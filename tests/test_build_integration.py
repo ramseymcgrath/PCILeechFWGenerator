@@ -282,6 +282,22 @@ class TestBuildWithExternalExamples:
             assert "context" in reg
             assert "device_analysis" in reg["context"]
 
+        # Set up file paths for testing
+        sv_file = temp_dir / "example_controller.sv"
+        tcl_file = temp_dir / "example_generate.tcl"
+        
+        # Create mock donor info for testing
+        donor_info = {
+            "vendor_id": "0x1234",
+            "device_id": "0x5678",
+            "subsystem_vendor_id": "0x9abc",
+            "subsystem_device_id": "0xdef0",
+            "bdf": "0000:03:00.0"
+        }
+
+        # Build SystemVerilog first
+        build.build_sv(enhanced_regs, sv_file)
+
         # Build TCL
         tcl_content, tcl_path = build.build_tcl(donor_info, str(tcl_file))
 
