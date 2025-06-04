@@ -125,7 +125,7 @@ secrets/
 .secrets/
 
 flash_fpga.py
-requirements-test.txt
+#requirements-test.txt
 .github/
 .pytest_cache/
 .benchmarks/
