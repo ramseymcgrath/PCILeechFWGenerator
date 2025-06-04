@@ -1,3 +1,9 @@
 2025-06-02 09:36:45,700 - INFO - Starting PCILeech firmware generation process
 2025-06-02 09:36:45,700 - ERROR - This script requires root privileges. Run with sudo.
 2025-06-02 09:36:45,700 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-04 17:29:02,781 - INFO - Starting PCILeech firmware generation process
+2025-06-04 17:29:02,781 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-04 17:29:02,782 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-04 17:29:13,984 - INFO - Starting PCILeech firmware generation process
+2025-06-04 17:29:14,844 - ERROR - Error checking container image: Command 'podman images dma-fw --format '{{.Repository}}'' returned non-zero exit status 125.
+2025-06-04 17:29:14,844 - ERROR - Fatal error during firmware generation: Error checking container image: Command 'podman images dma-fw --format '{{.Repository}}'' returned non-zero exit status 125.

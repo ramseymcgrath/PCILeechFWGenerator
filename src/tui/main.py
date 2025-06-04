@@ -113,6 +113,16 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                     yield Switch(value=False, id="flash-after-switch")
                     yield Static("Flash After Build")
 
+                # Donor dump configuration
+                yield Label("Donor Device Analysis:")
+                with Horizontal(classes="switch-row"):
+                    yield Switch(value=False, id="donor-dump-switch")
+                    yield Static("Extract Device Parameters")
+
+                with Horizontal(classes="switch-row"):
+                    yield Switch(value=False, id="auto-headers-switch")
+                    yield Static("Auto-install Kernel Headers")
+
                 # Profile Duration (only shown when profiling is enabled)
                 yield Label("Profile Duration (seconds):")
                 yield Input(
@@ -157,6 +167,10 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#flash-after-switch", Switch).value = (
                 config.flash_after_build
             )
+            self.query_one("#donor-dump-switch", Switch).value = config.donor_dump
+            self.query_one("#auto-headers-switch", Switch).value = (
+                config.auto_install_headers
+            )
             self.query_one("#profile-duration-input", Input).value = str(
                 config.profile_duration
             )
@@ -181,6 +195,8 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                     "#perf-counters-switch", Switch
                 ).value,
                 flash_after_build=self.query_one("#flash-after-switch", Switch).value,
+                donor_dump=self.query_one("#donor-dump-switch", Switch).value,
+                auto_install_headers=self.query_one("#auto-headers-switch", Switch).value,
                 profile_duration=float(
                     self.query_one("#profile-duration-input", Input).value or "30.0"
                 ),

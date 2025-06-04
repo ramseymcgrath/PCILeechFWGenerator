@@ -7,7 +7,7 @@ __version_info__ = (2, 0, 0)
 __title__ = "PCILeech Firmware Generator"
 __description__ = "Generate spoofed PCIe DMA firmware from real donor hardware"
 __author__ = "Ramsey McGrath"
-__author_email__ = "ramseymcgrath@gmail.com"
+__author_email__ = "ramsey@voltcyclone.info"
 __license__ = "MIT"
 __url__ = "https://github.com/ramseymcgrath/PCILeechFWGenerator"
 

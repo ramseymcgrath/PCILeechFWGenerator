@@ -8,9 +8,19 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch, mock_open
 
 import pytest
+
+# Import the donor dump manager for testing
+try:
+    from src.donor_dump_manager import DonorDumpManager, DonorDumpError, KernelHeadersNotFoundError, ModuleBuildError, ModuleLoadError
+except ImportError:
+    DonorDumpManager = None
+    DonorDumpError = Exception
+    KernelHeadersNotFoundError = Exception
+    ModuleBuildError = Exception
+    ModuleLoadError = Exception
 
 
 @pytest.mark.unit
@@ -711,3 +721,331 @@ class TestMakefileValidation:
 pytestmark = [
     pytest.mark.unit,  # Default marker for this module
 ]
+
+
+@pytest.mark.unit
+class TestDonorDumpManager:
+    """Test the DonorDumpManager class functionality."""
+
+    def test_manager_initialization(self):
+        """Test DonorDumpManager initialization."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        # Test default initialization
+        manager = DonorDumpManager()
+        assert manager.module_name == "donor_dump"
+        assert manager.proc_path == "/proc/donor_dump"
+        assert manager.module_source_dir.name == "donor_dump"
+        
+        # Test custom source directory
+        custom_dir = Path("/tmp/test_donor_dump")
+        manager = DonorDumpManager(custom_dir)
+        assert manager.module_source_dir == custom_dir
+
+    @patch("subprocess.check_output")
+    @patch("os.path.exists")
+    def test_check_kernel_headers_available(self, mock_exists, mock_check_output):
+        """Test kernel headers check when headers are available."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_check_output.return_value = "5.15.0-generic\n"
+        mock_exists.return_value = True
+        
+        manager = DonorDumpManager()
+        headers_available, kernel_version = manager.check_kernel_headers()
+        
+        assert headers_available is True
+        assert kernel_version == "5.15.0-generic"
+        mock_exists.assert_called_with("/lib/modules/5.15.0-generic/build")
+
+    @patch("subprocess.check_output")
+    @patch("os.path.exists")
+    def test_check_kernel_headers_missing(self, mock_exists, mock_check_output):
+        """Test kernel headers check when headers are missing."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_check_output.return_value = "5.15.0-generic\n"
+        mock_exists.return_value = False
+        
+        manager = DonorDumpManager()
+        headers_available, kernel_version = manager.check_kernel_headers()
+        
+        assert headers_available is False
+        assert kernel_version == "5.15.0-generic"
+
+    @patch("subprocess.run")
+    def test_install_kernel_headers_success(self, mock_run):
+        """Test successful kernel headers installation."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_run.return_value = Mock(returncode=0)
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'check_kernel_headers', return_value=(True, "5.15.0-generic")):
+            result = manager.install_kernel_headers("5.15.0-generic")
+        
+        assert result is True
+        assert mock_run.call_count == 2  # apt-get update and install
+
+    @patch("subprocess.run")
+    def test_install_kernel_headers_failure(self, mock_run):
+        """Test kernel headers installation failure."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_run.side_effect = subprocess.CalledProcessError(1, "apt-get")
+        
+        manager = DonorDumpManager()
+        result = manager.install_kernel_headers("5.15.0-generic")
+        
+        assert result is False
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_build_module_success(self, mock_exists, mock_run):
+        """Test successful module build."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        # Mock source directory exists, module doesn't exist yet
+        mock_exists.side_effect = lambda: mock_exists.call_count == 1  # source dir exists, module doesn't
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'check_kernel_headers', return_value=(True, "5.15.0-generic")):
+            result = manager.build_module()
+        
+        assert result is True
+        mock_run.assert_called()
+
+    @patch("pathlib.Path.exists")
+    def test_build_module_source_missing(self, mock_exists):
+        """Test module build when source directory is missing."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_exists.return_value = False
+        
+        manager = DonorDumpManager()
+        
+        with pytest.raises(ModuleBuildError, match="Module source directory not found"):
+            manager.build_module()
+
+    def test_build_module_headers_missing(self):
+        """Test module build when kernel headers are missing."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'check_kernel_headers', return_value=(False, "5.15.0-generic")):
+            with patch.object(manager.module_source_dir, 'exists', return_value=True):
+                with pytest.raises(KernelHeadersNotFoundError):
+                    manager.build_module()
+
+    @patch("subprocess.run")
+    def test_is_module_loaded_true(self, mock_run):
+        """Test module loaded check when module is loaded."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_run.return_value = Mock(returncode=0, stdout="donor_dump 12345 0")
+        
+        manager = DonorDumpManager()
+        result = manager.is_module_loaded()
+        
+        assert result is True
+
+    @patch("subprocess.run")
+    def test_is_module_loaded_false(self, mock_run):
+        """Test module loaded check when module is not loaded."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_run.return_value = Mock(returncode=0, stdout="other_module 12345 0")
+        
+        manager = DonorDumpManager()
+        result = manager.is_module_loaded()
+        
+        assert result is False
+
+    def test_load_module_invalid_bdf(self):
+        """Test module loading with invalid BDF format."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        manager = DonorDumpManager()
+        
+        with pytest.raises(ModuleLoadError, match="Invalid BDF format"):
+            manager.load_module("invalid_bdf")
+
+    @patch("subprocess.run")
+    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
+    def test_load_module_success(self, mock_path_exists, mock_os_exists, mock_run):
+        """Test successful module loading."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_path_exists.return_value = True  # Module file exists
+        mock_os_exists.return_value = True    # Proc file exists
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'is_module_loaded', side_effect=[False, True]):
+            result = manager.load_module("0000:03:00.0")
+        
+        assert result is True
+
+    @patch("subprocess.run")
+    def test_unload_module_success(self, mock_run):
+        """Test successful module unloading."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'is_module_loaded', return_value=True):
+            result = manager.unload_module()
+        
+        assert result is True
+
+    @patch("builtins.open", new_callable=mock_open, read_data="vendor_id:8086\ndevice_id:1521\nclass_code:020000\n")
+    @patch("os.path.exists")
+    def test_read_device_info_success(self, mock_exists, mock_file):
+        """Test successful device info reading."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_exists.return_value = True
+        
+        manager = DonorDumpManager()
+        device_info = manager.read_device_info()
+        
+        expected = {
+            "vendor_id": "8086",
+            "device_id": "1521",
+            "class_code": "020000"
+        }
+        assert device_info == expected
+
+    @patch("os.path.exists")
+    def test_read_device_info_proc_missing(self, mock_exists):
+        """Test device info reading when proc file is missing."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_exists.return_value = False
+        
+        manager = DonorDumpManager()
+        
+        with pytest.raises(DonorDumpError, match="Module not loaded"):
+            manager.read_device_info()
+
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.stat")
+    @patch("os.path.exists")
+    def test_get_module_status(self, mock_os_exists, mock_stat, mock_path_exists):
+        """Test module status reporting."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_path_exists.side_effect = [True, True]  # source dir and module file exist
+        mock_stat.return_value = Mock(st_size=12345)
+        mock_os_exists.return_value = True
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'check_kernel_headers', return_value=(True, "5.15.0-generic")):
+            with patch.object(manager, 'is_module_loaded', return_value=True):
+                status = manager.get_module_status()
+        
+        assert status["kernel_version"] == "5.15.0-generic"
+        assert status["headers_available"] is True
+        assert status["module_built"] is True
+        assert status["module_loaded"] is True
+        assert status["proc_available"] is True
+        assert status["source_dir_exists"] is True
+        assert status["module_size"] == 12345
+
+    @patch("json.dump")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("pathlib.Path.mkdir")
+    def test_setup_module_complete_flow(self, mock_mkdir, mock_file, mock_json_dump):
+        """Test complete module setup flow."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+        
+        mock_device_info = {
+            "vendor_id": "8086",
+            "device_id": "1521",
+            "class_code": "020000"
+        }
+        
+        manager = DonorDumpManager()
+        with patch.object(manager, 'check_kernel_headers', return_value=(True, "5.15.0-generic")):
+            with patch.object(manager, 'build_module', return_value=True):
+                with patch.object(manager, 'load_module', return_value=True):
+                    with patch.object(manager, 'read_device_info', return_value=mock_device_info):
+                        result = manager.setup_module("0000:03:00.0")
+        
+        assert result == mock_device_info
+        mock_json_dump.assert_called_once()
+
+
+@pytest.mark.integration
+class TestDonorDumpIntegration:
+    """Integration tests for donor dump functionality."""
+
+    def test_cli_integration_import(self):
+        """Test that CLI can import donor dump manager."""
+        try:
+            import generate
+            # Check if the import was successful
+            assert hasattr(generate, 'DonorDumpManager')
+        except ImportError:
+            pytest.skip("generate module not available")
+
+    def test_tui_config_integration(self):
+        """Test TUI configuration includes donor dump fields."""
+        try:
+            from src.tui.models.config import BuildConfiguration
+            
+            config = BuildConfiguration()
+            assert hasattr(config, 'donor_dump')
+            assert hasattr(config, 'auto_install_headers')
+            
+            # Test CLI args conversion
+            cli_args = config.to_cli_args()
+            assert 'donor_dump' in cli_args
+            assert 'auto_install_headers' in cli_args
+            
+            # Test serialization
+            config_dict = config.to_dict()
+            assert 'donor_dump' in config_dict
+            assert 'auto_install_headers' in config_dict
+            
+        except ImportError:
+            pytest.skip("TUI modules not available")
+
+    def test_feature_summary_includes_donor_dump(self):
+        """Test that feature summary includes donor dump when enabled."""
+        try:
+            from src.tui.models.config import BuildConfiguration
+            
+            config = BuildConfiguration(donor_dump=True)
+            summary = config.feature_summary
+            assert "Donor Device Analysis" in summary
+            
+        except ImportError:
+            pytest.skip("TUI modules not available")
+
+
+# Helper function for mock_open
+def mock_open(*args, **kwargs):
+    """Helper to create mock_open for file operations."""
+    from unittest.mock import mock_open as _mock_open
+    return _mock_open(*args, **kwargs)

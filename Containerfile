@@ -11,7 +11,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Install build dependencies without version pins for compatibility
 RUN apt-get update && apt-get install -y \
     build-essential \
-    linux-headers-generic \
     make \
     git \
     python3 \
@@ -26,8 +25,9 @@ COPY ./generate.py /build/
 COPY ./requirements-test.txt /build/
 WORKDIR /build
 
-# Pre-compile any Python modules or build kernel modules if needed
-RUN cd src/donor_dump && make clean && make
+# Note: Kernel module (donor_dump) should be built on target system, not in container
+# The module requires kernel headers matching the host kernel version
+# Build instructions are available in src/donor_dump/Makefile
 
 # Runtime stage - minimal runtime environment
 FROM ubuntu:22.04 AS runtime
@@ -84,7 +84,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import psutil, pydantic; print('Dependencies OK')" || exit 1
 
 # Add container usage documentation
-LABEL maintainer="Ramsey McGrath <ramseymcgrath@gmail.com>" \
+LABEL maintainer="Ramsey McGrath <ramsey@voltcyclone.info>" \
       description="PCILeech DMA firmware generator container with advanced SystemVerilog features (multi-stage optimized)" \
       version="2.0" \
       usage="podman run --rm -it --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN --device=/dev/vfio/X --device=/dev/vfio/vfio -v ./output:/app/output dma-fw sudo python3 /app/src/build.py --bdf XXXX:XX:XX.X --board XXt [--advanced-sv] [--device-type TYPE] [--enable-variance]" \
@@ -128,6 +128,13 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then\n\
     echo ""\n\
     echo "  # Custom configuration"\n\
     echo "  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv --device-type storage --disable-power-management"\n\
+    echo ""\n\
+    echo "Kernel Module (donor_dump):"\n\
+    echo "  The donor_dump kernel module must be built on the host system:"\n\
+    echo "  1. Copy /app/src/donor_dump/ to host"\n\
+    echo "  2. Install kernel headers: apt-get install linux-headers-\$(uname -r)"\n\
+    echo "  3. Build module: cd donor_dump && make"\n\
+    echo "  4. Load module: sudo insmod donor_dump.ko bdf=XXXX:XX:XX.X"\n\
     echo ""\n\
     echo "Features:"\n\
     echo "  - Basic PCILeech DMA firmware generation"\n\

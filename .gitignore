@@ -383,3 +383,4 @@ external_tcl_example.tcl
 junit-unit.xml
 test.tcl
 junit-unit.xml
+generate.log

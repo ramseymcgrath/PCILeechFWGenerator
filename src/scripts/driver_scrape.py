@@ -16,11 +16,27 @@ import ast
 import json
 import os
 import pathlib
+import platform
 import re
 import subprocess
 import sys
 import tarfile
 import tempfile
+
+
+def is_linux() -> bool:
+    """Check if running on Linux."""
+    return platform.system().lower() == "linux"
+
+
+def check_linux_requirement(operation: str) -> None:
+    """Check if operation requires Linux and raise error if not available."""
+    if not is_linux():
+        raise RuntimeError(
+            f"{operation} requires Linux. "
+            f"Current platform: {platform.system()}. "
+            f"This functionality is only available on Linux systems."
+        )
 
 # Import state machine extractor
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
@@ -55,6 +71,7 @@ def ensure_kernel_source():
 
 
 def ko_name_from_alias():
+    check_linux_requirement("Driver module resolution")
     alias_line = run(
         f"modprobe --resolve-alias pci:v0000{VENDOR}d0000{DEVICE}*"
     ).splitlines()

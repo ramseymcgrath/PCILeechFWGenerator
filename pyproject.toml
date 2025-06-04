@@ -9,10 +9,10 @@ description = "Generate spoofed PCIe DMA firmware from real donor hardware"
 readme = "README.md"
 license = "MIT"
 authors = [
-    {name = "Ramsey McGrath", email = "ramseymcgrath@gmail.com"}
+    {name = "Ramsey McGrath", email = "ramsey@voltcyclone.info"}
 ]
 maintainers = [
-    {name = "Ramsey McGrath", email = "ramseymcgrath@gmail.com"}
+    {name = "Ramsey McGrath", email = "ramsey@voltcyclone.info"}
 ]
 keywords = [
     "pcie", "dma", "firmware", "fpga", "hardware", "security", 

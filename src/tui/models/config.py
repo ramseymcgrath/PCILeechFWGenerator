@@ -24,6 +24,10 @@ class BuildConfiguration:
     error_handling: bool = True
     performance_counters: bool = True
     flash_after_build: bool = False
+    
+    # Donor dump configuration
+    donor_dump: bool = False
+    auto_install_headers: bool = False
 
     # Profile metadata
     name: str = "Default Configuration"
@@ -70,6 +74,8 @@ class BuildConfiguration:
             features.append("Behavior Profiling")
         if self.device_type != "generic":
             features.append(f"{self.device_type.title()} Optimizations")
+        if self.donor_dump:
+            features.append("Donor Device Analysis")
 
         return ", ".join(features) if features else "Basic Configuration"
 
@@ -86,6 +92,8 @@ class BuildConfiguration:
             "disable_performance_counters": not self.performance_counters,
             "enable_behavior_profiling": self.behavior_profiling,
             "behavior_profile_duration": int(self.profile_duration),
+            "donor_dump": self.donor_dump,
+            "auto_install_headers": self.auto_install_headers,
         }
         return args
 
@@ -104,6 +112,8 @@ class BuildConfiguration:
             "error_handling": self.error_handling,
             "performance_counters": self.performance_counters,
             "flash_after_build": self.flash_after_build,
+            "donor_dump": self.donor_dump,
+            "auto_install_headers": self.auto_install_headers,
             "created_at": self.created_at,
             "last_used": self.last_used,
         }

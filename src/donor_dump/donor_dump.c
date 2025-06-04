@@ -374,4 +374,4 @@ module_init(mod_init);
 module_exit(mod_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Dump selected PCIe device parameters for DMA-FW builder");
-MODULE_AUTHOR("Ramsey McGrath <ramseymcgrath@gmail.com>");
+MODULE_AUTHOR("Ramsey McGrath <ramsey@voltcyclone.info>");

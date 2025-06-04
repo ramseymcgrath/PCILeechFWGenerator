@@ -17,6 +17,7 @@ import argparse
 import logging
 import os
 import pathlib
+import platform
 import re
 import shutil
 import subprocess
@@ -24,6 +25,13 @@ import sys
 import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
+
+# Import donor dump manager
+try:
+    from src.donor_dump_manager import DonorDumpManager, DonorDumpError
+except ImportError:
+    DonorDumpManager = None
+    DonorDumpError = Exception
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,8 +59,26 @@ def run_command(cmd: str, **kwargs) -> str:
     return subprocess.check_output(cmd, shell=True, text=True, **kwargs).strip()
 
 
+def is_linux() -> bool:
+    """Check if running on Linux."""
+    import platform
+    return platform.system().lower() == "linux"
+
+
+def check_linux_requirement(operation: str) -> None:
+    """Check if operation requires Linux and raise error if not available."""
+    if not is_linux():
+        raise RuntimeError(
+            f"{operation} requires Linux. "
+            f"Current platform: {platform.system()}. "
+            f"Please run this on a Linux system with VFIO support."
+        )
+
+
 def list_pci_devices() -> List[Dict[str, str]]:
     """List all PCIe devices with their details."""
+    check_linux_requirement("PCIe device enumeration")
+    
     pattern = re.compile(
         r"(?P<bdf>[0-9a-fA-F:.]+) .*?\["
         r"(?P<class>[0-9a-fA-F]{4})\]: .*?\["
@@ -87,6 +113,8 @@ def choose_device(devices: List[Dict[str, str]]) -> Dict[str, str]:
 
 def get_current_driver(bdf: str) -> Optional[str]:
     """Get the current driver bound to a PCIe device."""
+    check_linux_requirement("Driver detection")
+    
     if not validate_bdf_format(bdf):
         raise ValueError(
             f"Invalid BDF format: {bdf}. Expected format: DDDD:BB:DD.F (e.g., 0000:03:00.0)"
@@ -100,6 +128,8 @@ def get_current_driver(bdf: str) -> Optional[str]:
 
 def get_iommu_group(bdf: str) -> str:
     """Get the IOMMU group for a PCIe device."""
+    check_linux_requirement("IOMMU group detection")
+    
     if not validate_bdf_format(bdf):
         raise ValueError(
             f"Invalid BDF format: {bdf}. Expected format: DDDD:BB:DD.F (e.g., 0000:03:00.0)"
@@ -187,6 +217,8 @@ def bind_to_vfio(
     bdf: str, vendor: str, device: str, original_driver: Optional[str]
 ) -> None:
     """Bind PCIe device to vfio-pci driver"""
+    check_linux_requirement("VFIO device binding")
+    
     if not validate_bdf_format(bdf):
         raise ValueError(
             f"Invalid BDF format: {bdf}. Expected format: DDDD:BB:DD.F (e.g., 0000:03:00.0)"
@@ -517,6 +549,19 @@ def main() -> int:
             help="Duration for behavior profiling in seconds (default: 30)",
         )
 
+        # Donor dump functionality
+        parser.add_argument(
+            "--donor-dump",
+            action="store_true",
+            help="Extract donor device parameters using kernel module before generation",
+        )
+
+        parser.add_argument(
+            "--auto-install-headers",
+            action="store_true",
+            help="Automatically install kernel headers if missing (for donor dump)",
+        )
+
         args = parser.parse_args()
 
         # Check if TUI mode is requested
@@ -583,6 +628,58 @@ def main() -> int:
         )
         print(f"IOMMU group: {iommu_group}")
         print(f"Current driver: {original_driver or 'none'}")
+
+        # Extract donor device parameters if requested
+        donor_info = None
+        if args.donor_dump:
+            if DonorDumpManager is None:
+                error_msg = "Donor dump functionality not available. Check src/donor_dump_manager.py"
+                logger.error(error_msg)
+                print(f"[✗] {error_msg}")
+                return 1
+            
+            try:
+                print(f"\n[•] Extracting donor device parameters for {bdf}...")
+                logger.info(f"Starting donor dump extraction for {bdf}")
+                
+                dump_manager = DonorDumpManager()
+                donor_info = dump_manager.setup_module(
+                    bdf,
+                    auto_install_headers=args.auto_install_headers
+                )
+                
+                print("[✓] Donor device parameters extracted successfully")
+                logger.info("Donor dump extraction completed successfully")
+                
+                # Log key parameters
+                key_params = ['vendor_id', 'device_id', 'class_code', 'bar_size', 'mpc', 'mpr']
+                for param in key_params:
+                    if param in donor_info:
+                        logger.info(f"  {param}: {donor_info[param]}")
+                
+                # Save donor info to file for container use
+                import json
+                donor_info_path = pathlib.Path("output/donor_info.json")
+                donor_info_path.parent.mkdir(exist_ok=True)
+                with open(donor_info_path, 'w') as f:
+                    json.dump(donor_info, f, indent=2)
+                logger.info(f"Donor info saved to {donor_info_path}")
+                
+            except DonorDumpError as e:
+                error_msg = f"Donor dump failed: {e}"
+                logger.error(error_msg)
+                print(f"[✗] {error_msg}")
+                
+                # Ask user if they want to continue without donor dump
+                response = input("Continue without donor dump? [y/N]: ").strip().lower()
+                if response not in ['y', 'yes']:
+                    return 1
+                print("[•] Continuing without donor dump...")
+            except Exception as e:
+                error_msg = f"Unexpected error during donor dump: {e}"
+                logger.error(error_msg)
+                print(f"[✗] {error_msg}")
+                return 1
 
         # Bind device to vfio-pci
         bind_to_vfio(bdf, vendor, device, original_driver)
