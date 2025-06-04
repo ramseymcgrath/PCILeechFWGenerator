@@ -138,7 +138,7 @@ class BehaviorProfiler:
         """
         try:
             check_linux_requirement("Device behavior monitoring")
-            
+
             # Check if device exists
             result = subprocess.run(
                 f"lspci -s {self.bdf}", shell=True, capture_output=True, text=True

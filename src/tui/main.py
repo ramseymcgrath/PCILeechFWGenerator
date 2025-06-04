@@ -196,7 +196,9 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 ).value,
                 flash_after_build=self.query_one("#flash-after-switch", Switch).value,
                 donor_dump=self.query_one("#donor-dump-switch", Switch).value,
-                auto_install_headers=self.query_one("#auto-headers-switch", Switch).value,
+                auto_install_headers=self.query_one(
+                    "#auto-headers-switch", Switch
+                ).value,
                 profile_duration=float(
                     self.query_one("#profile-duration-input", Input).value or "30.0"
                 ),

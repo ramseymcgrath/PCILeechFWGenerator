@@ -24,7 +24,7 @@ class BuildConfiguration:
     error_handling: bool = True
     performance_counters: bool = True
     flash_after_build: bool = False
-    
+
     # Donor dump configuration
     donor_dump: bool = False
     auto_install_headers: bool = False

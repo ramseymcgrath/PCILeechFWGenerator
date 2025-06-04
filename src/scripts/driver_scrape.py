@@ -38,6 +38,7 @@ def check_linux_requirement(operation: str) -> None:
             f"This functionality is only available on Linux systems."
         )
 
+
 # Import state machine extractor
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
 from state_machine_extractor import StateMachineExtractor
