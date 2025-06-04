@@ -8,15 +8,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Install build dependencies with pinned versions
+# Install build dependencies without version pins for compatibility
 RUN apt-get update && apt-get install -y \
-    build-essential=12.9ubuntu3 \
-    linux-headers-generic=5.15.0.91.88 \
-    make=4.3-4.1build1 \
-    git=1:2.34.1-1ubuntu1.10 \
-    python3=3.10.6-1~22.04 \
-    python3-pip=22.0.2+dfsg-1ubuntu0.4 \
-    python3-dev=3.10.6-1~22.04 \
+    build-essential \
+    linux-headers-generic \
+    make \
+    git \
+    python3 \
+    python3-pip \
+    python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -38,15 +38,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Install only runtime dependencies with pinned versions
+# Install only runtime dependencies without version pins for compatibility
 RUN apt-get update && apt-get install -y \
-    python3=3.10.6-1~22.04 \
-    python3-pip=22.0.2+dfsg-1ubuntu0.4 \
-    pciutils=1:3.7.0-6 \
-    bsdextrautils=2.37.2-4ubuntu3 \
-    sudo=1.9.9-1ubuntu2.4 \
-    kmod=29-1ubuntu1 \
-    ca-certificates=20230311ubuntu0.22.04.1 \
+    python3 \
+    python3-pip \
+    pciutils \
+    bsdextrautils \
+    sudo \
+    kmod \
+    ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* \
