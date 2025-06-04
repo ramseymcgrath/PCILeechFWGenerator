@@ -449,7 +449,9 @@ class TestEnvironmentValidation:
     @patch("os.geteuid")
     @patch("shutil.which")
     @patch("generate.run_command")
-    def test_validate_environment_success(self, mock_run_command, mock_which, mock_geteuid):
+    def test_validate_environment_success(
+        self, mock_run_command, mock_which, mock_geteuid
+    ):
         """Test successful environment validation."""
         mock_geteuid.return_value = 0  # Root user
         mock_which.return_value = "/usr/bin/podman"
