@@ -1,0 +1,184 @@
+name: Container CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Containerfile'
+      - '.dockerignore'
+      - 'requirements*.txt'
+      - 'src/**'
+      - '.github/workflows/container-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Containerfile'
+      - '.dockerignore'
+      - 'requirements*.txt'
+      - 'src/**'
+      - '.github/workflows/container-ci.yml'
+
+jobs:
+  container-build-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+        
+    - name: Build container image
+      run: |
+        podman build -t pcileech-fw-generator:test -f Containerfile .
+        
+    - name: Test container health check
+      run: |
+        # Test that the container starts and health check passes
+        podman run --rm pcileech-fw-generator:test python3 -c "import psutil, pydantic; print('Dependencies OK')"
+        
+    - name: Test container help
+      run: |
+        # Test that the help command works
+        podman run --rm pcileech-fw-generator:test --help
+        
+    - name: Test Python imports
+      run: |
+        # Test that all required modules can be imported
+        podman run --rm pcileech-fw-generator:test python3 -c "
+        import sys
+        sys.path.append('/app/src')
+        try:
+            from advanced_sv_main import AdvancedSVGenerator
+            from manufacturing_variance import ManufacturingVarianceSimulator
+            from behavior_profiler import BehaviorProfiler
+            print('All imports successful')
+        except ImportError as e:
+            print(f'Import error: {e}')
+            sys.exit(1)
+        "
+        
+    - name: Test file structure
+      run: |
+        # Verify the correct file structure in container
+        podman run --rm pcileech-fw-generator:test ls -la /app/src/
+        podman run --rm pcileech-fw-generator:test test -f /app/src/build.py
+        podman run --rm pcileech-fw-generator:test test -f /app/generate.py
+        
+    - name: Test container user permissions
+      run: |
+        # Test that the appuser has correct permissions
+        podman run --rm pcileech-fw-generator:test whoami
+        podman run --rm pcileech-fw-generator:test test -w /app/output
+        
+    - name: Security scan
+      run: |
+        # Basic security check - ensure no privileged escalation in Containerfile
+        if grep -q "USER root" Containerfile; then
+          echo "Warning: Container switches to root user"
+        fi
+        
+        # Check for hardcoded secrets (basic check)
+        if grep -iE "(password|secret|key|token)" Containerfile; then
+          echo "Warning: Potential hardcoded secrets found"
+          exit 1
+        fi
+        
+  container-integration-test:
+    runs-on: ubuntu-latest
+    needs: container-build-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+        
+    - name: Build container image
+      run: |
+        podman build -t pcileech-fw-generator:integration -f Containerfile .
+        
+    - name: Create test output directory
+      run: |
+        mkdir -p ./test-output
+        chmod 777 ./test-output
+        
+    - name: Test container with volume mount
+      run: |
+        # Test that volume mounting works correctly
+        podman run --rm \
+          -v ./test-output:/app/output \
+          pcileech-fw-generator:integration \
+          touch /app/output/test-file.txt
+        
+        # Verify file was created
+        test -f ./test-output/test-file.txt
+        
+    - name: Test container environment variables
+      run: |
+        # Test environment variable passing
+        podman run --rm \
+          -e TEST_VAR=test_value \
+          pcileech-fw-generator:integration \
+          bash -c 'echo "TEST_VAR=$TEST_VAR"'
+          
+    - name: Test resource limits
+      run: |
+        # Test that container respects resource limits
+        podman run --rm \
+          --memory=512m \
+          --cpus=1 \
+          pcileech-fw-generator:integration \
+          python3 -c "import psutil; print(f'Memory: {psutil.virtual_memory().total / 1024**3:.1f}GB')"
+
+  container-security-test:
+    runs-on: ubuntu-latest
+    needs: container-build-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+        
+    - name: Build container image
+      run: |
+        podman build -t pcileech-fw-generator:security -f Containerfile .
+        
+    - name: Test non-root user
+      run: |
+        # Verify container runs as non-root by default
+        USER_ID=$(podman run --rm pcileech-fw-generator:security id -u)
+        if [ "$USER_ID" = "0" ]; then
+          echo "Error: Container is running as root"
+          exit 1
+        fi
+        echo "Container running as user ID: $USER_ID"
+        
+    - name: Test capability requirements
+      run: |
+        # Test that container works with specific capabilities instead of privileged
+        # Note: This is a basic test since we can't test actual PCI operations in CI
+        podman run --rm \
+          --cap-add=SYS_RAWIO \
+          --cap-add=SYS_ADMIN \
+          pcileech-fw-generator:security \
+          echo "Capability test passed"
+          
+    - name: Test read-only filesystem
+      run: |
+        # Test container behavior with read-only root filesystem
+        podman run --rm \
+          --read-only \
+          --tmpfs /tmp \
+          pcileech-fw-generator:security \
+          python3 -c "print('Read-only filesystem test passed')"

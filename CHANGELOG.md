@@ -21,6 +21,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] - Container Flow Improvements
+
+### 🔧 Fixed
+- **🐳 Container Dependency Installation**: Fixed missing Python dependencies in container build
+  - Added proper `pip install` commands for `requirements.txt` and `requirements-tui.txt`
+  - Fixed import errors for `psutil`, `pydantic`, and other required packages
+- **📁 Container File Structure**: Corrected file paths and directory structure
+  - Fixed `build.py` path from `/app/build.py` to `/app/src/build.py`
+  - Updated all container usage examples and documentation
+- **🔒 Container Security Improvements**: Enhanced security posture
+  - Replaced `--privileged` with specific capabilities (`--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN`)
+  - Maintained non-root user execution while preserving functionality
+- **✅ Container Health Checks**: Improved dependency validation
+  - Enhanced health check to validate Python imports
+  - Added comprehensive dependency testing
+
+### ✨ Added
+- **🔨 Container Build Script**: New automated build and test script
+  - Added `scripts/build_container.sh` with comprehensive testing
+  - Supports both Podman and Docker container engines
+  - Includes security validation and usage examples
+- **🚀 Container CI Pipeline**: Automated container testing workflow
+  - Added `.github/workflows/container-ci.yml` for continuous integration
+  - Tests container build, dependencies, security, and integration
+  - Validates file structure and user permissions
+
+### 📚 Improved
+- **📖 Documentation Updates**: Enhanced container usage documentation
+  - Updated `podman_demo.md` with security best practices
+  - Added troubleshooting section for container issues
+  - Included capability-based security examples
+
+### 🗂️ Changed
+- **📦 Container File Inclusion**: Updated `.dockerignore` configuration
+  - Removed exclusion of `src/tui/` components
+  - Included necessary requirements files
+  - Optimized build context for better performance
+
+---
+
 ## [2.0.0] - 2025-01-02
 
 ### ✨ Added

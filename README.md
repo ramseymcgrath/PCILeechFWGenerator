@@ -440,7 +440,25 @@ podman --version
 
 # Verify rootless setup
 podman info | grep rootless
+
+# Test container build and dependencies
+./scripts/build_container.sh --test
+
+# Manual container dependency check
+podman run --rm pcileech-fw-generator:latest python3 -c "import psutil, pydantic; print('Dependencies OK')"
+
+# Check container file structure
+podman run --rm pcileech-fw-generator:latest ls -la /app/src/
+
+# Test with specific capabilities (recommended)
+podman run --rm --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN pcileech-fw-generator:latest echo "Capability test passed"
 ```
+
+**Container Security Best Practices:**
+- Use specific capabilities (`--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN`) instead of `--privileged` when possible
+- Always mount output directories to preserve generated files: `-v ./output:/app/output`
+- The container runs as non-root user `appuser` by default for security
+- Use the build script for automated testing: `./scripts/build_container.sh --test`
 
 ### Getting Help
 

@@ -60,30 +60,42 @@ podman run --rm -it pcileech-fw-generator:latest
 
 This starts the container in interactive mode and removes it when you exit.
 
-### Running with Privileged Access for PCI Operations
+### Running with Specific Capabilities for PCI Operations
 
 ```bash
-podman run --rm -it --privileged \
+podman run --rm -it \
+  --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \
   --device=/dev/vfio/10 --device=/dev/vfio/vfio \
   -v ./output:/app/output \
   pcileech-fw-generator:latest \
-  sudo python3 /app/build.py --bdf 0000:03:00.0 --board 75t
+  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t
 ```
 
 This command:
-- Grants privileged access to the container
+- Grants specific capabilities (SYS_RAWIO, SYS_ADMIN) instead of full privileged access
 - Maps specific VFIO devices into the container
 - Mounts a local `output` directory to store generated files
 - Runs the firmware generator with specific parameters
 
-### Running with Advanced SystemVerilog Features
+### Alternative: Running with Privileged Access (Less Secure)
 
 ```bash
 podman run --rm -it --privileged \
   --device=/dev/vfio/10 --device=/dev/vfio/vfio \
   -v ./output:/app/output \
   pcileech-fw-generator:latest \
-  sudo python3 /app/build.py --bdf 0000:03:00.0 --board 75t \
+  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t
+```
+
+### Running with Advanced SystemVerilog Features
+
+```bash
+podman run --rm -it \
+  --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \
+  --device=/dev/vfio/10 --device=/dev/vfio/vfio \
+  -v ./output:/app/output \
+  pcileech-fw-generator:latest \
+  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t \
   --advanced-sv --device-type network --enable-variance
 ```
 
@@ -178,17 +190,22 @@ podman run --pod pcileech-pod -d pcileech-fw-generator:latest
    --device=/dev/vfio/X --device=/dev/vfio/vfio
    ```
 
-3. **Resource Limits**: Set memory and CPU limits for better resource management
+3. **Security**: Use specific capabilities instead of --privileged when possible
+   ```bash
+   --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN
+   ```
+
+4. **Resource Limits**: Set memory and CPU limits for better resource management
    ```bash
    --memory 2g --cpus 2
    ```
 
-4. **Environment Variables**: Pass configuration through environment variables
+5. **Environment Variables**: Pass configuration through environment variables
    ```bash
    -e DEBUG=1 -e OPTIMIZATION_LEVEL=high
    ```
 
-5. **Container Labels**: Add custom labels for better organization
+6. **Container Labels**: Add custom labels for better organization
    ```bash
    --label "purpose=firmware-generation" --label "project=pcileech"
    ```
@@ -209,19 +226,21 @@ chmod 777 ./output
 
 # Run basic firmware generation
 echo "Running basic firmware generation..."
-podman run --rm -it --privileged \
+podman run --rm -it \
+  --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \
   --device=/dev/vfio/10 --device=/dev/vfio/vfio \
   -v ./output:/app/output \
   pcileech-fw-generator:latest \
-  sudo python3 /app/build.py --bdf 0000:03:00.0 --board 75t
+  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t
 
 # Run advanced firmware generation
 echo "Running advanced firmware generation..."
-podman run --rm -it --privileged \
+podman run --rm -it \
+  --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \
   --device=/dev/vfio/10 --device=/dev/vfio/vfio \
   -v ./output:/app/output \
   pcileech-fw-generator:latest \
-  sudo python3 /app/build.py --bdf 0000:03:00.0 --board 75t \
+  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t \
   --advanced-sv --device-type network --enable-variance
 
 # List generated files
