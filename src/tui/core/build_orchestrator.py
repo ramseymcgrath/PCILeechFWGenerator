@@ -245,17 +245,23 @@ class BuildOrchestrator:
         if "dma-fw" not in result.stdout:
             # Container image not found, try to build it
             if self._current_progress:
-                self._current_progress.current_operation = "Building container image 'dma-fw'"
+                self._current_progress.current_operation = (
+                    "Building container image 'dma-fw'"
+                )
                 await self._notify_progress()
-            
+
             try:
                 print("[*] Container image 'dma-fw' not found. Building it now...")
                 build_result = await self._run_command("podman build -t dma-fw .")
                 if build_result.returncode != 0:
-                    raise RuntimeError(f"Failed to build container image: {build_result.stderr}")
+                    raise RuntimeError(
+                        f"Failed to build container image: {build_result.stderr}"
+                    )
                 print("[✓] Container image built successfully")
             except Exception as e:
-                raise RuntimeError(f"Container image 'dma-fw' not found and build failed: {str(e)}")
+                raise RuntimeError(
+                    f"Container image 'dma-fw' not found and build failed: {str(e)}"
+                )
 
         # Check output directory
         output_dir = Path("output")
