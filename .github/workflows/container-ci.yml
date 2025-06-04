@@ -2,7 +2,7 @@ name: Container CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '*' ]
     paths:
       - 'Containerfile'
       - '.dockerignore'
@@ -10,7 +10,7 @@ on:
       - 'src/**'
       - '.github/workflows/container-ci.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ '*' ]
     paths:
       - 'Containerfile'
       - '.dockerignore'
