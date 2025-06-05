@@ -91,63 +91,8 @@ LABEL maintainer="Ramsey McGrath <ramsey@voltcyclone.info>" \
       security.notes="Requires privileged mode for PCI device access via VFIO" \
       features="Basic firmware generation, Advanced SystemVerilog features, Manufacturing variance simulation, Device-specific optimizations"
 
-# Create entrypoint script for better container usage
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Display usage information\n\
-if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then\n\
-    echo "PCILeech DMA Firmware Generator Container v2.0"\n\
-    echo "Usage: podman run --rm -it --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \\"\n\
-    echo "         --device=/dev/vfio/GROUP --device=/dev/vfio/vfio \\"\n\
-    echo "         -v ./output:/app/output dma-fw \\"\n\
-    echo "         sudo python3 /app/src/build.py [OPTIONS]"\n\
-    echo ""\n\
-    echo "Required arguments:"\n\
-    echo "  --bdf XXXX:XX:XX.X  PCI Bus:Device.Function (e.g., 0000:03:00.0)"\n\
-    echo "  --board XXt         Target board (35t, 75t, or 100t)"\n\
-    echo ""\n\
-    echo "Advanced SystemVerilog options:"\n\
-    echo "  --advanced-sv       Enable advanced SystemVerilog generation"\n\
-    echo "  --device-type TYPE  Device type optimization (network, storage, graphics)"\n\
-    echo "  --enable-variance   Enable manufacturing variance simulation"\n\
-    echo "  --disable-power-management  Disable power management features"\n\
-    echo "  --enable-debug      Enable debug features in generated code"\n\
-    echo "  --custom-config FILE  Use custom configuration file"\n\
-    echo ""\n\
-    echo "Basic examples:"\n\
-    echo "  # Standard firmware generation"\n\
-    echo "  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t"\n\
-    echo ""\n\
-    echo "Advanced examples:"\n\
-    echo "  # Basic advanced generation"\n\
-    echo "  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv"\n\
-    echo ""\n\
-    echo "  # Device-specific with variance"\n\
-    echo "  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv --device-type network --enable-variance"\n\
-    echo ""\n\
-    echo "  # Custom configuration"\n\
-    echo "  sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv --device-type storage --disable-power-management"\n\
-    echo ""\n\
-    echo "Kernel Module (donor_dump):"\n\
-    echo "  The donor_dump kernel module must be built on the host system:"\n\
-    echo "  1. Copy /app/src/donor_dump/ to host"\n\
-    echo "  2. Install kernel headers: apt-get install linux-headers-\$(uname -r)"\n\
-    echo "  3. Build module: cd donor_dump && make"\n\
-    echo "  4. Load module: sudo insmod donor_dump.ko bdf=XXXX:XX:XX.X"\n\
-    echo ""\n\
-    echo "Features:"\n\
-    echo "  - Basic PCILeech DMA firmware generation"\n\
-    echo "  - Advanced SystemVerilog code generation"\n\
-    echo "  - Manufacturing variance simulation"\n\
-    echo "  - Device-specific optimizations"\n\
-    echo "  - Power management controls"\n\
-    echo "  - Performance profiling and optimization"\n\
-    exit 0\n\
-fi\n\
-\n\
-# Execute the command\n\
-exec "$@"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+# Copy the pre-created entrypoint script
+COPY entrypoint.sh /entrypoint.sh
 
 # Note: Vivado tools should be installed separately or use Xilinx's official container images
 # This container provides the optimized base environment for DMA firmware generation
