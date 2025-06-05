@@ -4,7 +4,7 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/pcileech-fw-generator.svg)](https://pypi.org/project/pcileech-fw-generator/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Complete installation instructions for PCILeech Firmware Generator v2.0.0.
+Complete installation instructions for PCILeech Firmware Generator v0.1.2.
 
 ---
 

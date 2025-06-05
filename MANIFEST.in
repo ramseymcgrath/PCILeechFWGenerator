@@ -24,8 +24,9 @@ recursive-include src/tui/styles *.tcss
 # Include donor dump C code and Makefile
 recursive-include src/donor_dump *.c *.h Makefile
 
-# Include test files
-recursive-include tests *.py
+# Exclude test files from distribution
+# Tests are available in the source repository but not in PyPI packages
+# recursive-include tests *.py
 
 # Include scripts
 recursive-include src/scripts *.py

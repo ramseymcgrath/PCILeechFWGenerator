@@ -12,5 +12,5 @@ __license__ = "MIT"
 __url__ = "https://github.com/ramseymcgrath/PCILeechFWGenerator"
 
 # Build metadata
-__build_date__ = None
-__commit_hash__ = None
+__build_date__ = "2025-06-05T01:44:07.732192"
+__commit_hash__ = "39c13da"

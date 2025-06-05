@@ -1,0 +1,129 @@
+# Makefile for PCILeech Firmware Generator
+
+.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release
+
+# Default target
+help:
+	@echo "PCILeech Firmware Generator - Available targets:"
+	@echo ""
+	@echo "Development:"
+	@echo "  install      - Install package in development mode"
+	@echo "  install-dev  - Install development dependencies"
+	@echo "  test         - Run test suite"
+	@echo "  lint         - Run code linting"
+	@echo "  format       - Format code with black and isort"
+	@echo "  clean        - Clean build artifacts"
+	@echo ""
+	@echo "Building:"
+	@echo "  build        - Build package distributions"
+	@echo "  build-pypi   - Full PyPI package generation (recommended)"
+	@echo "  build-quick  - Quick build without quality checks"
+	@echo ""
+	@echo "Publishing:"
+	@echo "  upload-test  - Upload to Test PyPI"
+	@echo "  upload-pypi  - Upload to PyPI"
+	@echo "  release      - Full release process"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  check-deps   - Check system dependencies"
+	@echo "  security     - Run security scans"
+
+# Development targets
+install:
+	pip install -e .
+
+install-dev:
+	pip install -e ".[dev,test,tui]"
+
+test:
+	pytest tests/ --cov=src --cov-report=term-missing
+
+lint:
+	flake8 src/ tests/
+	mypy src/
+
+format:
+	black src/ tests/
+	isort src/ tests/
+
+clean:
+	rm -rf build/ dist/ *.egg-info/ .pytest_cache/ htmlcov/ .coverage
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# Building targets
+build:
+	python -m build
+
+build-pypi:
+	@echo "Running full PyPI package generation..."
+	python3 scripts/generate_pypi_package.py --skip-upload
+
+build-quick:
+	@echo "Running quick PyPI package generation..."
+	python3 scripts/generate_pypi_package.py --quick --skip-upload
+
+# Publishing targets
+upload-test:
+	@echo "Building and uploading to Test PyPI..."
+	python3 scripts/generate_pypi_package.py --test-pypi
+
+upload-pypi:
+	@echo "Building and uploading to PyPI..."
+	python3 scripts/generate_pypi_package.py
+
+release:
+	@echo "Running full release process..."
+	./scripts/build_release.sh release $(VERSION)
+
+# Utility targets
+check-deps:
+	@echo "Checking system dependencies..."
+	@python3 scripts/generate_pypi_package.py --skip-quality --skip-security --skip-upload --skip-install-test || true
+
+security:
+	@echo "Running security scans..."
+	bandit -r src/
+	safety check
+
+# Docker targets
+docker-build:
+	./scripts/build_container.sh
+
+# Test package build
+test-build:
+	@echo "Testing PyPI package build..."
+	python3 scripts/test_package_build.py
+
+# Help for specific targets
+help-build:
+	@echo "Build targets:"
+	@echo ""
+	@echo "  build        - Basic build using python -m build"
+	@echo "  build-pypi   - Full PyPI generation with all checks"
+	@echo "  build-quick  - Quick build skipping quality checks"
+	@echo ""
+	@echo "Options for build-pypi:"
+	@echo "  - Runs code quality checks (black, isort, flake8, mypy)"
+	@echo "  - Runs security scans (bandit, safety)"
+	@echo "  - Runs test suite with coverage"
+	@echo "  - Validates package structure"
+	@echo "  - Tests installation in virtual environment"
+	@echo ""
+	@echo "Use 'make build-quick' for faster iteration during development"
+
+help-upload:
+	@echo "Upload targets:"
+	@echo ""
+	@echo "  upload-test  - Upload to Test PyPI (https://test.pypi.org/)"
+	@echo "  upload-pypi  - Upload to production PyPI (https://pypi.org/)"
+	@echo ""
+	@echo "Prerequisites:"
+	@echo "  - Configure ~/.pypirc with your API tokens"
+	@echo "  - Or set TWINE_USERNAME and TWINE_PASSWORD environment variables"
+	@echo ""
+	@echo "Test PyPI installation:"
+	@echo "  pip install --index-url https://test.pypi.org/simple/ pcileech-fw-generator"
+	@echo ""
+	@echo "Production PyPI installation:"
+	@echo "  pip install pcileech-fw-generator"

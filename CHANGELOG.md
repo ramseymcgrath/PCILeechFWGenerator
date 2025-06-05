@@ -7,7 +7,7 @@
 All notable changes to the PCILeech Firmware Generator will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2.html).
 
 ---
 
@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Better error handling and logging
 
 ### 🔄 Changed
-- **🔢 Major Version Bump**: Incremented to v2.0.0 to reflect significant TUI addition
+- **🔢 Major Version Bump**: Incremented to v0.1.2 to reflect significant TUI addition
 - **📚 Improved Documentation**: Enhanced README with TUI features and installation instructions
 - **🐛 Better Error Handling**: More informative error messages and recovery suggestions
 - **📋 Enhanced Logging**: Improved logging throughout the application with structured output
@@ -153,7 +153,7 @@ pcileech-build --bdf 0000:03:00.0 --board 75t
 
 ## 📋 Release Notes
 
-### 🚀 v2.0.0 Highlights
+### 🚀 v0.1.2 Highlights
 
 This major release introduces a modern, interactive TUI that transforms the user experience while maintaining full backward compatibility with the original command-line interface. The TUI provides guided workflows, real-time monitoring, and intelligent error handling that makes firmware generation more accessible and reliable.
 
