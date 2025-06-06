@@ -14,6 +14,7 @@ Requires root privileges (sudo) for driver rebinding and VFIO operations.
 """
 
 import argparse
+import datetime
 import logging
 import os
 import pathlib
@@ -25,7 +26,6 @@ import sys
 import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
-import datetime
 
 # Import donor dump manager
 try:
@@ -413,34 +413,34 @@ def run_build_container(
 def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
     """
     Ensure that the git repository is available locally.
-    
+
     Args:
         repo_url (str): URL of the git repository
         local_dir (str): Local directory to clone/pull the repository
         update (bool): Whether to update the repository if it already exists
-        
+
     Returns:
         str: Path to the local repository
     """
     # Create cache directory if it doesn't exist
     os.makedirs(os.path.dirname(local_dir), exist_ok=True)
-    
+
     # Check if repository already exists
     if os.path.exists(os.path.join(local_dir, ".git")):
         logger.info(f"Repository already exists at {local_dir}")
-        
+
         # Update repository if requested
         if update:
             try:
                 logger.info(f"Updating repository at {local_dir}")
                 print(f"[*] Updating repository at {local_dir}")
-                
+
                 # Get current directory
                 current_dir = os.getcwd()
-                
+
                 # Change to repository directory
                 os.chdir(local_dir)
-                
+
                 # Pull latest changes
                 result = subprocess.run(
                     "git pull",
@@ -450,10 +450,10 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
                     stderr=subprocess.PIPE,
                     text=True,
                 )
-                
+
                 # Change back to original directory
                 os.chdir(current_dir)
-                
+
                 logger.info(f"Repository updated successfully: {result.stdout.strip()}")
                 print(f"[✓] Repository updated successfully")
             except subprocess.CalledProcessError as e:
@@ -464,7 +464,7 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
         try:
             logger.info(f"Cloning repository {repo_url} to {local_dir}")
             print(f"[*] Cloning repository {repo_url} to {local_dir}")
-            
+
             result = subprocess.run(
                 f"git clone {repo_url} {local_dir}",
                 shell=True,
@@ -473,16 +473,17 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            
+
             logger.info(f"Repository cloned successfully")
             print(f"[✓] Repository cloned successfully")
         except subprocess.CalledProcessError as e:
             error_msg = f"Failed to clone repository: {e.stderr}"
             logger.error(error_msg)
             raise RuntimeError(error_msg)
-    
+
     # Return path to repository
     return local_dir
+
 
 def validate_environment() -> None:
     """Validate that the environment is properly set up."""
@@ -540,7 +541,7 @@ def main() -> int:
     try:
         logger.info("Starting PCILeech firmware generation process")
         validate_environment()
-        
+
         # Ensure pcileech-fpga repository is available
         repo_dir = os.path.join(REPO_CACHE_DIR, "pcileech-fpga")
         pcileech_fpga_dir = ensure_git_repo(PCILEECH_FPGA_REPO, repo_dir, update=False)
@@ -589,12 +590,19 @@ def main() -> int:
             "--board",
             choices=[
                 # Original boards
-                "35t", "75t", "100t",
+                "35t",
+                "75t",
+                "100t",
                 # CaptainDMA boards
-                "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
-                "pcileech_35t325_x1", "pcileech_100t484_x1",
+                "pcileech_75t484_x1",
+                "pcileech_35t484_x1",
+                "pcileech_35t325_x4",
+                "pcileech_35t325_x1",
+                "pcileech_100t484_x1",
                 # Other boards
-                "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+                "pcileech_enigma_x1",
+                "pcileech_squirrel",
+                "pcileech_pciescreamer_xc7a35",
             ],
             default="35t",
             help="Target FPGA board type (default: 35t/Squirrel)",

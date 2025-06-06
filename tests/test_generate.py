@@ -610,14 +610,21 @@ class TestArgumentParsing:
                 "--board",
                 choices=[
                     # Original boards
-                    "35t", "75t", "100t",
+                    "35t",
+                    "75t",
+                    "100t",
                     # CaptainDMA boards
-                    "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
-                    "pcileech_35t325_x1", "pcileech_100t484_x1",
+                    "pcileech_75t484_x1",
+                    "pcileech_35t484_x1",
+                    "pcileech_35t325_x4",
+                    "pcileech_35t325_x1",
+                    "pcileech_100t484_x1",
                     # Other boards
-                    "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+                    "pcileech_enigma_x1",
+                    "pcileech_squirrel",
+                    "pcileech_pciescreamer_xc7a35",
                 ],
-                default="35t"
+                default="35t",
             )
 
             args = parser.parse_args([])
@@ -633,14 +640,21 @@ class TestArgumentParsing:
                 "--board",
                 choices=[
                     # Original boards
-                    "35t", "75t", "100t",
+                    "35t",
+                    "75t",
+                    "100t",
                     # CaptainDMA boards
-                    "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
-                    "pcileech_35t325_x1", "pcileech_100t484_x1",
+                    "pcileech_75t484_x1",
+                    "pcileech_35t484_x1",
+                    "pcileech_35t325_x4",
+                    "pcileech_35t325_x1",
+                    "pcileech_100t484_x1",
                     # Other boards
-                    "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+                    "pcileech_enigma_x1",
+                    "pcileech_squirrel",
+                    "pcileech_pciescreamer_xc7a35",
                 ],
-                default="35t"
+                default="35t",
             )
 
             args = parser.parse_args(["--board", "100t", "--flash"])

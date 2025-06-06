@@ -492,7 +492,7 @@ class TestBuildOrchestrator:
 
         assert orchestrator._should_cancel is True
         mock_process.terminate.assert_called_once()
-    
+
     @pytest.mark.unit
     @patch("os.path.exists")
     @patch("os.makedirs")
@@ -500,7 +500,7 @@ class TestBuildOrchestrator:
     async def test_ensure_git_repo(self, mock_run_command, mock_makedirs, mock_exists):
         """Test git repository cloning and updating"""
         orchestrator = BuildOrchestrator()
-        
+
         # Mock progress tracking
         orchestrator._current_progress = BuildProgress(
             stage=BuildStage.ENVIRONMENT_VALIDATION,
@@ -508,28 +508,30 @@ class TestBuildOrchestrator:
             current_operation="Testing",
         )
         orchestrator._notify_progress = AsyncMock()
-        
+
         # Case 1: Repository doesn't exist yet
         mock_exists.return_value = False
-        mock_run_command.return_value = MagicMock(returncode=0, stdout="Cloning into...")
-        
+        mock_run_command.return_value = MagicMock(
+            returncode=0, stdout="Cloning into..."
+        )
+
         await orchestrator._ensure_git_repo()
-        
+
         # Should create cache directory and clone repo
         mock_makedirs.assert_called_once()
         mock_run_command.assert_called_once()
         assert "git clone" in mock_run_command.call_args[0][0]
-        
+
         # Case 2: Repository exists but needs update
         mock_exists.return_value = True
         mock_run_command.reset_mock()
         mock_makedirs.reset_mock()
-        
+
         # Mock last update file to be old
         with patch("builtins.open", mock_open(read_data="2020-01-01T00:00:00")):
             with patch("os.chdir"):
                 await orchestrator._ensure_git_repo()
-                
+
                 # Should not create directory but should run git pull
                 mock_makedirs.assert_called_once()
                 mock_run_command.assert_called_once()

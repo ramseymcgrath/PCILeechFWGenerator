@@ -399,14 +399,14 @@ class TestBoardConfiguration:
         assert "35t" in build.BOARD_INFO
         assert "75t" in build.BOARD_INFO
         assert "100t" in build.BOARD_INFO
-        
+
         # CaptainDMA boards
         assert "pcileech_75t484_x1" in build.BOARD_INFO
         assert "pcileech_35t484_x1" in build.BOARD_INFO
         assert "pcileech_35t325_x4" in build.BOARD_INFO
         assert "pcileech_35t325_x1" in build.BOARD_INFO
         assert "pcileech_100t484_x1" in build.BOARD_INFO
-        
+
         # Other boards
         assert "pcileech_enigma_x1" in build.BOARD_INFO
         assert "pcileech_squirrel" in build.BOARD_INFO

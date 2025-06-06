@@ -42,12 +42,19 @@ class BuildConfiguration:
         """Validate configuration after initialization"""
         valid_board_types = [
             # Original boards
-            "35t", "75t", "100t",
+            "35t",
+            "75t",
+            "100t",
             # CaptainDMA boards
-            "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
-            "pcileech_35t325_x1", "pcileech_100t484_x1",
+            "pcileech_75t484_x1",
+            "pcileech_35t484_x1",
+            "pcileech_35t325_x4",
+            "pcileech_35t325_x1",
+            "pcileech_100t484_x1",
             # Other boards
-            "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+            "pcileech_enigma_x1",
+            "pcileech_squirrel",
+            "pcileech_pciescreamer_xc7a35",
         ]
         if self.board_type not in valid_board_types:
             raise ValueError(f"Invalid board type: {self.board_type}")

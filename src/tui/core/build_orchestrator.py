@@ -6,13 +6,13 @@ Orchestrates the build process with real-time monitoring and progress tracking.
 
 import argparse
 import asyncio
+import datetime
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
-import shutil
-import datetime
 
 import psutil
 
@@ -62,12 +62,12 @@ class BuildOrchestrator:
                 BuildStage.ENVIRONMENT_VALIDATION, 0, "Validating environment"
             )
             await self._validate_environment()
-            
+
             # Stage 1.5: PCI Configuration Validation
             await self._update_progress(
                 BuildStage.ENVIRONMENT_VALIDATION,
                 60,
-                "Validating PCI configuration values"
+                "Validating PCI configuration values",
             )
             await self._validate_pci_config(device, config)
 
@@ -312,20 +312,22 @@ class BuildOrchestrator:
         # Check output directory
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-        
+
         # Ensure pcileech-fpga repository is available
         await self._ensure_git_repo()
 
     async def _ensure_git_repo(self) -> None:
         """Ensure that the pcileech-fpga git repository is available"""
         if self._current_progress:
-            self._current_progress.current_operation = "Checking pcileech-fpga repository"
+            self._current_progress.current_operation = (
+                "Checking pcileech-fpga repository"
+            )
             await self._notify_progress()
-        
+
         # Create cache directory if it doesn't exist
         repo_dir = REPO_CACHE_DIR / "pcileech-fpga"
         os.makedirs(REPO_CACHE_DIR, exist_ok=True)
-        
+
         # Check if git is available
         try:
             result = await self._run_command("git --version")
@@ -337,79 +339,103 @@ class BuildOrchestrator:
             if self._current_progress:
                 self._current_progress.add_error("Git not found in PATH")
             raise RuntimeError("Git not found in PATH")
-        
+
         # Check if repository already exists
         if os.path.exists(os.path.join(repo_dir, ".git")):
             if self._current_progress:
-                self._current_progress.current_operation = f"PCILeech FPGA repository found at {repo_dir}"
+                self._current_progress.current_operation = (
+                    f"PCILeech FPGA repository found at {repo_dir}"
+                )
                 await self._notify_progress()
-            
+
             # Check if repository needs update (older than 7 days)
             try:
                 last_update_file = repo_dir / ".last_update"
                 update_needed = True
-                
+
                 if last_update_file.exists():
                     with open(last_update_file, "r") as f:
                         try:
-                            last_update = datetime.datetime.fromisoformat(f.read().strip())
-                            days_since_update = (datetime.datetime.now() - last_update).days
+                            last_update = datetime.datetime.fromisoformat(
+                                f.read().strip()
+                            )
+                            days_since_update = (
+                                datetime.datetime.now() - last_update
+                            ).days
                             update_needed = days_since_update >= 7
                         except (ValueError, TypeError):
                             update_needed = True
-                
+
                 if update_needed:
                     if self._current_progress:
-                        self._current_progress.current_operation = f"Updating PCILeech FPGA repository"
+                        self._current_progress.current_operation = (
+                            f"Updating PCILeech FPGA repository"
+                        )
                         await self._notify_progress()
-                    
+
                     # Get current directory
                     current_dir = os.getcwd()
-                    
+
                     # Change to repository directory
                     os.chdir(repo_dir)
-                    
+
                     try:
                         # Pull latest changes
                         result = await self._run_command("git pull")
-                        
+
                         # Update last update timestamp
                         with open(last_update_file, "w") as f:
                             f.write(datetime.datetime.now().isoformat())
-                        
+
                         if self._current_progress:
-                            self._current_progress.current_operation = f"PCILeech FPGA repository updated successfully"
+                            self._current_progress.current_operation = (
+                                f"PCILeech FPGA repository updated successfully"
+                            )
                             await self._notify_progress()
                     except Exception as e:
                         if self._current_progress:
-                            self._current_progress.add_warning(f"Failed to update repository: {str(e)}")
+                            self._current_progress.add_warning(
+                                f"Failed to update repository: {str(e)}"
+                            )
                     finally:
                         # Change back to original directory
                         os.chdir(current_dir)
             except Exception as e:
                 if self._current_progress:
-                    self._current_progress.add_warning(f"Error checking repository update status: {str(e)}")
+                    self._current_progress.add_warning(
+                        f"Error checking repository update status: {str(e)}"
+                    )
         else:
             # Clone repository
             if self._current_progress:
-                self._current_progress.current_operation = f"Cloning PCILeech FPGA repository to {repo_dir}"
+                self._current_progress.current_operation = (
+                    f"Cloning PCILeech FPGA repository to {repo_dir}"
+                )
                 await self._notify_progress()
-            
+
             try:
-                result = await self._run_command(f"git clone {PCILEECH_FPGA_REPO} {repo_dir}")
-                
+                result = await self._run_command(
+                    f"git clone {PCILEECH_FPGA_REPO} {repo_dir}"
+                )
+
                 # Create last update timestamp
                 with open(repo_dir / ".last_update", "w") as f:
                     f.write(datetime.datetime.now().isoformat())
-                
+
                 if self._current_progress:
-                    self._current_progress.current_operation = f"PCILeech FPGA repository cloned successfully"
+                    self._current_progress.current_operation = (
+                        f"PCILeech FPGA repository cloned successfully"
+                    )
                     await self._notify_progress()
             except Exception as e:
                 if self._current_progress:
-                    self._current_progress.add_error(f"Failed to clone repository: {str(e)}")
-                raise RuntimeError(f"Failed to clone PCILeech FPGA repository: {str(e)}")
-    
+                    self._current_progress.add_error(
+                        f"Failed to clone repository: {str(e)}"
+                    )
+                raise RuntimeError(
+                    f"Failed to clone PCILeech FPGA repository: {str(e)}"
+                )
+
     async def _check_donor_module(self, config: BuildConfiguration) -> None:
         """
         Check if donor_dump kernel module is properly installed
@@ -468,7 +494,7 @@ class BuildOrchestrator:
                         kernel_version = module_status.get("raw_status", {}).get(
                             "kernel_version", ""
                         )
-                        
+
                         if kernel_version:
                             # Try to install headers using the manager's method
                             # which handles different Linux distributions
@@ -476,10 +502,12 @@ class BuildOrchestrator:
                                 self._current_progress.add_warning(
                                     "Detecting Linux distribution and installing appropriate headers..."
                                 )
-                                
+
                                 # Install headers
-                                headers_installed = manager.install_kernel_headers(kernel_version)
-                                
+                                headers_installed = manager.install_kernel_headers(
+                                    kernel_version
+                                )
+
                                 if headers_installed:
                                     self._current_progress.add_warning(
                                         "Kernel headers installed successfully"
@@ -515,7 +543,9 @@ class BuildOrchestrator:
                                     )
                                     # Add manual instructions
                                     distro = manager._detect_linux_distribution()
-                                    install_cmd = manager._get_header_install_command(distro, kernel_version)
+                                    install_cmd = manager._get_header_install_command(
+                                        distro, kernel_version
+                                    )
                                     self._current_progress.add_warning(
                                         f"Please try installing headers manually: {install_cmd}"
                                     )
@@ -540,11 +570,13 @@ class BuildOrchestrator:
                     f"Failed to check donor module status: {str(e)}"
                 )
                 await self._notify_progress()
-    
-    async def _validate_pci_config(self, device: PCIDevice, config: BuildConfiguration) -> None:
+
+    async def _validate_pci_config(
+        self, device: PCIDevice, config: BuildConfiguration
+    ) -> None:
         """
         Validate PCI configuration values against donor card
-        
+
         Args:
             device: The PCIe device to validate
             config: Current build configuration
@@ -557,32 +589,35 @@ class BuildOrchestrator:
                         "Skipping PCI configuration validation - no donor info file provided"
                     )
                 return
-            
+
             # Import build module for validation
             import sys
             from pathlib import Path
-            
+
             sys.path.append(str(Path(__file__).parent.parent.parent.parent))
             from build import validate_donor_info
-            
+
             # For local builds with donor info file, load and validate the file
             if config.local_build and config.donor_info_file:
                 import json
+
                 try:
-                    with open(config.donor_info_file, 'r') as f:
+                    with open(config.donor_info_file, "r") as f:
                         donor_info = json.load(f)
-                    
+
                     # Validate the donor info
                     if self._current_progress:
-                        self._current_progress.current_operation = "Validating donor info file"
+                        self._current_progress.current_operation = (
+                            "Validating donor info file"
+                        )
                         await self._notify_progress()
-                    
+
                     # Perform validation
                     validate_donor_info(donor_info)
-                    
+
                     # Compare with device info
                     validation_results = []
-                    
+
                     # Check vendor ID
                     if device.vendor_id and "vendor_id" in donor_info:
                         device_vendor = device.vendor_id.lower().replace("0x", "")
@@ -593,10 +628,10 @@ class BuildOrchestrator:
                                     field="vendor_id",
                                     expected=donor_vendor,
                                     actual=device_vendor,
-                                    status="mismatch"
+                                    status="mismatch",
                                 )
                             )
-                    
+
                     # Check device ID
                     if device.device_id and "device_id" in donor_info:
                         device_id = device.device_id.lower().replace("0x", "")
@@ -607,38 +642,46 @@ class BuildOrchestrator:
                                     field="device_id",
                                     expected=donor_id,
                                     actual=device_id,
-                                    status="mismatch"
+                                    status="mismatch",
                                 )
                             )
-                    
+
                     # Check subsystem vendor ID
                     if device.subsystem_vendor and "subvendor_id" in donor_info:
-                        device_subvendor = device.subsystem_vendor.lower().replace("0x", "")
-                        donor_subvendor = donor_info["subvendor_id"].lower().replace("0x", "")
+                        device_subvendor = device.subsystem_vendor.lower().replace(
+                            "0x", ""
+                        )
+                        donor_subvendor = (
+                            donor_info["subvendor_id"].lower().replace("0x", "")
+                        )
                         if device_subvendor != donor_subvendor:
                             validation_results.append(
                                 ValidationResult(
                                     field="subvendor_id",
                                     expected=donor_subvendor,
                                     actual=device_subvendor,
-                                    status="mismatch"
+                                    status="mismatch",
                                 )
                             )
-                    
+
                     # Check subsystem device ID
                     if device.subsystem_device and "subsystem_id" in donor_info:
-                        device_subsystem = device.subsystem_device.lower().replace("0x", "")
-                        donor_subsystem = donor_info["subsystem_id"].lower().replace("0x", "")
+                        device_subsystem = device.subsystem_device.lower().replace(
+                            "0x", ""
+                        )
+                        donor_subsystem = (
+                            donor_info["subsystem_id"].lower().replace("0x", "")
+                        )
                         if device_subsystem != donor_subsystem:
                             validation_results.append(
                                 ValidationResult(
                                     field="subsystem_id",
                                     expected=donor_subsystem,
                                     actual=device_subsystem,
-                                    status="mismatch"
+                                    status="mismatch",
                                 )
                             )
-                    
+
                     # Add validation results to progress
                     if validation_results:
                         if self._current_progress:
@@ -651,9 +694,11 @@ class BuildOrchestrator:
                                 )
                     else:
                         if self._current_progress:
-                            self._current_progress.current_operation = "PCI configuration values match donor card"
+                            self._current_progress.current_operation = (
+                                "PCI configuration values match donor card"
+                            )
                             await self._notify_progress()
-                
+
                 except FileNotFoundError:
                     if self._current_progress:
                         self._current_progress.add_error(
@@ -669,13 +714,15 @@ class BuildOrchestrator:
                         self._current_progress.add_error(
                             f"Error validating PCI configuration: {str(e)}"
                         )
-            
+
             # For non-local builds with donor_dump, validation happens during donor_dump extraction
             elif not config.local_build and config.donor_dump:
                 if self._current_progress:
-                    self._current_progress.current_operation = "PCI validation will be performed during donor extraction"
+                    self._current_progress.current_operation = (
+                        "PCI validation will be performed during donor extraction"
+                    )
                     await self._notify_progress()
-        
+
         except Exception as e:
             # Log error but continue with build
             if self._current_progress:

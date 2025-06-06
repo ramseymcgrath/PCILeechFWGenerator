@@ -6,7 +6,7 @@ Build progress tracking for real-time monitoring.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 
 class BuildStage(Enum):

@@ -116,7 +116,13 @@ class DonorDumpManager:
 
                     # Install specific kernel headers
                     subprocess.run(
-                        ["sudo", "apt-get", "install", "-y", f"linux-headers-{kernel_version}"],
+                        [
+                            "sudo",
+                            "apt-get",
+                            "install",
+                            "-y",
+                            f"linux-headers-{kernel_version}",
+                        ],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -129,7 +135,13 @@ class DonorDumpManager:
                 # Fedora/CentOS/RHEL approach
                 try:
                     subprocess.run(
-                        ["sudo", "dnf", "install", "-y", f"kernel-devel-{kernel_version}"],
+                        [
+                            "sudo",
+                            "dnf",
+                            "install",
+                            "-y",
+                            f"kernel-devel-{kernel_version}",
+                        ],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -155,7 +167,13 @@ class DonorDumpManager:
                 # openSUSE approach
                 try:
                     subprocess.run(
-                        ["sudo", "zypper", "install", "-y", f"kernel-devel-{kernel_version}"],
+                        [
+                            "sudo",
+                            "zypper",
+                            "install",
+                            "-y",
+                            f"kernel-devel-{kernel_version}",
+                        ],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -164,7 +182,9 @@ class DonorDumpManager:
                     logger.error(f"Failed to install kernel headers via zypper: {e}")
                     return False
             else:
-                logger.warning(f"Unsupported distribution: {distro}. Cannot automatically install headers.")
+                logger.warning(
+                    f"Unsupported distribution: {distro}. Cannot automatically install headers."
+                )
                 return False
 
             # Verify installation
@@ -174,11 +194,11 @@ class DonorDumpManager:
         except Exception as e:
             logger.error(f"Failed to install kernel headers: {e}")
             return False
-            
+
     def _detect_linux_distribution(self) -> str:
         """
         Detect the Linux distribution
-        
+
         Returns:
             String identifying the distribution (debian, ubuntu, fedora, centos, arch, etc.)
         """
@@ -187,7 +207,7 @@ class DonorDumpManager:
             if os.path.exists("/etc/os-release"):
                 with open("/etc/os-release", "r") as f:
                     os_release = f.read().lower()
-                    
+
                     if "debian" in os_release:
                         return "debian"
                     elif "ubuntu" in os_release:
@@ -204,7 +224,7 @@ class DonorDumpManager:
                         return "manjaro"
                     elif "opensuse" in os_release:
                         return "opensuse"
-            
+
             # Fallback to checking specific files
             if os.path.exists("/etc/debian_version"):
                 return "debian"
@@ -214,12 +234,14 @@ class DonorDumpManager:
                 return "centos"
             elif os.path.exists("/etc/arch-release"):
                 return "arch"
-            
+
             # Last resort: try to use lsb_release command
             try:
-                result = subprocess.run(["lsb_release", "-i"], capture_output=True, text=True, check=True)
+                result = subprocess.run(
+                    ["lsb_release", "-i"], capture_output=True, text=True, check=True
+                )
                 output = result.stdout.lower()
-                
+
                 if "debian" in output:
                     return "debian"
                 elif "ubuntu" in output:
@@ -232,7 +254,7 @@ class DonorDumpManager:
                     return "arch"
             except (subprocess.CalledProcessError, FileNotFoundError):
                 pass
-                
+
             return "unknown"
         except Exception as e:
             logger.error(f"Error detecting Linux distribution: {e}")
@@ -266,7 +288,7 @@ class DonorDumpManager:
             # Get distribution-specific instructions
             distro = self._detect_linux_distribution()
             install_cmd = self._get_header_install_command(distro, kernel_version)
-            
+
             raise KernelHeadersNotFoundError(
                 f"Kernel headers not found for {kernel_version}. "
                 f"Install with: {install_cmd}"
@@ -298,7 +320,9 @@ class DonorDumpManager:
                 return True
             except subprocess.CalledProcessError as e:
                 # If the build fails, try with KERNELRELEASE explicitly set
-                logger.warning(f"Standard build failed, trying with explicit KERNELRELEASE")
+                logger.warning(
+                    f"Standard build failed, trying with explicit KERNELRELEASE"
+                )
                 try:
                     result = subprocess.run(
                         ["make", f"KERNELRELEASE={kernel_version}"],
@@ -307,7 +331,9 @@ class DonorDumpManager:
                         capture_output=True,
                         text=True,
                     )
-                    logger.info("Module build with explicit KERNELRELEASE completed successfully")
+                    logger.info(
+                        "Module build with explicit KERNELRELEASE completed successfully"
+                    )
                     return True
                 except subprocess.CalledProcessError as e2:
                     error_msg = f"Module build failed with explicit KERNELRELEASE: {e2}"
@@ -320,15 +346,15 @@ class DonorDumpManager:
             if e.stderr:
                 error_msg += f"\nStderr: {e.stderr}"
             raise ModuleBuildError(error_msg)
-            
+
     def _get_header_install_command(self, distro: str, kernel_version: str) -> str:
         """
         Get the appropriate command to install kernel headers for the given distribution
-        
+
         Args:
             distro: Linux distribution name
             kernel_version: Kernel version string
-            
+
         Returns:
             Command string to install headers
         """

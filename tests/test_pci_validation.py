@@ -44,9 +44,9 @@ class TestPCIValidation:
             "dsn_lo": "0x00000000",
             "power_mgmt": "0xc823",
             "aer_caps": "0x10001",
-            "vendor_caps": "0x0040"
+            "vendor_caps": "0x0040",
         }
-        
+
         # Validation should pass without raising exceptions
         result = build.validate_donor_info(complete_info)
         assert result is True
@@ -64,7 +64,7 @@ class TestPCIValidation:
             "mpc": "0x02",
             # Missing mpr
         }
-        
+
         # Validation should raise SystemExit
         with pytest.raises(SystemExit):
             build.validate_donor_info(incomplete_info)
@@ -83,7 +83,7 @@ class TestPCIValidation:
             "mpr": "0x02",
             # Missing extended fields
         }
-        
+
         # Validation should pass but return warnings
         result = build.validate_donor_info(basic_info)
         assert result is True
@@ -102,7 +102,7 @@ class TestPCIValidation:
             "mpr": "0x02",
             "class_code": "XYZ",  # Invalid class code
         }
-        
+
         # Validation should pass but return warnings
         result = build.validate_donor_info(invalid_info)
         assert result is False
@@ -112,7 +112,7 @@ class TestPCIValidation:
         """Test that get_donor_info calls validate_donor_info."""
         # Mock the validate_donor_info function
         mock_validate.return_value = True
-        
+
         # Mock the DonorDumpManager
         with patch.object(DonorDumpManager, "setup_module") as mock_setup:
             mock_donor_info = {
@@ -126,10 +126,10 @@ class TestPCIValidation:
                 "mpr": "0x02",
             }
             mock_setup.return_value = mock_donor_info
-            
+
             # Call get_donor_info
             info = build.get_donor_info(bdf="0000:00:00.0")
-            
+
             # Verify validate_donor_info was called
             mock_validate.assert_called_once_with(mock_donor_info)
 
