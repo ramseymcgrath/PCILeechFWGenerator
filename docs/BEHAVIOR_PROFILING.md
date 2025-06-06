@@ -217,4 +217,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 2.0.0** - Major release with TUI interface and professional packaging
+**Version 0.1.6** - Major release with TUI interface and professional packaging
