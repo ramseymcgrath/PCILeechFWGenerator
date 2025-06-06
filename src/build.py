@@ -137,7 +137,12 @@ def create_secure_tempfile(suffix: str = "", prefix: str = "pcileech_") -> str:
         raise
 
 
-def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optional[str] = None, device_type: str = "generic") -> dict:
+def get_donor_info(
+    bdf: str,
+    use_donor_dump: bool = True,
+    donor_info_path: Optional[str] = None,
+    device_type: str = "generic",
+) -> dict:
     """
     Extract donor PCIe device information using a kernel module or generate synthetic data.
 
@@ -167,20 +172,20 @@ def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optio
 
     # Import donor_dump_manager for better error handling
     try:
-        from .donor_dump_manager import DonorDumpManager, DonorDumpError
+        from .donor_dump_manager import DonorDumpError, DonorDumpManager
     except ImportError:
-        from donor_dump_manager import DonorDumpManager, DonorDumpError
+        from donor_dump_manager import DonorDumpError, DonorDumpManager
 
     # Create manager instance
     manager = DonorDumpManager(donor_info_path=donor_info_path)
-    
+
     # Try to load donor info from file if explicitly provided and exists
     if donor_info_path and donor_info_path.strip() and os.path.exists(donor_info_path):
         try:
-            with open(donor_info_path, 'r') as f:
+            with open(donor_info_path, "r") as f:
                 info = json.load(f)
             print(f"[*] Loaded donor information from {donor_info_path}")
-            
+
             # Validate required fields
             missing_fields = [field for field in required_fields if field not in info]
             if missing_fields:
@@ -209,7 +214,7 @@ def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optio
                 bdf,
                 save_to_file=donor_info_path,
                 generate_if_unavailable=not use_donor_dump,
-                device_type=device_type
+                device_type=device_type,
             )
             print(f"[*] Successfully extracted donor info")
             return info
@@ -218,11 +223,11 @@ def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optio
             if not use_donor_dump:
                 print("[*] Generating synthetic donor information")
                 info = manager.generate_donor_info(device_type)
-                
+
                 # Save the generated info if a path was provided
                 if donor_info_path:
                     manager.save_donor_info(info, donor_info_path)
-                    
+
                 return info
             else:
                 sys.exit(f"Failed to extract donor information: {e}")
@@ -230,11 +235,11 @@ def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optio
         # Generate synthetic donor information
         print("[*] Generating synthetic donor information")
         info = manager.generate_donor_info(device_type)
-        
+
         # Save the generated info if a path was provided
         if donor_info_path:
             manager.save_donor_info(info, donor_info_path)
-            
+
         return info
 
 
@@ -1239,7 +1244,7 @@ def main() -> None:
     # Validate board directory exists (unless skipped)
     if not args.skip_board_check and not target_src.parent.exists():
         sys.exit("Expected pcileech board folder missing in repo clone")
-    
+
     # Create output directory if it doesn't exist
     if not target_src.parent.exists():
         print(f"[*] Creating output directory: {target_src.parent}")
@@ -1251,7 +1256,7 @@ def main() -> None:
         args.bdf,
         use_donor_dump=not args.skip_donor_dump,
         donor_info_path=args.donor_info_file,
-        device_type=args.device_type
+        device_type=args.device_type,
     )
 
     if args.verbose:

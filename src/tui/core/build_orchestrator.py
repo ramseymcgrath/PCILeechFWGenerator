@@ -56,14 +56,16 @@ class BuildOrchestrator:
                 BuildStage.ENVIRONMENT_VALIDATION, 0, "Validating environment"
             )
             await self._validate_environment()
-            
+
             # Check donor_dump module status if needed
             if config.donor_dump and not config.local_build:
                 await self._update_progress(
-                    BuildStage.ENVIRONMENT_VALIDATION, 50, "Checking donor_dump module status"
+                    BuildStage.ENVIRONMENT_VALIDATION,
+                    50,
+                    "Checking donor_dump module status",
                 )
                 await self._check_donor_module(config)
-                
+
             await self._update_progress(
                 BuildStage.ENVIRONMENT_VALIDATION,
                 100,
@@ -238,7 +240,7 @@ class BuildOrchestrator:
         app = self._get_app()
         config = getattr(app, "current_config", None)
         local_build = config and config.local_build
-        
+
         # For local builds, we have more relaxed requirements
         if not local_build:
             # Check if running as root (only needed for non-local builds)
@@ -281,9 +283,13 @@ class BuildOrchestrator:
             # For local builds, just check if Python and build.py are available
             if not Path("src/build.py").exists():
                 raise RuntimeError("build.py not found in src directory")
-            
+
             # Check if donor info file exists if specified
-            if config and config.donor_info_file and not Path(config.donor_info_file).exists():
+            if (
+                config
+                and config.donor_info_file
+                and not Path(config.donor_info_file).exists()
+            ):
                 if self._current_progress:
                     self._current_progress.add_warning(
                         f"Donor info file not found: {config.donor_info_file}"
@@ -292,91 +298,117 @@ class BuildOrchestrator:
         # Check output directory
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-    
+
     async def _check_donor_module(self, config: BuildConfiguration) -> None:
         """
         Check if donor_dump kernel module is properly installed
-        
+
         Args:
             config: Current build configuration
         """
         # Skip check if donor_dump is disabled or using local build
         if not config.donor_dump or config.local_build:
             return
-            
+
         try:
             # Import donor_dump_manager
             import sys
             from pathlib import Path
-            
+
             sys.path.append(str(Path(__file__).parent.parent.parent.parent))
             from donor_dump_manager import DonorDumpManager
-            
+
             # Create manager and check status
             manager = DonorDumpManager()
             module_status = manager.check_module_installation()
-            
+
             # Update progress with module status
             if self._current_progress:
                 status = module_status.get("status", "unknown")
                 details = module_status.get("details", "")
-                
+
                 if status != "installed":
                     # Add warning about module status
-                    self._current_progress.add_warning(f"Donor module status: {details}")
-                    
+                    self._current_progress.add_warning(
+                        f"Donor module status: {details}"
+                    )
+
                     # Add first issue and fix to progress
                     issues = module_status.get("issues", [])
                     fixes = module_status.get("fixes", [])
-                    
+
                     if issues:
                         self._current_progress.add_warning(f"Issue: {issues[0]}")
                     if fixes:
                         self._current_progress.add_warning(f"Suggested fix: {fixes[0]}")
-                        
+
                     # If auto_install_headers is enabled, try to fix common issues
-                    if config.auto_install_headers and status == "not_built" and "headers" in str(issues):
-                        self._current_progress.current_operation = "Attempting to install kernel headers"
+                    if (
+                        config.auto_install_headers
+                        and status == "not_built"
+                        and "headers" in str(issues)
+                    ):
+                        self._current_progress.current_operation = (
+                            "Attempting to install kernel headers"
+                        )
                         await self._notify_progress()
-                        
+
                         # Get kernel version
-                        kernel_version = module_status.get("raw_status", {}).get("kernel_version", "")
+                        kernel_version = module_status.get("raw_status", {}).get(
+                            "kernel_version", ""
+                        )
                         if kernel_version:
                             # Try to install headers
                             try:
-                                result = await self._run_command(f"sudo apt-get install -y linux-headers-{kernel_version}")
+                                result = await self._run_command(
+                                    f"sudo apt-get install -y linux-headers-{kernel_version}"
+                                )
                                 if result.returncode == 0:
-                                    self._current_progress.add_warning("Kernel headers installed successfully")
-                                    
+                                    self._current_progress.add_warning(
+                                        "Kernel headers installed successfully"
+                                    )
+
                                     # Try to build module
-                                    self._current_progress.current_operation = "Building donor_dump module"
+                                    self._current_progress.current_operation = (
+                                        "Building donor_dump module"
+                                    )
                                     await self._notify_progress()
-                                    
+
                                     # Build module
                                     manager.build_module(force_rebuild=True)
-                                    self._current_progress.add_warning("Donor module built successfully")
+                                    self._current_progress.add_warning(
+                                        "Donor module built successfully"
+                                    )
                                 else:
-                                    self._current_progress.add_error(f"Failed to install kernel headers: {result.stderr}")
+                                    self._current_progress.add_error(
+                                        f"Failed to install kernel headers: {result.stderr}"
+                                    )
                             except Exception as e:
-                                self._current_progress.add_error(f"Failed to install kernel headers: {str(e)}")
+                                self._current_progress.add_error(
+                                    f"Failed to install kernel headers: {str(e)}"
+                                )
                 else:
                     # Module is properly installed
-                    self._current_progress.current_operation = "Donor module is properly installed"
+                    self._current_progress.current_operation = (
+                        "Donor module is properly installed"
+                    )
                     await self._notify_progress()
-                
+
         except Exception as e:
             # Log error but continue with build
             if self._current_progress:
-                self._current_progress.add_error(f"Failed to check donor module status: {str(e)}")
+                self._current_progress.add_error(
+                    f"Failed to check donor module status: {str(e)}"
+                )
                 await self._notify_progress()
-        
+
     def _get_app(self):
         """Get the parent app instance"""
         # Find the app instance in the widget tree
         widget = getattr(self, "_progress_callback", None)
         while widget and not isinstance(widget, object):
             widget = getattr(widget, "app", None)
-        
+
         return widget
 
     async def _analyze_device(self, device: PCIDevice) -> None:
@@ -479,13 +511,17 @@ class BuildOrchestrator:
             build_cmd_parts.append(
                 f"--profile-duration {cli_args['behavior_profile_duration']}"
             )
-        
+
         # Add donor dump options
         if cli_args.get("skip_donor_dump"):
             build_cmd_parts.append("--skip-donor-dump")
         # Only add donor_info_file when explicitly provided and not empty
         donor_info_file = cli_args.get("donor_info_file")
-        if donor_info_file and isinstance(donor_info_file, str) and donor_info_file.strip():
+        if (
+            donor_info_file
+            and isinstance(donor_info_file, str)
+            and donor_info_file.strip()
+        ):
             build_cmd_parts.append(f"--donor-info-file {donor_info_file}")
         if cli_args.get("skip_board_check"):
             build_cmd_parts.append("--skip-board-check")
@@ -497,7 +533,7 @@ class BuildOrchestrator:
             if self._current_progress:
                 self._current_progress.current_operation = "Running local build"
                 await self._notify_progress()
-            
+
             # Run the build command directly
             await self._run_monitored_command(build_cmd.split())
         else:
@@ -525,11 +561,13 @@ class BuildOrchestrator:
                 "-v",
                 f"{os.getcwd()}/output:/app/output",
                 "dma-fw",
-                f"sudo python3 /app/build.py --bdf {device.bdf} --board {config.board_type}"
+                f"sudo python3 /app/build.py --bdf {device.bdf} --board {config.board_type}",
             ]
-            
+
             # Add the same options to the container command
-            for option in build_cmd_parts[1:]:  # Skip the first part (python3 src/build.py)
+            for option in build_cmd_parts[
+                1:
+            ]:  # Skip the first part (python3 src/build.py)
                 container_cmd.append(option)
 
             # Run container with progress monitoring

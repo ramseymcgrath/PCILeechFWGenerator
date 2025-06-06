@@ -104,14 +104,14 @@ class BuildConfiguration:
             "skip_donor_dump": not self.donor_dump,
             "auto_install_headers": self.auto_install_headers,
         }
-        
+
         # Add local build options if enabled
         if self.local_build:
             if self.donor_info_file:
                 args["donor_info_file"] = self.donor_info_file
             if self.skip_board_check:
                 args["skip_board_check"] = True
-                
+
         return args
 
     def to_dict(self) -> Dict[str, Any]:

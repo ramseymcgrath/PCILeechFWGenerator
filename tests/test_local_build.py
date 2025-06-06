@@ -34,48 +34,51 @@ class TestLocalBuild:
         # It should default to True
         with patch.object(DonorDumpManager, "setup_module") as mock_setup:
             mock_setup.return_value = mock_donor_info
-            
-            info = build.get_donor_info(
-                bdf="0000:00:00.0"  # Only provide BDF
-            )
-            
+
+            info = build.get_donor_info(bdf="0000:00:00.0")  # Only provide BDF
+
             # Verify setup_module was called with use_donor_dump=True
             mock_setup.assert_called_once()
             args, kwargs = mock_setup.call_args
             assert args[0] == "0000:00:00.0"  # BDF
             assert kwargs.get("generate_if_unavailable") is False  # Default value
-            
+
             # Verify the info matches the expected values
             assert info == mock_donor_info
-    
+
     def test_get_donor_info_from_file(self, mock_donor_info):
         """Test loading donor info from a file."""
         # Path to the sample donor info file
         donor_info_path = Path(__file__).parent / "sample_donor_info.json"
-        
+
         # Ensure the file exists
         assert donor_info_path.exists(), "Sample donor info file not found"
-        
+
         # Load donor info from file
         info = build.get_donor_info(
             bdf="0000:00:00.0",  # Dummy BDF, shouldn't be used
             use_donor_dump=False,  # Skip donor dump
             donor_info_path=str(donor_info_path),
-            device_type="generic"
+            device_type="generic",
         )
-        
+
         # Verify the loaded info matches the expected values
         assert info["vendor_id"] == "0x8086"
         assert info["device_id"] == "0x1533"
         assert info["bar_size"] == "0x20000"
         assert info["mpc"] == "0x02"
         assert info["mpr"] == "0x02"
-        
+
         # Verify all required fields are present
         required_fields = [
-            "vendor_id", "device_id", "subvendor_id", 
-            "subsystem_id", "revision_id", "bar_size", 
-            "mpc", "mpr"
+            "vendor_id",
+            "device_id",
+            "subvendor_id",
+            "subsystem_id",
+            "revision_id",
+            "bar_size",
+            "mpc",
+            "mpr",
         ]
         for field in required_fields:
             assert field in info, f"Required field {field} missing from donor info"
@@ -86,17 +89,23 @@ class TestLocalBuild:
     @patch("src.build.build_tcl")
     @patch("src.build.vivado_run")
     def test_build_with_skip_donor_dump(
-        self, mock_vivado_run, mock_build_tcl, mock_build_sv,
-        mock_scrape_driver_regs, mock_get_donor_info, mock_donor_info, mock_register_data
+        self,
+        mock_vivado_run,
+        mock_build_tcl,
+        mock_build_sv,
+        mock_scrape_driver_regs,
+        mock_get_donor_info,
+        mock_donor_info,
+        mock_register_data,
     ):
         """Test build process with --skip-donor-dump option."""
         # Set up mocks
         mock_get_donor_info.return_value = mock_donor_info
         mock_scrape_driver_regs.return_value = mock_register_data
-        
+
         # Mock TCL generation
         mock_build_tcl.return_value = ("tcl content", "test.tcl")
-        
+
         # Create a temporary directory for output
         with tempfile.TemporaryDirectory() as temp_dir:
             # Call get_donor_info directly instead of patching main
@@ -104,9 +113,9 @@ class TestLocalBuild:
                 bdf="0000:00:00.0",
                 use_donor_dump=False,
                 donor_info_path=str(Path(__file__).parent / "sample_donor_info.json"),
-                device_type="generic"
+                device_type="generic",
             )
-            
+
             # Verify get_donor_info was called with the right parameters
             mock_get_donor_info.assert_called_once()
             args, kwargs = mock_get_donor_info.call_args
@@ -125,41 +134,43 @@ class TestLocalBuild:
             "revision_id": "0x03",
             "bar_size": "0x20000",
             "mpc": "0x02",
-            "mpr": "0x02"
+            "mpr": "0x02",
         }
         mock_generate_donor_info.return_value = mock_donor_info
-        
+
         # Create a non-existent file path
         non_existent_file = "/tmp/non_existent_donor_info.json"
         if os.path.exists(non_existent_file):
             os.remove(non_existent_file)
-        
+
         # Get donor info with non-existent file and skip_donor_dump=True
         info = build.get_donor_info(
             bdf="0000:00:00.0",
             use_donor_dump=False,
             donor_info_path=non_existent_file,
-            device_type="network"
+            device_type="network",
         )
-        
+
         # Verify generate_donor_info was called with the right device type
         mock_generate_donor_info.assert_called_once_with("network")
-        
+
         # Verify the generated info matches the expected values
         assert info == mock_donor_info
 
     def test_donor_info_file_validation(self):
         """Test validation of donor info file contents."""
         # Create a temporary file with incomplete donor info
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".json", delete=False
+        ) as temp_file:
             incomplete_info = {
                 "vendor_id": "0x8086",
-                "device_id": "0x1533"
+                "device_id": "0x1533",
                 # Missing required fields
             }
             json.dump(incomplete_info, temp_file)
             temp_file_path = temp_file.name
-        
+
         try:
             # Test with incomplete file and use_donor_dump=False
             # This should generate synthetic data instead
@@ -172,20 +183,20 @@ class TestLocalBuild:
                     "revision_id": "0x03",
                     "bar_size": "0x20000",
                     "mpc": "0x02",
-                    "mpr": "0x02"
+                    "mpr": "0x02",
                 }
                 mock_generate.return_value = mock_donor_info
-                
+
                 info = build.get_donor_info(
                     bdf="0000:00:00.0",
                     use_donor_dump=False,
                     donor_info_path=temp_file_path,
-                    device_type="generic"
+                    device_type="generic",
                 )
-                
+
                 # Verify generate_donor_info was called
                 mock_generate.assert_called_once()
-                
+
                 # Verify the generated info was used
                 assert info == mock_donor_info
         finally:
@@ -199,17 +210,23 @@ class TestLocalBuild:
     @patch("src.build.build_tcl")
     @patch("src.build.vivado_run")
     def test_build_without_donor_file(
-        self, mock_vivado_run, mock_build_tcl, mock_build_sv,
-        mock_scrape_driver_regs, mock_get_donor_info, mock_donor_info, mock_register_data
+        self,
+        mock_vivado_run,
+        mock_build_tcl,
+        mock_build_sv,
+        mock_scrape_driver_regs,
+        mock_get_donor_info,
+        mock_donor_info,
+        mock_register_data,
     ):
         """Test build process without requiring donor file."""
         # Set up mocks
         mock_get_donor_info.return_value = mock_donor_info
         mock_scrape_driver_regs.return_value = mock_register_data
-        
+
         # Mock TCL generation
         mock_build_tcl.return_value = ("tcl content", "test.tcl")
-        
+
         # Create a temporary directory for output
         with tempfile.TemporaryDirectory() as temp_dir:
             # Call get_donor_info directly instead of patching main
@@ -217,9 +234,9 @@ class TestLocalBuild:
                 bdf="0000:00:00.0",
                 use_donor_dump=False,
                 donor_info_path=None,
-                device_type="generic"
+                device_type="generic",
             )
-            
+
             # Verify get_donor_info was called with the right parameters
             mock_get_donor_info.assert_called_once()
             args, kwargs = mock_get_donor_info.call_args
@@ -229,27 +246,33 @@ class TestLocalBuild:
 
 class TestBuildOrchestratorLocalBuild:
     """Test BuildOrchestrator with local build configuration."""
-    
+
     @pytest.mark.asyncio
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._run_monitored_command")
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._validate_environment")
     @patch("generate.get_current_driver")
     @patch("generate.get_iommu_group")
-    async def test_orchestrator_default_behavior(self, mock_get_iommu, mock_get_driver,
-                                           mock_validate_env, mock_run_command, mock_donor_info):
+    async def test_orchestrator_default_behavior(
+        self,
+        mock_get_iommu,
+        mock_get_driver,
+        mock_validate_env,
+        mock_run_command,
+        mock_donor_info,
+    ):
         """Test BuildOrchestrator with default configuration (donor dump enabled)."""
         from src.tui.core.build_orchestrator import BuildOrchestrator
         from src.tui.models.config import BuildConfiguration
         from src.tui.models.device import PCIDevice
         from src.tui.models.progress import BuildProgress
-        
+
         # Mock the validation to avoid the build.py not found error
         mock_validate_env.return_value = None
-        
+
         # Mock the driver and IOMMU group functions to avoid Linux requirement
         mock_get_driver.return_value = None
         mock_get_iommu.return_value = "1"
-        
+
         # Create a device
         device = PCIDevice(
             bdf="0000:00:00.0",
@@ -266,55 +289,59 @@ class TestBuildOrchestratorLocalBuild:
             link_speed="5 GT/s",
             bars=[{"address": "0xf0000000", "size": "128K", "type": "Memory"}],
             suitability_score=1.0,
-            compatibility_issues=[]
+            compatibility_issues=[],
         )
-        
+
         # Create a configuration with default settings (donor_dump=True)
         config = BuildConfiguration(
-            board_type="75t",
-            device_type="network",
-            donor_dump=True  # Default behavior
+            board_type="75t", device_type="network", donor_dump=True  # Default behavior
         )
-        
+
         # Create a progress callback
         progress_callback = Mock()
-        
+
         # Create the orchestrator
         orchestrator = BuildOrchestrator()
-        
+
         # Start the build
         await orchestrator.start_build(device, config, progress_callback)
-        
+
         # Verify the command was run with the right parameters
         mock_run_command.assert_called()
         cmd = mock_run_command.call_args[0][0]
-        
+
         # Check that the command includes the expected arguments
         assert "--bdf 0000:00:00.0" in " ".join(cmd)
         assert "--board 75t" in " ".join(cmd)
         # Verify that --skip-donor-dump is NOT present (donor dump is enabled by default)
         assert "--skip-donor-dump" not in " ".join(cmd)
-    
+
     @pytest.mark.asyncio
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._run_monitored_command")
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._validate_environment")
     @patch("generate.get_current_driver")
     @patch("generate.get_iommu_group")
-    async def test_orchestrator_local_build(self, mock_get_iommu, mock_get_driver,
-                                           mock_validate_env, mock_run_command, mock_donor_info):
+    async def test_orchestrator_local_build(
+        self,
+        mock_get_iommu,
+        mock_get_driver,
+        mock_validate_env,
+        mock_run_command,
+        mock_donor_info,
+    ):
         """Test BuildOrchestrator with local build configuration."""
         from src.tui.core.build_orchestrator import BuildOrchestrator
         from src.tui.models.config import BuildConfiguration
         from src.tui.models.device import PCIDevice
         from src.tui.models.progress import BuildProgress
-        
+
         # Mock the validation to avoid the build.py not found error
         mock_validate_env.return_value = None
-        
+
         # Mock the driver and IOMMU group functions to avoid Linux requirement
         mock_get_driver.return_value = None
         mock_get_iommu.return_value = "1"
-        
+
         # Create a device
         device = PCIDevice(
             bdf="0000:00:00.0",
@@ -331,31 +358,31 @@ class TestBuildOrchestratorLocalBuild:
             link_speed="5 GT/s",
             bars=[{"address": "0xf0000000", "size": "128K", "type": "Memory"}],
             suitability_score=1.0,
-            compatibility_issues=[]
+            compatibility_issues=[],
         )
-        
+
         # Create a configuration with local build enabled
         config = BuildConfiguration(
             board_type="75t",
             device_type="network",
             local_build=True,
             donor_dump=False,
-            donor_info_file=str(Path(__file__).parent / "sample_donor_info.json")
+            donor_info_file=str(Path(__file__).parent / "sample_donor_info.json"),
         )
-        
+
         # Create a progress callback
         progress_callback = Mock()
-        
+
         # Create the orchestrator
         orchestrator = BuildOrchestrator()
-        
+
         # Start the build
         await orchestrator.start_build(device, config, progress_callback)
-        
+
         # Verify the command was run with the right parameters
         mock_run_command.assert_called()
         cmd = mock_run_command.call_args[0][0]
-        
+
         # Check that the command includes the expected arguments
         assert "--bdf 0000:00:00.0" in " ".join(cmd)
         assert "--board 75t" in " ".join(cmd)

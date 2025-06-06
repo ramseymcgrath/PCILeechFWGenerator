@@ -6,15 +6,15 @@ Provides functionality to build, load, and manage the donor_dump kernel module
 for extracting PCI device parameters.
 """
 
+import json
 import logging
 import os
+import random
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-import json
-import random
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,11 @@ class ModuleLoadError(DonorDumpError):
 class DonorDumpManager:
     """Manager for donor_dump kernel module operations"""
 
-    def __init__(self, module_source_dir: Optional[Path] = None, donor_info_path: Optional[str] = None):
+    def __init__(
+        self,
+        module_source_dir: Optional[Path] = None,
+        donor_info_path: Optional[str] = None,
+    ):
         """
         Initialize the donor dump manager
 
@@ -298,7 +302,7 @@ class DonorDumpManager:
             Dictionary of synthetic device parameters
         """
         logger.info(f"Generating synthetic donor information for {device_type} device")
-        
+
         # Common device profiles
         device_profiles = {
             "generic": {
@@ -332,14 +336,14 @@ class DonorDumpManager:
                 "mpr": "0x03",  # Max read request size (1024 bytes)
             },
         }
-        
+
         # Use the specified device profile or fall back to generic
         profile = device_profiles.get(device_type, device_profiles["generic"])
-        
+
         # Add some randomness to make it look more realistic
         if random.random() > 0.5:
             profile["revision_id"] = f"0x{random.randint(1, 5):02x}"
-        
+
         return profile
 
     def save_donor_info(self, device_info: Dict[str, str], output_path: str) -> bool:
@@ -356,7 +360,7 @@ class DonorDumpManager:
         try:
             # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-            
+
             with open(output_path, "w") as f:
                 json.dump(device_info, f, indent=2)
             logger.info(f"Saved donor information to {output_path}")
@@ -413,11 +417,11 @@ class DonorDumpManager:
             status["module_size"] = module_ko.stat().st_size
 
         return status
-        
+
     def check_module_installation(self) -> Dict[str, Any]:
         """
         Check if the donor_dump kernel module is installed properly and provide detailed status
-        
+
         Returns:
             Dictionary with detailed status information including:
             - status: overall status (installed, not_installed, built_not_loaded, etc.)
@@ -427,77 +431,105 @@ class DonorDumpManager:
         """
         # Get basic module status
         status_info = self.get_module_status()
-        
+
         result = {
             "status": "unknown",
             "details": "",
             "issues": [],
             "fixes": [],
-            "raw_status": status_info
+            "raw_status": status_info,
         }
-        
+
         # Check if module is fully installed and working
         if status_info["module_loaded"] and status_info["proc_available"]:
             result["status"] = "installed"
-            result["details"] = "Donor dump kernel module is properly installed and loaded"
+            result["details"] = (
+                "Donor dump kernel module is properly installed and loaded"
+            )
             return result
-            
+
         # Check if module is built but not loaded
         if status_info["module_built"] and not status_info["module_loaded"]:
             result["status"] = "built_not_loaded"
             result["details"] = "Module is built but not currently loaded"
             result["issues"].append("Module is not loaded into the kernel")
-            result["fixes"].append(f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF")
-            result["fixes"].append("Or use the DonorDumpManager.load_module() function with your device BDF")
+            result["fixes"].append(
+                f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
+            )
+            result["fixes"].append(
+                "Or use the DonorDumpManager.load_module() function with your device BDF"
+            )
             return result
-            
+
         # Check if source exists but module is not built
         if status_info["source_dir_exists"] and not status_info["module_built"]:
             result["status"] = "not_built"
             result["details"] = "Module source exists but has not been built"
-            
+
             # Check if headers are available
             if not status_info["headers_available"]:
-                result["issues"].append(f"Kernel headers not found for kernel {status_info['kernel_version']}")
-                result["fixes"].append(f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}")
+                result["issues"].append(
+                    f"Kernel headers not found for kernel {status_info['kernel_version']}"
+                )
+                result["fixes"].append(
+                    f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}"
+                )
             else:
                 result["issues"].append("Module has not been built yet")
-                result["fixes"].append(f"Build the module: cd {self.module_source_dir} && make")
-                result["fixes"].append("Or use the DonorDumpManager.build_module() function")
-            
+                result["fixes"].append(
+                    f"Build the module: cd {self.module_source_dir} && make"
+                )
+                result["fixes"].append(
+                    "Or use the DonorDumpManager.build_module() function"
+                )
+
             return result
-            
+
         # Check if source directory doesn't exist
         if not status_info["source_dir_exists"]:
             result["status"] = "missing_source"
             result["details"] = "Module source directory not found"
-            result["issues"].append(f"Source directory not found at {self.module_source_dir}")
-            result["fixes"].append("Ensure the PCILeech Firmware Generator is properly installed")
-            result["fixes"].append("Check if the donor_dump directory exists in the src directory")
+            result["issues"].append(
+                f"Source directory not found at {self.module_source_dir}"
+            )
+            result["fixes"].append(
+                "Ensure the PCILeech Firmware Generator is properly installed"
+            )
+            result["fixes"].append(
+                "Check if the donor_dump directory exists in the src directory"
+            )
             return result
-            
+
         # Module is loaded but proc file is not available
         if status_info["module_loaded"] and not status_info["proc_available"]:
             result["status"] = "loaded_but_error"
             result["details"] = "Module is loaded but /proc/donor_dump is not available"
             result["issues"].append("Module loaded with errors or incorrect parameters")
             result["fixes"].append("Unload the module: sudo rmmod donor_dump")
-            result["fixes"].append("Check kernel logs for errors: dmesg | grep donor_dump")
-            result["fixes"].append("Reload with correct BDF: sudo insmod donor_dump.ko bdf=YOUR_DEVICE_BDF")
+            result["fixes"].append(
+                "Check kernel logs for errors: dmesg | grep donor_dump"
+            )
+            result["fixes"].append(
+                "Reload with correct BDF: sudo insmod donor_dump.ko bdf=YOUR_DEVICE_BDF"
+            )
             return result
-            
+
         # Fallback for any other state
         result["status"] = "unknown_error"
         result["details"] = "Unknown module installation state"
         result["issues"].append("Could not determine module status")
         result["fixes"].append("Check the module source directory and build logs")
         result["fixes"].append("Try rebuilding the module: make clean && make")
-        
+
         return result
 
     def setup_module(
-        self, bdf: str, auto_install_headers: bool = False, save_to_file: Optional[str] = None,
-        generate_if_unavailable: bool = False, device_type: str = "generic"
+        self,
+        bdf: str,
+        auto_install_headers: bool = False,
+        save_to_file: Optional[str] = None,
+        generate_if_unavailable: bool = False,
+        device_type: str = "generic",
     ) -> Dict[str, str]:
         """
         Complete setup process: check headers, build, load module, and read info
@@ -538,24 +570,24 @@ class DonorDumpManager:
 
             # Read device info
             device_info = self.read_device_info()
-            
+
             # Save to file if requested
             if save_to_file and device_info:
                 self.save_donor_info(device_info, save_to_file)
-                
+
             return device_info
-            
+
         except Exception as e:
             logger.error(f"Failed to set up donor_dump module: {e}")
-            
+
             if generate_if_unavailable:
                 logger.info("Generating synthetic donor information as fallback")
                 device_info = self.generate_donor_info(device_type)
-                
+
                 # Save to file if requested
                 if save_to_file and device_info:
                     self.save_donor_info(device_info, save_to_file)
-                    
+
                 return device_info
             else:
                 raise
@@ -582,9 +614,7 @@ def main():
         "--unload", action="store_true", help="Unload the module instead of loading"
     )
     parser.add_argument("--status", action="store_true", help="Show module status")
-    parser.add_argument(
-        "--save-to", help="Save donor information to specified file"
-    )
+    parser.add_argument("--save-to", help="Save donor information to specified file")
     parser.add_argument(
         "--generate",
         action="store_true",
@@ -628,7 +658,7 @@ def main():
             auto_install_headers=args.auto_install_headers,
             save_to_file=args.save_to,
             generate_if_unavailable=args.generate,
-            device_type=args.device_type
+            device_type=args.device_type,
         )
 
         print(f"Device information for {args.bdf}:")
