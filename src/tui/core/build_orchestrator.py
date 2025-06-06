@@ -16,7 +16,7 @@ import psutil
 
 from ..models.config import BuildConfiguration
 from ..models.device import PCIDevice
-from ..models.progress import BuildProgress, BuildStage
+from ..models.progress import BuildProgress, BuildStage, ValidationResult
 
 
 class BuildOrchestrator:
@@ -56,6 +56,14 @@ class BuildOrchestrator:
                 BuildStage.ENVIRONMENT_VALIDATION, 0, "Validating environment"
             )
             await self._validate_environment()
+            
+            # Stage 1.5: PCI Configuration Validation
+            await self._update_progress(
+                BuildStage.ENVIRONMENT_VALIDATION,
+                60,
+                "Validating PCI configuration values"
+            )
+            await self._validate_pci_config(device, config)
 
             # Check donor_dump module status if needed
             if config.donor_dump and not config.local_build:
@@ -399,6 +407,149 @@ class BuildOrchestrator:
             if self._current_progress:
                 self._current_progress.add_error(
                     f"Failed to check donor module status: {str(e)}"
+                )
+                await self._notify_progress()
+    
+    async def _validate_pci_config(self, device: PCIDevice, config: BuildConfiguration) -> None:
+        """
+        Validate PCI configuration values against donor card
+        
+        Args:
+            device: The PCIe device to validate
+            config: Current build configuration
+        """
+        try:
+            # Skip validation for local builds without donor info file
+            if config.local_build and not config.donor_info_file:
+                if self._current_progress:
+                    self._current_progress.add_warning(
+                        "Skipping PCI configuration validation - no donor info file provided"
+                    )
+                return
+            
+            # Import build module for validation
+            import sys
+            from pathlib import Path
+            
+            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+            from build import validate_donor_info
+            
+            # For local builds with donor info file, load and validate the file
+            if config.local_build and config.donor_info_file:
+                import json
+                try:
+                    with open(config.donor_info_file, 'r') as f:
+                        donor_info = json.load(f)
+                    
+                    # Validate the donor info
+                    if self._current_progress:
+                        self._current_progress.current_operation = "Validating donor info file"
+                        await self._notify_progress()
+                    
+                    # Perform validation
+                    validate_donor_info(donor_info)
+                    
+                    # Compare with device info
+                    validation_results = []
+                    
+                    # Check vendor ID
+                    if device.vendor_id and "vendor_id" in donor_info:
+                        device_vendor = device.vendor_id.lower().replace("0x", "")
+                        donor_vendor = donor_info["vendor_id"].lower().replace("0x", "")
+                        if device_vendor != donor_vendor:
+                            validation_results.append(
+                                ValidationResult(
+                                    field="vendor_id",
+                                    expected=donor_vendor,
+                                    actual=device_vendor,
+                                    status="mismatch"
+                                )
+                            )
+                    
+                    # Check device ID
+                    if device.device_id and "device_id" in donor_info:
+                        device_id = device.device_id.lower().replace("0x", "")
+                        donor_id = donor_info["device_id"].lower().replace("0x", "")
+                        if device_id != donor_id:
+                            validation_results.append(
+                                ValidationResult(
+                                    field="device_id",
+                                    expected=donor_id,
+                                    actual=device_id,
+                                    status="mismatch"
+                                )
+                            )
+                    
+                    # Check subsystem vendor ID
+                    if device.subsystem_vendor and "subvendor_id" in donor_info:
+                        device_subvendor = device.subsystem_vendor.lower().replace("0x", "")
+                        donor_subvendor = donor_info["subvendor_id"].lower().replace("0x", "")
+                        if device_subvendor != donor_subvendor:
+                            validation_results.append(
+                                ValidationResult(
+                                    field="subvendor_id",
+                                    expected=donor_subvendor,
+                                    actual=device_subvendor,
+                                    status="mismatch"
+                                )
+                            )
+                    
+                    # Check subsystem device ID
+                    if device.subsystem_device and "subsystem_id" in donor_info:
+                        device_subsystem = device.subsystem_device.lower().replace("0x", "")
+                        donor_subsystem = donor_info["subsystem_id"].lower().replace("0x", "")
+                        if device_subsystem != donor_subsystem:
+                            validation_results.append(
+                                ValidationResult(
+                                    field="subsystem_id",
+                                    expected=donor_subsystem,
+                                    actual=device_subsystem,
+                                    status="mismatch"
+                                )
+                            )
+                    
+                    # Add validation results to progress
+                    if validation_results:
+                        if self._current_progress:
+                            self._current_progress.add_warning(
+                                f"Found {len(validation_results)} PCI configuration mismatches"
+                            )
+                            for result in validation_results:
+                                self._current_progress.add_warning(
+                                    f"PCI mismatch: {result.field} - expected {result.expected}, got {result.actual}"
+                                )
+                    else:
+                        if self._current_progress:
+                            self._current_progress.current_operation = "PCI configuration values match donor card"
+                            await self._notify_progress()
+                
+                except FileNotFoundError:
+                    if self._current_progress:
+                        self._current_progress.add_error(
+                            f"Donor info file not found: {config.donor_info_file}"
+                        )
+                except json.JSONDecodeError:
+                    if self._current_progress:
+                        self._current_progress.add_error(
+                            f"Invalid JSON in donor info file: {config.donor_info_file}"
+                        )
+                except Exception as e:
+                    if self._current_progress:
+                        self._current_progress.add_error(
+                            f"Error validating PCI configuration: {str(e)}"
+                        )
+            
+            # For non-local builds with donor_dump, validation happens during donor_dump extraction
+            elif not config.local_build and config.donor_dump:
+                if self._current_progress:
+                    self._current_progress.current_operation = "PCI validation will be performed during donor extraction"
+                    await self._notify_progress()
+        
+        except Exception as e:
+            # Log error but continue with build
+            if self._current_progress:
+                self._current_progress.add_error(
+                    f"Failed to validate PCI configuration: {str(e)}"
                 )
                 await self._notify_progress()
 

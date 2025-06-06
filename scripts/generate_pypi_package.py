@@ -554,12 +554,12 @@ class PyPIUploader:
             CommandRunner.run("twine upload --repository testpypi dist/*")
             Logger.success("Uploaded to Test PyPI")
             Logger.info(
-                "Install with: pip3` install --index-url https://test.pypi.org/simple/ pcileech-fw-generator"
+                "Install with: pip3` install --index-url https://test.pypi.org/simple/ pcileechfwgenerator"
             )
         else:
             CommandRunner.run("twine upload dist/*")
             Logger.success("Uploaded to PyPI")
-            Logger.info("Install with: pip3 install pcileech-fw-generator")
+            Logger.info("Install with: pip3 install pcileechfwgenerator")
 
 
 class PackageGenerator:
@@ -628,7 +628,7 @@ class PackageGenerator:
         Logger.info("\n" + "=" * 60)
         Logger.info("PACKAGE GENERATION SUMMARY")
         Logger.info("=" * 60)
-        Logger.info(f"Package: pcileech-fw-generator")
+        Logger.info(f"Package: pcileechfwgenerator")
         Logger.info(f"Version: {self.version}")
         Logger.info(f"Distributions built: {len(distributions)}")
 

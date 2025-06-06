@@ -1,6 +1,6 @@
 # PCILeech Firmware Generator
 
-[![PyPI version](https://badge.fury.io/py/pcileech-fw-generator.svg)](https://badge.fury.io/py/pcileech-fw-generator)
+[![PyPI version](https://badge.fury.io/py/pcileechfwgenerator.svg)](https://badge.fury.io/py/pcileechfwgenerator)
 [![CI](https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions)
 [![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
 ![](https://dcbadge.limes.pink/api/shield/429866199833247744)
@@ -60,13 +60,13 @@ Generate spoofed PCIe DMA firmware from real donor hardware with a single comman
 
 ```bash
 # Basic installation
-pip install pcileech-fw-generator
+pip install pcileechfwgenerator
 
 # With TUI support (recommended)
-pip install pcileech-fw-generator[tui]
+pip install pcileechfwgenerator[tui]
 
 # Development installation
-pip install pcileech-fw-generator[dev]
+pip install pcileechfwgenerator[dev]
 ```
 
 ### Usage
@@ -112,10 +112,10 @@ This is primarily tested in Linux, with some fiddling you could probably get it 
 
 ```bash
 # Install with TUI support
-pip install pcileech-fw-generator[tui]
+pip install pcileechfwgenerator[tui]
 
 # Basic installation (CLI only)
-pip install pcileech-fw-generator
+pip install pcileechfwgenerator
 
 # Development installation
 git clone https://github.com/ramseymcgrath/PCILeechFWGenerator
@@ -409,7 +409,7 @@ twine upload dist/*
 - **[TUI Design Document](docs/TUI_Design_Document.md)**: Technical architecture
 - **[Contributing Guide](CONTRIBUTING.md)**: Development and contribution guidelines
 - **[Changelog](CHANGELOG.md)**: Version history and release notes
-- **[API Reference](https://pcileech-fw-generator.readthedocs.io/)**: Complete API documentation
+- **[API Reference](https://pcileechfwgenerator.readthedocs.io/)**: Complete API documentation
 
 ## 🔧 Troubleshooting
 
@@ -419,7 +419,7 @@ twine upload dist/*
 ```bash
 # If pip installation fails
 pip install --upgrade pip setuptools wheel
-pip install pcileech-fw-generator[tui]
+pip install pcileechfwgenerator[tui]
 
 # For development installation issues
 pip install -e .[dev]
@@ -453,13 +453,13 @@ podman info | grep rootless
 ./scripts/build_container.sh --test
 
 # Manual container dependency check
-podman run --rm pcileech-fw-generator:latest python3 -c "import psutil, pydantic; print('Dependencies OK')"
+podman run --rm pcileechfwgenerator:latest python3 -c "import psutil, pydantic; print('Dependencies OK')"
 
 # Check container file structure
-podman run --rm pcileech-fw-generator:latest ls -la /app/src/
+podman run --rm pcileechfwgenerator:latest ls -la /app/src/
 
 # Test with specific capabilities (recommended)
-podman run --rm --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN pcileech-fw-generator:latest echo "Capability test passed"
+podman run --rm --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN pcileechfwgenerator:latest echo "Capability test passed"
 ```
 
 **Container Security Best Practices:**

@@ -1,7 +1,7 @@
 # 🚀 Quick Start Guide
 
-[![PyPI version](https://badge.fury.io/py/pcileech-fw-generator.svg)](https://badge.fury.io/py/pcileech-fw-generator)
-[![Python Support](https://img.shields.io/pypi/pyversions/pcileech-fw-generator.svg)](https://pypi.org/project/pcileech-fw-generator/)
+[![PyPI version](https://badge.fury.io/py/pcileechfwgenerator.svg)](https://badge.fury.io/py/pcileechfwgenerator)
+[![Python Support](https://img.shields.io/pypi/pyversions/pcileechfwgenerator.svg)](https://pypi.org/project/pcileechfwgenerator/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Get up and running with PCILeech Firmware Generator in minutes.
@@ -20,6 +20,8 @@ Get up and running with PCILeech Firmware Generator in minutes.
 - [📋 Common Workflows](#-common-workflows)
   - [Basic Firmware Generation](#basic-firmware-generation)
   - [Advanced Features](#advanced-features)
+  - [PCI Configuration Validation](#pci-configuration-validation)
+  - [Donor Dump Options](#donor-dump-options)
   - [Flashing DMA Board](#flashing-dma-board)
 - [🐛 Troubleshooting](#-troubleshooting)
   - [Permission Issues](#permission-issues)
@@ -38,7 +40,7 @@ Get up and running with PCILeech Firmware Generator in minutes.
 
 ```bash
 # Install with TUI support
-pip install pcileech-fw-generator[tui]
+pip install pcileechfwgenerator[tui]
 
 # Verify installation
 pcileech-tui --help
@@ -123,6 +125,44 @@ sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv \
 sudo pcileech-build --bdf 0000:03:00.0 --board 75t \
   --enable-behavior-profiling --profile-duration 30.0
 ```
+
+### PCI Configuration Validation
+
+The firmware generator now includes a validation step that confirms PCI configuration values exist and match the donor card. This ensures that the generated firmware accurately represents the donor device's characteristics.
+
+#### Validated PCI Configuration Values
+
+The validation process checks for the following values:
+
+**Critical Values (Required):**
+- Device ID (0xXXXX): A 16-bit identifier unique to the device model
+- Vendor ID (0xYYYY): A 16-bit identifier assigned to the manufacturer
+- Subsystem ID (0xZZZZ): Identifies the specific subsystem or variant
+- Subsystem Vendor ID (0xWWWW): Identifies the vendor of the subsystem
+- Revision ID (0xRR): Indicates the hardware revision level of the device
+- BAR Size: Size of the Base Address Register
+- MPC: Max Payload Capable
+- MPR: Max Read Request
+
+**Extended Values (Recommended):**
+- Class Code (0xCCCCCC): A 24-bit code that defines the primary function/type of device
+- Extended Configuration Space: Full 4KB extended configuration space
+- Enhanced Capabilities: Support for enhanced capabilities
+
+**Optional Values:**
+- Device Serial Number (DSN): A 64-bit unique identifier
+- Power Management Capabilities: Power state information
+- Advanced Error Reporting (AER) Capabilities: Error handling features
+- Vendor-specific Capabilities: Custom vendor features
+
+#### Validation Process
+
+The validation occurs during the build process:
+1. When using a donor card, values are extracted and validated automatically
+2. When using a donor info file, values are validated against the file
+3. When generating synthetic data, basic validation ensures proper format
+
+If validation fails for critical values, the build will abort with an error message. For non-critical values, warnings will be displayed but the build will continue.
 
 ### Donor Dump Options
 

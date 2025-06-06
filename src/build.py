@@ -137,6 +137,93 @@ def create_secure_tempfile(suffix: str = "", prefix: str = "pcileech_") -> str:
         raise
 
 
+def validate_donor_info(info: dict) -> bool:
+    """
+    Validate donor information to ensure all required PCI configuration values exist.
+    
+    Args:
+        info (dict): The donor information dictionary to validate.
+        
+    Returns:
+        bool: True if all required fields are present and valid, False otherwise.
+        
+    Raises:
+        SystemExit: If critical fields are missing from the donor info.
+    """
+    # Define required fields for basic validation
+    basic_required_fields = [
+        "vendor_id",
+        "device_id",
+        "subvendor_id",
+        "subsystem_id",
+        "revision_id",
+        "bar_size",
+        "mpc",
+        "mpr",
+    ]
+    
+    # Define extended fields that should be present for complete validation
+    extended_required_fields = [
+        "class_code",        # 24-bit code defining device function type
+        "extended_config_space",  # Full 4KB extended configuration space
+        "enhanced_caps",     # Enhanced capability support
+    ]
+    
+    # Optional but valuable fields
+    optional_fields = [
+        "dsn_hi",            # Device Serial Number (high 32 bits)
+        "dsn_lo",            # Device Serial Number (low 32 bits)
+        "power_mgmt",        # Power management capabilities
+        "aer_caps",          # Advanced Error Reporting capabilities
+        "vendor_caps",       # Vendor-specific capabilities
+    ]
+    
+    # Check for critical missing fields
+    missing_critical = [field for field in basic_required_fields if field not in info]
+    if missing_critical:
+        print(f"[!] ERROR: Critical fields missing from donor info: {missing_critical}")
+        print("[!] These fields are required for basic PCI device emulation")
+        raise SystemExit(f"Missing critical donor information: {', '.join(missing_critical)}")
+    
+    # Check for extended fields
+    missing_extended = [field for field in extended_required_fields if field not in info]
+    if missing_extended:
+        print(f"[!] WARNING: Extended fields missing from donor info: {missing_extended}")
+        print("[!] These fields are recommended for complete PCI configuration space emulation")
+        print("[!] The build will continue but may not fully match the donor device")
+    
+    # Check for optional fields
+    missing_optional = [field for field in optional_fields if field not in info]
+    if missing_optional:
+        print(f"[*] Note: Optional fields missing from donor info: {missing_optional}")
+        print("[*] These fields provide additional device-specific features")
+    
+    # Validate format of critical fields
+    format_errors = []
+    
+    # Validate hex values
+    hex_fields = ["vendor_id", "device_id", "subvendor_id", "subsystem_id", "revision_id", "bar_size"]
+    for field in hex_fields:
+        if field in info:
+            value = info[field]
+            if not (value.startswith("0x") and all(c in "0123456789abcdefABCDEF" for c in value[2:])):
+                format_errors.append(f"{field} ({value}) is not a valid hex value")
+    
+    # Validate class code if present
+    if "class_code" in info:
+        class_code = info["class_code"]
+        if not (len(class_code) == 6 and all(c in "0123456789abcdefABCDEF" for c in class_code)):
+            format_errors.append(f"class_code ({class_code}) should be a 6-digit hex value")
+    
+    if format_errors:
+        print(f"[!] WARNING: Format validation issues in donor info:")
+        for error in format_errors:
+            print(f"[!]   - {error}")
+        print("[!] The build will continue but may not behave as expected")
+    
+    return len(missing_critical) == 0 and len(format_errors) == 0
+
+
 def get_donor_info(
     bdf: str,
     use_donor_dump: bool = True,
@@ -195,8 +282,12 @@ def get_donor_info(
                 else:
                     print("[*] Generating synthetic donor information")
                     info = manager.generate_donor_info(device_type)
+                    # Validate the generated info
+                    validate_donor_info(info)
                     return info
             else:
+                # Validate the loaded info
+                validate_donor_info(info)
                 return info
         except (json.JSONDecodeError, IOError) as e:
             print(f"[!] Error loading donor info file: {e}")
@@ -217,6 +308,8 @@ def get_donor_info(
                 device_type=device_type,
             )
             print(f"[*] Successfully extracted donor info")
+            # Validate the extracted info
+            validate_donor_info(info)
             return info
         except Exception as e:
             print(f"[!] Error extracting donor information: {e}")
@@ -228,6 +321,8 @@ def get_donor_info(
                 if donor_info_path:
                     manager.save_donor_info(info, donor_info_path)
 
+                # Validate the generated info
+                validate_donor_info(info)
                 return info
             else:
                 sys.exit(f"Failed to extract donor information: {e}")
@@ -240,6 +335,8 @@ def get_donor_info(
         if donor_info_path:
             manager.save_donor_info(info, donor_info_path)
 
+        # Validate the generated info
+        validate_donor_info(info)
         return info
 
 

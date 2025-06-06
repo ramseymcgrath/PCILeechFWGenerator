@@ -22,7 +22,7 @@ def main():
         except ImportError:
             print("Error: Textual framework not installed.")
             print(
-                "Please install TUI dependencies with: pip install pcileech-fw-generator[tui]"
+                "Please install TUI dependencies with: pip install pcileechfwgenerator[tui]"
             )
             return 1
 

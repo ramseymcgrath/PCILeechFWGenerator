@@ -195,12 +195,12 @@ upload_to_pypi() {
         log_info "Uploading to Test PyPI..."
         twine upload --repository testpypi dist/*
         log_success "Uploaded to Test PyPI"
-        log_info "Install with: pip install --index-url https://test.pypi.org/simple/ pcileech-fw-generator"
+        log_info "Install with: pip install --index-url https://test.pypi.org/simple/ pcileechfwgenerator"
     else
         log_info "Uploading to PyPI..."
         twine upload dist/*
         log_success "Uploaded to PyPI"
-        log_info "Install with: pip install pcileech-fw-generator"
+        log_info "Install with: pip install pcileechfwgenerator"
     fi
 }
 

@@ -6,7 +6,7 @@ Build progress tracking for real-time monitoring.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 class BuildStage(Enum):
@@ -19,6 +19,16 @@ class BuildStage(Enum):
     SYSTEMVERILOG_GENERATION = "SystemVerilog Generation"
     VIVADO_SYNTHESIS = "Vivado Synthesis"
     BITSTREAM_GENERATION = "Bitstream Generation"
+
+
+@dataclass
+class ValidationResult:
+    """Validation result for PCI configuration values."""
+
+    field: str
+    expected: Any
+    actual: Any
+    status: str = "mismatch"  # mismatch, missing, invalid
 
 
 @dataclass
