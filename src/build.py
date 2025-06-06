@@ -1438,7 +1438,7 @@ def main() -> None:
 
     # Get board configuration
     board_config = BOARD_INFO[args.board]
-    
+
     try:
         # Get board path using RepoManager
         if not args.skip_board_check:
@@ -1448,7 +1448,7 @@ def main() -> None:
             board_root = Path(board_config["root"])
     except Exception as e:
         sys.exit(f"Error getting board path: {str(e)}")
-        
+
     target_src = board_root / "src" / "pcileech_tlps128_bar_controller.sv"
 
     # Create output directory if it doesn't exist

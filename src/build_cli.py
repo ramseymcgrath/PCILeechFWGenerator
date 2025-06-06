@@ -5,8 +5,8 @@ This module provides the main() function that setuptools will use as an entry po
 """
 
 import os
-import sys
 import site
+import sys
 from pathlib import Path
 
 # Add project root to path for imports
@@ -40,7 +40,9 @@ def main():
                 from build import main as build_main
             except ImportError:
                 print("Error: Could not import build module.")
-                print("This could be due to running with sudo without preserving the Python path.")
+                print(
+                    "This could be due to running with sudo without preserving the Python path."
+                )
                 print("Try using the pcileech-build-sudo script instead.")
                 return 1
 

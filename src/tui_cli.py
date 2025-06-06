@@ -5,8 +5,8 @@ This module provides the main() function that setuptools will use as an entry po
 """
 
 import os
-import sys
 import site
+import sys
 from pathlib import Path
 
 # Add project root to path for imports
@@ -50,7 +50,9 @@ def main():
                 from tui.main import PCILeechTUI
             except ImportError:
                 print("Error: Could not import TUI module.")
-                print("This could be due to running with sudo without preserving the Python path.")
+                print(
+                    "This could be due to running with sudo without preserving the Python path."
+                )
                 print("Try using the pcileech-tui-sudo script instead.")
                 return 1
 

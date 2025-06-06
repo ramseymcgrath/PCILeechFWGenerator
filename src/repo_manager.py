@@ -115,9 +115,7 @@ class RepoManager:
             print(f"[*] Cloning PCILeech FPGA repository to {repo_dir}")
 
             try:
-                result = cls.run_command(
-                    f"git clone {PCILEECH_FPGA_REPO} {repo_dir}"
-                )
+                result = cls.run_command(f"git clone {PCILEECH_FPGA_REPO} {repo_dir}")
 
                 # Create last update timestamp
                 with open(repo_dir / ".last_update", "w") as f:
