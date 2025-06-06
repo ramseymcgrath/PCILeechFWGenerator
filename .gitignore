@@ -14,7 +14,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -365,7 +364,6 @@ secrets.json
 # Archives
 *.7z
 *.dmg
-*.gz
 *.iso
 *.jar
 *.rar
