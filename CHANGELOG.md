@@ -13,8 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ## 📑 Table of Contents
 
-- [Version 2.0.0 (2025-01-02)](#200---2025-01-02)
-- [Version 1.0.0 (2024-12-01)](#100---2024-12-01)
+- [Version 0.1.7 (2025-01-02)](#200---2025-01-02)
 - [Release Notes](#release-notes)
 - [Backward Compatibility](#backward-compatibility)
 - [Future Roadmap](#future-roadmap)
@@ -61,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ---
 
-## [2.0.0] - 2025-01-02
+## [0.1.7] - 2025-01-02
 
 ### ✨ Added
 - **🖥️ Interactive TUI Interface**: Complete text-based user interface with real-time monitoring
@@ -181,4 +180,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.1.6** - Major release with TUI interface and professional packaging
+**Version 0.1.7** - Major release with TUI interface and professional packaging

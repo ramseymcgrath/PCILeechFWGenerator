@@ -77,7 +77,7 @@ Changelog = "https://github.com/ramseymcgrath/PCILeechFWGenerator/blob/main/CHAN
 [project.scripts]
 pcileech-generate = "src.generate_cli:main"
 pcileech-tui = "src.tui_cli:main"
-pcileech-build = "src.build:main"
+pcileech-build = "src.build_cli:main"
 
 [tool.setuptools]
 packages = ["src", "src.tui", "src.tui.core", "src.tui.models", "src.scripts"]

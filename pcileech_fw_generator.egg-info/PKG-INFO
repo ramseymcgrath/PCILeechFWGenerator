@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: pcileech-fw-generator
-Version: 2.0.0
+Version: 0.1.7
 Summary: Generate spoofed PCIe DMA firmware from real donor hardware
 Author-email: Ramsey McGrath <ramseymcgrath@gmail.com>
 Maintainer-email: Ramsey McGrath <ramseymcgrath@gmail.com>
@@ -491,5 +491,5 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 2.0.0** - Major release with TUI interface and professional packaging
+**Version 0.1.7** - Major release with TUI interface and professional packaging
 For educational research and legitimate PCIe development only. Misuse may violate laws and void warranties. The authors assume no liability.

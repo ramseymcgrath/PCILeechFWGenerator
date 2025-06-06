@@ -1,0 +1,18 @@
+#!/bin/bash
+# Wrapper script to run pcileech-build with sudo while preserving Python path
+
+# Get the path to the installed pcileech-build script
+PCILEECH_BUILD_PATH=$(which pcileech-build)
+
+if [ -z "$PCILEECH_BUILD_PATH" ]; then
+    echo "Error: pcileech-build not found in PATH"
+    exit 1
+fi
+
+# Get Python site-packages directories
+PYTHON_USER_SITE=$(python3 -m site --user-site)
+PYTHON_SITE_PACKAGES=$(python3 -c "import site; print(':'.join(site.getsitepackages()))")
+
+# Run with sudo, preserving the PYTHONPATH
+echo "Running pcileech-build with sudo and preserved Python paths..."
+sudo PYTHONPATH="$PYTHONPATH:$PYTHON_USER_SITE:$PYTHON_SITE_PACKAGES" "$PCILEECH_BUILD_PATH" "$@"

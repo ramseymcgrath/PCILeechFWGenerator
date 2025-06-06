@@ -35,6 +35,7 @@ try:
         PowerManagementConfig,
     )
     from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+    from .repo_manager import RepoManager
 except ImportError:
     # Fallback for direct execution
     from advanced_sv_main import (
@@ -46,6 +47,7 @@ except ImportError:
         PowerManagementConfig,
     )
     from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+    from repo_manager import RepoManager
 
 # Configuration constants
 ROOT = Path(__file__).parent.parent.resolve()  # Get project root directory
@@ -1426,16 +1428,28 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Ensure the pcileech-fpga repository is available
+    if not args.skip_board_check:
+        try:
+            print("[*] Checking pcileech-fpga repository")
+            RepoManager.ensure_git_repo()
+        except Exception as e:
+            sys.exit(f"Error ensuring pcileech-fpga repository: {str(e)}")
+
     # Get board configuration
     board_config = BOARD_INFO[args.board]
-    board_root = Path(board_config["root"])
+    
+    try:
+        # Get board path using RepoManager
+        if not args.skip_board_check:
+            board_root = RepoManager.get_board_path(args.board)
+        else:
+            # Use the original path if skipping board check
+            board_root = Path(board_config["root"])
+    except Exception as e:
+        sys.exit(f"Error getting board path: {str(e)}")
+        
     target_src = board_root / "src" / "pcileech_tlps128_bar_controller.sv"
-
-    # Validate board directory exists (unless skipped)
-    if not args.skip_board_check and not target_src.parent.exists():
-        sys.exit(
-            f"Expected pcileech board folder missing: {target_src.parent}\nMake sure the pcileech-fpga repository is properly cloned."
-        )
 
     # Create output directory if it doesn't exist
     if not target_src.parent.exists():

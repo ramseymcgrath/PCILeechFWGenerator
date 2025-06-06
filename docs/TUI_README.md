@@ -92,7 +92,13 @@ sudo python3 generate.py --tui
 
 # Method 3: Direct execution
 sudo python3 -m src.tui.main
+
+# Method 4: Using the sudo wrapper (recommended for root access)
+./install-sudo-wrapper.sh  # Install the wrapper first (one-time setup)
+pcileech-tui-sudo
 ```
+
+> **Note**: Many TUI operations require root privileges. The sudo wrapper script preserves the Python environment when running with sudo, preventing module import errors.
 
 ### TUI Interface Overview
 
@@ -364,8 +370,15 @@ The TUI continuously monitors:
 
 1. **Run as Root**:
    ```bash
+   # Using the sudo wrapper (recommended)
+   ./install-sudo-wrapper.sh  # Install the wrapper first
+   pcileech-tui-sudo
+   
+   # Or directly with sudo
    sudo python3 tui_generate.py
    ```
+   
+   > **Note**: When running with sudo, you might encounter the error `ModuleNotFoundError: No module named 'src'`. This happens because sudo changes the Python module search path. Use the provided sudo wrapper script to avoid this issue.
 
 2. **Check lspci**:
    ```bash
@@ -441,4 +454,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.1.6** - Major release with TUI interface and professional packaging
+**Version 0.1.7** - Major release with TUI interface and professional packaging

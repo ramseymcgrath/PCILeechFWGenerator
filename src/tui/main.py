@@ -78,7 +78,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                         ("graphics", "Graphics"),
                         ("audio", "Audio"),
                     ],
-                    value="generic",
                     id="device-type-select",
                 )
 
@@ -172,6 +171,13 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
         """Initialize dialog with current configuration"""
         # Get current configuration from parent app
         app = self.app
+        
+        # Initialize the device type select with default value
+        device_type_select = self.query_one("#device-type-select", Select)
+        if "generic" in [option[0] for option in device_type_select.options]:
+            device_type_select.value = "generic"
+        
+        # Then populate with current configuration if available
         if hasattr(app, "current_config"):
             config = app.current_config
             self._populate_form(config)
@@ -180,7 +186,13 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
         """Populate form fields with configuration values"""
         try:
             self.query_one("#board-type-select", Select).value = config.board_type
-            self.query_one("#device-type-select", Select).value = config.device_type
+            
+            # Set device type value safely
+            device_type_select = self.query_one("#device-type-select", Select)
+            # Make sure the value is in the available options
+            if config.device_type in [option[0] for option in device_type_select.options]:
+                device_type_select.value = config.device_type
+            
             self.query_one("#config-name-input", Input).value = config.name
             self.query_one("#config-description-input", Input).value = (
                 config.description
@@ -221,9 +233,16 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
     def _create_config_from_form(self) -> BuildConfiguration:
         """Create BuildConfiguration from form values"""
         try:
+            # Get device type safely
+            device_type_select = self.query_one("#device-type-select", Select)
+            device_type = device_type_select.value
+            # Fallback to generic if value is not set or invalid
+            if not device_type or device_type not in [option[0] for option in device_type_select.options]:
+                device_type = "generic"
+                
             return BuildConfiguration(
                 board_type=self.query_one("#board-type-select", Select).value,
-                device_type=self.query_one("#device-type-select", Select).value,
+                device_type=device_type,
                 name=self.query_one("#config-name-input", Input).value,
                 description=self.query_one("#config-description-input", Input).value,
                 advanced_sv=self.query_one("#advanced-sv-switch", Switch).value,

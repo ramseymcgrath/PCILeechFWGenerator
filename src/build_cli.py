@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLI entry point for pcileech-tui console script.
+CLI entry point for pcileech-build console script.
 This module provides the main() function that setuptools will use as an entry point.
 """
 
@@ -26,43 +26,31 @@ if user_site not in sys.path:
 
 
 def main():
-    """Main entry point for pcileech-tui command"""
+    """Main entry point for pcileech-build command"""
     try:
-        # Check if Textual is available
-        try:
-            import textual
-        except ImportError:
-            print("Error: Textual framework not installed.")
-            print(
-                "Please install TUI dependencies with: pip install pcileechfwgenerator[tui]"
-            )
-            return 1
-
-        # Import and run the TUI application
+        # Import and run the build module
         # Try different import strategies to handle various installation scenarios
         try:
             # First try the standard import (works when installed as package)
-            from src.tui.main import PCILeechTUI
+            from src.build import main as build_main
         except ImportError:
             # If that fails, try a direct import from the current directory
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             try:
-                from tui.main import PCILeechTUI
+                from build import main as build_main
             except ImportError:
-                print("Error: Could not import TUI module.")
+                print("Error: Could not import build module.")
                 print("This could be due to running with sudo without preserving the Python path.")
-                print("Try using the pcileech-tui-sudo script instead.")
+                print("Try using the pcileech-build-sudo script instead.")
                 return 1
 
-        app = PCILeechTUI()
-        app.run()
-        return 0
+        return build_main()
 
     except KeyboardInterrupt:
-        print("\nTUI application interrupted by user")
+        print("\nBuild process interrupted by user")
         return 1
     except Exception as e:
-        print(f"Error starting TUI application: {e}")
+        print(f"Error running build process: {e}")
         return 1
 
 
