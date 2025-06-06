@@ -15,9 +15,10 @@
  *   aer_caps          – Advanced Error Reporting capabilities
  *   vendor_caps       – Vendor-specific capabilities
  *
- * Kernel ≥ 5.x, GPL-compatible.
+ * Compatible with Linux kernel versions 4.x and 5.x, GPL-compatible.
  */
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/pci.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
@@ -61,10 +62,19 @@ static int show(struct seq_file *m, void *v)
     }
     
     /* Validate device is still present on the bus */
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
     if (!pci_device_is_present(pdev)) {
         seq_printf(m, "error:device_not_present\n");
         return 0;
     }
+    #else
+    /* For older kernels, check vendor ID */
+    u16 test_vid;
+    if (pci_read_config_word(pdev, PCI_VENDOR_ID, &test_vid) != PCIBIOS_SUCCESSFUL || test_vid == 0xFFFF) {
+        seq_printf(m, "error:device_not_present\n");
+        return 0;
+    }
+    #endif
     
     /* Safe PCI config space reads with error checking */
     ret = pci_read_config_word(pdev, PCI_VENDOR_ID, &vid);
@@ -262,12 +272,22 @@ static int show(struct seq_file *m, void *v)
 static int open_proc(struct inode *i, struct file *f)
 { return single_open(f, show, NULL); }
 
+/* Define proc_ops or file_operations based on kernel version */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
 static const struct proc_ops fops = {
     .proc_open    = open_proc,
     .proc_read    = seq_read,
     .proc_lseek   = seq_lseek,
     .proc_release = single_release,
 };
+#else
+static const struct file_operations fops = {
+    .open    = open_proc,
+    .read    = seq_read,
+    .llseek  = seq_lseek,
+    .release = single_release,
+};
+#endif
 
 /* ───── module init/exit with comprehensive error handling ───────────────────────────────────────────────── */
 static int __init mod_init(void)
@@ -313,11 +333,21 @@ static int __init mod_init(void)
     }
 
     /* Verify device is actually present on the bus */
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
     if (!pci_device_is_present(pdev)) {
         pr_err("donor_dump: PCI device %s is not present on bus\n", bdf);
         ret = -ENODEV;
         goto err_put_device;
     }
+    #else
+    /* For older kernels, check vendor ID instead */
+    u16 vendor_id;
+    if (pci_read_config_word(pdev, PCI_VENDOR_ID, &vendor_id) != PCIBIOS_SUCCESSFUL || vendor_id == 0xFFFF) {
+        pr_err("donor_dump: PCI device %s is not present on bus\n", bdf);
+        ret = -ENODEV;
+        goto err_put_device;
+    }
+    #endif
 
     /* Test basic config space access */
     u16 vendor_id;
@@ -358,11 +388,20 @@ static void __exit mod_exit(void)
     /* Properly release device reference to prevent memory leaks */
     if (pdev) {
         /* Verify device is still valid before logging */
+        #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
         if (pci_device_is_present(pdev) && pdev->error_state == pci_channel_io_normal) {
             pr_info("donor_dump: Releasing device %s\n", bdf);
         } else {
             pr_info("donor_dump: Releasing device reference (device may have been removed)\n");
         }
+        #else
+        /* For older kernels, check error state only */
+        if (pdev->error_state == pci_channel_io_normal) {
+            pr_info("donor_dump: Releasing device %s\n", bdf);
+        } else {
+            pr_info("donor_dump: Releasing device reference (device may have been removed)\n");
+        }
+        #endif
         pci_dev_put(pdev);
         pdev = NULL;
     }

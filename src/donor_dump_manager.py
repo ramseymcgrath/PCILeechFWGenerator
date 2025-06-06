@@ -99,29 +99,144 @@ class DonorDumpManager:
         try:
             logger.info(f"Installing kernel headers for {kernel_version}")
 
-            # Update package list first
-            subprocess.run(
-                ["sudo", "apt-get", "update"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            # Detect Linux distribution
+            distro = self._detect_linux_distribution()
+            logger.info(f"Detected Linux distribution: {distro}")
 
-            # Install specific kernel headers
-            subprocess.run(
-                ["sudo", "apt-get", "install", "-y", f"linux-headers-{kernel_version}"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            if distro == "debian" or distro == "ubuntu":
+                # Debian/Ubuntu approach
+                try:
+                    # Update package list first
+                    subprocess.run(
+                        ["sudo", "apt-get", "update"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    # Install specific kernel headers
+                    subprocess.run(
+                        ["sudo", "apt-get", "install", "-y", f"linux-headers-{kernel_version}"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to install kernel headers via apt-get: {e}")
+                    return False
+
+            elif distro == "fedora" or distro == "centos" or distro == "rhel":
+                # Fedora/CentOS/RHEL approach
+                try:
+                    subprocess.run(
+                        ["sudo", "dnf", "install", "-y", f"kernel-devel-{kernel_version}"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to install kernel headers via dnf: {e}")
+                    return False
+
+            elif distro == "arch" or distro == "manjaro":
+                # Arch Linux approach
+                try:
+                    subprocess.run(
+                        ["sudo", "pacman", "-S", "--noconfirm", "linux-headers"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to install kernel headers via pacman: {e}")
+                    return False
+
+            elif distro == "opensuse":
+                # openSUSE approach
+                try:
+                    subprocess.run(
+                        ["sudo", "zypper", "install", "-y", f"kernel-devel-{kernel_version}"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to install kernel headers via zypper: {e}")
+                    return False
+            else:
+                logger.warning(f"Unsupported distribution: {distro}. Cannot automatically install headers.")
+                return False
 
             # Verify installation
             headers_available, _ = self.check_kernel_headers()
             return headers_available
 
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             logger.error(f"Failed to install kernel headers: {e}")
             return False
+            
+    def _detect_linux_distribution(self) -> str:
+        """
+        Detect the Linux distribution
+        
+        Returns:
+            String identifying the distribution (debian, ubuntu, fedora, centos, arch, etc.)
+        """
+        try:
+            # Try to use /etc/os-release first (most modern distros)
+            if os.path.exists("/etc/os-release"):
+                with open("/etc/os-release", "r") as f:
+                    os_release = f.read().lower()
+                    
+                    if "debian" in os_release:
+                        return "debian"
+                    elif "ubuntu" in os_release:
+                        return "ubuntu"
+                    elif "fedora" in os_release:
+                        return "fedora"
+                    elif "centos" in os_release:
+                        return "centos"
+                    elif "rhel" in os_release:
+                        return "rhel"
+                    elif "arch" in os_release:
+                        return "arch"
+                    elif "manjaro" in os_release:
+                        return "manjaro"
+                    elif "opensuse" in os_release:
+                        return "opensuse"
+            
+            # Fallback to checking specific files
+            if os.path.exists("/etc/debian_version"):
+                return "debian"
+            elif os.path.exists("/etc/fedora-release"):
+                return "fedora"
+            elif os.path.exists("/etc/centos-release"):
+                return "centos"
+            elif os.path.exists("/etc/arch-release"):
+                return "arch"
+            
+            # Last resort: try to use lsb_release command
+            try:
+                result = subprocess.run(["lsb_release", "-i"], capture_output=True, text=True, check=True)
+                output = result.stdout.lower()
+                
+                if "debian" in output:
+                    return "debian"
+                elif "ubuntu" in output:
+                    return "ubuntu"
+                elif "fedora" in output:
+                    return "fedora"
+                elif "centos" in output:
+                    return "centos"
+                elif "arch" in output:
+                    return "arch"
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                pass
+                
+            return "unknown"
+        except Exception as e:
+            logger.error(f"Error detecting Linux distribution: {e}")
+            return "unknown"
 
     def build_module(self, force_rebuild: bool = False) -> bool:
         """
@@ -148,9 +263,13 @@ class DonorDumpManager:
         # Check kernel headers
         headers_available, kernel_version = self.check_kernel_headers()
         if not headers_available:
+            # Get distribution-specific instructions
+            distro = self._detect_linux_distribution()
+            install_cmd = self._get_header_install_command(distro, kernel_version)
+            
             raise KernelHeadersNotFoundError(
                 f"Kernel headers not found for {kernel_version}. "
-                f"Install with: sudo apt-get install linux-headers-{kernel_version}"
+                f"Install with: {install_cmd}"
             )
 
         try:
@@ -167,22 +286,62 @@ class DonorDumpManager:
                 )
 
             # Build the module
-            result = subprocess.run(
-                ["make"],
-                cwd=self.module_source_dir,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-
-            logger.info("Module build completed successfully")
-            return True
+            try:
+                result = subprocess.run(
+                    ["make"],
+                    cwd=self.module_source_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                logger.info("Module build completed successfully")
+                return True
+            except subprocess.CalledProcessError as e:
+                # If the build fails, try with KERNELRELEASE explicitly set
+                logger.warning(f"Standard build failed, trying with explicit KERNELRELEASE")
+                try:
+                    result = subprocess.run(
+                        ["make", f"KERNELRELEASE={kernel_version}"],
+                        cwd=self.module_source_dir,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    logger.info("Module build with explicit KERNELRELEASE completed successfully")
+                    return True
+                except subprocess.CalledProcessError as e2:
+                    error_msg = f"Module build failed with explicit KERNELRELEASE: {e2}"
+                    if e2.stderr:
+                        error_msg += f"\nStderr: {e2.stderr}"
+                    raise ModuleBuildError(error_msg)
 
         except subprocess.CalledProcessError as e:
             error_msg = f"Module build failed: {e}"
             if e.stderr:
                 error_msg += f"\nStderr: {e.stderr}"
             raise ModuleBuildError(error_msg)
+            
+    def _get_header_install_command(self, distro: str, kernel_version: str) -> str:
+        """
+        Get the appropriate command to install kernel headers for the given distribution
+        
+        Args:
+            distro: Linux distribution name
+            kernel_version: Kernel version string
+            
+        Returns:
+            Command string to install headers
+        """
+        if distro == "debian" or distro == "ubuntu":
+            return f"sudo apt-get install linux-headers-{kernel_version}"
+        elif distro == "fedora" or distro == "centos" or distro == "rhel":
+            return f"sudo dnf install kernel-devel-{kernel_version}"
+        elif distro == "arch" or distro == "manjaro":
+            return "sudo pacman -S linux-headers"
+        elif distro == "opensuse":
+            return f"sudo zypper install kernel-devel-{kernel_version}"
+        else:
+            return "Please install kernel headers for your distribution"
 
     def is_module_loaded(self) -> bool:
         """Check if the donor_dump module is currently loaded"""

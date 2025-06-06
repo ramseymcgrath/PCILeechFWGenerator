@@ -1,22 +1,35 @@
 # Kernel module build configuration
 obj-m += donor_dump.o
 
+# Get kernel release
+KVER ?= $(shell uname -r)
+# Get kernel source directory
+KDIR ?= /lib/modules/$(KVER)/build
+# Get current directory
+PWD := $(shell pwd)
+
 # Default target
 all:
-	@echo "Building donor_dump kernel module..."
-	@if [ ! -d "/lib/modules/$(shell uname -r)/build" ]; then \
-		echo "Error: Kernel headers not found for $(shell uname -r)"; \
-		echo "Please install kernel headers: apt-get install linux-headers-$(shell uname -r)"; \
+	@echo "Building donor_dump kernel module for kernel $(KVER)..."
+	@if [ ! -d "$(KDIR)" ]; then \
+		echo "Error: Kernel headers not found at $(KDIR)"; \
+		echo "Please install appropriate kernel headers for your distribution"; \
+		echo "For Debian/Ubuntu: apt-get install linux-headers-$(KVER)"; \
+		echo "For Fedora/CentOS: dnf install kernel-devel-$(KVER)"; \
+		echo "For Arch Linux: pacman -S linux-headers"; \
+		echo "For openSUSE: zypper install kernel-devel-$(KVER)"; \
 		exit 1; \
 	fi
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning donor_dump build artifacts..."
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	@if [ -d "$(KDIR)" ]; then \
+		$(MAKE) -C $(KDIR) M=$(PWD) clean; \
+	fi
 	rm -f *.o *.ko *.mod.c *.mod *.order *.symvers .*.cmd
-	rm -rf .tmp_versions/
+	rm -rf .tmp_versions/ .cache.mk Module.symvers modules.order
 
 # Install module (requires root)
 install: all
@@ -25,7 +38,7 @@ install: all
 		echo "Error: Module installation requires root privileges"; \
 		exit 1; \
 	fi
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules_install
+	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
 	depmod -a
 
 # Uninstall module (requires root)

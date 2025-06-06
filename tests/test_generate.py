@@ -607,7 +607,17 @@ class TestArgumentParsing:
             parser = generate.argparse.ArgumentParser()
             parser.add_argument("--flash", action="store_true")
             parser.add_argument(
-                "--board", choices=["35t", "75t", "100t"], default="35t"
+                "--board",
+                choices=[
+                    # Original boards
+                    "35t", "75t", "100t",
+                    # CaptainDMA boards
+                    "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
+                    "pcileech_35t325_x1", "pcileech_100t484_x1",
+                    # Other boards
+                    "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+                ],
+                default="35t"
             )
 
             args = parser.parse_args([])
@@ -620,7 +630,17 @@ class TestArgumentParsing:
             parser = generate.argparse.ArgumentParser()
             parser.add_argument("--flash", action="store_true")
             parser.add_argument(
-                "--board", choices=["35t", "75t", "100t"], default="35t"
+                "--board",
+                choices=[
+                    # Original boards
+                    "35t", "75t", "100t",
+                    # CaptainDMA boards
+                    "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
+                    "pcileech_35t325_x1", "pcileech_100t484_x1",
+                    # Other boards
+                    "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+                ],
+                default="35t"
             )
 
             args = parser.parse_args(["--board", "100t", "--flash"])

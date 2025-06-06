@@ -25,6 +25,7 @@ import sys
 import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
+import datetime
 
 # Import donor dump manager
 try:
@@ -32,6 +33,10 @@ try:
 except ImportError:
     DonorDumpManager = None
     DonorDumpError = Exception
+
+# Git repository information
+PCILEECH_FPGA_REPO = "https://github.com/ufrisk/pcileech-fpga.git"
+REPO_CACHE_DIR = os.path.expanduser("~/.cache/pcileech-fw-generator/repos")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -405,10 +410,90 @@ def run_build_container(
         raise RuntimeError(error_msg) from e
 
 
+def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
+    """
+    Ensure that the git repository is available locally.
+    
+    Args:
+        repo_url (str): URL of the git repository
+        local_dir (str): Local directory to clone/pull the repository
+        update (bool): Whether to update the repository if it already exists
+        
+    Returns:
+        str: Path to the local repository
+    """
+    # Create cache directory if it doesn't exist
+    os.makedirs(os.path.dirname(local_dir), exist_ok=True)
+    
+    # Check if repository already exists
+    if os.path.exists(os.path.join(local_dir, ".git")):
+        logger.info(f"Repository already exists at {local_dir}")
+        
+        # Update repository if requested
+        if update:
+            try:
+                logger.info(f"Updating repository at {local_dir}")
+                print(f"[*] Updating repository at {local_dir}")
+                
+                # Get current directory
+                current_dir = os.getcwd()
+                
+                # Change to repository directory
+                os.chdir(local_dir)
+                
+                # Pull latest changes
+                result = subprocess.run(
+                    "git pull",
+                    shell=True,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                
+                # Change back to original directory
+                os.chdir(current_dir)
+                
+                logger.info(f"Repository updated successfully: {result.stdout.strip()}")
+                print(f"[✓] Repository updated successfully")
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Failed to update repository: {e.stderr}")
+                print(f"[!] Warning: Failed to update repository: {e.stderr}")
+    else:
+        # Clone repository
+        try:
+            logger.info(f"Cloning repository {repo_url} to {local_dir}")
+            print(f"[*] Cloning repository {repo_url} to {local_dir}")
+            
+            result = subprocess.run(
+                f"git clone {repo_url} {local_dir}",
+                shell=True,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            
+            logger.info(f"Repository cloned successfully")
+            print(f"[✓] Repository cloned successfully")
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Failed to clone repository: {e.stderr}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+    
+    # Return path to repository
+    return local_dir
+
 def validate_environment() -> None:
     """Validate that the environment is properly set up."""
     if os.geteuid() != 0:
         error_msg = "This script requires root privileges. Run with sudo."
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    # Check if git is available
+    if shutil.which("git") is None:
+        error_msg = "Git not found in PATH. Please install Git first."
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
@@ -455,6 +540,11 @@ def main() -> int:
     try:
         logger.info("Starting PCILeech firmware generation process")
         validate_environment()
+        
+        # Ensure pcileech-fpga repository is available
+        repo_dir = os.path.join(REPO_CACHE_DIR, "pcileech-fpga")
+        pcileech_fpga_dir = ensure_git_repo(PCILEECH_FPGA_REPO, repo_dir, update=False)
+        logger.info(f"Using pcileech-fpga repository at {pcileech_fpga_dir}")
 
         # Parse command line arguments
         parser = argparse.ArgumentParser(
@@ -497,7 +587,15 @@ def main() -> int:
 
         parser.add_argument(
             "--board",
-            choices=["35t", "75t", "100t"],
+            choices=[
+                # Original boards
+                "35t", "75t", "100t",
+                # CaptainDMA boards
+                "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
+                "pcileech_35t325_x1", "pcileech_100t484_x1",
+                # Other boards
+                "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+            ],
             default="35t",
             help="Target FPGA board type (default: 35t/Squirrel)",
         )

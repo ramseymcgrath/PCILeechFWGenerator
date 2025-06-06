@@ -48,7 +48,22 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 # Board Type Selection
                 yield Label("Board Type:")
                 yield Select(
-                    [("35t", "35t"), ("75t", "75t"), ("100t", "100t")],
+                    [
+                        # Original boards
+                        ("35t", "35t"),
+                        ("75t", "75t"),
+                        ("100t", "100t"),
+                        # CaptainDMA boards
+                        ("pcileech_75t484_x1", "CaptainDMA 75T"),
+                        ("pcileech_35t484_x1", "CaptainDMA 35T 4.1"),
+                        ("pcileech_35t325_x4", "CaptainDMA M2 x4"),
+                        ("pcileech_35t325_x1", "CaptainDMA M2 x1"),
+                        ("pcileech_100t484_x1", "CaptainDMA 100T"),
+                        # Other boards
+                        ("pcileech_enigma_x1", "Enigma x1"),
+                        ("pcileech_squirrel", "PCIe Squirrel"),
+                        ("pcileech_pciescreamer_xc7a35", "PCIeScreamer"),
+                    ],
                     value="75t",
                     id="board-type-select",
                 )

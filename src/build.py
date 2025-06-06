@@ -53,6 +53,10 @@ OUT = ROOT / "output"
 OUT.mkdir(exist_ok=True)
 DDIR = ROOT / "src" / "donor_dump"
 
+# Repository cache directory
+REPO_CACHE_DIR = Path(os.path.expanduser("~/.cache/pcileech-fw-generator/repos"))
+PCILEECH_FPGA_DIR = REPO_CACHE_DIR / "pcileech-fpga"
+
 # BAR aperture size mappings
 APERTURE = {
     1024: "1_KB",
@@ -74,23 +78,76 @@ APERTURE = {
 
 # Board configuration mapping
 BOARD_INFO = {
+    # Original boards
     "35t": {
-        "root": ROOT / "pcileech-fpga" / "PCIeSquirrel",
+        "root": PCILEECH_FPGA_DIR / "PCIeSquirrel",
         "gen": "vivado_generate_project_35t.tcl",
         "base_frequency_mhz": 100.0,
         "device_class": "consumer",
     },
     "75t": {
-        "root": ROOT / "pcileech-fpga" / "PCIeEnigmaX1",
+        "root": PCILEECH_FPGA_DIR / "PCIeEnigmaX1",
         "gen": "vivado_generate_project_75t.tcl",
         "base_frequency_mhz": 125.0,
         "device_class": "industrial",
     },
     "100t": {
-        "root": ROOT / "pcileech-fpga" / "XilinxZDMA",
+        "root": PCILEECH_FPGA_DIR / "XilinxZDMA",
         "gen": "vivado_generate_project_100t.tcl",
         "base_frequency_mhz": 150.0,
         "device_class": "enterprise",
+    },
+    
+    # CaptainDMA boards
+    "pcileech_75t484_x1": {
+        "root": PCILEECH_FPGA_DIR / "CaptainDMA" / "75t484_x1",
+        "gen": "vivado_generate_project_captaindma_75t.tcl",
+        "base_frequency_mhz": 125.0,
+        "device_class": "industrial",
+    },
+    "pcileech_35t484_x1": {
+        "root": PCILEECH_FPGA_DIR / "CaptainDMA" / "35t484_x1",
+        "gen": "vivado_generate_project_captaindma_35t.tcl",
+        "base_frequency_mhz": 100.0,
+        "device_class": "consumer",
+    },
+    "pcileech_35t325_x4": {
+        "root": PCILEECH_FPGA_DIR / "CaptainDMA" / "35t325_x4",
+        "gen": "vivado_generate_project_captaindma_m2x4.tcl",
+        "base_frequency_mhz": 100.0,
+        "device_class": "consumer",
+    },
+    "pcileech_35t325_x1": {
+        "root": PCILEECH_FPGA_DIR / "CaptainDMA" / "35t325_x1",
+        "gen": "vivado_generate_project_captaindma_m2x1.tcl",
+        "base_frequency_mhz": 100.0,
+        "device_class": "consumer",
+    },
+    "pcileech_100t484_x1": {
+        "root": PCILEECH_FPGA_DIR / "CaptainDMA" / "100t484-1",
+        "gen": "vivado_generate_project_captaindma_100t.tcl",
+        "base_frequency_mhz": 150.0,
+        "device_class": "enterprise",
+    },
+    
+    # Other boards
+    "pcileech_enigma_x1": {
+        "root": PCILEECH_FPGA_DIR / "EnigmaX1",
+        "gen": "vivado_generate_project.tcl",
+        "base_frequency_mhz": 125.0,
+        "device_class": "industrial",
+    },
+    "pcileech_squirrel": {
+        "root": PCILEECH_FPGA_DIR / "PCIeSquirrel",
+        "gen": "vivado_generate_project.tcl",
+        "base_frequency_mhz": 100.0,
+        "device_class": "consumer",
+    },
+    "pcileech_pciescreamer_xc7a35": {
+        "root": PCILEECH_FPGA_DIR / "pciescreamer",
+        "gen": "vivado_generate_project.tcl",
+        "base_frequency_mhz": 100.0,
+        "device_class": "consumer",
     },
 }
 
@@ -1266,7 +1323,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--board",
-        choices=["35t", "75t", "100t"],
+        choices=[
+            # Original boards
+            "35t", "75t", "100t",
+            # CaptainDMA boards
+            "pcileech_75t484_x1", "pcileech_35t484_x1", "pcileech_35t325_x4",
+            "pcileech_35t325_x1", "pcileech_100t484_x1",
+            # Other boards
+            "pcileech_enigma_x1", "pcileech_squirrel", "pcileech_pciescreamer_xc7a35"
+        ],
         required=True,
         help="Target board type",
     )
@@ -1340,7 +1405,7 @@ def main() -> None:
 
     # Validate board directory exists (unless skipped)
     if not args.skip_board_check and not target_src.parent.exists():
-        sys.exit("Expected pcileech board folder missing in repo clone")
+        sys.exit(f"Expected pcileech board folder missing: {target_src.parent}\nMake sure the pcileech-fpga repository is properly cloned.")
 
     # Create output directory if it doesn't exist
     if not target_src.parent.exists():

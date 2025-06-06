@@ -11,8 +11,14 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+import shutil
+import datetime
 
 import psutil
+
+# Git repository information
+PCILEECH_FPGA_REPO = "https://github.com/ufrisk/pcileech-fpga.git"
+REPO_CACHE_DIR = Path(os.path.expanduser("~/.cache/pcileech-fw-generator/repos"))
 
 from ..models.config import BuildConfiguration
 from ..models.device import PCIDevice
@@ -306,7 +312,104 @@ class BuildOrchestrator:
         # Check output directory
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
+        
+        # Ensure pcileech-fpga repository is available
+        await self._ensure_git_repo()
 
+    async def _ensure_git_repo(self) -> None:
+        """Ensure that the pcileech-fpga git repository is available"""
+        if self._current_progress:
+            self._current_progress.current_operation = "Checking pcileech-fpga repository"
+            await self._notify_progress()
+        
+        # Create cache directory if it doesn't exist
+        repo_dir = REPO_CACHE_DIR / "pcileech-fpga"
+        os.makedirs(REPO_CACHE_DIR, exist_ok=True)
+        
+        # Check if git is available
+        try:
+            result = await self._run_command("git --version")
+            if result.returncode != 0:
+                if self._current_progress:
+                    self._current_progress.add_error("Git not available")
+                raise RuntimeError("Git not available")
+        except FileNotFoundError:
+            if self._current_progress:
+                self._current_progress.add_error("Git not found in PATH")
+            raise RuntimeError("Git not found in PATH")
+        
+        # Check if repository already exists
+        if os.path.exists(os.path.join(repo_dir, ".git")):
+            if self._current_progress:
+                self._current_progress.current_operation = f"PCILeech FPGA repository found at {repo_dir}"
+                await self._notify_progress()
+            
+            # Check if repository needs update (older than 7 days)
+            try:
+                last_update_file = repo_dir / ".last_update"
+                update_needed = True
+                
+                if last_update_file.exists():
+                    with open(last_update_file, "r") as f:
+                        try:
+                            last_update = datetime.datetime.fromisoformat(f.read().strip())
+                            days_since_update = (datetime.datetime.now() - last_update).days
+                            update_needed = days_since_update >= 7
+                        except (ValueError, TypeError):
+                            update_needed = True
+                
+                if update_needed:
+                    if self._current_progress:
+                        self._current_progress.current_operation = f"Updating PCILeech FPGA repository"
+                        await self._notify_progress()
+                    
+                    # Get current directory
+                    current_dir = os.getcwd()
+                    
+                    # Change to repository directory
+                    os.chdir(repo_dir)
+                    
+                    try:
+                        # Pull latest changes
+                        result = await self._run_command("git pull")
+                        
+                        # Update last update timestamp
+                        with open(last_update_file, "w") as f:
+                            f.write(datetime.datetime.now().isoformat())
+                        
+                        if self._current_progress:
+                            self._current_progress.current_operation = f"PCILeech FPGA repository updated successfully"
+                            await self._notify_progress()
+                    except Exception as e:
+                        if self._current_progress:
+                            self._current_progress.add_warning(f"Failed to update repository: {str(e)}")
+                    finally:
+                        # Change back to original directory
+                        os.chdir(current_dir)
+            except Exception as e:
+                if self._current_progress:
+                    self._current_progress.add_warning(f"Error checking repository update status: {str(e)}")
+        else:
+            # Clone repository
+            if self._current_progress:
+                self._current_progress.current_operation = f"Cloning PCILeech FPGA repository to {repo_dir}"
+                await self._notify_progress()
+            
+            try:
+                result = await self._run_command(f"git clone {PCILEECH_FPGA_REPO} {repo_dir}")
+                
+                # Create last update timestamp
+                with open(repo_dir / ".last_update", "w") as f:
+                    f.write(datetime.datetime.now().isoformat())
+                
+                if self._current_progress:
+                    self._current_progress.current_operation = f"PCILeech FPGA repository cloned successfully"
+                    await self._notify_progress()
+            except Exception as e:
+                if self._current_progress:
+                    self._current_progress.add_error(f"Failed to clone repository: {str(e)}")
+                raise RuntimeError(f"Failed to clone PCILeech FPGA repository: {str(e)}")
+    
     async def _check_donor_module(self, config: BuildConfiguration) -> None:
         """
         Check if donor_dump kernel module is properly installed
@@ -361,17 +464,23 @@ class BuildOrchestrator:
                         )
                         await self._notify_progress()
 
-                        # Get kernel version
+                        # Get kernel version and distribution info
                         kernel_version = module_status.get("raw_status", {}).get(
                             "kernel_version", ""
                         )
+                        
                         if kernel_version:
-                            # Try to install headers
+                            # Try to install headers using the manager's method
+                            # which handles different Linux distributions
                             try:
-                                result = await self._run_command(
-                                    f"sudo apt-get install -y linux-headers-{kernel_version}"
+                                self._current_progress.add_warning(
+                                    "Detecting Linux distribution and installing appropriate headers..."
                                 )
-                                if result.returncode == 0:
+                                
+                                # Install headers
+                                headers_installed = manager.install_kernel_headers(kernel_version)
+                                
+                                if headers_installed:
                                     self._current_progress.add_warning(
                                         "Kernel headers installed successfully"
                                     )
@@ -383,17 +492,39 @@ class BuildOrchestrator:
                                     await self._notify_progress()
 
                                     # Build module
-                                    manager.build_module(force_rebuild=True)
-                                    self._current_progress.add_warning(
-                                        "Donor module built successfully"
-                                    )
+                                    try:
+                                        manager.build_module(force_rebuild=True)
+                                        self._current_progress.add_warning(
+                                            "Donor module built successfully"
+                                        )
+                                    except Exception as build_error:
+                                        self._current_progress.add_error(
+                                            f"Failed to build module: {str(build_error)}"
+                                        )
+                                        # Add more detailed error information
+                                        if "ModuleBuildError" in str(type(build_error)):
+                                            self._current_progress.add_warning(
+                                                "This may be due to kernel version mismatch or missing build tools."
+                                            )
+                                            self._current_progress.add_warning(
+                                                "Try installing build-essential package: sudo apt-get install build-essential"
+                                            )
                                 else:
                                     self._current_progress.add_error(
-                                        f"Failed to install kernel headers: {result.stderr}"
+                                        "Failed to install kernel headers automatically"
+                                    )
+                                    # Add manual instructions
+                                    distro = manager._detect_linux_distribution()
+                                    install_cmd = manager._get_header_install_command(distro, kernel_version)
+                                    self._current_progress.add_warning(
+                                        f"Please try installing headers manually: {install_cmd}"
                                     )
                             except Exception as e:
                                 self._current_progress.add_error(
                                     f"Failed to install kernel headers: {str(e)}"
+                                )
+                                self._current_progress.add_warning(
+                                    "You may need to install kernel headers manually for your distribution"
                                 )
                 else:
                     # Module is properly installed

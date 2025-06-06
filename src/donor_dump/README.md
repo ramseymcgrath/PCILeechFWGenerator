@@ -19,10 +19,40 @@ The `donor_dump` kernel module extracts PCI device parameters and exposes them v
 
 ### Prerequisites
 
+Different Linux distributions have different ways to install kernel headers:
+
+#### Debian/Ubuntu
 ```bash
 # Install kernel headers for your current kernel
 sudo apt-get update
-sudo apt-get install linux-headers-$(uname -r)
+sudo apt-get install linux-headers-$(uname -r) build-essential
+
+# Verify headers are installed
+ls /lib/modules/$(uname -r)/build
+```
+
+#### Fedora/CentOS/RHEL
+```bash
+# Install kernel headers and development tools
+sudo dnf install kernel-devel-$(uname -r) gcc make
+
+# Verify headers are installed
+ls /lib/modules/$(uname -r)/build
+```
+
+#### Arch Linux/Manjaro
+```bash
+# Install kernel headers and development tools
+sudo pacman -S linux-headers base-devel
+
+# Verify headers are installed
+ls /lib/modules/$(uname -r)/build
+```
+
+#### openSUSE
+```bash
+# Install kernel headers and development tools
+sudo zypper install kernel-devel-$(uname -r) gcc make
 
 # Verify headers are installed
 ls /lib/modules/$(uname -r)/build
@@ -153,12 +183,29 @@ When using the PCILeech firmware generator container, the kernel module source i
 
 ### "Kernel headers not found" Error
 
+#### Debian/Ubuntu
 ```bash
 # Install headers for your specific kernel
-sudo apt-get install linux-headers-$(uname -r)
+sudo apt-get update
+sudo apt-get install linux-headers-$(uname -r) build-essential
+```
 
-# For Ubuntu/Debian, you might also need:
-sudo apt-get install build-essential
+#### Fedora/CentOS/RHEL
+```bash
+# Install headers for your specific kernel
+sudo dnf install kernel-devel-$(uname -r) gcc make
+```
+
+#### Arch Linux/Manjaro
+```bash
+# Install headers for your kernel
+sudo pacman -S linux-headers base-devel
+```
+
+#### openSUSE
+```bash
+# Install headers for your specific kernel
+sudo zypper install kernel-devel-$(uname -r) gcc make
 ```
 
 ### "No such device" Error
@@ -174,6 +221,51 @@ sudo apt-get install build-essential
 
 ## Compatibility
 
-- Requires Linux kernel ≥ 5.x
+- Compatible with Linux kernel 4.x and 5.x
 - GPL-compatible license
-- Tested on Ubuntu 20.04+ and similar distributions
+- Tested on:
+  - Ubuntu 20.04+ and other Debian-based distributions
+  - Fedora 34+ and other RHEL-based distributions
+  - Arch Linux and Manjaro
+  - openSUSE Leap and Tumbleweed
+
+## Common Build Issues
+
+### Module Version Mismatch
+
+If you see errors like "version magic" or "module layout", it means the module was built for a different kernel version:
+
+```bash
+# Rebuild the module for your current kernel
+make clean
+make
+```
+
+### Missing Build Tools
+
+If you encounter build errors, make sure you have the necessary build tools:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install build-essential
+
+# Fedora/CentOS/RHEL
+sudo dnf groupinstall "Development Tools"
+
+# Arch Linux/Manjaro
+sudo pacman -S base-devel
+
+# openSUSE
+sudo zypper install -t pattern devel_basis
+```
+
+### Secure Boot Issues
+
+If you're using Secure Boot, you may need to sign the module or disable Secure Boot:
+
+```bash
+# Check if Secure Boot is enabled
+mokutil --sb-state
+
+# Temporarily disable Secure Boot in your BIOS/UEFI settings
+```

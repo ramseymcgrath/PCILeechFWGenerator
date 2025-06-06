@@ -395,9 +395,22 @@ class TestBoardConfiguration:
 
     def test_board_info_constants(self):
         """Test board information constants."""
+        # Original boards
         assert "35t" in build.BOARD_INFO
         assert "75t" in build.BOARD_INFO
         assert "100t" in build.BOARD_INFO
+        
+        # CaptainDMA boards
+        assert "pcileech_75t484_x1" in build.BOARD_INFO
+        assert "pcileech_35t484_x1" in build.BOARD_INFO
+        assert "pcileech_35t325_x4" in build.BOARD_INFO
+        assert "pcileech_35t325_x1" in build.BOARD_INFO
+        assert "pcileech_100t484_x1" in build.BOARD_INFO
+        
+        # Other boards
+        assert "pcileech_enigma_x1" in build.BOARD_INFO
+        assert "pcileech_squirrel" in build.BOARD_INFO
+        assert "pcileech_pciescreamer_xc7a35" in build.BOARD_INFO
 
         for board, info in build.BOARD_INFO.items():
             assert "root" in info
