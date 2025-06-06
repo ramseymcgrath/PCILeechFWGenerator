@@ -2,6 +2,8 @@
 
 The `donor_dump` kernel module extracts PCI device parameters and exposes them via `/proc/donor_dump`. This module is used to gather detailed information about PCI devices for firmware generation.
 
+**Note**: By default, the PCILeech Firmware Generator automatically builds and uses this kernel module to extract device information. If you prefer not to use the kernel module, you can use the `--skip-donor-dump` option or the "Local Build" mode in the TUI.
+
 ## Features
 
 - Extracts Max-Payload-Capable (MPC) and Max-ReadReq-InEffect (MPR) values
@@ -89,6 +91,27 @@ sudo rmmod donor_dump
 - `bdf`: PCI Bus:Device.Function (e.g., "0000:03:00.0") - **Required**
 - `enable_extended_config`: Enable extended configuration space extraction (default: true)
 - `enable_enhanced_caps`: Enable enhanced capability analysis (default: true)
+
+## Alternative Options
+
+If you cannot or prefer not to use this kernel module, the PCILeech Firmware Generator provides alternative options:
+
+1. **Using a donor info file**: You can save the output from a previous run and reuse it:
+   ```bash
+   # First run with donor_dump to save the info
+   sudo pcileech-build --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/save/donor_info.json
+   
+   # Later runs using the saved file (no donor device needed)
+   sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump --donor-info-file /path/to/saved/donor_info.json
+   ```
+
+2. **Using synthetic data**: When no donor info file is available, the system can generate synthetic data:
+   ```bash
+   # Generate synthetic data for a network device
+   sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump --device-type network
+   ```
+
+3. **TUI Local Build Mode**: In the TUI, enable "Local Build" mode and disable "Donor Dump" in the configuration panel.
 
 ## Makefile Targets
 

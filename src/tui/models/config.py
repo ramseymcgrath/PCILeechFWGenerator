@@ -26,8 +26,11 @@ class BuildConfiguration:
     flash_after_build: bool = False
 
     # Donor dump configuration
-    donor_dump: bool = False
+    donor_dump: bool = True  # Default to using donor dump
     auto_install_headers: bool = False
+    donor_info_file: Optional[str] = None
+    skip_board_check: bool = False
+    local_build: bool = False
 
     # Profile metadata
     name: str = "Default Configuration"
@@ -76,6 +79,12 @@ class BuildConfiguration:
             features.append(f"{self.device_type.title()} Optimizations")
         if self.donor_dump:
             features.append("Donor Device Analysis")
+        if self.local_build:
+            features.append("Local Build")
+            if self.donor_info_file:
+                features.append("Custom Donor Info")
+            if self.skip_board_check:
+                features.append("Skip Board Check")
 
         return ", ".join(features) if features else "Basic Configuration"
 
@@ -92,9 +101,17 @@ class BuildConfiguration:
             "disable_performance_counters": not self.performance_counters,
             "enable_behavior_profiling": self.behavior_profiling,
             "behavior_profile_duration": int(self.profile_duration),
-            "donor_dump": self.donor_dump,
+            "skip_donor_dump": not self.donor_dump,
             "auto_install_headers": self.auto_install_headers,
         }
+        
+        # Add local build options if enabled
+        if self.local_build:
+            if self.donor_info_file:
+                args["donor_info_file"] = self.donor_info_file
+            if self.skip_board_check:
+                args["skip_board_check"] = True
+                
         return args
 
     def to_dict(self) -> Dict[str, Any]:
@@ -114,6 +131,9 @@ class BuildConfiguration:
             "flash_after_build": self.flash_after_build,
             "donor_dump": self.donor_dump,
             "auto_install_headers": self.auto_install_headers,
+            "donor_info_file": self.donor_info_file,
+            "skip_board_check": self.skip_board_check,
+            "local_build": self.local_build,
             "created_at": self.created_at,
             "last_used": self.last_used,
         }

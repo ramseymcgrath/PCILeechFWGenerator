@@ -184,7 +184,8 @@ Profiles are stored in `~/.pcileech/profiles/` as JSON files.
   "advanced_sv": true,
   "enable_variance": true,
   "behavior_profiling": true,
-  "profile_duration": 30.0
+  "profile_duration": 30.0,
+  "donor_dump": true
 }
 ```
 
@@ -196,7 +197,22 @@ Profiles are stored in `~/.pcileech/profiles/` as JSON files.
   "device_type": "generic",
   "advanced_sv": false,
   "enable_variance": false,
-  "flash_after_build": true
+  "flash_after_build": true,
+  "donor_dump": true
+}
+```
+
+#### Local Build
+```json
+{
+  "name": "Local Build",
+  "board_type": "75t",
+  "device_type": "generic",
+  "advanced_sv": true,
+  "enable_variance": true,
+  "donor_dump": false,
+  "local_build": true,
+  "donor_info_file": "~/.pcileech/donor_info.json"
 }
 ```
 
@@ -243,6 +259,38 @@ The TUI provides intelligent error analysis and guidance:
   - Add user to required groups
 
 ## 🚀 Advanced Features
+
+### Donor Device Configuration
+
+The TUI provides options for configuring how donor device information is obtained:
+
+- **Default Mode**: By default, the system builds and uses the donor_dump kernel module to extract real device information from the selected PCIe device. This provides the most accurate firmware generation.
+
+- **Local Build Mode**: When enabled, this mode skips using the donor_dump kernel module and instead uses either:
+  - A previously saved donor information file (specified via the "Donor Info File" option)
+  - Synthetic donor information generated based on the selected device type
+
+**Configuration Options:**
+- **Donor Dump**: Enable/disable using the donor_dump kernel module (enabled by default)
+- **Local Build**: Enable to use a donor info file or synthetic data instead of a real device
+- **Donor Info File**: Path to a JSON file containing donor information from a previous run
+
+**Benefits of Local Build Mode:**
+- **No Kernel Module**: Useful in environments where building kernel modules is restricted
+- **No Physical Device**: Generate firmware without requiring the donor device to be present
+- **Reproducible Builds**: Use the same donor information across multiple builds
+
+**Usage:**
+1. Select a device in the Device Selection Panel
+2. Open the Configuration Panel
+3. To use the default mode (recommended), ensure "Donor Dump" is enabled
+4. To use Local Build mode:
+   - Enable "Local Build" option
+   - Disable "Donor Dump" option
+   - Optionally specify a "Donor Info File" path
+5. Start the build process
+
+![TUI Configuration Panel](../docs/images/tui_config_panel.png)
 
 ### Behavior Profiling
 

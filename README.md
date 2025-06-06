@@ -172,8 +172,14 @@ For automated workflows or scripting:
 # Basic generation (interactive device selection)
 sudo pcileech-generate
 
-# Direct build with specific device
+# Direct build with specific device (uses donor_dump kernel module by default)
 sudo pcileech-build --bdf 0000:03:00.0 --board 75t
+
+# Build without using donor_dump kernel module (using synthetic data)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump
+
+# Build using a previously saved donor information file
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/donor_info.json
 
 # Advanced generation with enhanced features
 sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv
@@ -322,6 +328,10 @@ python3 src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv \
 **Core Options:**
 - `--bdf`: PCIe Bus:Device.Function identifier (required)
 - `--board`: Target board type (35t, 75t, 100t) (required)
+
+**Donor Device Options:**
+- `--skip-donor-dump`: Skip using the donor_dump kernel module (opt-in, not default)
+- `--donor-info-file`: Path to a JSON file containing donor information from a previous run
 
 **Advanced Features:**
 - `--advanced-sv`: Enable advanced SystemVerilog generation

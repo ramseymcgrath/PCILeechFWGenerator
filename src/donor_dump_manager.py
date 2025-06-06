@@ -13,6 +13,8 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import json
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +46,13 @@ class ModuleLoadError(DonorDumpError):
 class DonorDumpManager:
     """Manager for donor_dump kernel module operations"""
 
-    def __init__(self, module_source_dir: Optional[Path] = None):
+    def __init__(self, module_source_dir: Optional[Path] = None, donor_info_path: Optional[str] = None):
         """
         Initialize the donor dump manager
 
         Args:
             module_source_dir: Path to donor_dump source directory
+            donor_info_path: Path to donor information JSON file from previous run
         """
         if module_source_dir is None:
             # Default to src/donor_dump relative to this file
@@ -59,6 +62,7 @@ class DonorDumpManager:
 
         self.module_name = "donor_dump"
         self.proc_path = "/proc/donor_dump"
+        self.donor_info_path = donor_info_path
 
     def check_kernel_headers(self) -> Tuple[bool, str]:
         """
@@ -283,6 +287,84 @@ class DonorDumpManager:
                 error_msg += f"\nStderr: {e.stderr}"
             raise ModuleLoadError(error_msg)
 
+    def generate_donor_info(self, device_type: str = "generic") -> Dict[str, str]:
+        """
+        Generate synthetic donor information for local builds
+
+        Args:
+            device_type: Type of device to generate info for (generic, network, storage, etc.)
+
+        Returns:
+            Dictionary of synthetic device parameters
+        """
+        logger.info(f"Generating synthetic donor information for {device_type} device")
+        
+        # Common device profiles
+        device_profiles = {
+            "generic": {
+                "vendor_id": "0x8086",  # Intel
+                "device_id": "0x1533",  # I210 Gigabit Network Connection
+                "subvendor_id": "0x8086",
+                "subsystem_id": "0x0000",
+                "revision_id": "0x03",
+                "bar_size": "0x20000",  # 128KB
+                "mpc": "0x02",  # Max payload size capability (512 bytes)
+                "mpr": "0x02",  # Max read request size (512 bytes)
+            },
+            "network": {
+                "vendor_id": "0x8086",  # Intel
+                "device_id": "0x1533",  # I210 Gigabit Network Connection
+                "subvendor_id": "0x8086",
+                "subsystem_id": "0x0000",
+                "revision_id": "0x03",
+                "bar_size": "0x20000",  # 128KB
+                "mpc": "0x02",  # Max payload size capability (512 bytes)
+                "mpr": "0x02",  # Max read request size (512 bytes)
+            },
+            "storage": {
+                "vendor_id": "0x8086",  # Intel
+                "device_id": "0x2522",  # NVMe SSD Controller
+                "subvendor_id": "0x8086",
+                "subsystem_id": "0x0000",
+                "revision_id": "0x01",
+                "bar_size": "0x40000",  # 256KB
+                "mpc": "0x03",  # Max payload size capability (1024 bytes)
+                "mpr": "0x03",  # Max read request size (1024 bytes)
+            },
+        }
+        
+        # Use the specified device profile or fall back to generic
+        profile = device_profiles.get(device_type, device_profiles["generic"])
+        
+        # Add some randomness to make it look more realistic
+        if random.random() > 0.5:
+            profile["revision_id"] = f"0x{random.randint(1, 5):02x}"
+        
+        return profile
+
+    def save_donor_info(self, device_info: Dict[str, str], output_path: str) -> bool:
+        """
+        Save donor information to a JSON file for future use
+
+        Args:
+            device_info: Device information dictionary
+            output_path: Path to save the JSON file
+
+        Returns:
+            True if data was saved successfully
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            
+            with open(output_path, "w") as f:
+                json.dump(device_info, f, indent=2)
+            logger.info(f"Saved donor information to {output_path}")
+            return True
+        except IOError as e:
+            logger.error(f"Failed to save donor information: {e}")
+            return False
+
     def read_device_info(self) -> Dict[str, str]:
         """
         Read device information from /proc/donor_dump
@@ -331,9 +413,91 @@ class DonorDumpManager:
             status["module_size"] = module_ko.stat().st_size
 
         return status
+        
+    def check_module_installation(self) -> Dict[str, Any]:
+        """
+        Check if the donor_dump kernel module is installed properly and provide detailed status
+        
+        Returns:
+            Dictionary with detailed status information including:
+            - status: overall status (installed, not_installed, built_not_loaded, etc.)
+            - details: detailed description of the status
+            - issues: list of identified issues
+            - fixes: list of suggested fixes for the issues
+        """
+        # Get basic module status
+        status_info = self.get_module_status()
+        
+        result = {
+            "status": "unknown",
+            "details": "",
+            "issues": [],
+            "fixes": [],
+            "raw_status": status_info
+        }
+        
+        # Check if module is fully installed and working
+        if status_info["module_loaded"] and status_info["proc_available"]:
+            result["status"] = "installed"
+            result["details"] = "Donor dump kernel module is properly installed and loaded"
+            return result
+            
+        # Check if module is built but not loaded
+        if status_info["module_built"] and not status_info["module_loaded"]:
+            result["status"] = "built_not_loaded"
+            result["details"] = "Module is built but not currently loaded"
+            result["issues"].append("Module is not loaded into the kernel")
+            result["fixes"].append(f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF")
+            result["fixes"].append("Or use the DonorDumpManager.load_module() function with your device BDF")
+            return result
+            
+        # Check if source exists but module is not built
+        if status_info["source_dir_exists"] and not status_info["module_built"]:
+            result["status"] = "not_built"
+            result["details"] = "Module source exists but has not been built"
+            
+            # Check if headers are available
+            if not status_info["headers_available"]:
+                result["issues"].append(f"Kernel headers not found for kernel {status_info['kernel_version']}")
+                result["fixes"].append(f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}")
+            else:
+                result["issues"].append("Module has not been built yet")
+                result["fixes"].append(f"Build the module: cd {self.module_source_dir} && make")
+                result["fixes"].append("Or use the DonorDumpManager.build_module() function")
+            
+            return result
+            
+        # Check if source directory doesn't exist
+        if not status_info["source_dir_exists"]:
+            result["status"] = "missing_source"
+            result["details"] = "Module source directory not found"
+            result["issues"].append(f"Source directory not found at {self.module_source_dir}")
+            result["fixes"].append("Ensure the PCILeech Firmware Generator is properly installed")
+            result["fixes"].append("Check if the donor_dump directory exists in the src directory")
+            return result
+            
+        # Module is loaded but proc file is not available
+        if status_info["module_loaded"] and not status_info["proc_available"]:
+            result["status"] = "loaded_but_error"
+            result["details"] = "Module is loaded but /proc/donor_dump is not available"
+            result["issues"].append("Module loaded with errors or incorrect parameters")
+            result["fixes"].append("Unload the module: sudo rmmod donor_dump")
+            result["fixes"].append("Check kernel logs for errors: dmesg | grep donor_dump")
+            result["fixes"].append("Reload with correct BDF: sudo insmod donor_dump.ko bdf=YOUR_DEVICE_BDF")
+            return result
+            
+        # Fallback for any other state
+        result["status"] = "unknown_error"
+        result["details"] = "Unknown module installation state"
+        result["issues"].append("Could not determine module status")
+        result["fixes"].append("Check the module source directory and build logs")
+        result["fixes"].append("Try rebuilding the module: make clean && make")
+        
+        return result
 
     def setup_module(
-        self, bdf: str, auto_install_headers: bool = False
+        self, bdf: str, auto_install_headers: bool = False, save_to_file: Optional[str] = None,
+        generate_if_unavailable: bool = False, device_type: str = "generic"
     ) -> Dict[str, str]:
         """
         Complete setup process: check headers, build, load module, and read info
@@ -341,35 +505,60 @@ class DonorDumpManager:
         Args:
             bdf: PCI Bus:Device.Function
             auto_install_headers: Automatically install headers if missing
+            save_to_file: Path to save donor information for future use
+            generate_if_unavailable: Generate synthetic donor info if module setup fails
+            device_type: Type of device to generate info for if needed
 
         Returns:
             Device information dictionary
         """
-        logger.info(f"Setting up donor_dump module for device {bdf}")
+        try:
+            logger.info(f"Setting up donor_dump module for device {bdf}")
 
-        # Check kernel headers
-        headers_available, kernel_version = self.check_kernel_headers()
-        if not headers_available:
-            if auto_install_headers:
-                logger.info("Kernel headers missing, attempting to install...")
-                if not self.install_kernel_headers(kernel_version):
+            # Check kernel headers
+            headers_available, kernel_version = self.check_kernel_headers()
+            if not headers_available:
+                if auto_install_headers:
+                    logger.info("Kernel headers missing, attempting to install...")
+                    if not self.install_kernel_headers(kernel_version):
+                        raise KernelHeadersNotFoundError(
+                            f"Failed to install kernel headers for {kernel_version}"
+                        )
+                else:
                     raise KernelHeadersNotFoundError(
-                        f"Failed to install kernel headers for {kernel_version}"
+                        f"Kernel headers not found for {kernel_version}. "
+                        f"Install with: sudo apt-get install linux-headers-{kernel_version}"
                     )
+
+            # Build module
+            self.build_module()
+
+            # Load module
+            self.load_module(bdf)
+
+            # Read device info
+            device_info = self.read_device_info()
+            
+            # Save to file if requested
+            if save_to_file and device_info:
+                self.save_donor_info(device_info, save_to_file)
+                
+            return device_info
+            
+        except Exception as e:
+            logger.error(f"Failed to set up donor_dump module: {e}")
+            
+            if generate_if_unavailable:
+                logger.info("Generating synthetic donor information as fallback")
+                device_info = self.generate_donor_info(device_type)
+                
+                # Save to file if requested
+                if save_to_file and device_info:
+                    self.save_donor_info(device_info, save_to_file)
+                    
+                return device_info
             else:
-                raise KernelHeadersNotFoundError(
-                    f"Kernel headers not found for {kernel_version}. "
-                    f"Install with: sudo apt-get install linux-headers-{kernel_version}"
-                )
-
-        # Build module
-        self.build_module()
-
-        # Load module
-        self.load_module(bdf)
-
-        # Read device info
-        return self.read_device_info()
+                raise
 
 
 def main():
@@ -378,7 +567,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Donor Dump Kernel Module Manager")
     parser.add_argument(
-        "--bdf", required=True, help="PCI Bus:Device.Function (e.g., 0000:03:00.0)"
+        "--bdf", required=True, help="PCIe Bus:Device.Function (e.g., 0000:03:00.0)"
     )
     parser.add_argument("--source-dir", help="Path to donor_dump source directory")
     parser.add_argument(
@@ -393,6 +582,20 @@ def main():
         "--unload", action="store_true", help="Unload the module instead of loading"
     )
     parser.add_argument("--status", action="store_true", help="Show module status")
+    parser.add_argument(
+        "--save-to", help="Save donor information to specified file"
+    )
+    parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Generate synthetic donor information if module setup fails",
+    )
+    parser.add_argument(
+        "--device-type",
+        choices=["generic", "network", "storage"],
+        default="generic",
+        help="Device type for synthetic donor information",
+    )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
@@ -421,7 +624,11 @@ def main():
 
         # Setup and read device info
         device_info = manager.setup_module(
-            args.bdf, auto_install_headers=args.auto_install_headers
+            args.bdf,
+            auto_install_headers=args.auto_install_headers,
+            save_to_file=args.save_to,
+            generate_if_unavailable=args.generate,
+            device_type=args.device_type
         )
 
         print(f"Device information for {args.bdf}:")

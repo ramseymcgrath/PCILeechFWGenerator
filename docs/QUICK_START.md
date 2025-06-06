@@ -124,6 +124,26 @@ sudo pcileech-build --bdf 0000:03:00.0 --board 75t \
   --enable-behavior-profiling --profile-duration 30.0
 ```
 
+### Donor Dump Options
+
+By default, the system builds and uses the donor_dump kernel module to extract device information. You can use these options for alternative workflows:
+
+```bash
+# Skip using the donor_dump kernel module (use synthetic data)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump
+
+# Save donor information to a file for future use
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/save/donor_info.json
+
+# Use a previously saved donor information file (no donor device needed)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump --donor-info-file /path/to/saved/donor_info.json
+```
+
+In the TUI, you can:
+1. Enable "Local Build" mode in the Configuration panel
+2. Disable "Donor Dump" option
+3. Optionally specify a "Donor Info File" path
+
 ### Flashing DMA Board
 
 ```bash

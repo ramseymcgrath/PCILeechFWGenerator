@@ -5,7 +5,7 @@ The main entry point for the PCILeech Firmware Generator TUI.
 """
 
 import asyncio
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from textual import events
 from textual.app import App, ComposeResult
@@ -116,12 +116,30 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 # Donor dump configuration
                 yield Label("Donor Device Analysis:")
                 with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="donor-dump-switch")
-                    yield Static("Extract Device Parameters")
+                    yield Switch(value=True, id="donor-dump-switch")
+                    yield Static("Extract Device Parameters (Default)")
 
                 with Horizontal(classes="switch-row"):
                     yield Switch(value=False, id="auto-headers-switch")
                     yield Static("Auto-install Kernel Headers")
+                
+                # Local build options
+                yield Label("Local Build Options (Opt-in):")
+                with Horizontal(classes="switch-row"):
+                    yield Switch(value=False, id="local-build-switch")
+                    yield Static("Enable Local Build (Skips Donor Dump)")
+                
+                with Horizontal(classes="switch-row"):
+                    yield Switch(value=False, id="skip-board-check-switch")
+                    yield Static("Skip Board Check")
+                
+                # Donor info file input
+                yield Label("Donor Info File (optional):")
+                yield Input(
+                    placeholder="Path to donor info JSON file",
+                    value="",
+                    id="donor-info-file-input"
+                )
 
                 # Profile Duration (only shown when profiling is enabled)
                 yield Label("Profile Duration (seconds):")
@@ -171,6 +189,11 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#auto-headers-switch", Switch).value = (
                 config.auto_install_headers
             )
+            self.query_one("#local-build-switch", Switch).value = config.local_build
+            self.query_one("#skip-board-check-switch", Switch).value = config.skip_board_check
+            self.query_one("#donor-info-file-input", Input).value = (
+                config.donor_info_file or ""
+            )
             self.query_one("#profile-duration-input", Input).value = str(
                 config.profile_duration
             )
@@ -199,6 +222,9 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 auto_install_headers=self.query_one(
                     "#auto-headers-switch", Switch
                 ).value,
+                local_build=self.query_one("#local-build-switch", Switch).value,
+                skip_board_check=self.query_one("#skip-board-check-switch", Switch).value,
+                donor_info_file=self.query_one("#donor-info-file-input", Input).value or None,
                 profile_duration=float(
                     self.query_one("#profile-duration-input", Input).value or "30.0"
                 ),
@@ -281,6 +307,7 @@ class PCILeechTUI(App):
                     yield Static("Board Type: 75t", id="board-type")
                     yield Static("Device Type: generic", id="device-type")
                     yield Static("Advanced Features: Enabled", id="advanced-features")
+                    yield Static("Build Mode: Standard", id="build-mode")
                     with Horizontal(classes="button-row"):
                         yield Button("Configure", id="configure", variant="primary")
                         yield Button("Load Profile", id="load-profile")
@@ -317,6 +344,7 @@ class PCILeechTUI(App):
                     yield Static("🔌 USB Devices: Checking...", id="usb-status")
                     yield Static("💾 Disk Space: Checking...", id="disk-status")
                     yield Static("🔒 Root Access: Checking...", id="root-status")
+                    yield Static("🧩 Donor Module: Checking...", id="donor-module-status")
 
                 # Quick Actions Panel
                 with Vertical(id="actions-panel", classes="panel"):
@@ -326,6 +354,7 @@ class PCILeechTUI(App):
                     )
                     yield Button("📁 Open Output Dir", id="open-output")
                     yield Button("📊 View Last Build Report", id="view-report")
+                    yield Button("🧩 Check Donor Module", id="check-donor-module")
                     yield Button("⚙️ Advanced Settings", id="advanced-settings")
                     yield Button("📖 Documentation", id="documentation")
 
@@ -396,6 +425,14 @@ class PCILeechTUI(App):
         self.query_one("#advanced-features", Static).update(
             f"Advanced Features: {features}"
         )
+        
+        if config.local_build:
+            build_mode = "Local Build (No Donor Dump)"
+        else:
+            build_mode = "Standard (With Donor Dump)"
+        self.query_one("#build-mode", Static).update(
+            f"Build Mode: {build_mode}"
+        )
 
     async def _monitor_system_status(self) -> None:
         """Monitor system status continuously"""
@@ -403,6 +440,10 @@ class PCILeechTUI(App):
             try:
                 self._system_status = await self.status_monitor.get_system_status()
                 self._update_status_display()
+                
+                # Check donor module status periodically
+                await self._check_donor_module_status(show_notification=False)
+                
                 await asyncio.sleep(5)  # Update every 5 seconds
             except Exception as e:
                 self.notify(f"Status monitoring error: {e}", severity="warning")
@@ -447,6 +488,27 @@ class PCILeechTUI(App):
             "Available" if root.get("available") else "Required"
         )
         self.query_one("#root-status", Static).update(root_text)
+        
+        # Donor module status (if available)
+        if "donor_module" in status:
+            donor_status = status.get("donor_module", {})
+            status_text = donor_status.get("status", "Unknown")
+            
+            # Format status with appropriate emoji
+            if status_text == "installed":
+                donor_text = "🧩 Donor Module: ✅ Installed"
+            elif status_text == "built_not_loaded":
+                donor_text = "🧩 Donor Module: ⚠️ Built but not loaded"
+            elif status_text == "not_built":
+                donor_text = "🧩 Donor Module: ❌ Not built"
+            elif status_text == "missing_source":
+                donor_text = "🧩 Donor Module: ❌ Source missing"
+            elif status_text == "loaded_but_error":
+                donor_text = "🧩 Donor Module: ⚠️ Loaded with errors"
+            else:
+                donor_text = "🧩 Donor Module: ❓ Unknown state"
+                
+            self.query_one("#donor-module-status", Static).update(donor_text)
 
     def _update_build_progress(self) -> None:
         """Update build progress display"""
@@ -496,6 +558,9 @@ class PCILeechTUI(App):
             import subprocess
 
             subprocess.run(["xdg-open", "output"], check=False)
+            
+        elif button_id == "check-donor-module":
+            await self._check_donor_module_status(show_notification=True)
 
         elif button_id == "documentation":
             self.notify("Opening documentation...", severity="info")
@@ -532,6 +597,29 @@ class PCILeechTUI(App):
         if self.build_orchestrator.is_building():
             self.notify("Build already in progress", severity="warning")
             return
+            
+        # Check donor module status before starting build if donor_dump is enabled
+        if self.current_config.donor_dump and not self.current_config.local_build:
+            module_status = await self._check_donor_module_status(show_notification=False)
+            if module_status and module_status.get("status") != "installed":
+                # Show warning dialog with issues and fixes
+                self.notify(
+                    "⚠️ Donor module is not properly installed. This may affect the build.",
+                    severity="warning"
+                )
+                
+                # Show detailed issues and fixes
+                issues = module_status.get("issues", [])
+                fixes = module_status.get("fixes", [])
+                
+                if issues:
+                    self.notify(f"Issues: {issues[0]}", severity="warning")
+                if fixes:
+                    self.notify(f"Suggested fix: {fixes[0]}", severity="information")
+                
+                # Ask if user wants to continue anyway
+                # For now, we'll just continue with the build
+                # In a real implementation, you might want to add a confirmation dialog
 
         try:
             # Update button states
@@ -589,6 +677,86 @@ class PCILeechTUI(App):
         """React to build progress changes"""
         if progress:
             self._update_build_progress()
+            
+    async def _check_donor_module_status(self, show_notification: bool = True) -> Dict[str, Any]:
+        """
+        Check donor_dump kernel module status and update UI
+        
+        Args:
+            show_notification: Whether to show notification with status details
+            
+        Returns:
+            Module status information dictionary
+        """
+        try:
+            # Import donor_dump_manager
+            import sys
+            from pathlib import Path
+            
+            sys.path.append(str(Path(__file__).parent.parent.parent))
+            from donor_dump_manager import DonorDumpManager
+            
+            # Create manager and check status
+            manager = DonorDumpManager()
+            module_status = manager.check_module_installation()
+            
+            # Update system status with module status
+            if self._system_status is not None:
+                self._system_status["donor_module"] = module_status
+                self._update_status_display()
+            
+            # Show notification if requested
+            if show_notification:
+                status = module_status.get("status", "unknown")
+                details = module_status.get("details", "")
+                
+                if status == "installed":
+                    self.notify(f"Donor module status: {details}", severity="success")
+                elif status in ["built_not_loaded", "loaded_but_error"]:
+                    self.notify(f"Donor module status: {details}", severity="warning")
+                    
+                    # Show first issue and fix
+                    issues = module_status.get("issues", [])
+                    fixes = module_status.get("fixes", [])
+                    
+                    if issues:
+                        self.notify(f"Issue: {issues[0]}", severity="warning")
+                    if fixes:
+                        self.notify(f"Suggested fix: {fixes[0]}", severity="information")
+                else:
+                    self.notify(f"Donor module status: {details}", severity="error")
+                    
+                    # Show first issue and fix
+                    issues = module_status.get("issues", [])
+                    fixes = module_status.get("fixes", [])
+                    
+                    if issues:
+                        self.notify(f"Issue: {issues[0]}", severity="error")
+                    if fixes:
+                        self.notify(f"Suggested fix: {fixes[0]}", severity="information")
+            
+            return module_status
+            
+        except Exception as e:
+            if show_notification:
+                self.notify(f"Failed to check donor module status: {e}", severity="error")
+            
+            # Update status display with error
+            if self._system_status is not None:
+                self._system_status["donor_module"] = {
+                    "status": "error",
+                    "details": f"Error checking module: {str(e)}",
+                    "issues": [f"Exception occurred: {str(e)}"],
+                    "fixes": ["Check if donor_dump_manager.py is accessible"]
+                }
+                self._update_status_display()
+                
+            return {
+                "status": "error",
+                "details": f"Error checking module: {str(e)}",
+                "issues": [f"Exception occurred: {str(e)}"],
+                "fixes": ["Check if donor_dump_manager.py is accessible"]
+            }
 
 
 if __name__ == "__main__":

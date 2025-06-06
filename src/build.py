@@ -137,12 +137,15 @@ def create_secure_tempfile(suffix: str = "", prefix: str = "pcileech_") -> str:
         raise
 
 
-def get_donor_info(bdf: str) -> dict:
+def get_donor_info(bdf: str, use_donor_dump: bool = True, donor_info_path: Optional[str] = None, device_type: str = "generic") -> dict:
     """
-    Extract donor PCIe device information using a kernel module.
+    Extract donor PCIe device information using a kernel module or generate synthetic data.
 
     Args:
         bdf (str): PCIe Bus:Device.Function identifier (e.g., "0000:03:00.0").
+        use_donor_dump (bool): Whether to use the donor_dump kernel module.
+        donor_info_path (str): Path to a JSON file for saving/loading donor information.
+        device_type (str): Type of device for synthetic data generation if needed.
 
     Returns:
         dict: A dictionary containing donor device information.
@@ -150,21 +153,7 @@ def get_donor_info(bdf: str) -> dict:
     Raises:
         SystemExit: If required fields are missing from the donor dump.
     """
-    os.chdir(DDIR)
-    run("make -s")
-    run(f"insmod donor_dump.ko bdf={bdf}")
-
-    try:
-        raw = subprocess.check_output("cat /proc/donor_dump", shell=True, text=True)
-    finally:
-        run("rmmod donor_dump")
-
-    info = {}
-    for line in raw.splitlines():
-        if ":" in line:
-            key, value = line.split(":", 1)
-            info[key] = value.strip()
-
+    # Define required fields for validation
     required_fields = [
         "vendor_id",
         "device_id",
@@ -176,11 +165,77 @@ def get_donor_info(bdf: str) -> dict:
         "mpr",
     ]
 
-    missing_fields = [field for field in required_fields if field not in info]
-    if missing_fields:
-        sys.exit(f"donor_dump missing required fields: {missing_fields}")
+    # Import donor_dump_manager for better error handling
+    try:
+        from .donor_dump_manager import DonorDumpManager, DonorDumpError
+    except ImportError:
+        from donor_dump_manager import DonorDumpManager, DonorDumpError
 
-    return info
+    # Create manager instance
+    manager = DonorDumpManager(donor_info_path=donor_info_path)
+    
+    # Try to load donor info from file if explicitly provided and exists
+    if donor_info_path and donor_info_path.strip() and os.path.exists(donor_info_path):
+        try:
+            with open(donor_info_path, 'r') as f:
+                info = json.load(f)
+            print(f"[*] Loaded donor information from {donor_info_path}")
+            
+            # Validate required fields
+            missing_fields = [field for field in required_fields if field not in info]
+            if missing_fields:
+                print(f"[!] Warning: donor info file missing fields: {missing_fields}")
+                if use_donor_dump:
+                    print("[*] Falling back to donor_dump module")
+                else:
+                    print("[*] Generating synthetic donor information")
+                    info = manager.generate_donor_info(device_type)
+                    return info
+            else:
+                return info
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[!] Error loading donor info file: {e}")
+            if not use_donor_dump:
+                print("[*] Generating synthetic donor information")
+                info = manager.generate_donor_info(device_type)
+                return info
+            print("[*] Falling back to donor_dump module")
+
+    # Use donor_dump module if enabled
+    if use_donor_dump:
+        try:
+            # Try using the manager for better error handling
+            info = manager.setup_module(
+                bdf,
+                save_to_file=donor_info_path,
+                generate_if_unavailable=not use_donor_dump,
+                device_type=device_type
+            )
+            print(f"[*] Successfully extracted donor info")
+            return info
+        except Exception as e:
+            print(f"[!] Error extracting donor information: {e}")
+            if not use_donor_dump:
+                print("[*] Generating synthetic donor information")
+                info = manager.generate_donor_info(device_type)
+                
+                # Save the generated info if a path was provided
+                if donor_info_path:
+                    manager.save_donor_info(info, donor_info_path)
+                    
+                return info
+            else:
+                sys.exit(f"Failed to extract donor information: {e}")
+    else:
+        # Generate synthetic donor information
+        print("[*] Generating synthetic donor information")
+        info = manager.generate_donor_info(device_type)
+        
+        # Save the generated info if a path was provided
+        if donor_info_path:
+            manager.save_donor_info(info, donor_info_path)
+            
+        return info
 
 
 def scrape_driver_regs(vendor: str, device: str) -> list:
@@ -1160,6 +1215,20 @@ def main() -> None:
         action="store_true",
         help="Disable performance counters in advanced generation",
     )
+    parser.add_argument(
+        "--skip-donor-dump",
+        action="store_true",
+        help="Skip using the donor_dump kernel module (opt-in, not default)",
+    )
+    parser.add_argument(
+        "--donor-info-file",
+        help="Path to a JSON file containing donor information (only used when explicitly provided)",
+    )
+    parser.add_argument(
+        "--skip-board-check",
+        action="store_true",
+        help="Skip checking if the board directory exists (for local builds)",
+    )
     args = parser.parse_args()
 
     # Get board configuration
@@ -1167,13 +1236,23 @@ def main() -> None:
     board_root = Path(board_config["root"])
     target_src = board_root / "src" / "pcileech_tlps128_bar_controller.sv"
 
-    # Validate board directory exists
-    if not target_src.parent.exists():
+    # Validate board directory exists (unless skipped)
+    if not args.skip_board_check and not target_src.parent.exists():
         sys.exit("Expected pcileech board folder missing in repo clone")
+    
+    # Create output directory if it doesn't exist
+    if not target_src.parent.exists():
+        print(f"[*] Creating output directory: {target_src.parent}")
+        os.makedirs(target_src.parent, exist_ok=True)
 
     # Extract donor information with extended config space
     print(f"[*] Extracting enhanced donor info from {args.bdf}")
-    info = get_donor_info(args.bdf)
+    info = get_donor_info(
+        args.bdf,
+        use_donor_dump=not args.skip_donor_dump,
+        donor_info_path=args.donor_info_file,
+        device_type=args.device_type
+    )
 
     if args.verbose:
         print(
