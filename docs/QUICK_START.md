@@ -250,6 +250,21 @@ podman info | grep rootless
 sudo ./install.sh
 ```
 
+### Device Already Bound to vfio-pci
+
+If a device is already bound to the vfio-pci driver, the firmware generator will now detect this and skip the binding process automatically. This is useful in scenarios where:
+
+- You're running multiple builds for the same device
+- Another tool has already bound the device to vfio-pci
+- You manually bound the device to vfio-pci before running the generator
+
+The system will display a message like:
+```
+[*] Device already bound to vfio-pci driver, skipping binding process...
+```
+
+No action is required on your part - the build will proceed normally.
+
 ### Device Not Found
 
 ```bash

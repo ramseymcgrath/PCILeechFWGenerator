@@ -94,10 +94,26 @@ This project follows these coding standards:
 
 Pre-commit hooks are configured to enforce these standards.
 
+## 🔧 Device Driver Management
+
+### VFIO-PCI Binding
+
+The firmware generator manages PCIe device drivers during the build process. Here are some important implementation details:
+
+- **Driver Detection**: The system checks the current driver bound to a device before attempting to bind it to vfio-pci
+- **Automatic Skip**: If a device is already bound to vfio-pci, the binding process is skipped automatically
+- **Error Handling**: Even if the bind command fails but the device is actually bound to vfio-pci, the system will detect this and continue
+- **Driver Restoration**: After the build completes, the system attempts to restore the original driver
+
+This approach ensures smooth operation even in edge cases like:
+- Multiple consecutive builds using the same device
+- Manual pre-binding of devices to vfio-pci
+- Race conditions during driver binding
+
 ## ⚠️ Disclaimer
 
 This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
 
 ---
 
-**Version 0.1.7** - Major release with TUI interface and professional packaging
+**Version 0.1.8** - Major release with TUI interface and professional packaging

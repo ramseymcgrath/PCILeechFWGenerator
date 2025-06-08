@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ## 📑 Table of Contents
 
-- [Version 0.1.7 (2025-01-02)](#200---2025-01-02)
+- [Version 0.1.8 (2025-01-02)](#200---2025-01-02)
 - [Release Notes](#release-notes)
 - [Backward Compatibility](#backward-compatibility)
 - [Future Roadmap](#future-roadmap)
@@ -23,7 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 ## [Unreleased] - Container Flow Improvements
 
 ### 🔧 Fixed
-- **🐳 Container Dependency Installation**: Fixed missing Python dependencies in container build
+- **🔌 VFIO Device Binding**: Fixed an issue where binding a device already bound to vfio-pci would fail
+  - Added detection for devices already bound to vfio-pci
+  - Improved error handling during the binding process
+  - Added comprehensive test cases for this edge case
+- **� Container Dependency Installation**: Fixed missing Python dependencies in container build
   - Added proper `pip install` commands for `requirements.txt` and `requirements-tui.txt`
   - Fixed import errors for `psutil`, `pydantic`, and other required packages
 - **📁 Container File Structure**: Corrected file paths and directory structure
@@ -60,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ---
 
-## [0.1.7] - 2025-01-02
+## [0.1.8] - 2025-01-02
 
 ### ✨ Added
 - **🖥️ Interactive TUI Interface**: Complete text-based user interface with real-time monitoring
@@ -180,4 +184,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.1.7** - Major release with TUI interface and professional packaging
+**Version 0.1.8** - Major release with TUI interface and professional packaging
