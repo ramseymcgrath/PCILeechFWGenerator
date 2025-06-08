@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.state_machine_extractor import (
+from src.scripts.state_machine_extractor import (
     StateMachine,
     StateMachineExtractor,
     StateTransition,

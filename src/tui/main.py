@@ -206,9 +206,17 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
         app = self.app
 
         # Initialize the device type select with default value
-        device_type_select = self.query_one("#device-type-select", Select)
-        if "generic" in [option[0] for option in device_type_select.options]:
-            device_type_select.value = "generic"
+        try:
+            device_type_select = self.query_one("#device-type-select", Select)
+            device_options = [option[0] for option in device_type_select.options]
+            
+            # Check if generic is in options
+            if "generic" in device_options:
+                device_type_select.value = "generic"
+            elif device_options:  # If options exist but generic isn't one of them
+                device_type_select.value = device_options[0]  # Use first available option
+        except Exception as e:
+            print(f"Error initializing device type select: {e}")
 
         # Then populate with current configuration if available
         if hasattr(app, "current_config"):
@@ -221,12 +229,21 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#board-type-select", Select).value = config.board_type
 
             # Set device type value safely
-            device_type_select = self.query_one("#device-type-select", Select)
-            # Make sure the value is in the available options
-            if config.device_type in [
-                option[0] for option in device_type_select.options
-            ]:
-                device_type_select.value = config.device_type
+            try:
+                device_type_select = self.query_one("#device-type-select", Select)
+                device_options = [option[0] for option in device_type_select.options]
+                
+                # Make sure the value is in the available options
+                if config.device_type in device_options:
+                    device_type_select.value = config.device_type
+                elif "generic" in device_options:
+                    device_type_select.value = "generic"
+                    print(f"Warning: Device type '{config.device_type}' not found in options, using 'generic' instead")
+                elif device_options:
+                    device_type_select.value = device_options[0]
+                    print(f"Warning: Device type '{config.device_type}' not found in options, using '{device_options[0]}' instead")
+            except Exception as e:
+                print(f"Error setting device type: {e}")
 
             self.query_one("#config-name-input", Input).value = config.name
             self.query_one("#config-description-input", Input).value = (
@@ -271,11 +288,18 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             # Get device type safely
             device_type_select = self.query_one("#device-type-select", Select)
             device_type = device_type_select.value
+            device_options = [option[0] for option in device_type_select.options]
+            
             # Fallback to generic if value is not set or invalid
-            if not device_type or device_type not in [
-                option[0] for option in device_type_select.options
-            ]:
-                device_type = "generic"
+            if not device_type or device_type not in device_options:
+                # If generic is available, use it
+                if "generic" in device_options:
+                    device_type = "generic"
+                # Otherwise use the first available option or default to "generic"
+                elif device_options:
+                    device_type = device_options[0]
+                else:
+                    device_type = "generic"
 
             return BuildConfiguration(
                 board_type=self.query_one("#board-type-select", Select).value,
@@ -740,14 +764,20 @@ class PCILeechTUI(App):
     async def _open_configuration_dialog(self) -> None:
         """Open the configuration dialog"""
         try:
+            # Log current configuration before opening dialog
+            print(f"Current configuration device_type: {self.current_config.device_type}")
+            
             result = await self.push_screen(ConfigurationDialog())
             if result is not None:
                 # Update current configuration
                 self.current_config = result
+                print(f"New configuration device_type: {self.current_config.device_type}")
                 self._update_config_display()
                 self.notify("Configuration updated successfully", severity="success")
         except Exception as e:
-            self.notify(f"Failed to open configuration dialog: {e}", severity="error")
+            error_msg = f"Failed to open configuration dialog: {e}"
+            print(f"ERROR: {error_msg}")
+            self.notify(error_msg, severity="error")
 
     async def _confirm_with_warnings(self, title: str, message: str) -> bool:
         """Open a confirmation dialog with warnings and return user's choice"""

@@ -40,8 +40,14 @@ def check_linux_requirement(operation: str) -> None:
 
 
 # Import state machine extractor
-sys.path.append(str(pathlib.Path(__file__).parent.parent))
-from state_machine_extractor import StateMachineExtractor
+import os
+import sys
+
+# Add the project root directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+# Now import the state machine extractor
+from src.scripts.state_machine_extractor import StateMachineExtractor
 
 # Module-level variables will be set in main()
 VENDOR = None

@@ -503,60 +503,60 @@ class StateMachineExtractor:
                 for transition in transitions:
                     sm.add_transition(transition)
 
-        # Look for if-else chain state machines
-        if not sm:
-            # First, look for all if-else chains in the function body
-            if_chain_pattern = re.compile(
-                r"if\s*\(\s*(\w+)\s*==\s*(\w+)\s*\)([^}]+?)\s*(?:else\s+if\s*\(\s*\1\s*==\s*(\w+)\s*\)([^}]+?)\s*)*(?:else\s*\{([^}]+?)\s*\})?",
-                re.DOTALL,
-            )
-
-            for if_chain_match in if_chain_pattern.finditer(func_body):
-                state_var = if_chain_match.group(1)
-
-                # Create a state machine for this if-chain
-                sm = StateMachine(name=f"{func_name}_{state_var}_sm")
-                sm.context = {
-                    "function": func_name,
-                    "type": "explicit_if_chain",
-                    "state_variable": state_var,
-                }
-
-                # Extract all state comparisons
-                state_pattern = re.compile(rf"{re.escape(state_var)}\s*==\s*(\w+)")
-                for state_match in state_pattern.finditer(if_chain_match.group(0)):
-                    state_name = state_match.group(1)
-                    sm.add_state(state_name)
-
-                # Also look for state assignments
-                assign_pattern = re.compile(rf"{re.escape(state_var)}\s*=\s*(\w+)")
-                for assign_match in assign_pattern.finditer(if_chain_match.group(0)):
-                    state_name = assign_match.group(1)
-                    sm.add_state(state_name)
-
-                # Extract transitions from the if-chain
-                if_blocks = re.finditer(
-                    rf"if\s*\(\s*{re.escape(state_var)}\s*==\s*(\w+)\s*\)\s*\{{([^}}]+?)\s*\}}",
-                    if_chain_match.group(0),
+            # Look for if-else chain state machines
+            if not sm or len(sm.states) <= 1:
+                # First, look for all if-else chains in the function body
+                if_chain_pattern = re.compile(
+                    r"if\s*\(\s*(\w+)\s*==\s*(\w+)\s*\)([^}]+?)\s*(?:else\s+if\s*\(\s*\1\s*==\s*(\w+)\s*\)([^}]+?)\s*)*(?:else\s*\{([^}]+?)\s*\})?",
                     re.DOTALL,
                 )
 
-                for if_block in if_blocks:
-                    from_state = if_block.group(1)
-                    block_body = if_block.group(2)
+                for if_chain_match in if_chain_pattern.finditer(func_body):
+                    state_var = if_chain_match.group(1)
 
-                    # Look for transitions in the block body
-                    transitions = self._extract_transitions_from_code(
-                        from_state, block_body, registers
+                    # Create a state machine for this if-chain
+                    sm = StateMachine(name=f"{func_name}_{state_var}_sm")
+                    sm.context = {
+                        "function": func_name,
+                        "type": "explicit_if_chain",
+                        "state_variable": state_var,
+                    }
+
+                    # Extract all state comparisons
+                    state_pattern = re.compile(rf"{re.escape(state_var)}\s*==\s*(\w+)")
+                    for state_match in state_pattern.finditer(if_chain_match.group(0)):
+                        state_name = state_match.group(1)
+                        sm.add_state(state_name)
+
+                    # Also look for state assignments
+                    assign_pattern = re.compile(rf"{re.escape(state_var)}\s*=\s*(\w+)")
+                    for assign_match in assign_pattern.finditer(if_chain_match.group(0)):
+                        state_name = assign_match.group(1)
+                        sm.add_state(state_name)
+
+                    # Extract transitions from the if-chain
+                    if_blocks = re.finditer(
+                        rf"if\s*\(\s*{re.escape(state_var)}\s*==\s*(\w+)\s*\)\s*\{{([^}}]+?)\s*\}}",
+                        if_chain_match.group(0),
+                        re.DOTALL,
                     )
-                    for transition in transitions:
-                        sm.add_transition(transition)
 
-                # If we found states, break out of the loop
-                if len(sm.states) > 0:
-                    break
+                    for if_block in if_blocks:
+                        from_state = if_block.group(1)
+                        block_body = if_block.group(2)
 
-        return sm if sm and len(sm.states) > 1 else None
+                        # Look for transitions in the block body
+                        transitions = self._extract_transitions_from_code(
+                            from_state, block_body, registers
+                        )
+                        for transition in transitions:
+                            sm.add_transition(transition)
+
+                    # If we found states, break out of the loop
+                    if len(sm.states) > 0:
+                        break
+
+            return sm if sm and len(sm.states) > 1 else None
 
     def _extract_implicit_state_machine(
         self, func_name: str, func_body: str, registers: Dict[str, int]
