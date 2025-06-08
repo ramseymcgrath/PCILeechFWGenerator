@@ -36,6 +36,39 @@ from .models.device import PCIDevice
 from .models.progress import BuildProgress
 
 
+class ConfirmationDialog(ModalScreen[bool]):
+    """Modal dialog for confirming actions with warnings"""
+
+    def __init__(self, title: str, message: str) -> None:
+        """Initialize the confirmation dialog with a title and message"""
+        super().__init__()
+        self.title = title
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        """Create the confirmation dialog layout"""
+        with Container(id="confirm-dialog"):
+            yield Static(self.title, id="dialog-title")
+
+            with Vertical(id="confirm-message"):
+                yield Static(self.message)
+
+            # Dialog Buttons
+            with Horizontal(id="dialog-buttons"):
+                yield Button("Cancel", id="cancel-confirm", variant="default")
+                yield Button("Continue", id="confirm-action", variant="primary")
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle dialog button presses"""
+        button_id = event.button.id
+
+        if button_id == "cancel-confirm":
+            self.dismiss(False)
+
+        elif button_id == "confirm-action":
+            self.dismiss(True)
+
+
 class ConfigurationDialog(ModalScreen[BuildConfiguration]):
     """Modal dialog for configuring build settings"""
 
@@ -663,8 +696,14 @@ class PCILeechTUI(App):
                     self.notify(f"Suggested fix: {fixes[0]}", severity="information")
 
                 # Ask if user wants to continue anyway
-                # For now, we'll just continue with the build
-                # In a real implementation, you might want to add a confirmation dialog
+                should_continue = await self._confirm_with_warnings(
+                    "⚠️ Warning: Donor Module Issues",
+                    "The donor module is not properly installed. This may affect the build. Do you want to continue anyway?",
+                )
+
+                if not should_continue:
+                    self.notify("Build cancelled by user", severity="information")
+                    return
 
         try:
             # Update button states
@@ -709,6 +748,15 @@ class PCILeechTUI(App):
                 self.notify("Configuration updated successfully", severity="success")
         except Exception as e:
             self.notify(f"Failed to open configuration dialog: {e}", severity="error")
+
+    async def _confirm_with_warnings(self, title: str, message: str) -> bool:
+        """Open a confirmation dialog with warnings and return user's choice"""
+        try:
+            result = await self.push_screen(ConfirmationDialog(title, message))
+            return result is True
+        except Exception as e:
+            self.notify(f"Failed to open confirmation dialog: {e}", severity="error")
+            return False
 
     # Reactive watchers
     def watch_selected_device(self, device: Optional[PCIDevice]) -> None:

@@ -1,6 +1,6 @@
 # PCILeech Firmware Generator
 
-[![PyPI version](https://badge.fury.io/py/pcileechfwgenerator.svg)](https://badge.fury.io/py/pcileechfwgenerator)
+[![PyPI - Version](https://img.shields.io/pypi/v/:pcileechfwgenerator)](https://pypi.org/project/pcileechfwgenerator/)
 [![CI](https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions)
 [![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
 ![](https://dcbadge.limes.pink/api/shield/429866199833247744)
