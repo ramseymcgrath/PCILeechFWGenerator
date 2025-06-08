@@ -234,7 +234,9 @@ def bind_to_vfio(
         f"Binding device {bdf} to vfio-pci driver (current driver: {original_driver or 'none'})"
     )
     if original_driver == "vfio-pci":
-        print("[*] Device already bound to vfio-pci driver, skipping binding process...")
+        print(
+            "[*] Device already bound to vfio-pci driver, skipping binding process..."
+        )
         logger.info(f"Device {bdf} already bound to vfio-pci, skipping binding process")
         return
     else:
@@ -258,7 +260,9 @@ def bind_to_vfio(
                 with open(ids_file, "r") as f:
                     registered_ids = f.read()
                     if f"{vendor} {device}" in registered_ids:
-                        logger.info(f"Device ID {vendor}:{device} already registered with vfio-pci")
+                        logger.info(
+                            f"Device ID {vendor}:{device} already registered with vfio-pci"
+                        )
                         device_id_registered = True
         except Exception as e:
             logger.debug(f"Error checking registered device IDs: {e}")
@@ -268,12 +272,18 @@ def bind_to_vfio(
         if not device_id_registered:
             logger.debug(f"Registering device ID {vendor}:{device} with vfio-pci")
             try:
-                run_command(f"echo {vendor} {device} > /sys/bus/pci/drivers/vfio-pci/new_id")
-                logger.info(f"Successfully registered device ID {vendor}:{device} with vfio-pci")
+                run_command(
+                    f"echo {vendor} {device} > /sys/bus/pci/drivers/vfio-pci/new_id"
+                )
+                logger.info(
+                    f"Successfully registered device ID {vendor}:{device} with vfio-pci"
+                )
             except subprocess.CalledProcessError as e:
                 # If the error is "File exists", the device ID is already registered, which is fine
                 if "File exists" in str(e):
-                    logger.info(f"Device ID {vendor}:{device} already registered with vfio-pci")
+                    logger.info(
+                        f"Device ID {vendor}:{device} already registered with vfio-pci"
+                    )
                 else:
                     # Re-raise if it's a different error
                     logger.error(f"Failed to register device ID: {e}")
@@ -299,7 +309,9 @@ def bind_to_vfio(
             # Check if device is already bound to vfio-pci despite the error
             current_driver = get_current_driver(bdf)
             if current_driver == "vfio-pci":
-                logger.info(f"Device {bdf} is already bound to vfio-pci despite bind command error")
+                logger.info(
+                    f"Device {bdf} is already bound to vfio-pci despite bind command error"
+                )
                 print("[✓] Device is already bound to vfio-pci driver")
             else:
                 logger.error(f"Failed to bind to vfio-pci: {e}")
