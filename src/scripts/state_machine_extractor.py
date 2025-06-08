@@ -530,7 +530,9 @@ class StateMachineExtractor:
 
                     # Also look for state assignments
                     assign_pattern = re.compile(rf"{re.escape(state_var)}\s*=\s*(\w+)")
-                    for assign_match in assign_pattern.finditer(if_chain_match.group(0)):
+                    for assign_match in assign_pattern.finditer(
+                        if_chain_match.group(0)
+                    ):
                         state_name = assign_match.group(1)
                         sm.add_state(state_name)
 

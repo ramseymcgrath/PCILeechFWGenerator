@@ -535,5 +535,5 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.1.8** - Major release with TUI interface and professional packaging
+**Version 0.1.9** - Major release with TUI interface and professional packaging
 For educational research and legitimate PCIe development only. Misuse may violate laws and void warranties. The authors assume no liability.
