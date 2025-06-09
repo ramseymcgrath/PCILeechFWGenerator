@@ -13,8 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ## 📑 Table of Contents
 
-- [Unreleased (Build Process Improvements)](#unreleased---build-process-improvements)
-- [Version 0.3.0 (2025-06-10)](#030---2025-06-10)
 - [Version 0.2.0 (2025-06-09)](#020---2025-06-09)
 - [Version 0.2.0 (2025-01-02)](#0110---2025-01-02)
 - [Release Notes](#release-notes)
@@ -23,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ---
 
-## [0.3.0] - 2025-06-10
+## [0.2.0] - 2025-06-10
 
 ### ✨ Added
 - **🧩 Feature Integration**: Comprehensive integration of all major features
@@ -53,8 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
   - Consistent variance parameters for the same donor device and build revision
   - Different variance parameters for different donor devices or build revisions
   - Support for different device classes with appropriate variance ranges
-
-### 🔄 Changed
 - **🏗️ Build Process**: Enhanced to support all integrated features
   - Improved donor dump extraction with full 4 KB configuration space
   - Added capability pruning step to the build process
@@ -69,8 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
   - Added `docs/INTEGRATED_FEATURES.md` with detailed integration information
   - Updated feature-specific documentation with integration details
   - Added troubleshooting information for integrated features
-
-### 🔧 Fixed
 - **🔌 MSI-X Table Integration**: Fixed issues with MSI-X table integration
   - Corrected MSI-X table parameter extraction from configuration space
   - Fixed MSI-X table and PBA memory mapping in BAR controller
@@ -170,52 +164,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
   - Optimized build context for better performance
 
 ---
-
-## [0.2.0] - 2025-01-02
-
-### ✨ Added
-- **🖥️ Interactive TUI Interface**: Complete text-based user interface with real-time monitoring
-  - Visual PCIe device browser with enhanced device information
-  - Guided configuration workflows with validation
-  - Real-time build monitoring with progress tracking
-  - System status monitoring for Podman, Vivado, USB devices
-  - Intelligent error guidance with suggested fixes
-  - Profile management for build configurations
-- **📦 Enhanced Package Structure**: Professional Python packaging with pip installability
-  - Console script entry points (`pcileech-generate`, `pcileech-tui`, `pcileech-build`)
-  - Proper package metadata and dependency management
-  - Optional TUI dependencies for lightweight installations
-- **⚡ Advanced SystemVerilog Features**: Comprehensive PCIe device controller improvements
-  - Modular architecture with enhanced power management
-  - Performance counters and monitoring capabilities
-  - Error handling and recovery mechanisms
-  - Manufacturing variance simulation for realistic behavior
-- **📊 Behavioral Profiling**: Dynamic device behavior capture and simulation
-  - Real-time register access pattern analysis
-  - Timing characteristic profiling
-  - Device-specific behavior modeling
-- **🧪 Quality Assurance**: Comprehensive testing and code quality tools
-  - Unit and integration test suites
-  - Code formatting with Black and isort
-  - Type checking with mypy
-  - Pre-commit hooks for development workflow
-- **🐳 Container Improvements**: Enhanced containerized build environment
-  - Updated Containerfile with TUI support
-  - Improved resource management and monitoring
-  - Better error handling and logging
-
-### 🔄 Changed
-- **🔢 Major Version Bump**: Incremented to v0.1.2 to reflect significant TUI addition
-- **📚 Improved Documentation**: Enhanced README with TUI features and installation instructions
-- **🐛 Better Error Handling**: More informative error messages and recovery suggestions
-- **📋 Enhanced Logging**: Improved logging throughout the application with structured output
-
-### 🔧 Technical Details
-- **📦 Dependencies**: Added Textual, Rich, Watchdog for TUI functionality
-- **🐍 Python Support**: Requires Python 3.9+ with support through 3.12
-- **📂 Package Structure**: Reorganized as proper Python package with setuptools/pip support
-- **⌨️ Entry Points**: Added console scripts for easy command-line access
-- **🧪 Testing**: Comprehensive test suite with pytest and coverage reporting
 
 ### 🚀 Installation
 ```bash
