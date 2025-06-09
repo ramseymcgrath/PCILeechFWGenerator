@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 # Optional pytest import for parametrized tests
 try:
     import pytest
@@ -175,14 +174,26 @@ if PYTEST_AVAILABLE:
             sample_rom_path = output_dir / "sample.rom"
             with open(sample_rom_path, "wb") as f:
                 # Create a valid ROM with signature 0x55AA
-                f.write(bytes([0x55, 0xAA]))  # ROM signature
-                f.write(bytes([rom_size // 512]))  # Size in 512-byte blocks
-                f.write(bytes([0x00] * (rom_size - 2)))  # Padding
+                f.write(bytes([0x55, 0xAA]))  # ROM signature (2 bytes)
+                
+                # Size in 512-byte blocks, handle large sizes properly
+                size_blocks = rom_size // 512
+                if size_blocks <= 255:
+                    f.write(bytes([size_blocks]))  # Size in 512-byte blocks (1 byte)
+                else:
+                    # For larger sizes, use a fixed value and rely on actual file size
+                    f.write(bytes([0xFF]))  # Maximum size indicator (1 byte)
+                
+                # Padding to reach the desired size
+                # We've already written 3 bytes (signature + size), so subtract 3
+                f.write(bytes([0x00] * (rom_size - 3)))  # Padding
 
             # Load the ROM
             manager.load_rom_file(str(sample_rom_path))
 
             # Verify size
+            # The ROM size should be exactly rom_size bytes
+            # We've adjusted the padding to account for the signature and size byte
             assert manager.rom_size == rom_size
 
             # Save as hex and verify

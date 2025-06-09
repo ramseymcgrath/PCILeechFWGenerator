@@ -29,19 +29,16 @@ class TestLocalBuild:
     """Test local build functionality without donor device."""
 
     def test_default_donor_dump_behavior(self, mock_donor_info):
-        """Test that donor dump is enabled by default."""
+        """Test that donor dump is disabled by default (local build is default)."""
         # Call get_donor_info without specifying use_donor_dump
-        # It should default to True
-        with patch.object(DonorDumpManager, "setup_module") as mock_setup:
-            mock_setup.return_value = mock_donor_info
+        # It should default to False
+        with patch.object(DonorDumpManager, "generate_donor_info") as mock_generate:
+            mock_generate.return_value = mock_donor_info
 
             info = build.get_donor_info(bdf="0000:00:00.0")  # Only provide BDF
 
-            # Verify setup_module was called with use_donor_dump=True
-            mock_setup.assert_called_once()
-            args, kwargs = mock_setup.call_args
-            assert args[0] == "0000:00:00.0"  # BDF
-            assert kwargs.get("generate_if_unavailable") is False  # Default value
+            # Verify generate_donor_info was called (since use_donor_dump defaults to False)
+            mock_generate.assert_called_once_with("generic")
 
             # Verify the info matches the expected values
             assert info == mock_donor_info
@@ -260,7 +257,7 @@ class TestBuildOrchestratorLocalBuild:
         mock_run_command,
         mock_donor_info,
     ):
-        """Test BuildOrchestrator with default configuration (donor dump enabled)."""
+        """Test BuildOrchestrator with default configuration (local build is default)."""
         from src.tui.core.build_orchestrator import BuildOrchestrator
         from src.tui.models.config import BuildConfiguration
         from src.tui.models.device import PCIDevice
@@ -292,9 +289,9 @@ class TestBuildOrchestratorLocalBuild:
             compatibility_issues=[],
         )
 
-        # Create a configuration with default settings (donor_dump=True)
+        # Create a configuration with default settings (donor_dump=False is now default)
         config = BuildConfiguration(
-            board_type="75t", device_type="network", donor_dump=True  # Default behavior
+            board_type="75t", device_type="network"  # Use default behavior (donor_dump=False)
         )
 
         # Create a progress callback
@@ -313,8 +310,8 @@ class TestBuildOrchestratorLocalBuild:
         # Check that the command includes the expected arguments
         assert "--bdf 0000:00:00.0" in " ".join(cmd)
         assert "--board 75t" in " ".join(cmd)
-        # Verify that --skip-donor-dump is NOT present (donor dump is enabled by default)
-        assert "--skip-donor-dump" not in " ".join(cmd)
+        # Verify that --use-donor-dump is NOT present (local build is default)
+        assert "--use-donor-dump" not in " ".join(cmd)
 
     @pytest.mark.asyncio
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._run_monitored_command")
@@ -386,6 +383,6 @@ class TestBuildOrchestratorLocalBuild:
         # Check that the command includes the expected arguments
         assert "--bdf 0000:00:00.0" in " ".join(cmd)
         assert "--board 75t" in " ".join(cmd)
-        assert "--skip-donor-dump" in " ".join(cmd)
+        # No need to assert --skip-donor-dump since local builds are now default
         assert "--donor-info-file" in " ".join(cmd)
         assert "sample_donor_info.json" in " ".join(cmd)

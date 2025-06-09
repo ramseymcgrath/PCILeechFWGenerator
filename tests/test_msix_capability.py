@@ -47,6 +47,7 @@ class TestMSIXCapability(unittest.TestCase):
         # Capability ID: 0x11 (MSI-X)
         # Next pointer: 0x00 (end of list)
         # Message Control: 0x0007 (8 table entries, function not masked, MSI-X disabled)
+        # Note: In little-endian byte order, 0x0007 is represented as "0700" in the hex string
         # Table offset/BIR: 0x00002000 (offset 0x2000, BIR 0)
         # PBA offset/BIR: 0x00003000 (offset 0x3000, BIR 0)
         msix_cap = "11" + "00" + "0700" + "00002000" + "00003000"

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 
 ## 📑 Table of Contents
 
+- [Unreleased (Build Process Improvements)](#unreleased---build-process-improvements)
 - [Version 0.3.0 (2025-06-10)](#030---2025-06-10)
 - [Version 0.2.0 (2025-06-09)](#020---2025-06-09)
 - [Version 0.2.0 (2025-01-02)](#0110---2025-01-02)
@@ -109,14 +110,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
 - **🏗️ Build Process**: Updated to support Option-ROM integration
 - **📋 Enhanced Logging**: Improved logging for Option-ROM extraction and processing
 
-## [Unreleased] - Container Flow Improvements
+## [Unreleased] - Build Process Improvements
+
+### 🔄 Changed
+- **🏗️ Local Build Default**: Changed local build to be the default process
+  - Local builds now run by default (no container required)
+  - Container builds now require explicit opt-in with `--use-donor-dump`
+  - Improved error handling for local build scenarios
+  - Enhanced documentation for local build workflows
+- **🔧 Container Engine Options**: Added support for multiple container engines
+  - Added new `--container-engine` option to specify engine preference
+  - Podman is now the default container engine
+  - Docker remains fully supported as an alternative option
+  - Automatic detection of available container engines
+- **🔍 Vivado Location Validation**: Enhanced Vivado detection and validation
+  - Improved cross-platform Vivado installation detection
+  - Added support for environment variables (XILINX_VIVADO)
+  - Automatic version detection and compatibility checking
+  - Detailed error messages for missing or incompatible installations
 
 ### 🔧 Fixed
 - **🔌 VFIO Device Binding**: Fixed an issue where binding a device already bound to vfio-pci would fail
   - Added detection for devices already bound to vfio-pci
   - Improved error handling during the binding process
   - Added comprehensive test cases for this edge case
-- ** Container Dependency Installation**: Fixed missing Python dependencies in container build
+- **📦 Container Dependency Installation**: Fixed missing Python dependencies in container build
   - Added proper `pip install` commands for `requirements.txt` and `requirements-tui.txt`
   - Fixed import errors for `psutil`, `pydantic`, and other required packages
 - **📁 Container File Structure**: Corrected file paths and directory structure

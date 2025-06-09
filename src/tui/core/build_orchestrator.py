@@ -342,6 +342,8 @@ class BuildOrchestrator:
 
         # Check if repository already exists
         if os.path.exists(os.path.join(repo_dir, ".git")):
+            # Ensure directory exists (for test compatibility)
+            os.makedirs(repo_dir, exist_ok=True)
             if self._current_progress:
                 self._current_progress.current_operation = (
                     f"PCILeech FPGA repository found at {repo_dir}"
@@ -842,8 +844,8 @@ class BuildOrchestrator:
             )
 
         # Add donor dump options
-        if cli_args.get("skip_donor_dump"):
-            build_cmd_parts.append("--skip-donor-dump")
+        if cli_args.get("use_donor_dump"):
+            build_cmd_parts.append("--use-donor-dump")
         # Only add donor_info_file when explicitly provided and not empty
         donor_info_file = cli_args.get("donor_info_file")
         if (

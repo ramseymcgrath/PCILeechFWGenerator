@@ -148,12 +148,16 @@ When adding new Linux-specific functionality:
 
 ## Container Usage
 
-The container build provides a more cohesive environment but not all pcie cards may work.
+The container build provides a more cohesive environment but not all pcie cards may work. You can now specify which container engine to use (docker or podman).
 
 ```bash
 # Build container on Linux host (if using container image)
 podman build -t dma-fw .
 podman run --rm -it dma-fw --help
+
+# Specify container engine when building firmware
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --container-engine docker
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --container-engine podman
 ```
 
 ## Testing

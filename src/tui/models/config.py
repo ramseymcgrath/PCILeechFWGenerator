@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-
 @dataclass
 class BuildConfiguration:
     """Comprehensive build configuration"""
@@ -27,11 +26,11 @@ class BuildConfiguration:
     flash_after_build: bool = False
 
     # Donor dump configuration
-    donor_dump: bool = True  # Default to using donor dump
+    donor_dump: bool = False  # Default to local builds (no donor dump)
     auto_install_headers: bool = False
     donor_info_file: Optional[str] = None
     skip_board_check: bool = False
-    local_build: bool = False
+    local_build: bool = True  # Default to local builds
 
     # Profile metadata
     name: str = "Default Configuration"
@@ -118,7 +117,7 @@ class BuildConfiguration:
             "disable_performance_counters": not self.performance_counters,
             "enable_behavior_profiling": self.behavior_profiling,
             "behavior_profile_duration": int(self.profile_duration),
-            "skip_donor_dump": not self.donor_dump,
+            "use_donor_dump": self.donor_dump,  # Use the new parameter name
             "auto_install_headers": self.auto_install_headers,
         }
 

@@ -67,12 +67,12 @@ class ConfigManager:
 
     def save_profile(
         self, name: str, config: BuildConfiguration
-    ) -> Tuple[bool, Optional[TUIError]]:
+    ) -> bool:
         """
         Save configuration profile to ~/.pcileech/profiles/.
 
         Returns:
-            Tuple containing (success, error_if_any)
+            Boolean indicating success
         """
         # Update metadata
         config.name = name
@@ -86,20 +86,10 @@ class ConfigManager:
             # Save to file
             profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
             config.save_to_file(profile_path)
-            return True, None
+            return True
         except PermissionError as e:
-            error = TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message=f"Permission denied when saving profile '{name}'",
-                details=str(e),
-                suggested_actions=[
-                    "Check file permissions in ~/.pcileech/profiles/",
-                    "Ensure you have write access to your home directory",
-                    "Try running the application with appropriate permissions",
-                ],
-            )
-            return False, error
+            print(f"Permission denied when saving profile '{name}': {e}")
+            return False
         except Exception as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -111,16 +101,17 @@ class ConfigManager:
                     "Verify that the ~/.pcileech directory is accessible",
                 ],
             )
-            return False, error
+            print(f"Error saving profile: {error.message}")
+            return False
 
     def load_profile(
         self, name: str
-    ) -> Tuple[Optional[BuildConfiguration], Optional[TUIError]]:
+    ) -> Optional[BuildConfiguration]:
         """
         Load configuration profile.
 
         Returns:
-            Tuple containing (config_if_successful, error_if_any)
+            Configuration if successful, None otherwise
         """
         try:
             # Ensure directory exists
@@ -138,20 +129,19 @@ class ConfigManager:
                         "Create a new profile with this name",
                     ],
                 )
-                return None, error
+                print(f"Profile not found: {error.message}")
+                return None
 
             config = BuildConfiguration.load_from_file(profile_path)
 
             # Update last used timestamp
             config.last_used = datetime.now().isoformat()
-            success, error = self.save_profile(name, config)  # Save updated timestamp
-            if not success and error:
+            success = self.save_profile(name, config)  # Save updated timestamp
+            if not success:
                 # If we couldn't save the updated timestamp, just log and continue
-                print(
-                    f"Warning: Could not update last_used timestamp for profile '{name}': {error.message}"
-                )
+                print(f"Warning: Could not update last_used timestamp for profile '{name}'")
 
-            return config, None
+            return config
 
         except PermissionError as e:
             error = TUIError(
@@ -164,7 +154,8 @@ class ConfigManager:
                     "Ensure you have read access to your home directory",
                 ],
             )
-            return None, error
+            print(f"Permission error: {error.message}")
+            return None
         except json.JSONDecodeError as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -176,7 +167,8 @@ class ConfigManager:
                     "Try deleting and recreating the profile",
                 ],
             )
-            return None, error
+            print(f"JSON error: {error.message}")
+            return None
         except Exception as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -188,14 +180,15 @@ class ConfigManager:
                     "Verify that the file contains valid JSON data",
                 ],
             )
-            return None, error
+            print(f"Error loading profile: {error.message}")
+            return None
 
-    def list_profiles(self) -> Tuple[List[Dict[str, str]], Optional[TUIError]]:
+    def list_profiles(self) -> List[Dict[str, str]]:
         """
         List available configuration profiles.
 
         Returns:
-            Tuple containing (profiles_list, error_if_any)
+            List of profile information dictionaries
         """
         try:
             # Ensure directory exists
@@ -242,9 +235,10 @@ class ConfigManager:
                         "Consider deleting corrupted profile files",
                     ],
                 )
-                return profiles, error
+                print(f"Warning: {error.message}")
+                return profiles
 
-            return profiles, None
+            return profiles
 
         except PermissionError as e:
             error = TUIError(
@@ -257,7 +251,8 @@ class ConfigManager:
                     "Ensure you have read access to your home directory",
                 ],
             )
-            return [], error
+            print(f"Permission error: {error.message}")
+            return []
         except Exception as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -268,27 +263,23 @@ class ConfigManager:
                     "Check if the ~/.pcileech directory exists and is accessible"
                 ],
             )
-            return [], error
+            print(f"Error listing profiles: {error.message}")
+            return []
 
-    def delete_profile(self, name: str) -> Tuple[bool, Optional[TUIError]]:
+    def delete_profile(self, name: str) -> bool:
         """
         Delete a configuration profile.
 
         Returns:
-            Tuple containing (success, error_if_any)
+            Boolean indicating success
         """
         try:
             profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
             if profile_path.exists():
                 profile_path.unlink()
-                return True, None
-            return False, TUIError(
-                severity=ErrorSeverity.WARNING,
-                category="config",
-                message=f"Profile '{name}' not found for deletion",
-                details=f"The file {profile_path} does not exist",
-                suggested_actions=["Check if the profile name is correct"],
-            )
+                return True
+            print(f"Profile '{name}' not found for deletion")
+            return False
         except PermissionError as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -300,7 +291,8 @@ class ConfigManager:
                     "Ensure you have write access to your home directory",
                 ],
             )
-            return False, error
+            print(f"Permission error: {error.message}")
+            return False
         except Exception as e:
             error = TUIError(
                 severity=ErrorSeverity.ERROR,
@@ -312,19 +304,20 @@ class ConfigManager:
                     "Verify that the ~/.pcileech directory is accessible",
                 ],
             )
-            return False, error
+            print(f"Error deleting profile: {error.message}")
+            return False
 
     def profile_exists(self, name: str) -> bool:
         """Check if a profile exists."""
         profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
         return profile_path.exists()
 
-    def create_default_profiles(self) -> Tuple[bool, Optional[TUIError]]:
+    def create_default_profiles(self) -> bool:
         """
         Create default configuration profiles.
 
         Returns:
-            Tuple containing (success, error_if_any)
+            Boolean indicating success
         """
         try:
             # Ensure directory exists with proper permissions
@@ -405,89 +398,47 @@ class ConfigManager:
                     config = profile_data["config"]
                     config.name = profile_data["name"]
                     config.description = profile_data["description"]
-                    success, error = self.save_profile(profile_data["name"], config)
+                    success = self.save_profile(profile_data["name"], config)
                     if success:
                         created_count += 1
-                    elif error:
-                        errors.append(
-                            f"Failed to create '{profile_data['name']}': {error.message}"
-                        )
                     else:
-                        errors.append(
-                            f"Failed to create '{profile_data['name']}': Unknown error"
-                        )
+                        errors.append(f"Failed to create '{profile_data['name']}'")
 
             if errors:
-                error = TUIError(
-                    severity=ErrorSeverity.WARNING,
-                    category="config",
-                    message=f"Created {created_count} of {len(default_profiles)} default profiles",
-                    details="\n".join(errors),
-                    suggested_actions=[
-                        "Check permissions for ~/.pcileech/profiles/ directory",
-                        "Ensure you have write access to your home directory",
-                    ],
-                )
-                return created_count > 0, error
+                print(f"Warning: Created {created_count} of {len(default_profiles)} default profiles")
+                print("\n".join(errors))
+                return created_count > 0
 
-            return True, None
+            return True
 
         except PermissionError as e:
-            error = TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message="Permission denied when creating default profiles",
-                details=str(e),
-                suggested_actions=[
-                    "Check permissions for ~/.pcileech/profiles/ directory",
-                    "Ensure you have write access to your home directory",
-                    "Try running the application with appropriate permissions",
-                ],
-            )
-            return False, error
+            print(f"Permission denied when creating default profiles: {e}")
+            return False
         except Exception as e:
-            error = TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message="Failed to create default profiles",
-                details=str(e),
-                suggested_actions=[
-                    "Check if your disk has sufficient space",
-                    "Verify that the ~/.pcileech directory is accessible",
-                ],
-            )
-            return False, error
+            print(f"Failed to create default profiles: {e}")
+            return False
 
     def export_profile(
         self, name: str, export_path: Path
-    ) -> Tuple[bool, Optional[TUIError]]:
+    ) -> bool:
         """
         Export a profile to a specific path.
 
         Returns:
-            Tuple containing (success, error_if_any)
+            Boolean indicating success
         """
         try:
-            config, error = self.load_profile(name)
-            if error:
-                return False, error
+            config = self.load_profile(name)
+            if not config:
+                return False
 
             if config:
                 try:
                     config.save_to_file(export_path)
-                    return True, None
+                    return True
                 except PermissionError as e:
-                    error = TUIError(
-                        severity=ErrorSeverity.ERROR,
-                        category="config",
-                        message=f"Permission denied when exporting profile to {export_path}",
-                        details=str(e),
-                        suggested_actions=[
-                            "Check if you have write permissions for the target directory",
-                            "Try exporting to a different location",
-                        ],
-                    )
-                    return False, error
+                    print(f"Permission denied when exporting profile to {export_path}: {e}")
+                    return False
                 except Exception as e:
                     error = TUIError(
                         severity=ErrorSeverity.ERROR,
@@ -499,30 +450,21 @@ class ConfigManager:
                             "Verify that you have sufficient disk space",
                         ],
                     )
-                    return False, error
-            return False, TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message=f"Cannot export profile '{name}' - profile not loaded",
-                suggested_actions=["Check if the profile exists and is accessible"],
-            )
+                    return False
+            print(f"Cannot export profile '{name}' - profile not loaded")
+            return False
         except Exception as e:
-            error = TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message=f"Unexpected error when exporting profile '{name}'",
-                details=str(e),
-            )
-            return False, error
+            print(f"Unexpected error when exporting profile '{name}': {e}")
+            return False
 
     def import_profile(
         self, import_path: Path, new_name: Optional[str] = None
-    ) -> Tuple[Optional[str], Optional[TUIError]]:
+    ) -> Optional[str]:
         """
         Import a profile from a file.
 
         Returns:
-            Tuple containing (profile_name_if_successful, error_if_any)
+            Profile name if successful, None otherwise
         """
         try:
             if not import_path.exists():
@@ -535,7 +477,8 @@ class ConfigManager:
                         "Verify that the file exists",
                     ],
                 )
-                return None, error
+                print(f"Import file not found: {import_path}")
+                return None
 
             try:
                 config = BuildConfiguration.load_from_file(import_path)
@@ -550,7 +493,8 @@ class ConfigManager:
                         "Verify that the file is a valid configuration profile",
                     ],
                 )
-                return None, error
+                print(f"Invalid JSON in import file: Error at line {e.lineno}, column {e.colno}: {e.msg}")
+                return None
             except Exception as e:
                 error = TUIError(
                     severity=ErrorSeverity.ERROR,
@@ -562,7 +506,8 @@ class ConfigManager:
                         "Verify that the file is not corrupted",
                     ],
                 )
-                return None, error
+                print(f"Failed to parse import file: {e}")
+                return None
 
             # Use provided name or extract from config
             profile_name = new_name or config.name or import_path.stem
@@ -574,11 +519,11 @@ class ConfigManager:
                 profile_name = f"{original_name} ({counter})"
                 counter += 1
 
-            success, error = self.save_profile(profile_name, config)
+            success = self.save_profile(profile_name, config)
             if not success:
-                return None, error
+                return None
 
-            return profile_name, None
+            return profile_name
 
         except PermissionError as e:
             error = TUIError(
@@ -591,19 +536,11 @@ class ConfigManager:
                     "Ensure you have write access to ~/.pcileech/profiles/",
                 ],
             )
-            return None, error
+            print(f"Permission denied when importing profile: {e}")
+            return None
         except Exception as e:
-            error = TUIError(
-                severity=ErrorSeverity.ERROR,
-                category="config",
-                message=f"Failed to import profile from {import_path}",
-                details=str(e),
-                suggested_actions=[
-                    "Check if the file is accessible",
-                    "Verify that the file is a valid configuration profile",
-                ],
-            )
-            return None, error
+            print(f"Failed to import profile from {import_path}: {e}")
+            return None
 
     def get_profile_summary(self, name: str) -> Dict[str, str]:
         """
@@ -611,9 +548,9 @@ class ConfigManager:
         Always returns a dictionary, with error information if loading fails.
         """
         try:
-            config, error = self.load_profile(name)
-            if error:
-                return {"error": error.message, "details": error.details or ""}
+            config = self.load_profile(name)
+            if not config:
+                return {"error": "Profile not found", "details": f"Could not load profile '{name}'"}
 
             if config:
                 return {

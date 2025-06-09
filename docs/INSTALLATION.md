@@ -116,6 +116,13 @@ podman run -it --privileged \
   -v /dev:/dev \
   -v $(pwd)/output:/app/output \
   ghcr.io/ramseymcgrath/pcileechfwgenerator:latest
+
+# You can also use Docker instead of Podman
+docker pull ghcr.io/ramseymcgrath/pcileechfwgenerator:latest
+docker run -it --privileged \
+  -v /dev:/dev \
+  -v $(pwd)/output:/app/output \
+  ghcr.io/ramseymcgrath/pcileechfwgenerator:latest
 ```
 
 ## 🛠️ System Setup
@@ -195,7 +202,11 @@ sudo usermod -a -G dialout $USER
    vivado -version
    ```
 
-### 4. Configure Podman (Rootless)
+### 4. Configure Container Engine (Rootless)
+
+By default, the PCILeech Firmware Generator uses local builds, but you can also use container builds with either Podman (default) or Docker.
+
+#### Podman Setup
 
 ```bash
 # Re-login to pick up group changes
@@ -210,6 +221,19 @@ cat > ~/.config/containers/registries.conf << EOF
 [registries.search]
 registries = ['docker.io', 'quay.io', 'ghcr.io']
 EOF
+```
+
+#### Docker Setup
+
+```bash
+# Add user to docker group
+sudo usermod -a -G docker $USER
+
+# Re-login to pick up group changes
+newgrp docker
+
+# Test Docker
+docker info
 ```
 
 ## 🔧 Installation Verification
@@ -255,8 +279,14 @@ print('TUI import successful')
 podman --version
 podman info | grep rootless
 
+# Test Docker (if installed)
+docker --version
+docker info
+
 # Test container build
 podman build -t pcileech-test .
+# OR
+docker build -t pcileech-test .
 ```
 
 ### Hardware Verification
@@ -300,18 +330,28 @@ pip install textual rich psutil watchdog pydantic
 pip install --force-reinstall pcileech-fw-generator[tui]
 ```
 
-#### Podman Issues
+#### Container Issues
 
 ```bash
-# Check rootless setup
+# Podman: Check rootless setup
 podman info | grep -E "(rootless|subuid|subgid)"
 
 # Reset Podman if needed
 podman system reset
 
-# Reinstall if necessary
+# Reinstall Podman if necessary
 sudo apt remove podman
 sudo apt install podman
+
+# Docker: Check setup
+docker info
+
+# Reset Docker if needed
+docker system prune -a
+
+# Specify container engine when building
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --container-engine docker
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --container-engine podman
 ```
 
 #### VFIO Not Working
@@ -375,8 +415,11 @@ pip install -e .[tui,dev]
 ### Container Installation
 
 ```bash
-# Pull latest container
+# Pull latest container with Podman
 podman pull ghcr.io/ramseymcgrath/pcileechfwgenerator:latest
+
+# Or with Docker
+docker pull ghcr.io/ramseymcgrath/pcileechfwgenerator:latest
 ```
 
 ## 🗑️ Uninstallation

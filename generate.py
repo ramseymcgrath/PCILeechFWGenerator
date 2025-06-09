@@ -159,7 +159,7 @@ def list_usb_devices() -> List[Tuple[str, str]]:
         )
         if match:
             vid_pid = match.group(1)
-            description = match.group(2)
+            description = match.group(2).strip()  # Strip whitespace from description
             devices.append((vid_pid, description))
 
     return devices
@@ -483,7 +483,7 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
     # Create cache directory if it doesn't exist
     os.makedirs(os.path.dirname(local_dir), exist_ok=True)
 
-    # Check if repository already exists
+    # Check if repository already exists as a valid git repository
     if os.path.exists(os.path.join(local_dir, ".git")):
         logger.info(f"Repository already exists at {local_dir}")
 
@@ -518,6 +518,20 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
                 logger.warning(f"Failed to update repository: {e.stderr}")
                 print(f"[!] Warning: Failed to update repository: {e.stderr}")
     else:
+        # Check if directory exists but is not a git repository
+        if os.path.exists(local_dir):
+            logger.info(f"Directory exists but is not a git repository: {local_dir}")
+            print(f"[*] Removing existing directory: {local_dir}")
+            
+            # Remove the directory to allow fresh clone
+            import shutil
+            try:
+                shutil.rmtree(local_dir)
+            except Exception as e:
+                logger.warning(f"Failed to remove directory: {e}")
+                print(f"[!] Warning: Failed to remove directory: {e}")
+                # Continue anyway, git clone might still work
+
         # Clone repository
         try:
             logger.info(f"Cloning repository {repo_url} to {local_dir}")
@@ -561,6 +575,24 @@ def validate_environment() -> None:
         error_msg = "Podman not found in PATH. Please install Podman first."
         logger.error(error_msg)
         raise RuntimeError(error_msg)
+        
+    # Check if Vivado is available
+    try:
+        # Import vivado_utils from src directory
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent / "src"))
+        from src.vivado_utils import find_vivado_installation
+        
+        vivado_info = find_vivado_installation()
+        if vivado_info:
+            logger.info(f"Found Vivado {vivado_info['version']} at {vivado_info['path']}")
+            print(f"[✓] Vivado {vivado_info['version']} detected")
+        else:
+            logger.warning("Vivado not found. It will be used from the container.")
+            print("[!] Warning: Vivado not found locally. Will use container version.")
+    except ImportError:
+        logger.warning("Could not import vivado_utils. Skipping Vivado check.")
+        print("[!] Warning: Skipping Vivado check.")
 
     # Check if container image exists
     try:

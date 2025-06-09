@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
 ![](https://dcbadge.limes.pink/api/shield/429866199833247744)
 
-Generate spoofed PCIe DMA firmware from real donor hardware with a single command. The workflow rips the donor's configuration space, builds a personalized FPGA bit‑stream in an isolated container, and (optionally) flashes your DMA card over USB‑JTAG.
+Generate spoofed PCIe DMA firmware from real donor hardware with a single command. The workflow rips the donor's configuration space, builds a personalized FPGA bit‑stream locally by default (or optionally in an isolated container), and (optionally) flashes your DMA card over USB‑JTAG.
 
 ---
 
@@ -199,11 +199,11 @@ For automated workflows or scripting:
 # Basic generation (interactive device selection)
 sudo pcileech-generate
 
-# Direct build with specific device (uses donor_dump kernel module by default)
+# Direct build with specific device (local build by default)
 sudo pcileech-build --bdf 0000:03:00.0 --board 75t
 
-# Build without using donor_dump kernel module (using synthetic data)
-sudo pcileech-build --bdf 0000:03:00.0 --board 75t --skip-donor-dump
+# Build using donor_dump kernel module (opt-in)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --use-donor-dump
 
 # Build using a previously saved donor information file
 sudo pcileech-build --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/donor_info.json
@@ -223,7 +223,7 @@ sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv \
   --disable-power-management --disable-performance-counters
 ```
 
-**Note:** The system will automatically build the required container image (`dma-fw`) if it doesn't exist. This happens during the first run and requires an internet connection to download base images.
+**Note:** When using container builds, the system will automatically build the required container image (`dma-fw`) if it doesn't exist. This happens during the first run and requires an internet connection to download base images.
 
 **Output:** `output/firmware.bin` (FPGA bit‑stream ready for flashing).
 
@@ -466,8 +466,11 @@ python3 src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv \
 - `--bdf`: PCIe Bus:Device.Function identifier (required)
 - `--board`: Target board type (35t, 75t, 100t) (required)
 
+**Build Options:**
+- `--container-engine`: Specify container engine to use (docker or podman, default: podman)
+
 **Donor Device Options:**
-- `--skip-donor-dump`: Skip using the donor_dump kernel module (opt-in, not default)
+- `--use-donor-dump`: Use the donor_dump kernel module (opt-in, not default)
 - `--donor-info-file`: Path to a JSON file containing donor information from a previous run
 
 **Advanced Features:**

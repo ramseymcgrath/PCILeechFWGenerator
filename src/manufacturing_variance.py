@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-
 class DeviceClass(Enum):
     """Device class categories with different variance characteristics."""
 
@@ -198,16 +197,18 @@ class ManufacturingVarianceSimulator:
             seed: Random seed for reproducible variance generation. Can be an integer
                  or a string (which will be hashed to produce an integer seed).
         """
+        # Create a local random number generator instance instead of using the global one
+        self.rng = random.Random()
+        
         if seed is not None:
             if isinstance(seed, str):
                 # Convert string seed to integer using hash
                 seed_int = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % (2**32)
-                random.seed(seed_int)
+                self.rng.seed(seed_int)
             else:
-                random.seed(seed)
+                self.rng.seed(seed)
 
         self.generated_models: Dict[str, VarianceModel] = {}
-        self.rng = random  # Use the global random instance by default
 
     def deterministic_seed(self, dsn: int, revision: str) -> int:
         """
@@ -457,6 +458,7 @@ class ManufacturingVarianceSimulator:
     // Device class: {variance_model.device_class.value}
     // Base cycles: {base_delay_cycles}, Adjusted: {adjusted_base_cycles}
     // Jitter range: ±{max_jitter_cycles} cycles
+    // This is a variance-aware implementation for realistic hardware simulation
     logic [{max(1, (adjusted_base_cycles + max_jitter_cycles).bit_length()-1)}:0] {register_name}_delay_counter = 0;
     logic [{max(1, max_jitter_cycles.bit_length()-1)}:0] {register_name}_jitter_lfsr = {initial_lfsr_value}; // Deterministic initial LFSR value
     logic {register_name}_write_pending = 0;

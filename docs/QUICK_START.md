@@ -188,23 +188,27 @@ If validation fails for critical values, the build will abort with an error mess
 
 ### Donor Dump Options
 
-By default, the system builds and uses the donor_dump kernel module to extract device information. You can use these options for alternative workflows:
+By default, the system performs local builds without using the donor_dump kernel module. You can use these options for alternative workflows:
 
 ```bash
-# Skip using the donor_dump kernel module (use synthetic data)
-pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --skip-donor-dump
+# Opt-in to using the donor_dump kernel module
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --use-donor-dump
 
 # Save donor information to a file for future use
 pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/save/donor_info.json
 
 # Use a previously saved donor information file (no donor device needed)
-pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --skip-donor-dump --donor-info-file /path/to/saved/donor_info.json
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/saved/donor_info.json
+
+# Specify container engine (docker or podman)
+pcileech-build-sudo --bdf 0000:03:00.0 --board 75t --container-engine docker
 ```
 
 In the TUI, you can:
-1. Enable "Local Build" mode in the Configuration panel
-2. Disable "Donor Dump" option
+1. Local builds are enabled by default in the Configuration panel
+2. Optionally enable "Donor Dump" option if needed
 3. Optionally specify a "Donor Info File" path
+4. Select your preferred container engine (docker or podman)
 
 ### Flashing DMA Board
 

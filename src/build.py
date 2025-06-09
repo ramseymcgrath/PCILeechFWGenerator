@@ -10,7 +10,6 @@ Boards:
   75t  → Enigma-X1  (PCIeEnigmaX1)
   100t → ZDMA       (XilinxZDMA)
 """
-
 import argparse
 import json
 import os
@@ -36,6 +35,7 @@ try:
     )
     from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
     from .repo_manager import RepoManager
+    from .behavior_profiler import BehaviorProfiler
 except ImportError:
     # Fallback for direct execution
     from advanced_sv_main import (
@@ -48,6 +48,7 @@ except ImportError:
     )
     from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
     from repo_manager import RepoManager
+    from behavior_profiler import BehaviorProfiler
 
 # Configuration constants
 ROOT = Path(__file__).parent.parent.resolve()  # Get project root directory
@@ -306,7 +307,7 @@ def validate_donor_info(info: dict) -> bool:
 
 def get_donor_info(
     bdf: str,
-    use_donor_dump: bool = True,
+    use_donor_dump: bool = False,
     donor_info_path: Optional[str] = None,
     device_type: str = "generic",
 ) -> dict:
@@ -315,7 +316,7 @@ def get_donor_info(
 
     Args:
         bdf (str): PCIe Bus:Device.Function identifier (e.g., "0000:03:00.0").
-        use_donor_dump (bool): Whether to use the donor_dump kernel module.
+        use_donor_dump (bool): Whether to use the donor_dump kernel module (defaults to False for local builds).
         donor_info_path (str): Path to a JSON file for saving/loading donor information.
         device_type (str): Type of device for synthetic data generation if needed.
 
@@ -461,10 +462,7 @@ def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0) -> 
         list: Enhanced register definitions with behavioral data.
     """
     try:
-        src_path = str(ROOT / "src")
-        if src_path not in sys.path:
-            sys.path.append(src_path)
-        from behavior_profiler import BehaviorProfiler
+        # BehaviorProfiler is already imported at the module level
 
         print(f"[*] Capturing device behavior profile for {duration}s...")
         profiler = BehaviorProfiler(bdf, debug=False)
@@ -1425,15 +1423,39 @@ def vivado_run(board_root: pathlib.Path, gen_tcl_path: str, patch_tcl: str) -> N
         patch_tcl (str): Path to the patch TCL file.
 
     Raises:
-        SystemExit: If no bitstream file is found after the build.
+        SystemExit: If Vivado is not found or no bitstream file is found after the build.
     """
+    # Import vivado_utils here to avoid circular imports
+    try:
+        from .vivado_utils import find_vivado_installation, run_vivado_command
+    except ImportError:
+        from vivado_utils import find_vivado_installation, run_vivado_command
+    
+    # Check if Vivado is installed
+    vivado_info = find_vivado_installation()
+    if not vivado_info:
+        sys.exit(
+            "ERROR: Vivado not found. Please make sure Vivado is installed and in your PATH, "
+            "or set the XILINX_VIVADO environment variable."
+        )
+    
+    print(f"[*] Using Vivado {vivado_info['version']} from {vivado_info['path']}")
+    
+    # Change to board root directory
     os.chdir(board_root)
 
     try:
-        # Run Vivado build steps
-        run(f"vivado -mode batch -source {gen_tcl_path} -notrace")
-        run(f"vivado -mode batch -source {patch_tcl} -notrace")
-        run("vivado -mode batch -source vivado_build.tcl -notrace")
+        # Run Vivado build steps using the detected installation
+        vivado_exe = vivado_info['executable']
+        
+        print(f"[*] Running Vivado project generation...")
+        run(f"{vivado_exe} -mode batch -source {gen_tcl_path} -notrace")
+        
+        print(f"[*] Applying configuration patch...")
+        run(f"{vivado_exe} -mode batch -source {patch_tcl} -notrace")
+        
+        print(f"[*] Running Vivado build...")
+        run(f"{vivado_exe} -mode batch -source vivado_build.tcl -notrace")
 
         # Find and copy the generated bitstream
         bit_files = list(board_root.glob("*/impl_*/pcileech_*_top.bin"))
@@ -1538,9 +1560,9 @@ def main() -> None:
         help="Disable performance counters in advanced generation",
     )
     parser.add_argument(
-        "--skip-donor-dump",
+        "--use-donor-dump",
         action="store_true",
-        help="Skip using the donor_dump kernel module (opt-in, not default)",
+        help="Use the donor_dump kernel module (opt-in, not default)",
     )
     parser.add_argument(
         "--donor-info-file",
@@ -1610,7 +1632,7 @@ def main() -> None:
     print(f"[*] Extracting enhanced donor info from {args.bdf}")
     info = get_donor_info(
         args.bdf,
-        use_donor_dump=not args.skip_donor_dump,
+        use_donor_dump=args.use_donor_dump,
         donor_info_path=args.donor_info_file,
         device_type=args.device_type,
     )

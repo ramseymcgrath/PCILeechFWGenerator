@@ -290,9 +290,13 @@ class TestBuildWithExternalExamples:
         donor_info = {
             "vendor_id": "0x1234",
             "device_id": "0x5678",
-            "subsystem_vendor_id": "0x9abc",
-            "subsystem_device_id": "0xdef0",
+            "subvendor_id": "0x9abc",  # Changed from subsystem_vendor_id
+            "subsystem_id": "0xdef0",   # Changed from subsystem_device_id
+            "revision_id": "0x01",      # Added revision_id
             "bdf": "0000:03:00.0",
+            "bar_size": "0x20000",      # 128KB
+            "mpc": "0x02",              # Max payload capability
+            "mpr": "0x02",              # Max read request capability
         }
 
         # Build SystemVerilog first

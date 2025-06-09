@@ -71,7 +71,9 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         if msix_enable:
             message_control |= 0x8000  # Bit 15
 
-        message_control_hex = f"{message_control:04x}"
+        # Convert to little-endian byte order for the hex string
+        # For example, 0x0007 becomes "0700"
+        message_control_hex = f"{((message_control & 0xFF) << 8) | ((message_control & 0xFF00) >> 8):04x}"
 
         # Table offset/BIR: 0x00002000 (offset 0x2000, BIR 0)
         # PBA offset/BIR: 0x00003000 (offset 0x3000, BIR 0)

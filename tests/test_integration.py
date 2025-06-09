@@ -66,7 +66,11 @@ class TestFullWorkflow:
         mock_validate.assert_called_once()
         mock_list_devices.assert_called_once()
         mock_bind.assert_called_once_with("0000:03:00.0", "8086", "1533", "e1000e")
-        mock_container.assert_called_once_with("0000:03:00.0", "75t", "/dev/vfio/15")
+        # Pass the args parameter to run_build_container
+        mock_container.assert_called_once()
+        args = mock_container.call_args[0][3]
+        assert args.board == "75t"
+        assert args.flash is False
         mock_restore.assert_called_once_with("0000:03:00.0", "e1000e")
 
     @patch("build.get_donor_info")

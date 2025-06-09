@@ -66,7 +66,7 @@ class TestDonorInfoExtraction:
     def test_get_donor_info_success(
         self, mock_output, mock_run, mock_chdir, mock_donor_info
     ):
-        """Test successful donor info extraction."""
+        """Test successful donor info extraction with explicit use_donor_dump=True."""
         # Mock kernel module output
         mock_proc_output = """vendor_id: 0x8086
 device_id: 0x1533
@@ -79,7 +79,8 @@ mpr: 0x02"""
 
         mock_output.return_value = mock_proc_output
 
-        info = build.get_donor_info("0000:03:00.0")
+        # Explicitly set use_donor_dump=True since it's now False by default
+        info = build.get_donor_info("0000:03:00.0", use_donor_dump=True)
 
         assert info["vendor_id"] == "0x8086"
         assert info["device_id"] == "0x1533"
@@ -102,7 +103,7 @@ device_id: 0x1533"""
         mock_output.return_value = mock_proc_output
 
         with pytest.raises(SystemExit):
-            build.get_donor_info("0000:03:00.0")
+            build.get_donor_info("0000:03:00.0", use_donor_dump=True)
 
     @patch("os.chdir")
     @patch("build.run")
@@ -112,7 +113,7 @@ device_id: 0x1533"""
         mock_output.return_value = "malformed output without colons"
 
         with pytest.raises(SystemExit):
-            build.get_donor_info("0000:03:00.0")
+            build.get_donor_info("0000:03:00.0", use_donor_dump=True)
 
 
 class TestDriverRegisterScraping:

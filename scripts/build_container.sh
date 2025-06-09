@@ -1,6 +1,6 @@
 #!/bin/bash
 # Container build and test script for PCILeech Firmware Generator
-# Usage: ./scripts/build_container.sh [--test] [--push] [--tag TAG]
+# Usage: ./scripts/build_container.sh [--test] [--push] [--tag TAG] [--container-engine ENGINE]
 
 set -e
 
@@ -36,12 +36,24 @@ print_error() {
 
 # Function to check if container engine is available
 check_container_engine() {
+    # If container engine was explicitly specified, check if it's available
+    if [ -n "$CONTAINER_ENGINE" ]; then
+        if command -v $CONTAINER_ENGINE &> /dev/null; then
+            print_status "Using $CONTAINER_ENGINE as container engine (user specified)"
+        else
+            print_error "Specified container engine '$CONTAINER_ENGINE' not found. Please install it or choose another engine."
+            exit 1
+        fi
+        return
+    fi
+
+    # Auto-detect container engine if not specified
     if command -v podman &> /dev/null; then
         CONTAINER_ENGINE="podman"
-        print_status "Using Podman as container engine"
+        print_status "Using Podman as container engine (auto-detected)"
     elif command -v docker &> /dev/null; then
         CONTAINER_ENGINE="docker"
-        print_status "Using Docker as container engine"
+        print_status "Using Docker as container engine (auto-detected)"
     else
         print_error "Neither Podman nor Docker found. Please install one of them."
         exit 1
@@ -181,14 +193,19 @@ while [[ $# -gt 0 ]]; do
             CONTAINER_TAG="$2"
             shift 2
             ;;
+        --container-engine)
+            CONTAINER_ENGINE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo
             echo "Options:"
-            echo "  --test          Run tests after building"
-            echo "  --push          Push image to registry after building"
-            echo "  --tag TAG       Use custom tag (default: pcileech-fw-generator:latest)"
-            echo "  --help, -h      Show this help message"
+            echo "  --test                  Run tests after building"
+            echo "  --push                  Push image to registry after building"
+            echo "  --tag TAG               Use custom tag (default: pcileech-fw-generator:latest)"
+            echo "  --container-engine ENG  Specify container engine to use (podman or docker)"
+            echo "  --help, -h              Show this help message"
             echo
             echo "Examples:"
             echo "  $0                           # Build container"

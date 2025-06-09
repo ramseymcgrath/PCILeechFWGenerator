@@ -362,9 +362,19 @@ class TestFeatureIntegration(unittest.TestCase):
                                     # Update the donor info with the pruned configuration
                                     info["extended_config"] = pruned_config
 
-                                    # Save the donor info to a file
+                                    # Create a serializable copy of the info dictionary
+                                    serializable_info = {}
+                                    for key, value in info.items():
+                                        # Skip MagicMock objects or replace them with a serializable value
+                                        if not isinstance(value, MagicMock):
+                                            serializable_info[key] = value
+                                        else:
+                                            # Replace MagicMock with a placeholder string
+                                            serializable_info[key] = "mock_value"
+
+                                    # Save the serializable donor info to a file
                                     with open(self.donor_info_path, "w") as f:
-                                        json.dump(info, f)
+                                        json.dump(serializable_info, f)
 
                                     # Create the config_hex_path file
                                     with open(self.config_hex_path, "w") as f:
