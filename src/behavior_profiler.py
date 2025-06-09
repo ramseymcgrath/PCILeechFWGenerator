@@ -213,10 +213,10 @@ class BehaviorProfiler:
             return
 
         # Check if running in CI environment
-        if os.environ.get('CI') == 'true':
+        if os.environ.get("CI") == "true":
             self._log("Ftrace setup disabled in CI environment")
             return
-            
+
         try:
             # Enable function tracing for PCI config space accesses
             ftrace_cmds = [
@@ -267,10 +267,10 @@ class BehaviorProfiler:
             return
 
         # Check if running in CI environment
-        if os.environ.get('CI') == 'true':
+        if os.environ.get("CI") == "true":
             self._log("Ftrace monitoring disabled in CI environment")
             return
-            
+
         try:
             # Read ftrace buffer for PCI config space accesses
             trace_path = "/sys/kernel/debug/tracing/trace_pipe"
@@ -326,10 +326,10 @@ class BehaviorProfiler:
     def _monitor_debugfs_registers(self) -> None:
         """Monitor device registers via debugfs if available."""
         # Check if running in CI environment
-        if os.environ.get('CI') == 'true':
+        if os.environ.get("CI") == "true":
             self._log("Debugfs monitoring disabled in CI environment")
             return
-            
+
         try:
             # Check for device-specific debugfs entries
             debugfs_paths = [
@@ -455,7 +455,7 @@ class BehaviorProfiler:
 
         # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
-            if os.environ.get('CI') == 'true':
+            if os.environ.get("CI") == "true":
                 self._log("Skipping ftrace disable in CI environment")
             else:
                 try:
@@ -481,7 +481,7 @@ class BehaviorProfiler:
 
         # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
-            if os.environ.get('CI') == 'true':
+            if os.environ.get("CI") == "true":
                 self._log("Skipping ftrace disable in CI environment")
             else:
                 try:
