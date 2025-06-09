@@ -116,7 +116,7 @@ This is primarily tested in Linux, with some fiddling you could probably get it 
 | pciutils, usbutils | lspci / lsusb helpers | Available in most Linux distributions |
 
 > **⚠️ Security Notice**
-> Never build firmware on the same operating system you plan to run the attack from. Use a separate Linux box or VM.
+> Never build firmware on the same operating system you plan to run the attack from. Use a separate Linux box.
 
 ### Hardware
 
@@ -529,7 +529,7 @@ This tool is intended for educational research and legitimate PCIe development p
 
 **Security Considerations:**
 - Never build firmware on systems used for production or sensitive operations
-- Use isolated build environments (VMs or dedicated hardware)
+- Use isolated build environments (Seperate dedicated hardware)
 - Keep generated firmware private and secure
 - Follow responsible disclosure practices for any security research
 

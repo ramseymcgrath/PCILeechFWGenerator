@@ -1,6 +1,6 @@
 # Cross-Platform Support
 
-The PCILeech Firmware Generator has some cross-platform support but not much.
+The PCILeech Firmware Generator has some cross-platform support but not much. Podman helps with a more self-contained build env but you might have issues passing through some pcie devices. The kernel module always needs to be run on a metal linux machine. 
 
 ## Overview
 
@@ -148,19 +148,17 @@ When adding new Linux-specific functionality:
 
 ## Container Usage
 
-The container-based workflow remains the recommended approach for cross-platform usage:
+The container build provides a more cohesive environment but not all pcie cards may work.
 
 ```bash
-# Build container on Linux host
+# Build container on Linux host (if using container image)
 podman build -t dma-fw .
-
-# Use container from any platform (with Linux VM)
 podman run --rm -it dma-fw --help
 ```
 
 ## Testing
 
-Cross-platform support is tested in the test suite:
+Cross-platform safety messages are tested in the test suite:
 
 ```bash
 # Run cross-platform tests
