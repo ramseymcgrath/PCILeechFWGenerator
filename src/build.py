@@ -544,7 +544,24 @@ def build_sv(
         SystemExit: If no registers are provided.
     """
     if not regs:
-        sys.exit("No registers scraped – aborting build")
+        print("[!] Warning: No registers scraped. Using default register set.")
+        # Create a minimal set of default registers for basic functionality
+        regs = [
+            {
+                "offset": 0x0,
+                "name": "device_control",
+                "value": "0x0",
+                "rw": "rw",
+                "context": {"function": "init", "timing": "early"}
+            },
+            {
+                "offset": 0x4,
+                "name": "device_status",
+                "value": "0x0",
+                "rw": "ro",
+                "context": {"function": "status", "timing": "runtime"}
+            }
+        ]
 
     declarations = []
     write_cases = []
@@ -819,7 +836,24 @@ def build_advanced_sv(
         SystemExit: If no registers are provided.
     """
     if not regs:
-        sys.exit("No registers scraped – aborting advanced build")
+        print("[!] Warning: No registers scraped. Using default register set for advanced build.")
+        # Create a minimal set of default registers for basic functionality
+        regs = [
+            {
+                "offset": 0x0,
+                "name": "device_control",
+                "value": "0x0",
+                "rw": "rw",
+                "context": {"function": "init", "timing": "early"}
+            },
+            {
+                "offset": 0x4,
+                "name": "device_status",
+                "value": "0x0",
+                "rw": "ro",
+                "context": {"function": "status", "timing": "runtime"}
+            }
+        ]
 
     # Configure advanced features based on board type and requirements
     board_config = BOARD_INFO.get(board_type, BOARD_INFO["75t"])
@@ -1270,7 +1304,9 @@ def build_tcl(info: dict, gen_tcl: str, args=None) -> tuple[str, str]:
     bar_bytes = int(info["bar_size"], 16)
     aperture = APERTURE.get(bar_bytes)
     if not aperture:
-        sys.exit(f"Unsupported BAR size: {bar_bytes} bytes")
+        print(f"[!] Warning: Unsupported BAR size: {bar_bytes} bytes. Using default aperture.")
+        # Use a default aperture size
+        aperture = "128K"
 
     # Calculate max payload size and max read request size
     mps = 1 << (int(info["mpc"], 16) + 7)
