@@ -435,7 +435,9 @@ def scrape_driver_regs(vendor: str, device: str) -> tuple:
     """
     try:
         output = subprocess.check_output(
-            f"python3 src/scripts/driver_scrape.py {vendor} {device}", shell=True, text=True
+            f"python3 src/scripts/driver_scrape.py {vendor} {device}",
+            shell=True,
+            text=True,
         )
         data = json.loads(output)
 
@@ -552,15 +554,15 @@ def build_sv(
                 "name": "device_control",
                 "value": "0x0",
                 "rw": "rw",
-                "context": {"function": "init", "timing": "early"}
+                "context": {"function": "init", "timing": "early"},
             },
             {
                 "offset": 0x4,
                 "name": "device_status",
                 "value": "0x0",
                 "rw": "ro",
-                "context": {"function": "status", "timing": "runtime"}
-            }
+                "context": {"function": "status", "timing": "runtime"},
+            },
         ]
 
     declarations = []
@@ -836,7 +838,9 @@ def build_advanced_sv(
         SystemExit: If no registers are provided.
     """
     if not regs:
-        print("[!] Warning: No registers scraped. Using default register set for advanced build.")
+        print(
+            "[!] Warning: No registers scraped. Using default register set for advanced build."
+        )
         # Create a minimal set of default registers for basic functionality
         regs = [
             {
@@ -844,15 +848,15 @@ def build_advanced_sv(
                 "name": "device_control",
                 "value": "0x0",
                 "rw": "rw",
-                "context": {"function": "init", "timing": "early"}
+                "context": {"function": "init", "timing": "early"},
             },
             {
                 "offset": 0x4,
                 "name": "device_status",
                 "value": "0x0",
                 "rw": "ro",
-                "context": {"function": "status", "timing": "runtime"}
-            }
+                "context": {"function": "status", "timing": "runtime"},
+            },
         ]
 
     # Configure advanced features based on board type and requirements
@@ -1304,7 +1308,9 @@ def build_tcl(info: dict, gen_tcl: str, args=None) -> tuple[str, str]:
     bar_bytes = int(info["bar_size"], 16)
     aperture = APERTURE.get(bar_bytes)
     if not aperture:
-        print(f"[!] Warning: Unsupported BAR size: {bar_bytes} bytes. Using default aperture.")
+        print(
+            f"[!] Warning: Unsupported BAR size: {bar_bytes} bytes. Using default aperture."
+        )
         # Use a default aperture size
         aperture = "128K"
 
@@ -1788,10 +1794,12 @@ def main() -> None:
     regs, state_machine_analysis = scrape_driver_regs(
         info["vendor_id"], info["device_id"]
     )
-    
+
     # Continue with empty registers instead of exiting
     if not regs:
-        print("[!] Warning: Driver scrape returned no registers. Using default register set.")
+        print(
+            "[!] Warning: Driver scrape returned no registers. Using default register set."
+        )
         # Create a minimal set of default registers for basic functionality
         regs = [
             {
@@ -1799,17 +1807,17 @@ def main() -> None:
                 "name": "device_control",
                 "value": "0x0",
                 "rw": "rw",
-                "context": {"function": "init", "timing": "early"}
+                "context": {"function": "init", "timing": "early"},
             },
             {
                 "offset": 0x4,
                 "name": "device_status",
                 "value": "0x0",
                 "rw": "ro",
-                "context": {"function": "status", "timing": "runtime"}
-            }
+                "context": {"function": "status", "timing": "runtime"},
+            },
         ]
-    
+
     print(f"[*] Found {len(regs)} registers with context analysis")
 
     # Print state machine analysis summary

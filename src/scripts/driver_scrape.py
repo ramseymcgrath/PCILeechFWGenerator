@@ -483,7 +483,7 @@ def main():
     DEVICE = sys.argv[2].lower()
 
     ksrc = ensure_kernel_source()
-    
+
     # If kernel source not found, return empty data with state machine analysis
     if ksrc is None:
         empty_output = {
@@ -498,7 +498,7 @@ def main():
         }
         print(json.dumps(empty_output, indent=2))
         return
-    
+
     try:
         driver = ko_name_from_alias()
         print(f"[driver_scrape] Driver module: {driver}")
