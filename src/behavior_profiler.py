@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+import os
 import platform
 import queue
 import re
@@ -211,6 +212,11 @@ class BehaviorProfiler:
             self._log("Ftrace monitoring disabled by configuration")
             return
 
+        # Check if running in CI environment
+        if os.environ.get('CI') == 'true':
+            self._log("Ftrace setup disabled in CI environment")
+            return
+            
         try:
             # Enable function tracing for PCI config space accesses
             ftrace_cmds = [
@@ -260,6 +266,11 @@ class BehaviorProfiler:
         if not self.enable_ftrace:
             return
 
+        # Check if running in CI environment
+        if os.environ.get('CI') == 'true':
+            self._log("Ftrace monitoring disabled in CI environment")
+            return
+            
         try:
             # Read ftrace buffer for PCI config space accesses
             trace_path = "/sys/kernel/debug/tracing/trace_pipe"
@@ -314,6 +325,11 @@ class BehaviorProfiler:
 
     def _monitor_debugfs_registers(self) -> None:
         """Monitor device registers via debugfs if available."""
+        # Check if running in CI environment
+        if os.environ.get('CI') == 'true':
+            self._log("Debugfs monitoring disabled in CI environment")
+            return
+            
         try:
             # Check for device-specific debugfs entries
             debugfs_paths = [
@@ -452,17 +468,20 @@ class BehaviorProfiler:
         if self.monitor_thread:
             self.monitor_thread.join(timeout=1.0)
 
-        # Disable ftrace
+        # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
-            try:
-                subprocess.run(
-                    "echo 0 > /sys/kernel/debug/tracing/tracing_on",
-                    shell=True,
-                    check=False,
-                )
-            except Exception as e:
-                # Ignore tracing cleanup errors as they're not critical
-                self._log(f"Failed to disable tracing: {e}")
+            if os.environ.get('CI') == 'true':
+                self._log("Skipping ftrace disable in CI environment")
+            else:
+                try:
+                    subprocess.run(
+                        "echo 0 > /sys/kernel/debug/tracing/tracing_on",
+                        shell=True,
+                        check=False,
+                    )
+                except Exception as e:
+                    # Ignore tracing cleanup errors as they're not critical
+                    self._log(f"Failed to disable tracing: {e}")
 
         self._log("Monitoring stopped")
 
@@ -475,17 +494,20 @@ class BehaviorProfiler:
         if self.monitor_thread:
             self.monitor_thread.join(timeout=1.0)
 
-        # Disable ftrace
+        # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
-            try:
-                subprocess.run(
-                    "echo 0 > /sys/kernel/debug/tracing/tracing_on",
-                    shell=True,
-                    check=False,
-                )
-            except Exception as e:
-                # Ignore tracing cleanup errors as they're not critical
-                self._log(f"Failed to disable tracing: {e}")
+            if os.environ.get('CI') == 'true':
+                self._log("Skipping ftrace disable in CI environment")
+            else:
+                try:
+                    subprocess.run(
+                        "echo 0 > /sys/kernel/debug/tracing/tracing_on",
+                        shell=True,
+                        check=False,
+                    )
+                except Exception as e:
+                    # Ignore tracing cleanup errors as they're not critical
+                    self._log(f"Failed to disable tracing: {e}")
 
         self._log("Monitoring stopped")
 

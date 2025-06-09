@@ -214,7 +214,7 @@ class TestBehaviorCapture:
             ),
         ]
 
-        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=True)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         # Mock the access queue to return test data
         profiler.access_queue.put(mock_accesses[0])
@@ -265,7 +265,7 @@ class TestBehaviorCapture:
         mock_setup.return_value = True
         mock_start.return_value = True
 
-        profiler = BehaviorProfiler("0000:03:00.0", enable_ftrace=True)
+        profiler = BehaviorProfiler("0000:03:00.0", enable_ftrace=False)
 
         # Mock register access
         mock_access = RegisterAccess(

@@ -130,6 +130,7 @@ class TestProfilerGeneratorCompatibility:
 
     def test_profiler_analysis_structure(self, mock_behavior_profile):
         """Test that the profiler analysis has the expected structure."""
+        # Explicitly disable ftrace to avoid permission issues
         profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
