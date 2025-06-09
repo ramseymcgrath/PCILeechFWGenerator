@@ -122,17 +122,33 @@ class TestDriverRegisterScraping:
     @patch("subprocess.check_output")
     def test_scrape_driver_regs_success(self, mock_output, mock_register_data):
         """Test successful driver register scraping."""
-        mock_output.return_value = json.dumps(mock_register_data)
+        # Create a mock response with both registers and state machine analysis
+        mock_response = {
+            "registers": mock_register_data,
+            "state_machine_analysis": {
+                "extracted_state_machines": 2,
+                "optimized_state_machines": 1,
+                "functions_with_state_patterns": 3,
+                "state_machines": [],
+                "analysis_report": "Test report",
+            },
+        }
+        mock_output.return_value = json.dumps(mock_response)
 
-        regs = build.scrape_driver_regs("8086", "1533")
+        regs, state_machine_analysis = build.scrape_driver_regs("8086", "1533")
 
+        # Check registers
         assert len(regs) == 2
         assert regs[0]["name"] == "reg_ctrl"
         assert regs[0]["offset"] == 0x400
         assert "context" in regs[0]
 
+        # Check state machine analysis
+        assert state_machine_analysis["extracted_state_machines"] == 2
+        assert state_machine_analysis["optimized_state_machines"] == 1
+
         mock_output.assert_called_once_with(
-            "python3 scripts/driver_scrape.py 8086 1533", shell=True, text=True
+            "python3 src/scripts/driver_scrape.py 8086 1533", shell=True, text=True
         )
 
     @patch("subprocess.check_output")
@@ -140,16 +156,19 @@ class TestDriverRegisterScraping:
         """Test driver register scraping when command fails."""
         mock_output.side_effect = subprocess.CalledProcessError(1, "driver_scrape.py")
 
-        regs = build.scrape_driver_regs("8086", "1533")
+        regs, state_machine_analysis = build.scrape_driver_regs("8086", "1533")
         assert regs == []
+        assert state_machine_analysis == {}
 
     @patch("subprocess.check_output")
     def test_scrape_driver_regs_invalid_json(self, mock_output):
         """Test driver register scraping with invalid JSON output."""
         mock_output.return_value = "invalid json"
 
-        with pytest.raises(json.JSONDecodeError):
-            build.scrape_driver_regs("8086", "1533")
+        # We now handle JSON decode errors gracefully
+        regs, state_machine_analysis = build.scrape_driver_regs("8086", "1533")
+        assert regs == []
+        assert state_machine_analysis == {}
 
 
 class TestBehaviorProfiling:
@@ -260,8 +279,16 @@ class TestSystemVerilogGeneration:
         """Test SystemVerilog generation with no registers."""
         target_file = temp_dir / "test_controller.sv"
 
-        with pytest.raises(SystemExit, match="No registers scraped"):
-            build.build_sv([], target_file)
+        # We now handle empty register lists by using default registers
+        build.build_sv([], target_file)
+
+        # Verify the file was created with default registers
+        assert target_file.exists()
+        sv_content = target_file.read_text()
+
+        # Check for default register declarations
+        assert "device_control_reg" in sv_content
+        assert "device_status_reg" in sv_content
 
     def test_build_sv_complex_timing(self, temp_dir):
         """Test SystemVerilog generation with complex timing constraints."""
@@ -385,10 +412,19 @@ class TestTCLGeneration:
             "bar_size": "0x12345",  # Unsupported size
             "mpc": "0x02",
             "mpr": "0x02",
+            "subvendor_id": "0x8086",  # Added required field
+            "subsystem_id": "0x0000",  # Added required field
+            "revision_id": "0x03",  # Added required field
         }
 
-        with pytest.raises(SystemExit, match="Unsupported BAR size"):
-            build.build_tcl(invalid_info, "test.tcl")
+        # We now handle unsupported BAR sizes by using a default aperture
+        tcl_content, tcl_file = build.build_tcl(invalid_info, "test.tcl")
+
+        # Verify the default aperture was used
+        assert "128K" in tcl_content
+        assert (
+            "Warning: Unsupported BAR size" not in tcl_content
+        )  # Warning is printed, not in content
 
 
 class TestBoardConfiguration:
@@ -504,8 +540,17 @@ class TestErrorHandlingAndEdgeCases:
 
     def test_empty_register_list_handling(self, temp_dir):
         """Test handling of empty register lists."""
-        with pytest.raises(SystemExit):
-            build.build_sv([], temp_dir / "test.sv")
+        # We now handle empty register lists by using default registers
+        target_file = temp_dir / "test.sv"
+        build.build_sv([], target_file)
+
+        # Verify the file was created with default registers
+        assert target_file.exists()
+        sv_content = target_file.read_text()
+
+        # Check for default register declarations
+        assert "device_control_reg" in sv_content
+        assert "device_status_reg" in sv_content
 
     def test_malformed_register_data(self, temp_dir):
         """Test handling of malformed register data."""
