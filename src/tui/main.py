@@ -143,7 +143,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 with Horizontal(classes="switch-row"):
                     yield Switch(value=False, id="profiling-switch")
                     yield Static("Behavior Profiling")
-                
+
                 with Horizontal(classes="switch-row"):
                     yield Switch(value=False, id="disable-ftrace-switch")
                     yield Static("Disable Ftrace (for CI/non-root)")

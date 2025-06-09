@@ -449,7 +449,9 @@ def scrape_driver_regs(vendor: str, device: str) -> list:
         return []
 
 
-def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0, disable_ftrace: bool = False) -> list:
+def integrate_behavior_profile(
+    bdf: str, regs: list, duration: float = 10.0, disable_ftrace: bool = False
+) -> list:
     """
     Integrate behavior profiling data with register definitions.
 
@@ -1758,7 +1760,9 @@ def main() -> None:
     # Optional behavior profiling
     if args.enable_behavior_profiling:
         print(f"[*] Integrating dynamic behavior profiling...")
-        regs = integrate_behavior_profile(args.bdf, regs, args.profile_duration, args.disable_ftrace)
+        regs = integrate_behavior_profile(
+            args.bdf, regs, args.profile_duration, args.disable_ftrace
+        )
     else:
         print(
             "[*] Skipping behavior profiling (use --enable-behavior-profiling to enable)"

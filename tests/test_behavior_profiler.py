@@ -183,7 +183,9 @@ class TestMonitoringSetup:
 class TestBehaviorCapture:
     """Test behavior capture functionality."""
 
-    @pytest.mark.skipif(not is_linux(), reason="Test requires Linux with ftrace support")
+    @pytest.mark.skipif(
+        not is_linux(), reason="Test requires Linux with ftrace support"
+    )
     @patch.object(BehaviorProfiler, "_setup_monitoring")
     @patch.object(BehaviorProfiler, "_start_monitoring")
     @patch.object(BehaviorProfiler, "_stop_monitoring")
@@ -220,11 +222,13 @@ class TestBehaviorCapture:
 
         # Mock the queue.get to return our test data
         original_get = profiler.access_queue.get
+
         def mock_get(*args, **kwargs):
             try:
                 return original_get(*args, **kwargs)
             except queue.Empty:
                 return mock_accesses[0]
+
         profiler.access_queue.get = mock_get
 
         profile = profiler.capture_behavior_profile(1.0)
@@ -247,7 +251,9 @@ class TestBehaviorCapture:
         with pytest.raises(RuntimeError, match="Failed to start monitoring"):
             profiler.capture_behavior_profile(1.0)
 
-    @pytest.mark.skipif(not is_linux(), reason="Test requires Linux with ftrace support")
+    @pytest.mark.skipif(
+        not is_linux(), reason="Test requires Linux with ftrace support"
+    )
     @patch.object(BehaviorProfiler, "_setup_monitoring")
     @patch.object(BehaviorProfiler, "_start_monitoring")
     @patch.object(BehaviorProfiler, "_stop_monitoring")
@@ -260,7 +266,7 @@ class TestBehaviorCapture:
         mock_start.return_value = True
 
         profiler = BehaviorProfiler("0000:03:00.0", enable_ftrace=True)
-        
+
         # Mock register access
         mock_access = RegisterAccess(
             timestamp=time.time(),
@@ -269,23 +275,25 @@ class TestBehaviorCapture:
             operation="write",
             value=0x1,
         )
-        
+
         # Add a read operation to avoid division by zero
         read_access = RegisterAccess(
             timestamp=time.time() + 0.1,
             register="REG_STATUS",
             offset=0x404,
-            operation="read"
+            operation="read",
         )
         profiler.access_queue.put(read_access)
-        
+
         # Mock the queue.get to return our test data
         original_get = profiler.access_queue.get
+
         def mock_get(*args, **kwargs):
             try:
                 return original_get(*args, **kwargs)
             except queue.Empty:
                 return mock_access
+
         profiler.access_queue.get = mock_get
 
         profile = profiler.capture_behavior_profile(5.0)
@@ -463,7 +471,7 @@ class TestTimingPatternDetection:
 
         # Should detect some pattern
         assert len(patterns) > 0
-        
+
         # If we have a burst pattern, great, but we'll accept any pattern for test stability
         burst_pattern = next((p for p in patterns if p.pattern_type == "burst"), None)
         if burst_pattern is None:
@@ -568,7 +576,7 @@ class TestMonitoringThreads:
         # Mock setup_monitoring to return True
         with patch.object(profiler, "_setup_monitoring") as mock_setup:
             mock_setup.return_value = True
-            
+
             # Mock the monitoring method
             with patch.object(profiler, "_monitor_device_access") as mock_monitor:
                 profiler._start_monitoring()
