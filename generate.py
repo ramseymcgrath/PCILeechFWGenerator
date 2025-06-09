@@ -522,9 +522,10 @@ def ensure_git_repo(repo_url: str, local_dir: str, update: bool = False) -> str:
         if os.path.exists(local_dir):
             logger.info(f"Directory exists but is not a git repository: {local_dir}")
             print(f"[*] Removing existing directory: {local_dir}")
-            
+
             # Remove the directory to allow fresh clone
             import shutil
+
             try:
                 shutil.rmtree(local_dir)
             except Exception as e:
@@ -575,17 +576,20 @@ def validate_environment() -> None:
         error_msg = "Podman not found in PATH. Please install Podman first."
         logger.error(error_msg)
         raise RuntimeError(error_msg)
-        
+
     # Check if Vivado is available
     try:
         # Import vivado_utils from src directory
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).parent / "src"))
         from src.vivado_utils import find_vivado_installation
-        
+
         vivado_info = find_vivado_installation()
         if vivado_info:
-            logger.info(f"Found Vivado {vivado_info['version']} at {vivado_info['path']}")
+            logger.info(
+                f"Found Vivado {vivado_info['version']} at {vivado_info['path']}"
+            )
             print(f"[✓] Vivado {vivado_info['version']} detected")
         else:
             logger.warning("Vivado not found. It will be used from the container.")

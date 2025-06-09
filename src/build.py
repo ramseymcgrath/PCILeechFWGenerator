@@ -33,9 +33,9 @@ try:
         PerformanceCounterConfig,
         PowerManagementConfig,
     )
+    from .behavior_profiler import BehaviorProfiler
     from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
     from .repo_manager import RepoManager
-    from .behavior_profiler import BehaviorProfiler
 except ImportError:
     # Fallback for direct execution
     from advanced_sv_main import (
@@ -46,9 +46,9 @@ except ImportError:
         PerformanceCounterConfig,
         PowerManagementConfig,
     )
+    from behavior_profiler import BehaviorProfiler
     from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
     from repo_manager import RepoManager
-    from behavior_profiler import BehaviorProfiler
 
 # Configuration constants
 ROOT = Path(__file__).parent.parent.resolve()  # Get project root directory
@@ -1430,7 +1430,7 @@ def vivado_run(board_root: pathlib.Path, gen_tcl_path: str, patch_tcl: str) -> N
         from .vivado_utils import find_vivado_installation, run_vivado_command
     except ImportError:
         from vivado_utils import find_vivado_installation, run_vivado_command
-    
+
     # Check if Vivado is installed
     vivado_info = find_vivado_installation()
     if not vivado_info:
@@ -1438,22 +1438,22 @@ def vivado_run(board_root: pathlib.Path, gen_tcl_path: str, patch_tcl: str) -> N
             "ERROR: Vivado not found. Please make sure Vivado is installed and in your PATH, "
             "or set the XILINX_VIVADO environment variable."
         )
-    
+
     print(f"[*] Using Vivado {vivado_info['version']} from {vivado_info['path']}")
-    
+
     # Change to board root directory
     os.chdir(board_root)
 
     try:
         # Run Vivado build steps using the detected installation
-        vivado_exe = vivado_info['executable']
-        
+        vivado_exe = vivado_info["executable"]
+
         print(f"[*] Running Vivado project generation...")
         run(f"{vivado_exe} -mode batch -source {gen_tcl_path} -notrace")
-        
+
         print(f"[*] Applying configuration patch...")
         run(f"{vivado_exe} -mode batch -source {patch_tcl} -notrace")
-        
+
         print(f"[*] Running Vivado build...")
         run(f"{vivado_exe} -mode batch -source vivado_build.tcl -notrace")
 

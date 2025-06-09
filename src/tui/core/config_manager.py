@@ -65,9 +65,7 @@ class ConfigManager:
         except Exception as e:
             raise Exception(f"Failed to create config directory: {str(e)}")
 
-    def save_profile(
-        self, name: str, config: BuildConfiguration
-    ) -> bool:
+    def save_profile(self, name: str, config: BuildConfiguration) -> bool:
         """
         Save configuration profile to ~/.pcileech/profiles/.
 
@@ -104,9 +102,7 @@ class ConfigManager:
             print(f"Error saving profile: {error.message}")
             return False
 
-    def load_profile(
-        self, name: str
-    ) -> Optional[BuildConfiguration]:
+    def load_profile(self, name: str) -> Optional[BuildConfiguration]:
         """
         Load configuration profile.
 
@@ -139,7 +135,9 @@ class ConfigManager:
             success = self.save_profile(name, config)  # Save updated timestamp
             if not success:
                 # If we couldn't save the updated timestamp, just log and continue
-                print(f"Warning: Could not update last_used timestamp for profile '{name}'")
+                print(
+                    f"Warning: Could not update last_used timestamp for profile '{name}'"
+                )
 
             return config
 
@@ -405,7 +403,9 @@ class ConfigManager:
                         errors.append(f"Failed to create '{profile_data['name']}'")
 
             if errors:
-                print(f"Warning: Created {created_count} of {len(default_profiles)} default profiles")
+                print(
+                    f"Warning: Created {created_count} of {len(default_profiles)} default profiles"
+                )
                 print("\n".join(errors))
                 return created_count > 0
 
@@ -418,9 +418,7 @@ class ConfigManager:
             print(f"Failed to create default profiles: {e}")
             return False
 
-    def export_profile(
-        self, name: str, export_path: Path
-    ) -> bool:
+    def export_profile(self, name: str, export_path: Path) -> bool:
         """
         Export a profile to a specific path.
 
@@ -437,7 +435,9 @@ class ConfigManager:
                     config.save_to_file(export_path)
                     return True
                 except PermissionError as e:
-                    print(f"Permission denied when exporting profile to {export_path}: {e}")
+                    print(
+                        f"Permission denied when exporting profile to {export_path}: {e}"
+                    )
                     return False
                 except Exception as e:
                     error = TUIError(
@@ -493,7 +493,9 @@ class ConfigManager:
                         "Verify that the file is a valid configuration profile",
                     ],
                 )
-                print(f"Invalid JSON in import file: Error at line {e.lineno}, column {e.colno}: {e.msg}")
+                print(
+                    f"Invalid JSON in import file: Error at line {e.lineno}, column {e.colno}: {e.msg}"
+                )
                 return None
             except Exception as e:
                 error = TUIError(
@@ -550,7 +552,10 @@ class ConfigManager:
         try:
             config = self.load_profile(name)
             if not config:
-                return {"error": "Profile not found", "details": f"Could not load profile '{name}'"}
+                return {
+                    "error": "Profile not found",
+                    "details": f"Could not load profile '{name}'",
+                }
 
             if config:
                 return {

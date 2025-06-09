@@ -95,8 +95,10 @@ class DeviceManager:
         bars = await self._get_device_bars(bdf)
 
         # Calculate suitability score and compatibility issues
-        suitability_score, compatibility_issues = self._assess_device_suitability(device_class, driver, bars)
-        
+        suitability_score, compatibility_issues = self._assess_device_suitability(
+            device_class, driver, bars
+        )
+
         # Create empty compatibility factors for now
         compatibility_factors = []
 

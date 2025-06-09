@@ -64,19 +64,19 @@ class StatusMonitor:
                     "version": "2023.1",
                     "path": "/opt/Xilinx/Vivado",
                 }
-            
+
             # Import vivado_utils from src directory
             import sys
             from pathlib import Path
-            
+
             # Add parent directories to path to find vivado_utils
             current_dir = Path(__file__).parent.parent.parent  # src directory
             if current_dir not in sys.path:
                 sys.path.insert(0, str(current_dir))
-                
+
             try:
                 from vivado_utils import find_vivado_installation
-                
+
                 # Use the utility function to find Vivado
                 vivado_info = find_vivado_installation()
                 if vivado_info:
@@ -84,11 +84,11 @@ class StatusMonitor:
                         "status": "detected",
                         "version": vivado_info["version"],
                         "path": vivado_info["path"],
-                        "executable": vivado_info["executable"]
+                        "executable": vivado_info["executable"],
                     }
                 else:
                     return {"status": "not_found", "message": "Vivado not detected"}
-                    
+
             except ImportError:
                 # Fall back to original implementation if import fails
                 vivado_paths = [
@@ -96,7 +96,7 @@ class StatusMonitor:
                     "/tools/Xilinx/Vivado",
                     shutil.which("vivado"),
                 ]
-                
+
                 for path in vivado_paths:
                     if path and os.path.exists(path):
                         # Try to get version
@@ -112,7 +112,9 @@ class StatusMonitor:
                                 }
                         elif os.path.isdir(path):
                             # Look for version directories
-                            versions = [d for d in os.listdir(path) if d.startswith("20")]
+                            versions = [
+                                d for d in os.listdir(path) if d.startswith("20")
+                            ]
                             if versions:
                                 latest_version = sorted(versions)[-1]
                                 return {
@@ -120,7 +122,7 @@ class StatusMonitor:
                                     "version": latest_version,
                                     "path": path,
                                 }
-                
+
                 return {"status": "not_found", "message": "Vivado not detected"}
 
         except Exception as e:

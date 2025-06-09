@@ -395,7 +395,7 @@ class TestManufacturingVarianceIntegration(unittest.TestCase):
         # So we'll check the parameter ranges instead
         auto_params = simulator.DEFAULT_VARIANCE_PARAMS[DeviceClass.AUTOMOTIVE]
         enterprise_params = simulator.DEFAULT_VARIANCE_PARAMS[DeviceClass.ENTERPRISE]
-        
+
         self.assertLess(
             auto_params.process_variation_percent_max,
             enterprise_params.process_variation_percent_max,

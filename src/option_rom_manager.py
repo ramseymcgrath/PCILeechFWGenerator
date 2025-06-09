@@ -135,14 +135,12 @@ class OptionROMManager:
                 raise OptionROMExtractionError(
                     f"ROM extraction failed: file not created"
                 )
-                
+
             # Get the file size and verify it's not empty
             file_size = rom_path.stat().st_size
             if file_size == 0:
-                raise OptionROMExtractionError(
-                    f"ROM extraction failed: file is empty"
-                )
-                
+                raise OptionROMExtractionError(f"ROM extraction failed: file is empty")
+
             # Load the ROM data
             with open(rom_path, "rb") as f:
                 self.rom_data = f.read()

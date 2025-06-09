@@ -1,6 +1,7 @@
 """
 Comprehensive tests for src/donor_dump/ kernel module functionality.
 """
+
 import os
 import re
 import subprocess
@@ -8,7 +9,9 @@ import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, mock_open, patch
+
 import pytest
+
 try:
     from src.donor_dump_manager import (
         DonorDumpError,
@@ -23,6 +26,7 @@ except ImportError:
     KernelHeadersNotFoundError = Exception
     ModuleBuildError = Exception
     ModuleLoadError = Exception
+
 
 @pytest.mark.unit
 class TestKernelModuleBuild:
@@ -782,7 +786,7 @@ class TestDonorDumpManager:
         """Test successful kernel headers installation."""
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
-            
+
         # Test removed due to persistent issues with mocking
         # The functionality is covered by other tests
 
@@ -964,7 +968,9 @@ class TestDonorDumpManager:
                         manager, "read_device_info", return_value=mock_device_info
                     ):
                         # Pass save_to_file parameter to ensure json.dump is called
-                        result = manager.setup_module("0000:03:00.0", save_to_file="test_output.json")
+                        result = manager.setup_module(
+                            "0000:03:00.0", save_to_file="test_output.json"
+                        )
 
         assert result == mock_device_info
         mock_json_dump.assert_called_once()

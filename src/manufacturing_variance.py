@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+
 class DeviceClass(Enum):
     """Device class categories with different variance characteristics."""
 
@@ -199,7 +200,7 @@ class ManufacturingVarianceSimulator:
         """
         # Create a local random number generator instance instead of using the global one
         self.rng = random.Random()
-        
+
         if seed is not None:
             if isinstance(seed, str):
                 # Convert string seed to integer using hash

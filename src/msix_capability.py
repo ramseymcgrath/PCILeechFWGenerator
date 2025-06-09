@@ -122,7 +122,7 @@ def msix_size(cfg: str) -> int:
 
     try:
         msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
-        
+
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
         if len(msg_ctrl_bytes) == 4:  # Standard 16-bit value in hex (4 chars)
@@ -141,7 +141,7 @@ def msix_size(cfg: str) -> int:
                     msg_ctrl = int(swapped_bytes, 16)
         else:
             msg_ctrl = int(msg_ctrl_bytes, 16)
-            
+
         # Table size is encoded in the lower 11 bits
         table_size = (msg_ctrl & 0x7FF) + 1
         return table_size
@@ -193,7 +193,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
 
     try:
         msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
-        
+
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
         if len(msg_ctrl_bytes) == 4:  # Standard 16-bit value in hex (4 chars)
@@ -212,7 +212,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
                     msg_ctrl = int(swapped_bytes, 16)
         else:
             msg_ctrl = int(msg_ctrl_bytes, 16)
-            
+
         # Parse Message Control fields
         table_size = (msg_ctrl & 0x7FF) + 1
         enabled = bool(msg_ctrl & 0x8000)  # Bit 15
@@ -231,7 +231,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
 
         table_bir = table_offset_bir & 0x7  # Lower 3 bits
         table_offset = table_offset_bir & ~0x7  # Clear lower 3 bits
-        
+
         # For the test_msix_table_alignment test, we need to preserve the original offset
         # even if it's not 8-byte aligned
         if table_offset_bir_bytes == "00002004":
@@ -272,6 +272,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
     except ValueError as e:
         logger.warning(f"Error parsing MSI-X capability: {e}")
         return result
+
 
 def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     """

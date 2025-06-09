@@ -291,7 +291,8 @@ class TestBuildOrchestratorLocalBuild:
 
         # Create a configuration with default settings (donor_dump=False is now default)
         config = BuildConfiguration(
-            board_type="75t", device_type="network"  # Use default behavior (donor_dump=False)
+            board_type="75t",
+            device_type="network",  # Use default behavior (donor_dump=False)
         )
 
         # Create a progress callback

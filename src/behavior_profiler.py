@@ -196,7 +196,7 @@ class BehaviorProfiler:
             except Exception as e:
                 self._log(f"Monitor worker error: {e}")
                 break
-                
+
     def _monitor_device_access(self) -> None:
         """Monitor device access for a single iteration."""
         # This method is used for testing
@@ -358,7 +358,7 @@ class BehaviorProfiler:
 
         self._log("Monitoring started")
         return True
-        
+
     def start_monitoring(self) -> bool:
         """
         Start continuous device monitoring.
@@ -399,7 +399,7 @@ class BehaviorProfiler:
             self._log(f"Failed to disable tracing: {e}")
 
         self._log("Monitoring stopped")
-        
+
     def stop_monitoring(self) -> None:
         """Stop device monitoring."""
         if not self.monitoring:
@@ -431,7 +431,7 @@ class BehaviorProfiler:
             BehaviorProfile containing all captured data
         """
         self._log(f"Starting behavior capture for {duration}s")
-        
+
         if duration <= 0:
             raise ValueError("Duration must be positive")
 
@@ -514,7 +514,9 @@ class BehaviorProfiler:
                 # Determine pattern type
                 if std_dev / avg_interval < 0.2:
                     pattern_type = "periodic"
-                elif len(intervals) > 10 and any(i < avg_interval / 5 for i in intervals):
+                elif len(intervals) > 10 and any(
+                    i < avg_interval / 5 for i in intervals
+                ):
                     pattern_type = "burst"
                 else:
                     pattern_type = "irregular"
@@ -530,7 +532,7 @@ class BehaviorProfiler:
                 patterns.append(pattern)
 
         return patterns
-        
+
     def _analyze_timing_patterns(
         self, accesses: List[RegisterAccess]
     ) -> List[TimingPattern]:
@@ -646,7 +648,7 @@ class BehaviorProfiler:
             "avg_interrupt_interval_us": 0,
             "interrupt_bursts": [],
         }
-        
+
         if accesses is None:
             return {}
 
@@ -708,8 +710,20 @@ class BehaviorProfiler:
             "most_active_registers": self._get_most_active_registers(
                 profile.register_accesses, top_n=5
             ),
-            "register_diversity": len(set(access.register for access in profile.register_accesses)),
-            "avg_access_duration_us": statistics.mean([access.duration_us for access in profile.register_accesses if access.duration_us]) if any(access.duration_us for access in profile.register_accesses) else 0.0,
+            "register_diversity": len(
+                set(access.register for access in profile.register_accesses)
+            ),
+            "avg_access_duration_us": (
+                statistics.mean(
+                    [
+                        access.duration_us
+                        for access in profile.register_accesses
+                        if access.duration_us
+                    ]
+                )
+                if any(access.duration_us for access in profile.register_accesses)
+                else 0.0
+            ),
         }
 
         # Performance metrics
@@ -942,17 +956,17 @@ class BehaviorProfiler:
         else:
             # Default to consumer for unknown patterns
             return DeviceClass.CONSUMER
-            
+
     def _generate_enhanced_context(self, profile: BehaviorProfile) -> Dict[str, Any]:
         """
         Generate enhanced register context information from behavior profile.
-        
+
         This method extracts behavioral patterns and timing characteristics
         from the profile and formats them for use in the build system.
-        
+
         Args:
             profile: BehaviorProfile containing captured behavior data
-            
+
         Returns:
             Dictionary with enhanced context information
         """
@@ -961,7 +975,7 @@ class BehaviorProfiler:
             "access_patterns": {},
             "performance_metrics": {},
         }
-        
+
         # Extract timing characteristics
         if profile.timing_patterns:
             enhanced_context["timing_characteristics"] = {
@@ -975,22 +989,24 @@ class BehaviorProfiler:
                     }
                     for pattern in profile.timing_patterns
                 ],
-                "overall_regularity": self._calculate_timing_regularity(profile.timing_patterns),
+                "overall_regularity": self._calculate_timing_regularity(
+                    profile.timing_patterns
+                ),
             }
-            
+
         # Extract access patterns
         reg_access_counts = {}
         reg_access_types = {}
-        
+
         for access in profile.register_accesses:
             if access.register not in reg_access_counts:
                 reg_access_counts[access.register] = 0
                 reg_access_types[access.register] = {"read": 0, "write": 0}
-                
+
             reg_access_counts[access.register] += 1
             if access.operation in reg_access_types[access.register]:
                 reg_access_types[access.register][access.operation] += 1
-                
+
         enhanced_context["access_patterns"] = {
             "register_frequency": {
                 reg: count / profile.capture_duration
@@ -999,19 +1015,21 @@ class BehaviorProfiler:
             },
             "access_types": reg_access_types,
         }
-        
+
         # Extract performance metrics
         access_durations = [
-            access.duration_us for access in profile.register_accesses if access.duration_us
+            access.duration_us
+            for access in profile.register_accesses
+            if access.duration_us
         ]
-        
+
         if access_durations:
             enhanced_context["performance_metrics"] = {
                 "avg_access_duration_us": statistics.mean(access_durations),
                 "min_access_duration_us": min(access_durations),
                 "max_access_duration_us": max(access_durations),
             }
-            
+
         return enhanced_context
 
 

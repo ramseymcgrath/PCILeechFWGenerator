@@ -62,21 +62,21 @@ def ensure_kernel_source():
     """Extract /usr/src/linux-source-*.tar.* if not untarred yet."""
     # Find the source package
     src_path = pathlib.Path("/usr/src")
-    
+
     # In real execution, this will be an iterator
     # In tests, this is mocked to return a list directly
     glob_result = src_path.glob("linux-source-*.tar*")
-    
+
     # Get the first source package
     # This approach works with both real iterators and mocked lists
     src_pkg = None
     for pkg in glob_result:
         src_pkg = pkg
         break
-    
+
     if not src_pkg:
         sys.exit("linux-source package not found inside container.")
-    
+
     untar_dir = src_pkg.with_suffix("").with_suffix("")  # strip .tar.xz
     if not (untar_dir / "drivers").exists():
         print("[driver_scrape] Extracting kernel source…")
@@ -156,8 +156,12 @@ def analyze_function_context(file_content, reg_name):
         if write_count > 0 and read_count > 0:
             # Check for write-then-read pattern (exactly one write followed by one read)
             if write_count == 1 and read_count == 1:
-                write_pos = re.search(r"write[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body).start()
-                read_pos = re.search(r"read[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body).start()
+                write_pos = re.search(
+                    r"write[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body
+                ).start()
+                read_pos = re.search(
+                    r"read[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body
+                ).start()
                 if write_pos < read_pos:
                     context["access_pattern"] = "write_then_read"
                 else:
@@ -727,21 +731,23 @@ def enhance_registers_with_context(registers, file_path):
 
 def find_driver_sources(kernel_source_dir, driver_name):
     """Find source files for a specific driver in the kernel source tree.
-    
+
     Args:
         kernel_source_dir: Path to the kernel source directory
         driver_name: Name of the driver module to find
-        
+
     Returns:
         List of paths to source files related to the driver
     """
     # Convert to Path object if it's a string
     if isinstance(kernel_source_dir, str):
         kernel_source_dir = pathlib.Path(kernel_source_dir)
-    
+
     # First, try to find files directly matching the driver name
-    src_files = list(kernel_source_dir.rglob(f"{driver_name}*.c")) + list(kernel_source_dir.rglob(f"{driver_name}*.h"))
-    
+    src_files = list(kernel_source_dir.rglob(f"{driver_name}*.c")) + list(
+        kernel_source_dir.rglob(f"{driver_name}*.h")
+    )
+
     # If no direct matches, try to find files containing the driver name in their content
     if not src_files:
         # Look in drivers directory first as it's most likely location
@@ -760,20 +766,20 @@ def find_driver_sources(kernel_source_dir, driver_name):
                     except Exception:
                         continue
             src_files = candidates
-    
+
     return src_files
 
 
 def extract_and_analyze_registers(source_files, all_content=None):
     """Extract and analyze registers from source files.
-    
+
     This function combines the extraction of register definitions with context analysis
     to provide comprehensive information about registers found in driver source code.
-    
+
     Args:
         source_files: List of source file paths to analyze
         all_content: Optional pre-loaded content of all files combined
-        
+
     Returns:
         List of register dictionaries with enhanced context information
     """
@@ -785,21 +791,21 @@ def extract_and_analyze_registers(source_files, all_content=None):
                     all_content += f.read() + "\n"
             except Exception as e:
                 print(f"Error reading {path}: {e}")
-    
+
     # Extract register definitions
     REG = re.compile(r"#define\s+(REG_[A-Z0-9_]+)\s+0x([0-9A-Fa-f]+)")
     WR = re.compile(r"write[blwq]?\s*\(.*?\b(REG_[A-Z0-9_]+)\b")
     RD = re.compile(r"read[blwq]?\s*\(.*?\b(REG_[A-Z0-9_]+)\b")
-    
+
     regs, writes, reads = {}, set(), set()
-    
+
     for m in REG.finditer(all_content):
         regs[m.group(1)] = int(m.group(2), 16)
     for w in WR.finditer(all_content):
         writes.add(w.group(1))
     for r in RD.finditer(all_content):
         reads.add(r.group(1))
-    
+
     # Create register objects with context
     items = []
     for sym, off in regs.items():
@@ -811,20 +817,22 @@ def extract_and_analyze_registers(source_files, all_content=None):
             rw_capability = "wo"
         elif sym in reads:
             rw_capability = "ro"
-        
+
         # Analyze context for this register
         context = analyze_function_context(all_content, sym)
-        
+
         # Add timing constraints
         timing_constraints = analyze_timing_constraints(all_content, sym)
         if timing_constraints:
-            context["timing_constraints"] = timing_constraints[:3]  # Limit to 3 most relevant
-        
+            context["timing_constraints"] = timing_constraints[
+                :3
+            ]  # Limit to 3 most relevant
+
         # Add access sequences
         sequences = analyze_access_sequences(all_content, sym)
         if sequences:
             context["sequences"] = sequences[:5]  # Limit to 5 most relevant
-        
+
         items.append(
             dict(
                 offset=off,
@@ -834,7 +842,7 @@ def extract_and_analyze_registers(source_files, all_content=None):
                 context=context,
             )
         )
-    
+
     return items
 
 

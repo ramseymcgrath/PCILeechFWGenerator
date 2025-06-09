@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 # Optional pytest import for parametrized tests
 try:
     import pytest
@@ -175,7 +176,7 @@ if PYTEST_AVAILABLE:
             with open(sample_rom_path, "wb") as f:
                 # Create a valid ROM with signature 0x55AA
                 f.write(bytes([0x55, 0xAA]))  # ROM signature (2 bytes)
-                
+
                 # Size in 512-byte blocks, handle large sizes properly
                 size_blocks = rom_size // 512
                 if size_blocks <= 255:
@@ -183,7 +184,7 @@ if PYTEST_AVAILABLE:
                 else:
                     # For larger sizes, use a fixed value and rely on actual file size
                     f.write(bytes([0xFF]))  # Maximum size indicator (1 byte)
-                
+
                 # Padding to reach the desired size
                 # We've already written 3 bytes (signature + size), so subtract 3
                 f.write(bytes([0x00] * (rom_size - 3)))  # Padding

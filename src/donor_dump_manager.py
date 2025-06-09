@@ -127,11 +127,11 @@ class DonorDumpManager:
                         capture_output=True,
                         text=True,
                     )
-                    
+
                     # For testing purposes, we'll consider the installation successful
                     # if the commands executed without errors
                     return True
-                        
+
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Failed to install kernel headers via apt-get: {e}")
                     return False
@@ -295,7 +295,7 @@ class DonorDumpManager:
 
         # Check kernel headers - this must happen before any build attempt
         headers_available, kernel_version = self.check_kernel_headers()
-        
+
         # Always raise KernelHeadersNotFoundError if headers are not available
         if not headers_available:
             # Get distribution-specific instructions
@@ -655,19 +655,19 @@ class DonorDumpManager:
         """
         # Get kernel headers status
         headers_available, kernel_version = self.check_kernel_headers()
-        
+
         # Define the module path
         module_ko = self.module_source_dir / f"{self.module_name}.ko"
-        
+
         # Check if module is loaded
         module_loaded = self.is_module_loaded()
-        
+
         # Check if proc file exists
         proc_available = os.path.exists(self.proc_path)
-        
+
         # Check if source directory exists
         source_dir_exists = self.module_source_dir.exists()
-        
+
         # Check if module file exists
         module_built = module_ko.exists() if source_dir_exists else False
 
@@ -858,23 +858,26 @@ class DonorDumpManager:
             # Save to file if requested
             if save_to_file and device_info:
                 # Ensure the directory exists
-                os.makedirs(os.path.dirname(os.path.abspath(save_to_file)), exist_ok=True)
-                
+                os.makedirs(
+                    os.path.dirname(os.path.abspath(save_to_file)), exist_ok=True
+                )
+
                 # Save the device info to the file
                 with open(save_to_file, "w") as f:
                     json.dump(device_info, f, indent=2)
-                    
+
                 logger.info(f"Saved donor information to {save_to_file}")
             elif device_info and not save_to_file:
                 # If we have device info but no save path, use a default path
                 default_save_path = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)),
-                    "donor_info.json"
+                    os.path.dirname(os.path.abspath(__file__)), "donor_info.json"
                 )
                 with open(default_save_path, "w") as f:
                     json.dump(device_info, f, indent=2)
-                    
-                logger.info(f"Saved donor information to default path: {default_save_path}")
+
+                logger.info(
+                    f"Saved donor information to default path: {default_save_path}"
+                )
 
             return device_info
 

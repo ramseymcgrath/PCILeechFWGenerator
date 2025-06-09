@@ -461,7 +461,7 @@ class PCILeechTUI(App):
     def __init__(self):
         # For test compatibility - initialize attributes before super().__init__()
         # to avoid ScreenStackError in tests
-        
+
         # Core services
         self.device_manager = DeviceManager()
         self.config_manager = ConfigManager()
@@ -471,7 +471,7 @@ class PCILeechTUI(App):
         # State
         self._devices = []
         self._system_status = {}
-        
+
         # Now call super().__init__()
         super().__init__()
 
@@ -574,10 +574,14 @@ class PCILeechTUI(App):
         # Load default configuration profiles with error handling
         success = self.config_manager.create_default_profiles()
         if not success:
-            self.notify("Warning: Failed to create default profiles", severity="warning")
+            self.notify(
+                "Warning: Failed to create default profiles", severity="warning"
+            )
 
             # No longer have error object with suggested actions
-            self.notify("Check configuration directory permissions", severity="information")
+            self.notify(
+                "Check configuration directory permissions", severity="information"
+            )
 
         # Start system status monitoring
         asyncio.create_task(self._monitor_system_status())
@@ -911,12 +915,12 @@ class PCILeechTUI(App):
         if device:
             self.sub_title = f"Selected: {device.bdf} - {device.display_name}"
             self._update_compatibility_display(device)
-            
+
             # Enable build buttons for test compatibility
             try:
                 start_button = self.query_one("#start-build", Button)
                 start_button.disabled = False
-                
+
                 details_button = self.query_one("#device-details", Button)
                 details_button.disabled = False
             except Exception:
