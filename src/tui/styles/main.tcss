@@ -54,7 +54,7 @@ Footer {
 
 /* Section layouts */
 #top-section {
-    height: 12;
+    height: 16;
 }
 
 #middle-section {
@@ -78,6 +78,21 @@ Footer {
 /* Configuration panel */
 #config-panel {
     width: 1fr;
+}
+
+/* Compatibility panel */
+#compatibility-panel {
+    width: 1fr;
+}
+
+#compatibility-table {
+    height: 8;
+    margin-top: 1;
+}
+
+#compatibility-score {
+    margin: 1 0;
+    text-style: bold;
 }
 
 /* Build panel */
@@ -177,6 +192,14 @@ DataTable > .datatable--cursor {
 /* Text styles */
 .text-bold {
     text-style: bold;
+}
+
+.positive-factor {
+    color: $success;
+}
+
+.negative-factor {
+    color: $error;
 }
 
 .text-italic {

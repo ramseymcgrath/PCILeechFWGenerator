@@ -4,14 +4,19 @@ Manufacturing Variance Simulation Module
 This module provides realistic hardware variance simulation for PCIe device firmware
 generation, adding timing jitter and parameter variations to make generated firmware
 more realistic and harder to detect.
+
+It includes deterministic variance seeding to ensure that two builds of the same donor
+at the same commit fall in the same timing band.
 """
 
+import hashlib
 import math
 import random
 import statistics
+import struct
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class DeviceClass(Enum):
@@ -185,17 +190,56 @@ class ManufacturingVarianceSimulator:
         ),
     }
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[Union[int, str]] = None):
         """
         Initialize the variance simulator.
 
         Args:
-            seed: Random seed for reproducible variance generation
+            seed: Random seed for reproducible variance generation. Can be an integer
+                 or a string (which will be hashed to produce an integer seed).
         """
         if seed is not None:
-            random.seed(seed)
+            if isinstance(seed, str):
+                # Convert string seed to integer using hash
+                seed_int = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % (2**32)
+                random.seed(seed_int)
+            else:
+                random.seed(seed)
 
         self.generated_models: Dict[str, VarianceModel] = {}
+        self.rng = random  # Use the global random instance by default
+
+    def deterministic_seed(self, dsn: int, revision: str) -> int:
+        """
+        Generate a deterministic seed based on device serial number and build revision.
+
+        Args:
+            dsn: Device Serial Number (unique to each donor device)
+            revision: Build revision (typically a git commit hash)
+
+        Returns:
+            Integer seed value derived from DSN and revision
+        """
+        # Pack the DSN as a 64-bit integer and the first 20 chars of revision as bytes
+        # This matches the algorithm specified in the requirements
+        blob = struct.pack("<Q", dsn) + bytes.fromhex(revision[:20])
+        # Generate a SHA-256 hash and convert to integer (little-endian)
+        return int.from_bytes(hashlib.sha256(blob).digest(), "little")
+
+    def initialize_deterministic_rng(self, dsn: int, revision: str) -> int:
+        """
+        Initialize a private RNG with a deterministic seed based on DSN and revision.
+
+        Args:
+            dsn: Device Serial Number
+            revision: Build revision (git commit hash)
+
+        Returns:
+            The seed value used to initialize the RNG
+        """
+        seed = self.deterministic_seed(dsn, revision)
+        self.rng = random.Random(seed)
+        return seed
 
     def generate_variance_model(
         self,
@@ -203,6 +247,8 @@ class ManufacturingVarianceSimulator:
         device_class: DeviceClass = DeviceClass.CONSUMER,
         base_frequency_mhz: float = 100.0,
         custom_params: Optional[VarianceParameters] = None,
+        dsn: Optional[int] = None,
+        revision: Optional[str] = None,
     ) -> VarianceModel:
         """
         Generate a variance model for a specific device.
@@ -212,44 +258,50 @@ class ManufacturingVarianceSimulator:
             device_class: Class of device (affects variance ranges)
             base_frequency_mhz: Base operating frequency in MHz
             custom_params: Custom variance parameters (overrides defaults)
+            dsn: Device Serial Number for deterministic seeding
+            revision: Build revision for deterministic seeding
 
         Returns:
             VarianceModel with generated variance parameters
         """
+        # Initialize deterministic RNG if DSN and revision are provided
+        if dsn is not None and revision is not None:
+            self.initialize_deterministic_rng(dsn, revision)
+
         # Use custom parameters or defaults for device class
         params = custom_params or self.DEFAULT_VARIANCE_PARAMS[device_class]
 
-        # Generate random variance values within specified ranges
-        clock_jitter = random.uniform(
+        # Generate random variance values within specified ranges using the RNG
+        clock_jitter = self.rng.uniform(
             params.clock_jitter_percent_min, params.clock_jitter_percent_max
         )
 
-        register_timing_jitter = random.uniform(
+        register_timing_jitter = self.rng.uniform(
             params.register_timing_jitter_ns_min, params.register_timing_jitter_ns_max
         )
 
-        power_noise = random.uniform(
+        power_noise = self.rng.uniform(
             params.power_noise_percent_min, params.power_noise_percent_max
         )
 
-        temperature_drift = random.uniform(
+        temperature_drift = self.rng.uniform(
             params.temperature_drift_ppm_per_c_min,
             params.temperature_drift_ppm_per_c_max,
         )
 
-        process_variation = random.uniform(
+        process_variation = self.rng.uniform(
             params.process_variation_percent_min, params.process_variation_percent_max
         )
 
-        propagation_delay = random.uniform(
+        propagation_delay = self.rng.uniform(
             params.propagation_delay_ps_min, params.propagation_delay_ps_max
         )
 
         # Generate operating conditions
-        operating_temp = random.uniform(params.temp_min_c, params.temp_max_c)
+        operating_temp = self.rng.uniform(params.temp_min_c, params.temp_max_c)
         supply_voltage = 3.3 * (
             1.0
-            + random.uniform(
+            + self.rng.uniform(
                 -params.voltage_variation_percent / 100.0,
                 params.voltage_variation_percent / 100.0,
             )
@@ -349,15 +401,17 @@ class ManufacturingVarianceSimulator:
         # Apply base timing factor
         adjusted_timing = base_timing_ns * adjustments["combined_timing_factor"]
 
-        # Add operation-specific jitter
+        # Add operation-specific jitter using the private RNG
         if operation_type == "register_access":
-            jitter = random.uniform(
+            jitter = self.rng.uniform(
                 -adjustments["register_access_jitter_ns"],
                 adjustments["register_access_jitter_ns"],
             )
             adjusted_timing += jitter
         elif operation_type == "clock_domain":
-            jitter = random.uniform(-adjustments["jitter_ns"], adjustments["jitter_ns"])
+            jitter = self.rng.uniform(
+                -adjustments["jitter_ns"], adjustments["jitter_ns"]
+            )
             adjusted_timing += jitter
 
         # Ensure positive timing
@@ -377,6 +431,7 @@ class ManufacturingVarianceSimulator:
             register_name: Name of the register
             base_delay_cycles: Base delay in clock cycles
             variance_model: Variance model to apply
+            offset: Register offset
 
         Returns:
             SystemVerilog code string with variance-aware timing
@@ -392,6 +447,10 @@ class ManufacturingVarianceSimulator:
         adjusted_base_cycles = max(1, int(base_delay_cycles * timing_factor))
         max_jitter_cycles = max(1, jitter_cycles)
 
+        # Generate a deterministic initial LFSR value based on register offset
+        # This ensures that different registers have different but deterministic jitter patterns
+        initial_lfsr_value = (offset & 0xFF) | 0x01  # Ensure it's non-zero
+
         # Generate variance-aware SystemVerilog code
         code = f"""
     // Variance-aware timing for {register_name}
@@ -399,18 +458,18 @@ class ManufacturingVarianceSimulator:
     // Base cycles: {base_delay_cycles}, Adjusted: {adjusted_base_cycles}
     // Jitter range: ±{max_jitter_cycles} cycles
     logic [{max(1, (adjusted_base_cycles + max_jitter_cycles).bit_length()-1)}:0] {register_name}_delay_counter = 0;
-    logic [{max(1, max_jitter_cycles.bit_length()-1)}:0] {register_name}_jitter_lfsr = 1; // LFSR for jitter
+    logic [{max(1, max_jitter_cycles.bit_length()-1)}:0] {register_name}_jitter_lfsr = {initial_lfsr_value}; // Deterministic initial LFSR value
     logic {register_name}_write_pending = 0;
     
     // LFSR for timing jitter generation
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            {register_name}_jitter_lfsr <= 1;
+            {register_name}_jitter_lfsr <= {initial_lfsr_value};
         end else begin
             // Simple LFSR for pseudo-random jitter
-            {register_name}_jitter_lfsr <= {{{register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-2}:0], 
-                                            {register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-1}] ^ 
-                                            {register_name}_jitter_lfsr[{max(0, max_jitter_cycles.bit_length()-3)}]}};
+            {register_name}_jitter_lfsr <= {{{register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-2}:0],
+                                             {register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-1}] ^
+                                             {register_name}_jitter_lfsr[{max(0, max_jitter_cycles.bit_length()-3)}]}};
         end
     end
     
@@ -423,7 +482,7 @@ class ManufacturingVarianceSimulator:
             {register_name}_write_pending <= 1;
             // Apply base delay with manufacturing variance
             {register_name}_delay_counter <= {adjusted_base_cycles} +
-                                           ({register_name}_jitter_lfsr % {max_jitter_cycles + 1});
+                                            ({register_name}_jitter_lfsr % {max_jitter_cycles + 1});
         end else if ({register_name}_write_pending && {register_name}_delay_counter > 0) begin
             {register_name}_delay_counter <= {register_name}_delay_counter - 1;
         end else if ({register_name}_write_pending && {register_name}_delay_counter == 0) begin
@@ -460,4 +519,5 @@ class ManufacturingVarianceSimulator:
                 "supply_voltage_v": variance_model.supply_voltage_v,
             },
             "timing_adjustments": variance_model.timing_adjustments,
+            "deterministic_seeding": hasattr(self, "rng") and self.rng is not random,
         }

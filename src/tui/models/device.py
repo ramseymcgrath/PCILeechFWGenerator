@@ -4,7 +4,7 @@ PCIe Device Data Model
 Enhanced PCIe device information for the TUI interface.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 
@@ -27,6 +27,7 @@ class PCIDevice:
     bars: List[Dict[str, Any]]
     suitability_score: float
     compatibility_issues: List[str]
+    compatibility_factors: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:
@@ -66,6 +67,7 @@ class PCIDevice:
             "bars": self.bars,
             "suitability_score": self.suitability_score,
             "compatibility_issues": self.compatibility_issues,
+            "compatibility_factors": self.compatibility_factors,
         }
 
     @classmethod

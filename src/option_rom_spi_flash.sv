@@ -1,0 +1,448 @@
+//==============================================================================
+// Option-ROM SPI Flash Interface
+// 
+// This module implements the Option-ROM SPI Flash interface (Mode B) for PCILeech FPGA.
+// It interfaces with the on-board QSPI flash to expose the Option-ROM content
+// through the PCIe Expansion-ROM interface.
+//
+// Features:
+// - Interfaces with on-board QSPI flash
+// - Exposes Option-ROM content through PCIe Expansion-ROM interface
+// - Handles legacy 16-bit config cycles for ROM access
+//==============================================================================
+
+module option_rom_spi_flash #(
+    parameter ROM_SIZE = 65536,  // Default: 64 KB
+    parameter FLASH_ADDR_OFFSET = 0  // Flash memory offset where ROM is stored
+) (
+    // Clock and reset
+    input  logic        clk,
+    input  logic        reset_n,
+    
+    // PCIe Expansion-ROM interface
+    input  logic        exp_rom_access,
+    input  logic [31:0] exp_rom_addr,
+    output logic [31:0] exp_rom_data,
+    output logic        exp_rom_data_valid,
+    
+    // Legacy ROM access interface (16-bit config cycles)
+    input  logic        legacy_rom_access,
+    input  logic [31:0] legacy_rom_addr,
+    output logic [31:0] legacy_rom_data,
+    
+    // SPI Flash interface
+    output logic        spi_cs_n,
+    output logic        spi_clk,
+    output logic        spi_mosi,
+    input  logic        spi_miso,
+    
+    // QSPI Flash interface (optional)
+    output logic        qspi_cs_n,
+    output logic        qspi_clk,
+    output logic [3:0]  qspi_dq_o,
+    input  logic [3:0]  qspi_dq_i,
+    output logic [3:0]  qspi_dq_oe
+);
+
+    // SPI Flash commands
+    localparam SPI_CMD_READ = 8'h03;
+    localparam SPI_CMD_FAST_READ = 8'h0B;
+    localparam SPI_CMD_QUAD_READ = 8'hEB;
+    
+    // SPI Flash state machine
+    typedef enum logic [3:0] {
+        FLASH_IDLE,
+        FLASH_CMD,
+        FLASH_ADDR_H,
+        FLASH_ADDR_M,
+        FLASH_ADDR_L,
+        FLASH_DUMMY,
+        FLASH_READ_DATA,
+        FLASH_WAIT,
+        FLASH_COMPLETE
+    } flash_state_t;
+    
+    flash_state_t flash_state = FLASH_IDLE;
+    
+    // Internal signals
+    logic [31:0] flash_addr;
+    logic [31:0] flash_data;
+    logic [7:0]  flash_cmd;
+    logic [3:0]  bit_counter;
+    logic [3:0]  byte_counter;
+    logic [7:0]  shift_reg;
+    logic        data_valid;
+    logic        use_qspi;
+    
+    // Small cache to improve performance
+    localparam CACHE_SIZE = 16;  // 16 x 32-bit words = 64 bytes
+    logic [31:0] cache_data[0:CACHE_SIZE-1];
+    logic [31:0] cache_addr[0:CACHE_SIZE-1];
+    logic        cache_valid[0:CACHE_SIZE-1];
+    logic [3:0]  cache_index;
+    logic        cache_hit;
+    logic [3:0]  cache_lru_counter[0:CACHE_SIZE-1];
+    
+    // Determine if we should use QSPI or standard SPI
+    // This could be based on a configuration register or auto-detection
+    assign use_qspi = 1'b1;  // Default to QSPI for better performance
+    
+    // Select appropriate flash command based on interface
+    assign flash_cmd = use_qspi ? SPI_CMD_QUAD_READ : SPI_CMD_FAST_READ;
+    
+    // Check if requested address is in cache
+    always_comb begin
+        cache_hit = 1'b0;
+        cache_index = 4'h0;
+        
+        for (int i = 0; i < CACHE_SIZE; i++) begin
+            if (cache_valid[i] && cache_addr[i] == {exp_rom_addr[31:2], 2'b00}) begin
+                cache_hit = 1'b1;
+                cache_index = i[3:0];
+                break;
+            end
+        end
+    end
+    
+    // Find least recently used cache entry
+    function logic [3:0] find_lru_entry();
+        logic [3:0] lru_index = 4'h0;
+        logic [3:0] min_counter = 4'hF;
+        
+        for (int i = 0; i < CACHE_SIZE; i++) begin
+            if (cache_lru_counter[i] < min_counter) begin
+                min_counter = cache_lru_counter[i];
+                lru_index = i[3:0];
+            end
+        end
+        
+        return lru_index;
+    endfunction
+    
+    // SPI Flash state machine
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            flash_state <= FLASH_IDLE;
+            spi_cs_n <= 1'b1;
+            spi_clk <= 1'b0;
+            spi_mosi <= 1'b0;
+            qspi_cs_n <= 1'b1;
+            qspi_clk <= 1'b0;
+            qspi_dq_o <= 4'h0;
+            qspi_dq_oe <= 4'h0;
+            bit_counter <= 4'h0;
+            byte_counter <= 4'h0;
+            data_valid <= 1'b0;
+            
+            // Initialize cache
+            for (int i = 0; i < CACHE_SIZE; i++) begin
+                cache_valid[i] <= 1'b0;
+                cache_addr[i] <= 32'h0;
+                cache_data[i] <= 32'h0;
+                cache_lru_counter[i] <= i[3:0];  // Initialize with different values
+            end
+        end else begin
+            case (flash_state)
+                FLASH_IDLE: begin
+                    data_valid <= 1'b0;
+                    
+                    if (exp_rom_access) begin
+                        if (cache_hit) begin
+                            // Cache hit - return data immediately
+                            flash_data <= cache_data[cache_index];
+                            data_valid <= 1'b1;
+                            
+                            // Update LRU counters
+                            for (int i = 0; i < CACHE_SIZE; i++) begin
+                                if (i[3:0] == cache_index) begin
+                                    cache_lru_counter[i] <= 4'hF;  // Most recently used
+                                end else if (cache_lru_counter[i] > 4'h0) begin
+                                    cache_lru_counter[i] <= cache_lru_counter[i] - 1'b1;
+                                end
+                            end
+                            
+                            flash_state <= FLASH_COMPLETE;
+                        end else begin
+                            // Cache miss - need to read from flash
+                            flash_addr <= FLASH_ADDR_OFFSET + {exp_rom_addr[31:2], 2'b00};
+                            
+                            if (use_qspi) begin
+                                qspi_cs_n <= 1'b0;
+                                qspi_dq_oe <= 4'hF;  // Output mode for command
+                            end else begin
+                                spi_cs_n <= 1'b0;
+                            end
+                            
+                            bit_counter <= 4'h7;  // 8 bits for command
+                            shift_reg <= flash_cmd;
+                            flash_state <= FLASH_CMD;
+                        end
+                    end
+                end
+                
+                FLASH_CMD: begin
+                    // Send command byte
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (qspi_clk) begin
+                            if (bit_counter[0] == 1'b0) begin
+                                // Send upper nibble on even counts
+                                qspi_dq_o <= shift_reg[7:4];
+                            end else begin
+                                // Send lower nibble on odd counts
+                                qspi_dq_o <= shift_reg[3:0];
+                                shift_reg <= 8'h00;  // Clear for next byte
+                                
+                                if (bit_counter == 4'h1) begin
+                                    bit_counter <= 4'h7;  // 8 bits for address high byte
+                                    shift_reg <= flash_addr[23:16];
+                                    flash_state <= FLASH_ADDR_H;
+                                end else begin
+                                    bit_counter <= bit_counter - 2;
+                                end
+                            end
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (spi_clk) begin
+                            spi_mosi <= shift_reg[7];
+                            shift_reg <= {shift_reg[6:0], 1'b0};
+                            
+                            if (bit_counter == 4'h0) begin
+                                bit_counter <= 4'h7;  // 8 bits for address high byte
+                                shift_reg <= flash_addr[23:16];
+                                flash_state <= FLASH_ADDR_H;
+                            end else begin
+                                bit_counter <= bit_counter - 1'b1;
+                            end
+                        end
+                    end
+                end
+                
+                FLASH_ADDR_H: begin
+                    // Send address high byte
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (qspi_clk) begin
+                            if (bit_counter[0] == 1'b0) begin
+                                qspi_dq_o <= shift_reg[7:4];
+                            end else begin
+                                qspi_dq_o <= shift_reg[3:0];
+                                shift_reg <= 8'h00;
+                                
+                                if (bit_counter == 4'h1) begin
+                                    bit_counter <= 4'h7;  // 8 bits for address middle byte
+                                    shift_reg <= flash_addr[15:8];
+                                    flash_state <= FLASH_ADDR_M;
+                                end else begin
+                                    bit_counter <= bit_counter - 2;
+                                end
+                            end
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (spi_clk) begin
+                            spi_mosi <= shift_reg[7];
+                            shift_reg <= {shift_reg[6:0], 1'b0};
+                            
+                            if (bit_counter == 4'h0) begin
+                                bit_counter <= 4'h7;  // 8 bits for address middle byte
+                                shift_reg <= flash_addr[15:8];
+                                flash_state <= FLASH_ADDR_M;
+                            end else begin
+                                bit_counter <= bit_counter - 1'b1;
+                            end
+                        end
+                    end
+                end
+                
+                FLASH_ADDR_M: begin
+                    // Send address middle byte
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (qspi_clk) begin
+                            if (bit_counter[0] == 1'b0) begin
+                                qspi_dq_o <= shift_reg[7:4];
+                            end else begin
+                                qspi_dq_o <= shift_reg[3:0];
+                                shift_reg <= 8'h00;
+                                
+                                if (bit_counter == 4'h1) begin
+                                    bit_counter <= 4'h7;  // 8 bits for address low byte
+                                    shift_reg <= flash_addr[7:0];
+                                    flash_state <= FLASH_ADDR_L;
+                                end else begin
+                                    bit_counter <= bit_counter - 2;
+                                end
+                            end
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (spi_clk) begin
+                            spi_mosi <= shift_reg[7];
+                            shift_reg <= {shift_reg[6:0], 1'b0};
+                            
+                            if (bit_counter == 4'h0) begin
+                                bit_counter <= 4'h7;  // 8 bits for address low byte
+                                shift_reg <= flash_addr[7:0];
+                                flash_state <= FLASH_ADDR_L;
+                            end else begin
+                                bit_counter <= bit_counter - 1'b1;
+                            end
+                        end
+                    end
+                end
+                
+                FLASH_ADDR_L: begin
+                    // Send address low byte
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (qspi_clk) begin
+                            if (bit_counter[0] == 1'b0) begin
+                                qspi_dq_o <= shift_reg[7:4];
+                            end else begin
+                                qspi_dq_o <= shift_reg[3:0];
+                                
+                                if (bit_counter == 4'h1) begin
+                                    bit_counter <= 4'h7;  // 8 dummy cycles for QSPI
+                                    flash_state <= FLASH_DUMMY;
+                                    qspi_dq_oe <= 4'h0;  // Switch to input mode
+                                end else begin
+                                    bit_counter <= bit_counter - 2;
+                                end
+                            end
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (spi_clk) begin
+                            spi_mosi <= shift_reg[7];
+                            shift_reg <= {shift_reg[6:0], 1'b0};
+                            
+                            if (bit_counter == 4'h0) begin
+                                bit_counter <= 4'h7;  // 8 dummy cycles for Fast Read
+                                flash_state <= FLASH_DUMMY;
+                            end else begin
+                                bit_counter <= bit_counter - 1'b1;
+                            end
+                        end
+                    end
+                end
+                
+                FLASH_DUMMY: begin
+                    // Dummy cycles required by Fast Read / QSPI Read
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (qspi_clk && bit_counter == 4'h0) begin
+                            bit_counter <= 4'h7;  // 8 bits per byte
+                            byte_counter <= 4'h0;  // 4 bytes (32 bits)
+                            flash_data <= 32'h0;
+                            flash_state <= FLASH_READ_DATA;
+                        end else if (qspi_clk) begin
+                            bit_counter <= bit_counter - 1'b1;
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (spi_clk && bit_counter == 4'h0) begin
+                            bit_counter <= 4'h7;  // 8 bits per byte
+                            byte_counter <= 4'h0;  // 4 bytes (32 bits)
+                            flash_data <= 32'h0;
+                            flash_state <= FLASH_READ_DATA;
+                        end else if (spi_clk) begin
+                            bit_counter <= bit_counter - 1'b1;
+                        end
+                    end
+                end
+                
+                FLASH_READ_DATA: begin
+                    // Read data from flash
+                    if (use_qspi) begin
+                        qspi_clk <= ~qspi_clk;
+                        if (!qspi_clk) begin  // Sample on falling edge
+                            if (bit_counter[0] == 1'b0) begin
+                                // Read upper nibble
+                                flash_data <= {flash_data[27:0], qspi_dq_i};
+                            end else begin
+                                // Read lower nibble
+                                flash_data <= {flash_data[27:0], qspi_dq_i};
+                                
+                                if (bit_counter == 4'h1 && byte_counter == 4'h3) begin
+                                    // Completed reading 32 bits
+                                    flash_state <= FLASH_COMPLETE;
+                                    qspi_cs_n <= 1'b1;  // Deselect flash
+                                    data_valid <= 1'b1;
+                                    
+                                    // Update cache with new data
+                                    logic [3:0] new_cache_index = find_lru_entry();
+                                    cache_valid[new_cache_index] <= 1'b1;
+                                    cache_addr[new_cache_index] <= {exp_rom_addr[31:2], 2'b00};
+                                    cache_data[new_cache_index] <= flash_data;
+                                    
+                                    // Update LRU counters
+                                    for (int i = 0; i < CACHE_SIZE; i++) begin
+                                        if (i[3:0] == new_cache_index) begin
+                                            cache_lru_counter[i] <= 4'hF;  // Most recently used
+                                        end else if (cache_lru_counter[i] > 4'h0) begin
+                                            cache_lru_counter[i] <= cache_lru_counter[i] - 1'b1;
+                                        end
+                                    end
+                                end else if (bit_counter == 4'h1) begin
+                                    bit_counter <= 4'h7;
+                                    byte_counter <= byte_counter + 1'b1;
+                                end else begin
+                                    bit_counter <= bit_counter - 2;
+                                end
+                            end
+                        end
+                    end else begin
+                        spi_clk <= ~spi_clk;
+                        if (!spi_clk) begin  // Sample on falling edge
+                            flash_data <= {flash_data[30:0], spi_miso};
+                            
+                            if (bit_counter == 4'h0 && byte_counter == 4'h3) begin
+                                // Completed reading 32 bits
+                                flash_state <= FLASH_COMPLETE;
+                                spi_cs_n <= 1'b1;  // Deselect flash
+                                data_valid <= 1'b1;
+                                
+                                // Update cache with new data
+                                logic [3:0] new_cache_index = find_lru_entry();
+                                cache_valid[new_cache_index] <= 1'b1;
+                                cache_addr[new_cache_index] <= {exp_rom_addr[31:2], 2'b00};
+                                cache_data[new_cache_index] <= flash_data;
+                                
+                                // Update LRU counters
+                                for (int i = 0; i < CACHE_SIZE; i++) begin
+                                    if (i[3:0] == new_cache_index) begin
+                                        cache_lru_counter[i] <= 4'hF;  // Most recently used
+                                    end else if (cache_lru_counter[i] > 4'h0) begin
+                                        cache_lru_counter[i] <= cache_lru_counter[i] - 1'b1;
+                                    end
+                                end
+                            end else if (bit_counter == 4'h0) begin
+                                bit_counter <= 4'h7;
+                                byte_counter <= byte_counter + 1'b1;
+                            end else begin
+                                bit_counter <= bit_counter - 1'b1;
+                            end
+                        end
+                    end
+                end
+                
+                FLASH_COMPLETE: begin
+                    // Data is valid and ready
+                    flash_state <= FLASH_IDLE;
+                end
+                
+                default: flash_state <= FLASH_IDLE;
+            endcase
+        end
+    end
+    
+    // Output assignments
+    assign exp_rom_data = flash_data;
+    assign exp_rom_data_valid = data_valid;
+    
+    // Legacy ROM access - reuse the same flash interface
+    assign legacy_rom_data = flash_data;
+
+endmodule

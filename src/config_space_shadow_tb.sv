@@ -1,0 +1,188 @@
+//==============================================================================
+// PCIe Configuration Space Shadow BRAM Testbench
+//==============================================================================
+
+`timescale 1ns / 1ps
+
+module config_space_shadow_tb;
+
+    // Clock and reset
+    logic clk;
+    logic reset_n;
+    
+    // Port A - PCIe configuration access
+    logic        cfg_ext_read_received;
+    logic        cfg_ext_write_received;
+    logic [9:0]  cfg_ext_register_number;
+    logic [3:0]  cfg_ext_function_number;
+    logic [31:0] cfg_ext_write_data;
+    logic [3:0]  cfg_ext_write_byte_enable;
+    logic [31:0] cfg_ext_read_data;
+    logic        cfg_ext_read_data_valid;
+    
+    // Port B - Host access
+    logic        host_access_en;
+    logic        host_write_en;
+    logic [11:0] host_addr;
+    logic [31:0] host_write_data;
+    logic [31:0] host_read_data;
+    
+    // Instantiate the Unit Under Test (UUT)
+    config_space_shadow uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        
+        // Port A
+        .cfg_ext_read_received(cfg_ext_read_received),
+        .cfg_ext_write_received(cfg_ext_write_received),
+        .cfg_ext_register_number(cfg_ext_register_number),
+        .cfg_ext_function_number(cfg_ext_function_number),
+        .cfg_ext_write_data(cfg_ext_write_data),
+        .cfg_ext_write_byte_enable(cfg_ext_write_byte_enable),
+        .cfg_ext_read_data(cfg_ext_read_data),
+        .cfg_ext_read_data_valid(cfg_ext_read_data_valid),
+        
+        // Port B
+        .host_access_en(host_access_en),
+        .host_write_en(host_write_en),
+        .host_addr(host_addr),
+        .host_write_data(host_write_data),
+        .host_read_data(host_read_data)
+    );
+    
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 100 MHz clock
+    end
+    
+    // Test sequence
+    initial begin
+        // Initialize signals
+        reset_n = 0;
+        cfg_ext_read_received = 0;
+        cfg_ext_write_received = 0;
+        cfg_ext_register_number = 0;
+        cfg_ext_function_number = 0;
+        cfg_ext_write_data = 0;
+        cfg_ext_write_byte_enable = 0;
+        host_access_en = 0;
+        host_write_en = 0;
+        host_addr = 0;
+        host_write_data = 0;
+        
+        // Apply reset
+        #20;
+        reset_n = 1;
+        #20;
+        
+        // Test 1: Host write to configuration space
+        $display("Test 1: Host write to configuration space");
+        host_access_en = 1;
+        host_write_en = 1;
+        host_addr = 12'h004; // Command register (offset 0x04)
+        host_write_data = 32'h12345678;
+        #10;
+        host_access_en = 0;
+        host_write_en = 0;
+        #10;
+        
+        // Test 2: Host read from configuration space
+        $display("Test 2: Host read from configuration space");
+        host_access_en = 1;
+        host_write_en = 0;
+        host_addr = 12'h004; // Command register (offset 0x04)
+        #10;
+        $display("Host read data: %h", host_read_data);
+        host_access_en = 0;
+        #10;
+        
+        // Test 3: PCIe read from configuration space
+        $display("Test 3: PCIe read from configuration space");
+        cfg_ext_read_received = 1;
+        cfg_ext_register_number = 10'h001; // Command register (offset 0x04)
+        cfg_ext_function_number = 4'h0;
+        #10;
+        cfg_ext_read_received = 0;
+        #10;
+        $display("PCIe read data: %h, valid: %b", cfg_ext_read_data, cfg_ext_read_data_valid);
+        
+        // Test 4: PCIe write to configuration space
+        $display("Test 4: PCIe write to configuration space");
+        cfg_ext_write_received = 1;
+        cfg_ext_register_number = 10'h001; // Command register (offset 0x04)
+        cfg_ext_function_number = 4'h0;
+        cfg_ext_write_data = 32'h87654321;
+        cfg_ext_write_byte_enable = 4'hF; // All bytes enabled
+        #10;
+        cfg_ext_write_received = 0;
+        #10;
+        
+        // Test 5: Verify PCIe write by reading back
+        $display("Test 5: Verify PCIe write by reading back");
+        cfg_ext_read_received = 1;
+        cfg_ext_register_number = 10'h001; // Command register (offset 0x04)
+        cfg_ext_function_number = 4'h0;
+        #10;
+        cfg_ext_read_received = 0;
+        #10;
+        $display("PCIe read data after write: %h, valid: %b", cfg_ext_read_data, cfg_ext_read_data_valid);
+        
+        // Test 6: Test byte-enable functionality
+        $display("Test 6: Test byte-enable functionality");
+        cfg_ext_write_received = 1;
+        cfg_ext_register_number = 10'h001; // Command register (offset 0x04)
+        cfg_ext_function_number = 4'h0;
+        cfg_ext_write_data = 32'hAABBCCDD;
+        cfg_ext_write_byte_enable = 4'h5; // Only bytes 0 and 2 enabled
+        #10;
+        cfg_ext_write_received = 0;
+        #10;
+        
+        cfg_ext_read_received = 1;
+        #10;
+        cfg_ext_read_received = 0;
+        #10;
+        $display("PCIe read data after partial write: %h, valid: %b", cfg_ext_read_data, cfg_ext_read_data_valid);
+        
+        // Test 7: Read from non-overlay register
+        $display("Test 7: Read from non-overlay register");
+        cfg_ext_read_received = 1;
+        cfg_ext_register_number = 10'h010; // Non-overlay register
+        cfg_ext_function_number = 4'h0;
+        #10;
+        cfg_ext_read_received = 0;
+        #10;
+        $display("PCIe read data from non-overlay register: %h, valid: %b", cfg_ext_read_data, cfg_ext_read_data_valid);
+        
+        // Test 8: Write to non-overlay register (should have no effect)
+        $display("Test 8: Write to non-overlay register");
+        cfg_ext_write_received = 1;
+        cfg_ext_register_number = 10'h010; // Non-overlay register
+        cfg_ext_function_number = 4'h0;
+        cfg_ext_write_data = 32'h11223344;
+        cfg_ext_write_byte_enable = 4'hF; // All bytes enabled
+        #10;
+        cfg_ext_write_received = 0;
+        #10;
+        
+        cfg_ext_read_received = 1;
+        #10;
+        cfg_ext_read_received = 0;
+        #10;
+        $display("PCIe read data after write to non-overlay register: %h, valid: %b", cfg_ext_read_data, cfg_ext_read_data_valid);
+        
+        // End simulation
+        #100;
+        $display("Simulation completed successfully");
+        $finish;
+    end
+    
+    // Monitor for debugging
+    always @(posedge clk) begin
+        if (cfg_ext_read_data_valid) begin
+            $display("Time %t: Valid read data: %h", $time, cfg_ext_read_data);
+        end
+    end
+
+endmodule

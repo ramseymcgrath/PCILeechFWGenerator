@@ -549,9 +549,61 @@ class DonorDumpManager:
             with open(output_path, "w") as f:
                 json.dump(device_info, f, indent=2)
             logger.info(f"Saved donor information to {output_path}")
+
+            # If extended configuration space is available, save it in a format suitable for $readmemh
+            if (
+                "extended_config" in device_info
+                and device_info["extended_config"] != "disabled"
+            ):
+                config_hex_path = os.path.join(
+                    os.path.dirname(os.path.abspath(output_path)),
+                    "config_space_init.hex",
+                )
+                self.save_config_space_hex(
+                    device_info["extended_config"], config_hex_path
+                )
+
             return True
         except IOError as e:
             logger.error(f"Failed to save donor information: {e}")
+            return False
+
+    def save_config_space_hex(self, config_hex_str: str, output_path: str) -> bool:
+        """
+        Save configuration space data in a format suitable for SystemVerilog $readmemh
+
+        Args:
+            config_hex_str: Hex string of configuration space data
+            output_path: Path to save the hex file
+
+        Returns:
+            True if data was saved successfully
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+            # Format the hex data for $readmemh (32-bit words, one per line)
+            with open(output_path, "w") as f:
+                # Process 8 hex characters (4 bytes) at a time to create 32-bit words
+                # Convert to little-endian format for SystemVerilog
+                for i in range(0, len(config_hex_str), 8):
+                    if i + 8 <= len(config_hex_str):
+                        # Extract 4 bytes (8 hex chars)
+                        word_hex = config_hex_str[i : i + 8]
+                        # Convert to little-endian format (reverse byte order)
+                        le_word = (
+                            word_hex[6:8]
+                            + word_hex[4:6]
+                            + word_hex[2:4]
+                            + word_hex[0:2]
+                        )
+                        f.write(f"{le_word}\n")
+
+            logger.info(f"Saved configuration space hex data to {output_path}")
+            return True
+        except IOError as e:
+            logger.error(f"Failed to save configuration space hex data: {e}")
             return False
 
     def read_device_info(self) -> Dict[str, str]:
@@ -715,6 +767,7 @@ class DonorDumpManager:
         save_to_file: Optional[str] = None,
         generate_if_unavailable: bool = False,
         device_type: str = "generic",
+        extract_full_config: bool = True,
     ) -> Dict[str, str]:
         """
         Complete setup process: check headers, build, load module, and read info
@@ -725,6 +778,7 @@ class DonorDumpManager:
             save_to_file: Path to save donor information for future use
             generate_if_unavailable: Generate synthetic donor info if module setup fails
             device_type: Type of device to generate info for if needed
+            extract_full_config: Extract full 4KB configuration space
 
         Returns:
             Device information dictionary
@@ -756,6 +810,18 @@ class DonorDumpManager:
             # Read device info
             device_info = self.read_device_info()
 
+            # Verify extended configuration space is available
+            if extract_full_config and (
+                "extended_config" not in device_info
+                or device_info["extended_config"] == "disabled"
+            ):
+                logger.warning(
+                    "Full 4KB configuration space extraction is disabled or not available"
+                )
+                logger.warning(
+                    "Some features may not work correctly without full configuration space data"
+                )
+
             # Save to file if requested
             if save_to_file and device_info:
                 self.save_donor_info(device_info, save_to_file)
@@ -768,6 +834,53 @@ class DonorDumpManager:
             if generate_if_unavailable:
                 logger.info("Generating synthetic donor information as fallback")
                 device_info = self.generate_donor_info(device_type)
+
+                # Add synthetic extended configuration space if needed
+                if extract_full_config and "extended_config" not in device_info:
+                    logger.info("Generating synthetic configuration space data")
+                    # Generate a basic 4KB configuration space with device/vendor IDs
+                    config_space = ["00"] * 4096  # Initialize with zeros
+
+                    # Set vendor ID (bytes 0-1)
+                    vendor_id = device_info.get("vendor_id", "0x8086")[
+                        2:
+                    ]  # Remove "0x" prefix
+                    config_space[0] = vendor_id[2:4] if len(vendor_id) >= 4 else "86"
+                    config_space[1] = vendor_id[0:2] if len(vendor_id) >= 2 else "80"
+
+                    # Set device ID (bytes 2-3)
+                    device_id = device_info.get("device_id", "0x1533")[
+                        2:
+                    ]  # Remove "0x" prefix
+                    config_space[2] = device_id[2:4] if len(device_id) >= 4 else "33"
+                    config_space[3] = device_id[0:2] if len(device_id) >= 2 else "15"
+
+                    # Set subsystem vendor ID (bytes 44-45)
+                    subvendor_id = device_info.get("subvendor_id", "0x8086")[2:]
+                    config_space[44] = (
+                        subvendor_id[2:4] if len(subvendor_id) >= 4 else "86"
+                    )
+                    config_space[45] = (
+                        subvendor_id[0:2] if len(subvendor_id) >= 2 else "80"
+                    )
+
+                    # Set subsystem ID (bytes 46-47)
+                    subsystem_id = device_info.get("subsystem_id", "0x0000")[2:]
+                    config_space[46] = (
+                        subsystem_id[2:4] if len(subsystem_id) >= 4 else "00"
+                    )
+                    config_space[47] = (
+                        subsystem_id[0:2] if len(subsystem_id) >= 2 else "00"
+                    )
+
+                    # Set revision ID (byte 8)
+                    revision_id = device_info.get("revision_id", "0x03")[2:]
+                    config_space[8] = (
+                        revision_id[0:2] if len(revision_id) >= 2 else "03"
+                    )
+
+                    # Convert to hex string
+                    device_info["extended_config"] = "".join(config_space)
 
                 # Save to file if requested
                 if save_to_file and device_info:

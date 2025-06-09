@@ -13,6 +13,106 @@ from src.manufacturing_variance import (
 )
 
 
+class TestDeterministicVarianceSeeding:
+    """Test cases for deterministic variance seeding."""
+
+    def test_deterministic_seed_generation(self):
+        """Test that deterministic seed generation produces consistent results."""
+        simulator = ManufacturingVarianceSimulator()
+
+        # Test with sample DSN and revision
+        dsn = 0x1234567890ABCDEF
+        revision = "abcdef1234567890abcd"
+
+        # Generate seed twice with the same inputs
+        seed1 = simulator.deterministic_seed(dsn, revision)
+        seed2 = simulator.deterministic_seed(dsn, revision)
+
+        # Seeds should be identical
+        assert seed1 == seed2
+
+        # Test with different DSN
+        different_dsn = 0x1234567890ABCDE0
+        different_seed = simulator.deterministic_seed(different_dsn, revision)
+
+        # Seeds should be different
+        assert seed1 != different_seed
+
+        # Test with different revision
+        different_revision = "abcdef1234567890abce"
+        different_seed = simulator.deterministic_seed(dsn, different_revision)
+
+        # Seeds should be different
+        assert seed1 != different_seed
+
+    def test_deterministic_rng_initialization(self):
+        """Test that RNG initialization with deterministic seed produces consistent results."""
+        simulator1 = ManufacturingVarianceSimulator()
+        simulator2 = ManufacturingVarianceSimulator()
+
+        dsn = 0x1234567890ABCDEF
+        revision = "abcdef1234567890abcd"
+
+        # Initialize both simulators with the same DSN and revision
+        seed1 = simulator1.initialize_deterministic_rng(dsn, revision)
+        seed2 = simulator2.initialize_deterministic_rng(dsn, revision)
+
+        # Seeds should be identical
+        assert seed1 == seed2
+
+        # Generate some random numbers and verify they're identical
+        for _ in range(10):
+            assert simulator1.rng.random() == simulator2.rng.random()
+
+    def test_deterministic_variance_model(self):
+        """Test that variance models generated with the same DSN and revision are identical."""
+        simulator1 = ManufacturingVarianceSimulator()
+        simulator2 = ManufacturingVarianceSimulator()
+
+        dsn = 0x1234567890ABCDEF
+        revision = "abcdef1234567890abcd"
+
+        # Generate variance models with the same DSN and revision
+        model1 = simulator1.generate_variance_model(
+            device_id="test_device",
+            device_class=DeviceClass.CONSUMER,
+            base_frequency_mhz=100.0,
+            dsn=dsn,
+            revision=revision,
+        )
+
+        model2 = simulator2.generate_variance_model(
+            device_id="test_device",
+            device_class=DeviceClass.CONSUMER,
+            base_frequency_mhz=100.0,
+            dsn=dsn,
+            revision=revision,
+        )
+
+        # Models should have identical variance parameters
+        assert model1.clock_jitter_percent == model2.clock_jitter_percent
+        assert model1.register_timing_jitter_ns == model2.register_timing_jitter_ns
+        assert model1.power_noise_percent == model2.power_noise_percent
+        assert model1.temperature_drift_ppm_per_c == model2.temperature_drift_ppm_per_c
+        assert model1.process_variation_percent == model2.process_variation_percent
+        assert model1.propagation_delay_ps == model2.propagation_delay_ps
+        assert model1.operating_temp_c == model2.operating_temp_c
+        assert model1.supply_voltage_v == model2.supply_voltage_v
+
+        # Generate a model with different DSN
+        different_dsn = 0x1234567890ABCDE0
+        different_model = simulator1.generate_variance_model(
+            device_id="test_device",
+            device_class=DeviceClass.CONSUMER,
+            base_frequency_mhz=100.0,
+            dsn=different_dsn,
+            revision=revision,
+        )
+
+        # Models should have different variance parameters
+        assert model1.clock_jitter_percent != different_model.clock_jitter_percent
+
+
 class TestManufacturingVarianceSimulator:
     """Test cases for ManufacturingVarianceSimulator."""
 

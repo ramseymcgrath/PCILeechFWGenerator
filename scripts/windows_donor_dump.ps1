@@ -173,7 +173,7 @@ public class PciConfig
         DlPortWritePortUlong(PCI_CONFIG_DATA, value);
     }
 
-    public static byte[] ReadPciConfigSpace(byte bus, byte device, byte function, int size = 256)
+    public static byte[] ReadPciConfigSpace(byte bus, byte device, byte function, int size = 4096)
     {
         byte[] configSpace = new byte[size];
         
@@ -182,7 +182,33 @@ public class PciConfig
         
         for (int offset = 0; offset < size; offset += 4)
         {
-            uint value = ReadPciConfig(bus, device, function, (byte)offset);
+            uint value;
+            
+            if (offset < 256) {
+                // First 256 bytes can be accessed directly through standard PCI config space
+                value = ReadPciConfig(bus, device, function, (byte)(offset & 0xFF));
+            } else {
+                // For extended config space (beyond 256 bytes), we need to use a different approach
+                // This is a simplified implementation and may not work on all systems
+                // For real hardware access, a more sophisticated approach might be needed
+                
+                // Check if we're in extended config space range
+                if (offset >= 4096) {
+                    // Fill with 0xFF for out of range
+                    value = 0xFFFFFFFF;
+                } else {
+                    try {
+                        // Try to access extended config space
+                        // This is a simplified approach - in reality, extended config space
+                        // access is more complex and hardware-dependent
+                        value = ReadPciConfig(bus, device, function, (byte)(0xE0 + ((offset >> 8) & 0x0F)));
+                        value = ReadPciConfig(bus, device, function, (byte)(offset & 0xFF));
+                    } catch {
+                        // If access fails, fill with 0xFF
+                        value = 0xFFFFFFFF;
+                    }
+                }
+            }
             
             // Convert uint to bytes and store in array
             configSpace[offset] = (byte)(value & 0xFF);
@@ -213,12 +239,13 @@ public class PciConfig
     try {
         Add-Type -TypeDefinition $PciConfigCode -Language CSharp
         
-        # Read PCI configuration space
-        $ConfigSpace = [PciConfig]::ReadPciConfigSpace($Bus, $Device, $Function, 256)
+        # Read PCI configuration space (full 4KB)
+        $ConfigSpace = [PciConfig]::ReadPciConfigSpace($Bus, $Device, $Function, 4096)
         
         return @{
             "ConfigSpace" = $ConfigSpace
             "HasFullAccess" = $true
+            "Size" = 4096
         }
     }
     catch {
@@ -301,6 +328,10 @@ function Extract-DeviceParameters {
         # Convert config space to hex string
         $ConfigHex = [System.BitConverter]::ToString($ConfigSpace).Replace("-", "").ToLower()
         $DeviceInfo["extended_config"] = $ConfigHex
+        
+        # Save config space in a format suitable for $readmemh
+        $ConfigHexPath = Join-Path (Split-Path -Parent $OutputFile) "config_space_init.hex"
+        Save-ConfigSpaceHex -ConfigSpace $ConfigSpace -OutputPath $ConfigHexPath
     }
     else {
         # Extract from WMI if available
@@ -364,6 +395,41 @@ function Extract-DeviceParameters {
     return $DeviceInfo
 }
 
+# Function to save configuration space in a format suitable for $readmemh
+function Save-ConfigSpaceHex {
+    param (
+        [byte[]]$ConfigSpace,
+        [string]$OutputPath
+    )
+    
+    # Create directory if it doesn't exist
+    $OutputDir = Split-Path -Parent $OutputPath
+    if (-not (Test-Path $OutputDir)) {
+        New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+    }
+    
+    # Format the hex data for $readmemh (32-bit words, one per line)
+    $Lines = @()
+    for ($i = 0; $i -lt $ConfigSpace.Length; $i += 4) {
+        if ($i + 4 <= $ConfigSpace.Length) {
+            # Extract 4 bytes
+            $Bytes = $ConfigSpace[$i..($i+3)]
+            
+            # Convert to little-endian format (reverse byte order)
+            $LeBytes = $Bytes[3], $Bytes[2], $Bytes[1], $Bytes[0]
+            
+            # Convert to hex string
+            $HexString = [System.BitConverter]::ToString($LeBytes).Replace("-", "").ToLower()
+            $Lines += $HexString
+        }
+    }
+    
+    # Write to file
+    $Lines | Out-File -FilePath $OutputPath -Encoding ascii
+    
+    Write-Host "Saved configuration space hex data to: $OutputPath" -ForegroundColor Green
+}
+
 # Main script execution
 try {
     Write-Host "Windows Donor Dump Script for PCILeech Firmware Generator" -ForegroundColor Cyan
@@ -414,6 +480,12 @@ try {
     # Save to JSON file
     $DeviceInfo | ConvertTo-Json -Depth 10 | Out-File -FilePath $OutputFile -Encoding utf8
     Write-Host "`nDonor information saved to: $OutputFile" -ForegroundColor Green
+    
+    # Save configuration space in hex format for $readmemh
+    $ConfigHexPath = Join-Path (Split-Path -Parent $OutputFile) "config_space_init.hex"
+    if (Test-Path $ConfigHexPath) {
+        Write-Host "Configuration space hex data saved to: $ConfigHexPath" -ForegroundColor Green
+    }
     
     # Instructions for using with PCILeech
     Write-Host "`nTo use this donor information with PCILeech Firmware Generator:" -ForegroundColor Cyan

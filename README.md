@@ -25,6 +25,10 @@ Generate spoofed PCIe DMA firmware from real donor hardware with a single comman
   - [Legacy Mode](#legacy-mode-source-installation)
 - [🔌 Flashing the DMA Board](#-flashing-the-dma-board)
 - [🚀 Advanced Features](#-advanced-features)
+  - [Full 4 KB Config-Space Shadow](#full-4-kb-config-space-shadow)
+  - [MSI-X Table Replication](#msi-x-table-replication)
+  - [Capability Pruning](#capability-pruning)
+  - [Deterministic Variance Seeding](#deterministic-variance-seeding)
   - [Manufacturing Variance Simulation](#manufacturing-variance-simulation)
   - [Advanced SystemVerilog Generation](#advanced-systemverilog-generation)
   - [Behavioral Profiling](#behavioral-profiling)
@@ -46,6 +50,10 @@ Generate spoofed PCIe DMA firmware from real donor hardware with a single comman
 ## ✨ Features
 
 - **🎯 Donor Hardware Analysis**: Extract real PCIe device configurations and register maps
+- **💾 Full 4 KB Config-Space Shadow**: Complete configuration space emulation with overlay RAM
+- **🔄 MSI-X Table Replication**: Exact replication of MSI-X tables from donor devices
+- **✂️ Capability Pruning**: Selective modification of capabilities that can't be faithfully emulated
+- **🎲 Deterministic Variance Seeding**: Consistent hardware variance based on device serial number
 - **📊 Behavioral Profiling**: Capture dynamic device behavior patterns for enhanced realism
 - **🔧 Manufacturing Variance Simulation**: Add realistic timing jitter and parameter variations
 - **⚡ Advanced SystemVerilog Generation**: Comprehensive PCIe device controller with modular architecture
@@ -244,6 +252,113 @@ If multiple λConcept boards are attached, add `--vidpid <vid:pid>`.
 
 ## 🚀 Advanced Features
 
+### Full 4 KB Config-Space Shadow
+
+The configuration space shadow BRAM implementation provides a complete 4 KB PCI Express configuration space in block RAM (BRAM) on the FPGA. This is a critical component for PCIe device emulation, as it allows the PCILeech firmware to accurately respond to configuration space accesses from the host system.
+
+**Key Capabilities:**
+- **Complete Configuration Space**: Full 4 KB configuration space shadow in BRAM
+- **Dual-Port Access**: Simultaneous read/write operations for improved performance
+- **Overlay RAM**: Dedicated storage for writable fields (Command/Status registers)
+- **Donor Initialization**: Automatic initialization from donor device configuration data
+- **PCIe Compatibility**: Little-endian format compatible with PCIe specification
+
+**Integration Benefits:**
+- **Enhanced Realism**: Complete configuration space emulation for better device mimicry
+- **Improved Compatibility**: Support for extended capabilities and configuration registers
+- **Flexible Access**: Proper handling of read-only and read-write fields
+- **Seamless Integration**: Works with MSI-X table replication and capability pruning
+
+**Usage:**
+```bash
+# Enabled by default in all builds
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t
+```
+
+For more details, see [CONFIG_SPACE_SHADOW.md](docs/CONFIG_SPACE_SHADOW.md).
+
+### MSI-X Table Replication
+
+The MSI-X table replication feature extends the PCILeech FPGA firmware generator to accurately replicate the MSI-X capability structure from donor devices. This enables the emulated device to support advanced interrupt handling capabilities, which is critical for high-performance device emulation.
+
+**Key Capabilities:**
+- **Automatic Parsing**: Extract MSI-X capability structure from donor configuration space
+- **Parameterized Implementation**: SystemVerilog implementation of MSI-X table and PBA
+- **Byte-Enable Writes**: Support for granular writes to MSI-X table entries
+- **Interrupt Delivery**: Complete interrupt delivery logic with masking support
+- **BAR Integration**: Seamless integration with the BAR controller for memory-mapped access
+
+**Integration Benefits:**
+- **Enhanced Compatibility**: Support for devices that rely on MSI-X interrupts
+- **Improved Performance**: Efficient interrupt handling for high-performance devices
+- **Realistic Behavior**: Accurate emulation of MSI-X interrupt delivery and masking
+- **Flexible Configuration**: Support for different table sizes and configurations
+
+**Usage:**
+```bash
+# Automatically enabled when MSI-X capability is detected in donor device
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t
+```
+
+For more details, see [MSIX_TABLE_REPLICATION.md](docs/MSIX_TABLE_REPLICATION.md).
+
+### Capability Pruning
+
+The PCI capability pruning feature extends the PCILeech FPGA firmware generator to analyze and selectively modify or remove PCI capabilities that cannot be faithfully emulated. This ensures that the emulated device presents a consistent and compatible configuration space to the host system.
+
+**Key Capabilities:**
+- **Automatic Analysis**: Identify and categorize all capabilities in the donor's configuration space
+- **Selective Modification**: Prune or modify capabilities based on emulation feasibility
+- **Chain Preservation**: Maintain capability chain integrity after modifications
+- **Comprehensive Coverage**: Support for both standard and extended capabilities
+
+**Pruning Rules:**
+- **ASPM / L1SS**: Clear ASPM bits and remove L1 PM Substates capability
+- **OBFF / LTR**: Zero OBFF & LTR bits and remove LTR capability
+- **SR-IOV**: Remove SR-IOV capability entirely
+- **Advanced PM**: Keep only D0/D3hot power states and clear PME support bits
+
+**Integration Benefits:**
+- **Improved Stability**: Prevent issues with capabilities that can't be properly emulated
+- **Enhanced Compatibility**: Better compatibility with different host systems
+- **Reduced Detection Risk**: Remove capabilities that might reveal the emulation
+- **Focused Emulation**: Concentrate on accurately emulating supported capabilities
+
+**Usage:**
+```bash
+# Enabled by default in all builds
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t
+
+# Disable capability pruning if needed
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --disable-capability-pruning
+```
+
+For more details, see [CAPABILITY_PRUNING.md](docs/CAPABILITY_PRUNING.md).
+
+### Deterministic Variance Seeding
+
+The deterministic variance seeding feature ensures that two builds of the same donor device at the same commit fall in the same timing band. This provides consistent behavior across builds while still maintaining realistic hardware variance.
+
+**Key Capabilities:**
+- **Deterministic Seed Generation**: Generate consistent seeds based on device serial number (DSN) and build revision
+- **Consistent Variance**: Same donor device and build revision produce identical variance parameters
+- **Device-Specific Variance**: Different donor devices produce different variance parameters
+- **Build-Specific Variance**: Different build revisions produce different variance parameters
+
+**Integration Benefits:**
+- **Reproducible Builds**: Consistent behavior across builds of the same donor device
+- **Enhanced Realism**: Realistic hardware variance that's unique to each donor device
+- **Reduced Detection Risk**: Variance parameters that match the donor device's characteristics
+- **Seamless Integration**: Works with manufacturing variance simulation and behavioral profiling
+
+**Usage:**
+```bash
+# Automatically enabled when DSN is available in donor device
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv
+```
+
+For more details, see [INTEGRATED_FEATURES.md](docs/INTEGRATED_FEATURES.md).
+
 ### Manufacturing Variance Simulation
 
 The Manufacturing Variance Simulation feature adds realistic hardware variations to make generated firmware more authentic and harder to detect. This feature models real-world manufacturing tolerances and environmental conditions.
@@ -365,6 +480,7 @@ python3 src/build.py --bdf 0000:03:00.0 --board 75t --advanced-sv \
 - `--disable-power-management`: Disable power management features
 - `--disable-error-handling`: Disable error handling features
 - `--disable-performance-counters`: Disable performance monitoring
+- `--disable-capability-pruning`: Disable capability pruning
 
 **Analysis & Debugging:**
 - `--save-analysis`: Save detailed analysis to specified file
@@ -427,6 +543,7 @@ twine upload dist/*
 
 ## 📚 Documentation
 
+- **[Integrated Features](docs/INTEGRATED_FEATURES.md)**: Comprehensive documentation of integrated features
 - **[TUI Documentation](docs/TUI_README.md)**: Detailed TUI interface guide
 - **[TUI Design Document](docs/TUI_Design_Document.md)**: Technical architecture
 - **[Manual Donor Dump Guide](docs/MANUAL_DONOR_DUMP.md)**: Step-by-step guide for manually generating donor dumps
@@ -535,5 +652,5 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.1.10** - Major release with TUI interface and professional packaging
+**Version 0.3.0** - Major release with integrated features for comprehensive PCIe device emulation
 For educational research and legitimate PCIe development only. Misuse may violate laws and void warranties. The authors assume no liability.

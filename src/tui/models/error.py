@@ -172,3 +172,19 @@ class ErrorTemplates:
                 "Proceed with caution if you understand the risks",
             ],
         )
+
+    @staticmethod
+    def config_file_error(details: Optional[str] = None) -> TUIError:
+        """Configuration file access error."""
+        return TUIError(
+            severity=ErrorSeverity.ERROR,
+            category="config",
+            message="Configuration file access error",
+            details=details,
+            suggested_actions=[
+                "Check if ~/.pcileech/profiles/ directory exists and is accessible",
+                "Ensure you have read/write permissions for your home directory",
+                "Try running the application with appropriate permissions",
+                "Check available disk space",
+            ],
+        )

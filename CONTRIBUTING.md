@@ -405,4 +405,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 Thank you for contributing to PCILeech Firmware Generator!
 
-**Version 0.1.10** - Major release with TUI interface and professional packaging
+**Version 0.2.0** - Major release with TUI interface and professional packaging
