@@ -422,7 +422,7 @@ def get_donor_info(
         return info
 
 
-def scrape_driver_regs(vendor: str, device: str) -> list:
+def scrape_driver_regs(vendor: str, device: str) -> tuple:
     """
     Scrape driver registers for the given vendor/device ID.
 
@@ -431,22 +431,28 @@ def scrape_driver_regs(vendor: str, device: str) -> list:
         device (str): Device ID of the PCIe device.
 
     Returns:
-        list: A list of register definitions.
+        tuple: A tuple containing (list of register definitions, state machine analysis dict).
     """
     try:
         output = subprocess.check_output(
-            f"python3 scripts/driver_scrape.py {vendor} {device}", shell=True, text=True
+            f"python3 src/scripts/driver_scrape.py {vendor} {device}", shell=True, text=True
         )
         data = json.loads(output)
 
-        if isinstance(data, dict) and "registers" in data:
-            return data["registers"]
+        if isinstance(data, dict):
+            # Extract both registers and state machine analysis
+            registers = data.get("registers", [])
+            state_machine_analysis = data.get("state_machine_analysis", {})
+            return registers, state_machine_analysis
         elif isinstance(data, list):
-            return data
+            # If it's just a list of registers, return that with empty state machine analysis
+            return data, {}
         else:
-            return []
-    except subprocess.CalledProcessError:
-        return []
+            # Return empty data for both
+            return [], {}
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        # Return empty data for both in case of any error
+        return [], {}
 
 
 def integrate_behavior_profile(
@@ -1746,9 +1752,28 @@ def main() -> None:
     regs, state_machine_analysis = scrape_driver_regs(
         info["vendor_id"], info["device_id"]
     )
+    
+    # Continue with empty registers instead of exiting
     if not regs:
-        sys.exit("Driver scrape returned no registers")
-
+        print("[!] Warning: Driver scrape returned no registers. Using default register set.")
+        # Create a minimal set of default registers for basic functionality
+        regs = [
+            {
+                "offset": 0x0,
+                "name": "device_control",
+                "value": "0x0",
+                "rw": "rw",
+                "context": {"function": "init", "timing": "early"}
+            },
+            {
+                "offset": 0x4,
+                "name": "device_status",
+                "value": "0x0",
+                "rw": "ro",
+                "context": {"function": "status", "timing": "runtime"}
+            }
+        ]
+    
     print(f"[*] Found {len(regs)} registers with context analysis")
 
     # Print state machine analysis summary
@@ -1756,6 +1781,8 @@ def main() -> None:
         sm_count = state_machine_analysis.get("extracted_state_machines", 0)
         opt_sm_count = state_machine_analysis.get("optimized_state_machines", 0)
         print(f"[*] Extracted {sm_count} state machines, optimized to {opt_sm_count}")
+    else:
+        print("[*] No state machine analysis available. Using default state patterns.")
 
     # Optional behavior profiling
     if args.enable_behavior_profiling:

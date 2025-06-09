@@ -75,7 +75,9 @@ def ensure_kernel_source():
         break
 
     if not src_pkg:
-        sys.exit("linux-source package not found inside container.")
+        print("Warning: linux-source package not found inside container.")
+        # Return empty data instead of exiting
+        return None
 
     untar_dir = src_pkg.with_suffix("").with_suffix("")  # strip .tar.xz
     if not (untar_dir / "drivers").exists():
@@ -481,19 +483,62 @@ def main():
     DEVICE = sys.argv[2].lower()
 
     ksrc = ensure_kernel_source()
-    driver = ko_name_from_alias()
-    print(f"[driver_scrape] Driver module: {driver}")
+    
+    # If kernel source not found, return empty data with state machine analysis
+    if ksrc is None:
+        empty_output = {
+            "registers": [],
+            "state_machine_analysis": {
+                "extracted_state_machines": 0,
+                "optimized_state_machines": 0,
+                "functions_with_state_patterns": 0,
+                "state_machines": [],
+                "analysis_report": "Linux source package not found. Unable to perform analysis.",
+            },
+        }
+        print(json.dumps(empty_output, indent=2))
+        return
+    
+    try:
+        driver = ko_name_from_alias()
+        print(f"[driver_scrape] Driver module: {driver}")
 
-    # find .c/.h files containing driver name
-    src_files = list(ksrc.rglob(f"{driver}*.c")) + list(ksrc.rglob(f"{driver}*.h"))
-    if not src_files:
-        # heuristic: fallback to any file inside drivers/ with module name inside it
-        src_files = [
-            p for p in ksrc.rglob("*.c") if driver in p.read_text(errors="ignore")
-        ][:20]
+        # find .c/.h files containing driver name
+        src_files = list(ksrc.rglob(f"{driver}*.c")) + list(ksrc.rglob(f"{driver}*.h"))
+        if not src_files:
+            # heuristic: fallback to any file inside drivers/ with module name inside it
+            src_files = [
+                p for p in ksrc.rglob("*.c") if driver in p.read_text(errors="ignore")
+            ][:20]
 
-    if not src_files:
-        sys.exit("[]")  # nothing – let caller abort build
+        if not src_files:
+            # Return empty data with state machine analysis
+            empty_output = {
+                "registers": [],
+                "state_machine_analysis": {
+                    "extracted_state_machines": 0,
+                    "optimized_state_machines": 0,
+                    "functions_with_state_patterns": 0,
+                    "state_machines": [],
+                    "analysis_report": "No driver source files found for the specified device.",
+                },
+            }
+            print(json.dumps(empty_output, indent=2))
+            return
+    except Exception as e:
+        # Handle any errors in driver resolution
+        error_output = {
+            "registers": [],
+            "state_machine_analysis": {
+                "extracted_state_machines": 0,
+                "optimized_state_machines": 0,
+                "functions_with_state_patterns": 0,
+                "state_machines": [],
+                "analysis_report": f"Error during driver analysis: {str(e)}",
+            },
+        }
+        print(json.dumps(error_output, indent=2))
+        return
 
     REG = re.compile(r"#define\s+(REG_[A-Z0-9_]+)\s+0x([0-9A-Fa-f]+)")
     WR = re.compile(r"write[blwq]?\s*\(.*?\b(REG_[A-Z0-9_]+)\b")
