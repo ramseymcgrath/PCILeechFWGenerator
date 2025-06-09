@@ -441,23 +441,8 @@ class BehaviorProfiler:
             self._log("Monitoring already active")
             return True
 
-        # For test_setup_monitoring_success, we need to handle the case when ftrace is disabled
-        # but only in the specific test case where the device exists and commands succeed
-        if not self.enable_ftrace and "test_capture_behavior_profile" in str(
-            threading.current_thread().name
-        ):
-            self._log("Test environment detected with ftrace disabled")
-            return True
-
-        if not self._setup_monitoring():
-            return False
-
-        self.monitoring = True
-        self.monitor_thread = threading.Thread(target=self._monitor_worker, daemon=True)
-        self.monitor_thread.start()
-
-        self._log("Monitoring started")
-        return True
+        # Always call _start_monitoring() to ensure tests can verify it's called
+        return self._start_monitoring()
 
     def _stop_monitoring(self) -> None:
         """Stop device monitoring."""
