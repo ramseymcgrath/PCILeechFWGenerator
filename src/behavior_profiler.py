@@ -609,9 +609,9 @@ class BehaviorProfiler:
                 )
 
                 # Determine pattern type
-                if std_dev / avg_interval < 0.2:
+                if avg_interval > 0 and std_dev / avg_interval < 0.2:
                     pattern_type = "periodic"
-                elif len(intervals) > 10 and any(
+                elif avg_interval > 0 and len(intervals) > 10 and any(
                     i < avg_interval / 5 for i in intervals
                 ):
                     pattern_type = "burst"
