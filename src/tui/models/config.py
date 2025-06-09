@@ -21,6 +21,7 @@ class BuildConfiguration:
     enable_variance: bool = True
     behavior_profiling: bool = False
     profile_duration: float = 30.0
+    disable_ftrace: bool = False
     power_management: bool = True
     error_handling: bool = True
     performance_counters: bool = True

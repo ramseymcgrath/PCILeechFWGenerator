@@ -143,6 +143,10 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 with Horizontal(classes="switch-row"):
                     yield Switch(value=False, id="profiling-switch")
                     yield Static("Behavior Profiling")
+                
+                with Horizontal(classes="switch-row"):
+                    yield Switch(value=False, id="disable-ftrace-switch")
+                    yield Static("Disable Ftrace (for CI/non-root)")
 
                 with Horizontal(classes="switch-row"):
                     yield Switch(value=True, id="power-mgmt-switch")
@@ -269,6 +273,9 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#profiling-switch", Switch).value = (
                 config.behavior_profiling
             )
+            self.query_one("#disable-ftrace-switch", Switch).value = (
+                config.disable_ftrace
+            )
             self.query_one("#power-mgmt-switch", Switch).value = config.power_management
             self.query_one("#error-handling-switch", Switch).value = (
                 config.error_handling
@@ -377,6 +384,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 advanced_sv=self.query_one("#advanced-sv-switch", Switch).value,
                 enable_variance=self.query_one("#variance-switch", Switch).value,
                 behavior_profiling=self.query_one("#profiling-switch", Switch).value,
+                disable_ftrace=self.query_one("#disable-ftrace-switch", Switch).value,
                 power_management=self.query_one("#power-mgmt-switch", Switch).value,
                 error_handling=self.query_one("#error-handling-switch", Switch).value,
                 performance_counters=self.query_one(

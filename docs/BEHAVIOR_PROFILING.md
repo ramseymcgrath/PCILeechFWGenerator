@@ -88,6 +88,7 @@ The behavior profiler supports the following configuration options:
 | `--enable-behavior-profiling` | Enable the behavior profiling feature | Disabled |
 | `--profile-duration` | Duration of profiling in seconds | 30.0 |
 | `--device-type` | Optimize profiling for specific device types (network, storage, graphics, audio) | generic |
+| `--disable-ftrace` | Disable ftrace monitoring (useful for CI environments or non-root usage) | Disabled |
 
 ## 🔄 How Profiling Enhances SystemVerilog Generation
 
@@ -161,6 +162,7 @@ Behavior profiling works seamlessly with other PCILeech Firmware Generator featu
 2. **Permission errors**
    - Ensure you're running with root/sudo privileges
    - Check that debugfs and tracefs are mounted
+   - Use `--disable-ftrace` option if running in CI environments or without root access
 
 3. **Profiling takes too long**
    - Reduce profiling duration
@@ -190,13 +192,16 @@ For advanced users, the behavior profiler can output detailed analysis data:
 
 ```bash
 pcileech-build --bdf 0000:03:00.0 --enable-behavior-profiling --save-analysis analysis.json
+
+# Run without ftrace monitoring (no root required)
+pcileech-build --bdf 0000:03:00.0 --enable-behavior-profiling --disable-ftrace
 ```
 
 ## 🔬 Technical Details
 
 The behavior profiler uses multiple monitoring techniques:
 
-1. **ftrace**: Kernel function tracing for PCI config space accesses
+1. **ftrace**: Kernel function tracing for PCI config space accesses (requires root privileges, can be disabled)
 2. **sysfs**: Monitoring device state changes via sysfs
 3. **debugfs**: Device register monitoring via debugfs if available
 

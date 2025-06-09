@@ -130,7 +130,7 @@ class TestProfilerGeneratorCompatibility:
 
     def test_profiler_analysis_structure(self, mock_behavior_profile):
         """Test that the profiler analysis has the expected structure."""
-        profiler = BehaviorProfiler("0000:03:00.0", debug=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
         # Verify analysis structure
@@ -170,7 +170,7 @@ class TestProfilerGeneratorCompatibility:
     def test_generator_compatibility(self, mock_behavior_profile, mock_registers):
         """Test that the generator can use the profiler data."""
         # Create a mock profiler to analyze the profile
-        profiler = BehaviorProfiler("0000:03:00.0", debug=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
         # Enhance registers with profile data
@@ -224,7 +224,7 @@ class TestProfilerGeneratorCompatibility:
     def test_end_to_end_integration(self, mock_behavior_profile, mock_registers):
         """Test end-to-end integration from profiler to generator."""
         # Create a mock profiler to analyze the profile
-        profiler = BehaviorProfiler("0000:03:00.0", debug=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
         # Verify analysis structure

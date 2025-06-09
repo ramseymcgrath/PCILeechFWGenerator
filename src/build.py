@@ -449,7 +449,7 @@ def scrape_driver_regs(vendor: str, device: str) -> list:
         return []
 
 
-def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0) -> list:
+def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0, disable_ftrace: bool = False) -> list:
     """
     Integrate behavior profiling data with register definitions.
 
@@ -457,6 +457,7 @@ def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0) -> 
         bdf (str): PCIe Bus:Device.Function identifier.
         regs (list): List of register definitions.
         duration (float): Duration of behavior profiling in seconds.
+        disable_ftrace (bool): Whether to disable ftrace monitoring.
 
     Returns:
         list: Enhanced register definitions with behavioral data.
@@ -465,7 +466,9 @@ def integrate_behavior_profile(bdf: str, regs: list, duration: float = 10.0) -> 
         # BehaviorProfiler is already imported at the module level
 
         print(f"[*] Capturing device behavior profile for {duration}s...")
-        profiler = BehaviorProfiler(bdf, debug=False)
+        # Determine whether to enable ftrace
+        enable_ftrace = not disable_ftrace and os.geteuid() == 0
+        profiler = BehaviorProfiler(bdf, debug=False, enable_ftrace=enable_ftrace)
         profile = profiler.capture_behavior_profile(duration)
         analysis = profiler.analyze_patterns(profile)
 
@@ -1513,6 +1516,11 @@ def main() -> None:
         help="Enable dynamic behavior profiling (requires root privileges)",
     )
     parser.add_argument(
+        "--disable-ftrace",
+        action="store_true",
+        help="Disable ftrace monitoring (useful for CI environments or non-root usage)",
+    )
+    parser.add_argument(
         "--disable-capability-pruning",
         action="store_true",
         help="Disable PCI capability pruning",
@@ -1750,7 +1758,7 @@ def main() -> None:
     # Optional behavior profiling
     if args.enable_behavior_profiling:
         print(f"[*] Integrating dynamic behavior profiling...")
-        regs = integrate_behavior_profile(args.bdf, regs, args.profile_duration)
+        regs = integrate_behavior_profile(args.bdf, regs, args.profile_duration, args.disable_ftrace)
     else:
         print(
             "[*] Skipping behavior profiling (use --enable-behavior-profiling to enable)"
