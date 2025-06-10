@@ -146,7 +146,7 @@ def get_vivado_version(vivado_path: str) -> str:
         if result.returncode == 0:
             # Parse version from output
             for line in result.stdout.splitlines():
-                if "Vivado" in line and "v" in line:
+                if "vivado" in line.lower() and "v" in line:
                     # Extract version like "v2022.2"
                     parts = line.split()
                     for part in parts:
