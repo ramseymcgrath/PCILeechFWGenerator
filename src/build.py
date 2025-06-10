@@ -1924,11 +1924,11 @@ def main() -> None:
     else:
         info["option_rom_enabled"] = "false"
 
-    gen_tcl, patch_tcl = build_tcl(info, board_config["gen"], args)
+    patch_content, patch_tcl = build_tcl(info, board_config["gen"], args)
 
     # Run Vivado build
     print("[*] Starting Vivado build")
-    vivado_run(board_root, gen_tcl, patch_tcl)
+    vivado_run(board_root, board_config["gen"], patch_tcl)
 
     print("[✓] Enhanced firmware generation complete!")
     print(f"[*] Firmware ready → {OUT / 'firmware.bin'}")
