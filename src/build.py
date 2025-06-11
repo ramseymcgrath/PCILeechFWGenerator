@@ -23,6 +23,11 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Ensure src directory is in Python path for module imports
+_src_dir = Path(__file__).parent
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
+
 # Import manufacturing variance simulation and advanced SystemVerilog generation
 try:
     from .advanced_sv_main import (
@@ -1322,17 +1327,38 @@ def build_tcl(info: dict, gen_tcl: str, args=None) -> tuple[str, str]:
     msix_params = {}
     pruned_config = None
 
+    # Handle both 'extended_config' and 'extended_config_space' keys for compatibility
+    extended_config_data = None
     if "extended_config" in info:
+        extended_config_data = info["extended_config"]
+        print(f"[*] Using extended_config data (length: {len(extended_config_data)})")
+    elif "extended_config_space" in info and info["extended_config_space"]:
+        # If extended_config_space is present and indicates extended config is available
+        # but the actual data isn't provided, we'll skip extended processing
+        if isinstance(info["extended_config_space"], str) and len(info["extended_config_space"]) > 10:
+            # If it's a hex string with actual config data
+            extended_config_data = info["extended_config_space"]
+            print(f"[*] Using extended_config_space data (length: {len(extended_config_data)})")
+        else:
+            print(f"[*] Extended config space indicated but no data provided (value: {info['extended_config_space']})")
+    
+    if extended_config_data:
         try:
             # Apply capability pruning if not disabled
             if args and not getattr(args, "disable_capability_pruning", False):
+                print(f"[*] Importing capability pruning module...")
                 from pci_capability import prune_capabilities_by_rules
 
-                pruned_config = prune_capabilities_by_rules(info["extended_config"])
+                pruned_config = prune_capabilities_by_rules(extended_config_data)
                 print("[*] Applied capability pruning to configuration space")
 
                 # Update the extended_config with the pruned version
-                info["extended_config"] = pruned_config
+                extended_config_data = pruned_config
+                # Store back in the original key format
+                if "extended_config" in info:
+                    info["extended_config"] = pruned_config
+                else:
+                    info["extended_config"] = pruned_config  # Add the key for consistency
 
                 # Save the pruned configuration space if donor_info_path is provided
                 if args and args.donor_info_file:
@@ -1348,9 +1374,10 @@ def build_tcl(info: dict, gen_tcl: str, args=None) -> tuple[str, str]:
                 print("[*] Capability pruning disabled by user")
 
             # Parse MSI-X capability from the configuration
+            print(f"[*] Importing MSI-X capability parser...")
             from msix_capability import parse_msix_capability
 
-            msix_info = parse_msix_capability(info["extended_config"])
+            msix_info = parse_msix_capability(extended_config_data)
             if msix_info["table_size"] > 0:
                 msix_params = {
                     "NUM_MSIX": msix_info["table_size"],
@@ -1379,8 +1406,8 @@ if {{ [info exists ::origin_dir_loc] }} {{
 # Set the project name
 set _xil_proj_name_ "pcileech_project"
 
-# Create project
-create_project ${{_xil_proj_name_}} ./${{_xil_proj_name_}} -part xc7a75tfgg484-2
+# Create project (with force flag to overwrite existing)
+create_project ${{_xil_proj_name_}} ./${{_xil_proj_name_}} -part xc7a75tfgg484-2 -force
 
 # Set project properties
 set obj [current_project]
@@ -1417,7 +1444,29 @@ if {{"{info.get('option_rom_enabled', 'false')}" eq "true"}} {{
 }}
 set imported_files [import_files -fileset sources_1 $files]
 
+# Create PCIe IP core if it doesn't exist
+puts "Creating PCIe IP core..."
+if {{[llength [get_ips pcie_7x_0]] == 0}} {{
+    puts "PCIe core not found, creating new IP..."
+    create_ip -name pcie_7x -vendor xilinx.com -library ip -version 3.3 -module_name pcie_7x_0
+    puts "PCIe IP core created successfully"
+}} else {{
+    puts "PCIe core already exists, configuring..."
+}}
+
+# DEBUG: Check if PCIe core exists before configuring
+puts "DEBUG: Checking for existing IP cores..."
+set all_ips [get_ips]
+puts "DEBUG: Found IPs: $all_ips"
+
 # Set PCIe core properties
+if {{[llength [get_ips pcie_7x_0]] > 0}} {{
+    puts "DEBUG: Found pcie_7x_0 core, configuring..."
+    set core [get_ips pcie_7x_0]
+}} else {{
+    puts "ERROR: pcie_7x_0 core not found. Available cores: [get_ips]"
+    error "PCIe core pcie_7x_0 not found in project"
+}}
 set core [get_ips pcie_7x_0]
 set_property -name "VENDOR_ID" -value "0x{info['vendor_id']}" -objects $core
 set_property -name "DEVICE_ID" -value "0x{info['device_id']}" -objects $core
@@ -1484,13 +1533,38 @@ def vivado_run(board_root: pathlib.Path, gen_tcl_path: str, patch_tcl: str) -> N
     except ImportError:
         from vivado_utils import find_vivado_installation, run_vivado_command
 
-    # Check if Vivado is installed
+    # Check if Vivado is installed with detailed diagnostics
+    print("[*] Detecting Vivado installation...")
     vivado_info = find_vivado_installation()
     if not vivado_info:
-        sys.exit(
-            "ERROR: Vivado not found. Please make sure Vivado is installed and in your PATH, "
-            "or set the XILINX_VIVADO environment variable."
-        )
+        print("[!] ERROR: Vivado installation not found")
+        print("[!] Troubleshooting steps:")
+        print("[!]   1. Install Xilinx Vivado (2020.1 or later recommended)")
+        print("[!]   2. Add Vivado to your PATH, or")
+        print("[!]   3. Set XILINX_VIVADO environment variable to installation directory")
+        print("[!]   4. Common paths: /opt/Xilinx/Vivado/*/bin (Linux), C:\\Xilinx\\Vivado\\*\\bin (Windows)")
+        
+        # Check common installation paths for better diagnostics
+        import platform
+        system = platform.system().lower()
+        if system == "linux":
+            common_paths = ["/opt/Xilinx/Vivado", "/tools/Xilinx/Vivado"]
+        elif system == "windows":
+            common_paths = ["C:\\Xilinx\\Vivado", "C:\\Program Files\\Xilinx\\Vivado"]
+        else:
+            common_paths = ["/Applications/Xilinx/Vivado"]
+            
+        for path in common_paths:
+            if os.path.exists(path):
+                print(f"[!]   Found Xilinx directory at: {path}")
+                try:
+                    versions = [d for d in os.listdir(path) if d[0].isdigit()]
+                    if versions:
+                        print(f"[!]   Available versions: {', '.join(sorted(versions))}")
+                except (PermissionError, FileNotFoundError):
+                    pass
+        
+        sys.exit("ERROR: Vivado installation required for FPGA build")
 
     print(f"[*] Using Vivado {vivado_info['version']} from {vivado_info['path']}")
 
