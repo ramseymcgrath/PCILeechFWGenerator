@@ -6,12 +6,13 @@ to ensure they work correctly and provide accurate device status information.
 """
 
 import asyncio
-import pytest
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, List, Any
 
-from src.tui.models.device import PCIDevice
+import pytest
+
 from src.tui.core.device_manager import DeviceManager
+from src.tui.models.device import PCIDevice
 
 
 class TestDeviceIndicators:
@@ -32,7 +33,7 @@ class TestDeviceIndicators:
             iommu_group="1",
             power_state="D0",
             link_speed="2.5 GT/s",
-            bars=[{"index": 0, "start": 0xf0000000, "size": 131072, "type": "memory"}],
+            bars=[{"index": 0, "start": 0xF0000000, "size": 131072, "type": "memory"}],
             suitability_score=0.8,
             compatibility_issues=[],
             # Enhanced compatibility indicators
@@ -99,19 +100,28 @@ class TestDeviceIndicators:
         """Test overall readiness indicator."""
         # Ready device (valid, VFIO-compatible, IOMMU-enabled)
         ready_device = self._create_test_device(
-            is_valid=True, vfio_compatible=True, iommu_enabled=True, suitability_score=0.8
+            is_valid=True,
+            vfio_compatible=True,
+            iommu_enabled=True,
+            suitability_score=0.8,
         )
         assert ready_device.ready_indicator == "⚡"
 
         # Caution device (suitable but missing some features)
         caution_device = self._create_test_device(
-            is_valid=True, vfio_compatible=False, iommu_enabled=True, suitability_score=0.8
+            is_valid=True,
+            vfio_compatible=False,
+            iommu_enabled=True,
+            suitability_score=0.8,
         )
         assert caution_device.ready_indicator == "⚠️"
 
         # Problem device (not suitable)
         problem_device = self._create_test_device(
-            is_valid=False, vfio_compatible=False, iommu_enabled=False, suitability_score=0.3
+            is_valid=False,
+            vfio_compatible=False,
+            iommu_enabled=False,
+            suitability_score=0.3,
         )
         assert problem_device.ready_indicator == "❌"
 
@@ -123,7 +133,7 @@ class TestDeviceIndicators:
             is_detached=True,
             vfio_compatible=True,
             iommu_enabled=True,
-            suitability_score=0.8
+            suitability_score=0.8,
         )
 
         compact_status = device.compact_status
@@ -147,7 +157,7 @@ class TestDeviceIndicators:
             bars=[{"index": 0, "size": 4096}],
             is_valid=True,
             vfio_compatible=True,
-            iommu_enabled=True
+            iommu_enabled=True,
         )
 
         # Score should be high with all positive factors
@@ -162,7 +172,7 @@ class TestDeviceIndicators:
             bars=[],  # No BARs
             is_valid=False,
             vfio_compatible=False,
-            iommu_enabled=False
+            iommu_enabled=False,
         )
 
         # Score should be lower with negative factors
@@ -178,7 +188,7 @@ class TestDeviceIndicators:
             vfio_compatible=True,
             iommu_enabled=True,
             power_state="D0",
-            link_speed="5.0 GT/s"
+            link_speed="5.0 GT/s",
         )
 
         status = device.detailed_status
@@ -186,12 +196,17 @@ class TestDeviceIndicators:
         # For a device created directly, it will be empty by default
         # This test should verify the structure when populated by device manager
         assert isinstance(status, dict)
-        
+
         # If status is populated, check the expected keys
         if status:
             expected_keys = [
-                "device_accessible", "driver_bound", "driver_detached",
-                "vfio_ready", "iommu_configured", "power_management", "link_active"
+                "device_accessible",
+                "driver_bound",
+                "driver_detached",
+                "vfio_ready",
+                "iommu_configured",
+                "power_management",
+                "link_active",
             ]
             for key in expected_keys:
                 if key in status:
@@ -241,7 +256,9 @@ class TestDeviceIndicators:
             "iommu_group": "1",
             "power_state": "D0",
             "link_speed": "2.5 GT/s",
-            "bars": [{"index": 0, "start": 0xf0000000, "size": 131072, "type": "memory"}],
+            "bars": [
+                {"index": 0, "start": 0xF0000000, "size": 131072, "type": "memory"}
+            ],
             "suitability_score": 0.8,
             "compatibility_issues": [],
             "is_valid": True,
@@ -265,13 +282,15 @@ class TestDeviceManagerEnhancements:
     @pytest.mark.asyncio
     async def test_device_validity_check(self, device_manager):
         """Test device validity checking."""
-        with patch('os.path.exists') as mock_exists, \
-             patch('builtins.open', create=True) as mock_open:
-            
+        with (
+            patch("os.path.exists") as mock_exists,
+            patch("builtins.open", create=True) as mock_open,
+        ):
+
             # Mock valid device
             mock_exists.return_value = True
             mock_open.return_value.__enter__.return_value.read.return_value = "0x8086"
-            
+
             result = await device_manager._check_device_validity("0000:01:00.0")
             assert result is True
 
@@ -283,37 +302,47 @@ class TestDeviceManagerEnhancements:
     @pytest.mark.asyncio
     async def test_driver_status_check(self, device_manager):
         """Test driver status checking."""
-        with patch('os.path.islink') as mock_islink:
+        with patch("os.path.islink") as mock_islink:
             # Test device with bound driver
             mock_islink.return_value = True
-            has_driver, is_detached = await device_manager._check_driver_status("0000:01:00.0", "e1000e")
+            has_driver, is_detached = await device_manager._check_driver_status(
+                "0000:01:00.0", "e1000e"
+            )
             assert has_driver is True
             assert is_detached is False
 
             # Test device with VFIO driver (detached)
-            has_driver, is_detached = await device_manager._check_driver_status("0000:01:00.0", "vfio-pci")
+            has_driver, is_detached = await device_manager._check_driver_status(
+                "0000:01:00.0", "vfio-pci"
+            )
             assert has_driver is True
             assert is_detached is True
 
             # Test device with no driver
-            has_driver, is_detached = await device_manager._check_driver_status("0000:01:00.0", None)
+            has_driver, is_detached = await device_manager._check_driver_status(
+                "0000:01:00.0", None
+            )
             assert has_driver is False
             assert is_detached is False
 
     @pytest.mark.asyncio
     async def test_vfio_compatibility_check(self, device_manager):
         """Test VFIO compatibility checking."""
-        with patch('os.path.exists') as mock_exists, \
-             patch('builtins.open', create=True) as mock_open:
-            
+        with (
+            patch("os.path.exists") as mock_exists,
+            patch("builtins.open", create=True) as mock_open,
+        ):
+
             # Mock VFIO available and compatible device
             mock_exists.side_effect = lambda path: path in [
                 "/sys/module/vfio",
                 "/sys/bus/pci/devices/0000:01:00.0",
-                "/sys/bus/pci/devices/0000:01:00.0/class"
+                "/sys/bus/pci/devices/0000:01:00.0/class",
             ]
-            mock_open.return_value.__enter__.return_value.read.return_value = "0x020000"  # Network controller
-            
+            mock_open.return_value.__enter__.return_value.read.return_value = (
+                "0x020000"  # Network controller
+            )
+
             result = await device_manager._check_vfio_compatibility("0000:01:00.0")
             assert result is True
 
@@ -325,17 +354,19 @@ class TestDeviceManagerEnhancements:
     @pytest.mark.asyncio
     async def test_iommu_status_check(self, device_manager):
         """Test IOMMU status checking."""
-        with patch('os.path.exists') as mock_exists, \
-             patch('os.listdir') as mock_listdir:
-            
+        with (
+            patch("os.path.exists") as mock_exists,
+            patch("os.listdir") as mock_listdir,
+        ):
+
             # Mock IOMMU enabled and device in group
             mock_exists.side_effect = lambda path: path in [
                 "/sys/kernel/iommu_groups",
                 "/sys/kernel/iommu_groups/1",
-                "/sys/kernel/iommu_groups/1/devices"
+                "/sys/kernel/iommu_groups/1/devices",
             ]
             mock_listdir.return_value = ["0000:01:00.0"]
-            
+
             result = await device_manager._check_iommu_status("0000:01:00.0", "1")
             assert result is True
 
@@ -352,18 +383,28 @@ class TestDeviceManagerEnhancements:
             "ven": "8086",
             "dev": "10d3",
             "class": "0200",
-            "pretty": "0000:01:00.0 Ethernet controller [0200]: Intel Corporation 82574L Gigabit Network Connection [8086:10d3]"
+            "pretty": "0000:01:00.0 Ethernet controller [0200]: Intel Corporation 82574L Gigabit Network Connection [8086:10d3]",
         }
 
-        with patch.object(device_manager, '_get_device_driver', return_value="e1000e"), \
-             patch.object(device_manager, '_get_iommu_group', return_value="1"), \
-             patch.object(device_manager, '_get_power_state', return_value="D0"), \
-             patch.object(device_manager, '_get_link_speed', return_value="2.5 GT/s"), \
-             patch.object(device_manager, '_get_device_bars', return_value=[{"index": 0, "size": 4096}]), \
-             patch.object(device_manager, '_check_device_validity', return_value=True), \
-             patch.object(device_manager, '_check_driver_status', return_value=(True, False)), \
-             patch.object(device_manager, '_check_vfio_compatibility', return_value=True), \
-             patch.object(device_manager, '_check_iommu_status', return_value=True):
+        with (
+            patch.object(device_manager, "_get_device_driver", return_value="e1000e"),
+            patch.object(device_manager, "_get_iommu_group", return_value="1"),
+            patch.object(device_manager, "_get_power_state", return_value="D0"),
+            patch.object(device_manager, "_get_link_speed", return_value="2.5 GT/s"),
+            patch.object(
+                device_manager,
+                "_get_device_bars",
+                return_value=[{"index": 0, "size": 4096}],
+            ),
+            patch.object(device_manager, "_check_device_validity", return_value=True),
+            patch.object(
+                device_manager, "_check_driver_status", return_value=(True, False)
+            ),
+            patch.object(
+                device_manager, "_check_vfio_compatibility", return_value=True
+            ),
+            patch.object(device_manager, "_check_iommu_status", return_value=True),
+        ):
 
             device = await device_manager._enhance_device_info(raw_device)
 
@@ -385,7 +426,7 @@ class TestTUIIntegration:
         # This would be tested in the actual TUI application
         # The device table should have columns: Status, BDF, Device, Indicators, Driver, IOMMU
         expected_columns = ["Status", "BDF", "Device", "Indicators", "Driver", "IOMMU"]
-        
+
         # In the actual TUI, this is set up in on_mount:
         # device_table.add_columns("Status", "BDF", "Device", "Indicators", "Driver", "IOMMU")
         assert len(expected_columns) == 6
@@ -433,8 +474,12 @@ class TestTUIIntegration:
         driver_display = device.driver or "none"
 
         assert status_indicator in ["✅", "⚠️", "❌"]
-        assert len(compact_status) >= 5  # 5 indicators (some emojis are multi-character)
-        assert device_name == "Intel Corporation 82574L Gigabit Network"  # Full name (not truncated in this case)
+        assert (
+            len(compact_status) >= 5
+        )  # 5 indicators (some emojis are multi-character)
+        assert (
+            device_name == "Intel Corporation 82574L Gigabit Network"
+        )  # Full name (not truncated in this case)
         assert driver_display == "e1000e"
         assert device.iommu_group == "1"
 

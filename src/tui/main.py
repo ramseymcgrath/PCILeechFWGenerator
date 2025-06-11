@@ -572,7 +572,9 @@ class PCILeechTUI(App):
         """Initialize the application"""
         # Set up the device table
         device_table = self.query_one("#device-table", DataTable)
-        device_table.add_columns("Status", "BDF", "Device", "Indicators", "Driver", "IOMMU")
+        device_table.add_columns(
+            "Status", "BDF", "Device", "Indicators", "Driver", "IOMMU"
+        )
 
         # Start background tasks
         self.call_after_refresh(self._initialize_app)
@@ -951,7 +953,7 @@ class PCILeechTUI(App):
             score_text = f"[green]{score_text}[/green]"
         else:
             score_text = f"[red]{score_text}[/red]"
-        
+
         # Add detailed status indicators
         status_indicators = []
         status_indicators.append(f"Valid: {device.validity_indicator}")
@@ -959,7 +961,7 @@ class PCILeechTUI(App):
         status_indicators.append(f"VFIO: {device.vfio_indicator}")
         status_indicators.append(f"IOMMU: {device.iommu_indicator}")
         status_indicators.append(f"Ready: {device.ready_indicator}")
-        
+
         status_line = " | ".join(status_indicators)
         score_text += f"\n{status_line}"
         compatibility_score.update(score_text)
@@ -974,7 +976,7 @@ class PCILeechTUI(App):
 
         # Add detailed status information
         self._add_detailed_status_rows(factors_table, device)
-        
+
         # Add compatibility factors if available
         for factor in device.compatibility_factors:
             name = factor["name"]
@@ -992,13 +994,19 @@ class PCILeechTUI(App):
 
             # Add row with appropriate styling
             factors_table.add_row(name, adj_text, description)
-    
+
     def _add_detailed_status_rows(self, table, device: PCIDevice) -> None:
         """Add detailed status information to the compatibility table."""
         # Device validity
-        valid_status = "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]"
-        table.add_row("Device Accessibility", valid_status, "Device is properly detected and accessible")
-        
+        valid_status = (
+            "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]"
+        )
+        table.add_row(
+            "Device Accessibility",
+            valid_status,
+            "Device is properly detected and accessible",
+        )
+
         # Driver status
         if device.has_driver:
             if device.is_detached:
@@ -1011,17 +1019,33 @@ class PCILeechTUI(App):
             driver_status = "[blue]🔌 No Driver[/blue]"
             driver_details = "No driver currently bound to device"
         table.add_row("Driver Status", driver_status, driver_details)
-        
+
         # VFIO compatibility
-        vfio_status = "[green]🛡️ Compatible[/green]" if device.vfio_compatible else "[red]❌ Incompatible[/red]"
-        vfio_details = "Device supports VFIO passthrough" if device.vfio_compatible else "Device cannot use VFIO passthrough"
+        vfio_status = (
+            "[green]🛡️ Compatible[/green]"
+            if device.vfio_compatible
+            else "[red]❌ Incompatible[/red]"
+        )
+        vfio_details = (
+            "Device supports VFIO passthrough"
+            if device.vfio_compatible
+            else "Device cannot use VFIO passthrough"
+        )
         table.add_row("VFIO Support", vfio_status, vfio_details)
-        
+
         # IOMMU status
-        iommu_status = "[green]🔒 Enabled[/green]" if device.iommu_enabled else "[red]❌ Disabled[/red]"
-        iommu_details = f"IOMMU group: {device.iommu_group}" if device.iommu_enabled else "IOMMU not properly configured"
+        iommu_status = (
+            "[green]🔒 Enabled[/green]"
+            if device.iommu_enabled
+            else "[red]❌ Disabled[/red]"
+        )
+        iommu_details = (
+            f"IOMMU group: {device.iommu_group}"
+            if device.iommu_enabled
+            else "IOMMU not properly configured"
+        )
         table.add_row("IOMMU Configuration", iommu_status, iommu_details)
-        
+
         # Overall readiness
         if device.is_valid and device.vfio_compatible and device.iommu_enabled:
             ready_status = "[green]⚡ Ready[/green]"

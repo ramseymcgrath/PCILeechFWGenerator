@@ -44,6 +44,7 @@ class TestHelperFunctions:
 # The ensure_kernel_source() function has evolved to integrate with state machine analysis
 # and has platform-specific requirements that make the original tests obsolete.
 
+
 class TestModuleResolution:
     """Test kernel module resolution."""
 

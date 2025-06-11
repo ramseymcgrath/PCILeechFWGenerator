@@ -28,7 +28,7 @@ class PCIDevice:
     suitability_score: float
     compatibility_issues: List[str]
     compatibility_factors: List[Dict[str, Any]] = field(default_factory=list)
-    
+
     # Enhanced compatibility indicators
     is_valid: bool = True
     has_driver: bool = False
@@ -56,12 +56,12 @@ class PCIDevice:
             return "⚠️"
         else:
             return "✅"
-    
+
     @property
     def validity_indicator(self) -> str:
         """Device validity indicator."""
         return "✅" if self.is_valid else "❌"
-    
+
     @property
     def driver_indicator(self) -> str:
         """Driver status indicator."""
@@ -71,17 +71,17 @@ class PCIDevice:
             return "🔓"  # Detached
         else:
             return "🔒"  # Bound
-    
+
     @property
     def vfio_indicator(self) -> str:
         """VFIO compatibility indicator."""
         return "🛡️" if self.vfio_compatible else "❌"
-    
+
     @property
     def iommu_indicator(self) -> str:
         """IOMMU status indicator."""
         return "🔒" if self.iommu_enabled else "❌"
-    
+
     @property
     def ready_indicator(self) -> str:
         """Overall readiness indicator."""
@@ -91,7 +91,7 @@ class PCIDevice:
             return "⚠️"
         else:
             return "❌"
-    
+
     @property
     def compact_status(self) -> str:
         """Compact multi-indicator status for table display."""

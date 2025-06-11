@@ -18,11 +18,16 @@ logger = logging.getLogger(__name__)
 
 class OptionROMError(Exception):
     """Base exception for Option-ROM operations"""
-    
-    def __init__(self, message: str, rom_path: Optional[str] = None, device_bdf: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        rom_path: Optional[str] = None,
+        device_bdf: Optional[str] = None,
+    ):
         """
         Initialize Option-ROM error
-        
+
         Args:
             message: Error message
             rom_path: Path to the ROM file that caused the error
@@ -31,16 +36,16 @@ class OptionROMError(Exception):
         super().__init__(message)
         self.rom_path = rom_path
         self.device_bdf = device_bdf
-        
+
     def __str__(self) -> str:
         base_msg = super().__str__()
         details = []
-        
+
         if self.device_bdf:
             details.append(f"device: {self.device_bdf}")
         if self.rom_path:
             details.append(f"rom_path: {self.rom_path}")
-            
+
         if details:
             return f"{base_msg} ({', '.join(details)})"
         return base_msg
@@ -48,12 +53,18 @@ class OptionROMError(Exception):
 
 class OptionROMExtractionError(OptionROMError):
     """Raised when Option-ROM extraction fails"""
-    
-    def __init__(self, message: str, rom_path: Optional[str] = None, device_bdf: Optional[str] = None,
-                 extraction_method: Optional[str] = None, stderr_output: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        rom_path: Optional[str] = None,
+        device_bdf: Optional[str] = None,
+        extraction_method: Optional[str] = None,
+        stderr_output: Optional[str] = None,
+    ):
         """
         Initialize Option-ROM extraction error
-        
+
         Args:
             message: Error message
             rom_path: Path where ROM extraction was attempted
@@ -64,7 +75,7 @@ class OptionROMExtractionError(OptionROMError):
         super().__init__(message, rom_path, device_bdf)
         self.extraction_method = extraction_method
         self.stderr_output = stderr_output
-        
+
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.extraction_method:
@@ -76,79 +87,81 @@ class OptionROMExtractionError(OptionROMError):
 
 class OptionROMSizes:
     """Constants and utilities for Option-ROM size management"""
-    
+
     # Standard Option-ROM sizes (in bytes)
     SIZE_64KB = 65536
     SIZE_128KB = 131072
     SIZE_256KB = 262144
     SIZE_512KB = 524288
     SIZE_1MB = 1048576
-    
+
     # Valid Option-ROM sizes (must be powers of 2, minimum 2KB)
     VALID_SIZES = [
-        2048,      # 2KB (minimum)
-        4096,      # 4KB
-        8192,      # 8KB
-        16384,     # 16KB
-        32768,     # 32KB
+        2048,  # 2KB (minimum)
+        4096,  # 4KB
+        8192,  # 8KB
+        16384,  # 16KB
+        32768,  # 32KB
         SIZE_64KB,
         SIZE_128KB,
         SIZE_256KB,
         SIZE_512KB,
         SIZE_1MB,
     ]
-    
+
     # Maximum Option-ROM size supported by PCI specification
     MAX_SIZE = SIZE_1MB
-    
+
     # Minimum Option-ROM size
     MIN_SIZE = 2048
-    
+
     @classmethod
     def validate_size(cls, size: int) -> bool:
         """
         Validate if a given size is a valid Option-ROM size
-        
+
         Args:
             size: Size in bytes to validate
-            
+
         Returns:
             True if size is valid for Option-ROM
         """
         return size in cls.VALID_SIZES
-    
+
     @classmethod
     def get_next_valid_size(cls, size: int) -> int:
         """
         Get the next valid Option-ROM size that can accommodate the given size
-        
+
         Args:
             size: Required size in bytes
-            
+
         Returns:
             Next valid Option-ROM size that can fit the required size
-            
+
         Raises:
             OptionROMError: If size exceeds maximum supported size
         """
         if size > cls.MAX_SIZE:
-            raise OptionROMError(f"Size {size} exceeds maximum Option-ROM size {cls.MAX_SIZE}")
-        
+            raise OptionROMError(
+                f"Size {size} exceeds maximum Option-ROM size {cls.MAX_SIZE}"
+            )
+
         for valid_size in cls.VALID_SIZES:
             if valid_size >= size:
                 return valid_size
-        
+
         # Should never reach here due to MAX_SIZE check above
         raise OptionROMError(f"No valid Option-ROM size found for {size} bytes")
-    
+
     @classmethod
     def get_size_description(cls, size: int) -> str:
         """
         Get a human-readable description of the Option-ROM size
-        
+
         Args:
             size: Size in bytes
-            
+
         Returns:
             Human-readable size description
         """
@@ -158,15 +171,15 @@ class OptionROMSizes:
             return f"{size // 1024}KB"
         else:
             return f"{size}B"
-    
+
     @classmethod
     def calculate_blocks(cls, size: int) -> int:
         """
         Calculate the number of 512-byte blocks for a given size
-        
+
         Args:
             size: Size in bytes
-            
+
         Returns:
             Number of 512-byte blocks
         """

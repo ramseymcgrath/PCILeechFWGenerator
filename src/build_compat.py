@@ -6,10 +6,10 @@ This module provides backward compatibility for tests and other code
 that depends on the old build.py functions.
 """
 
-import tempfile
 import os
 import stat
-from typing import Dict, Any, List, Tuple
+import tempfile
+from typing import Any, Dict, List, Tuple
 
 
 def create_secure_tempfile(suffix: str = "", prefix: str = "build_") -> str:
@@ -38,11 +38,13 @@ def get_donor_info(bdf: str, use_donor_dump: bool = False) -> Dict[str, Any]:
         "bar_size": "0x20000",
         "mpc": "0x02",
         "mpr": "0x02",
-        "bdf": bdf
+        "bdf": bdf,
     }
 
 
-def scrape_driver_regs(vendor_id: str, device_id: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+def scrape_driver_regs(
+    vendor_id: str, device_id: str
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Mock driver register scraping for compatibility."""
     registers = [
         {
@@ -50,27 +52,29 @@ def scrape_driver_regs(vendor_id: str, device_id: str) -> Tuple[List[Dict[str, A
             "name": "device_control",
             "value": "0x00000000",
             "rw": "rw",
-            "context": {"function": "device_control"}
+            "context": {"function": "device_control"},
         },
         {
             "offset": 0x4,
             "name": "device_status",
             "value": "0x00000001",
             "rw": "ro",
-            "context": {"function": "status_check"}
-        }
+            "context": {"function": "status_check"},
+        },
     ]
-    
+
     state_machine_analysis = {
         "extracted_state_machines": 1,
         "optimized_state_machines": 1,
-        "functions_with_state_patterns": 2
+        "functions_with_state_patterns": 2,
     }
-    
+
     return registers, state_machine_analysis
 
 
-def integrate_behavior_profile(bdf: str, registers: List[Dict[str, Any]], duration: float = 10.0) -> List[Dict[str, Any]]:
+def integrate_behavior_profile(
+    bdf: str, registers: List[Dict[str, Any]], duration: float = 10.0
+) -> List[Dict[str, Any]]:
     """Mock behavior profile integration for compatibility."""
     # Just return the registers unchanged for compatibility
     return registers
@@ -79,7 +83,7 @@ def integrate_behavior_profile(bdf: str, registers: List[Dict[str, Any]], durati
 def build_sv(registers: List[Dict[str, Any]], output_file: str) -> None:
     """Mock SystemVerilog generation for compatibility."""
     # Generate basic SystemVerilog content
-    content = '''//
+    content = """//
 // PCILeech FPGA BAR Controller - Compatibility Mode
 //
 
@@ -96,28 +100,28 @@ module pcileech_tlps128_bar_controller(
 );
 
     // Register declarations
-'''
-    
+"""
+
     for reg in registers:
         reg_name = reg["name"]
         reg_value = reg.get("value", "0x00000000").replace("0x", "")
         content += f"    logic [31:0] {reg_name}_reg = 32'h{reg_value};\n"
-    
-    content += '''
+
+    content += """
     // Read logic
     assign bar_rd_data = 32'h0;
     assign bar_rd_valid = bar_en && !bar_wr_en;
 
 endmodule
-'''
-    
-    with open(output_file, 'w') as f:
+"""
+
+    with open(output_file, "w") as f:
         f.write(content)
 
 
 def build_tcl(device_info: Dict[str, Any], output_file: str) -> Tuple[str, str]:
     """Mock TCL generation for compatibility."""
-    content = f'''#
+    content = f"""#
 # PCILeech FPGA Build Script - Compatibility Mode
 #
 
@@ -126,8 +130,8 @@ def build_tcl(device_info: Dict[str, Any], output_file: str) -> Tuple[str, str]:
 # Device ID: {device_info.get("device_id", "0x0000")}
 
 create_project test_project . -force
-'''
-    
+"""
+
     return content, output_file
 
 
@@ -139,21 +143,18 @@ def run(command: str) -> None:
 
 def code_from_bytes(size_bytes: int) -> int:
     """Mock code from bytes conversion for compatibility."""
-    size_map = {
-        128: 0,
-        256: 1,
-        1024: 3,
-        4096: 5
-    }
+    size_map = {128: 0, 256: 1, 1024: 3, 4096: 5}
     return size_map.get(size_bytes, 0)
 
 
-def generate_register_state_machine(name: str, sequences: List[Dict[str, Any]], offset: int) -> str:
+def generate_register_state_machine(
+    name: str, sequences: List[Dict[str, Any]], offset: int
+) -> str:
     """Mock state machine generation for compatibility."""
     if len(sequences) < 2:
         return ""
-    
-    return f'''
+
+    return f"""
     // State machine for {name}
     typedef enum logic [1:0] {{
         {name.upper()}_IDLE,
@@ -161,12 +162,12 @@ def generate_register_state_machine(name: str, sequences: List[Dict[str, Any]], 
     }} {name}_state_t;
     
     {name}_state_t {name}_state;
-'''
+"""
 
 
 def generate_device_state_machine(registers: List[Dict[str, Any]]) -> str:
     """Mock device state machine generation for compatibility."""
-    return '''
+    return """
     // Device state machine
     typedef enum logic [2:0] {
         DEVICE_RESET,
@@ -177,7 +178,7 @@ def generate_device_state_machine(registers: List[Dict[str, Any]]) -> str:
     
     device_state_t device_state;
     logic [31:0] global_timer;
-'''
+"""
 
 
 # Board and aperture constants for compatibility
@@ -185,18 +186,35 @@ BOARD_INFO = {
     "35t": {"root": "pcileech_35t", "gen": "pcileech_35t.tcl"},
     "75t": {"root": "pcileech_75t", "gen": "pcileech_75t.tcl"},
     "100t": {"root": "pcileech_100t", "gen": "pcileech_100t.tcl"},
-    "pcileech_75t484_x1": {"root": "pcileech_75t484_x1", "gen": "pcileech_75t484_x1.tcl"},
-    "pcileech_35t484_x1": {"root": "pcileech_35t484_x1", "gen": "pcileech_35t484_x1.tcl"},
-    "pcileech_35t325_x4": {"root": "pcileech_35t325_x4", "gen": "pcileech_35t325_x4.tcl"},
-    "pcileech_35t325_x1": {"root": "pcileech_35t325_x1", "gen": "pcileech_35t325_x1.tcl"},
-    "pcileech_100t484_x1": {"root": "pcileech_100t484_x1", "gen": "pcileech_100t484_x1.tcl"},
-    "pcileech_enigma_x1": {"root": "pcileech_enigma_x1", "gen": "pcileech_enigma_x1.tcl"},
+    "pcileech_75t484_x1": {
+        "root": "pcileech_75t484_x1",
+        "gen": "pcileech_75t484_x1.tcl",
+    },
+    "pcileech_35t484_x1": {
+        "root": "pcileech_35t484_x1",
+        "gen": "pcileech_35t484_x1.tcl",
+    },
+    "pcileech_35t325_x4": {
+        "root": "pcileech_35t325_x4",
+        "gen": "pcileech_35t325_x4.tcl",
+    },
+    "pcileech_35t325_x1": {
+        "root": "pcileech_35t325_x1",
+        "gen": "pcileech_35t325_x1.tcl",
+    },
+    "pcileech_100t484_x1": {
+        "root": "pcileech_100t484_x1",
+        "gen": "pcileech_100t484_x1.tcl",
+    },
+    "pcileech_enigma_x1": {
+        "root": "pcileech_enigma_x1",
+        "gen": "pcileech_enigma_x1.tcl",
+    },
     "pcileech_squirrel": {"root": "pcileech_squirrel", "gen": "pcileech_squirrel.tcl"},
-    "pcileech_pciescreamer_xc7a35": {"root": "pcileech_pciescreamer_xc7a35", "gen": "pcileech_pciescreamer_xc7a35.tcl"}
+    "pcileech_pciescreamer_xc7a35": {
+        "root": "pcileech_pciescreamer_xc7a35",
+        "gen": "pcileech_pciescreamer_xc7a35.tcl",
+    },
 }
 
-APERTURE = {
-    1024: "1_KB",
-    65536: "64_KB",
-    16777216: "16_MB"
-}
+APERTURE = {1024: "1_KB", 65536: "64_KB", 16777216: "16_MB"}

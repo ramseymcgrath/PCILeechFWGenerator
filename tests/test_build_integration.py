@@ -23,6 +23,7 @@ try:
     from build.controller import BuildController, create_build_controller
     from build.generators.systemverilog import SystemVerilogGenerator
     from build.generators.tcl import TCLGenerator
+
     MODULAR_BUILD_AVAILABLE = True
 except ImportError:
     MODULAR_BUILD_AVAILABLE = False
@@ -143,13 +144,15 @@ class TestBuildWithExternalExamples:
         if MODULAR_BUILD_AVAILABLE:
             # Use modular SystemVerilog generator
             import asyncio
-            
+
             async def generate_sv():
                 generator = SystemVerilogGenerator()
                 config = {"board": "75t", "enable_variance": False}
-                content = await generator.generate_async(mock_registers_from_example, config)
+                content = await generator.generate_async(
+                    mock_registers_from_example, config
+                )
                 target_file.write_text(content)
-            
+
             asyncio.run(generate_sv())
         else:
             # Call the build_sv function with example-derived registers
@@ -183,13 +186,15 @@ class TestBuildWithExternalExamples:
         if MODULAR_BUILD_AVAILABLE:
             # Use modular TCL generator
             import asyncio
-            
+
             async def generate_tcl():
                 generator = TCLGenerator()
                 config = {"board": "75t", "disable_capability_pruning": False}
-                content = await generator.generate_async(mock_donor_info_from_example, config)
+                content = await generator.generate_async(
+                    mock_donor_info_from_example, config
+                )
                 return content, "example_generate.tcl"
-            
+
             tcl_content, tcl_file = asyncio.run(generate_tcl())
         else:
             # Call the build_tcl function with example-derived donor info

@@ -99,7 +99,7 @@ class DeviceManager:
         has_driver, is_detached = await self._check_driver_status(bdf, driver)
         vfio_compatible = await self._check_vfio_compatibility(bdf)
         iommu_enabled = await self._check_iommu_status(bdf, iommu_group)
-        
+
         # Create detailed status information
         detailed_status = {
             "device_accessible": is_valid,
@@ -252,34 +252,36 @@ class DeviceManager:
             device_path = f"/sys/bus/pci/devices/{bdf}"
             if not os.path.exists(device_path):
                 return False
-            
+
             # Check if we can read basic device information
             vendor_path = f"{device_path}/vendor"
             device_id_path = f"{device_path}/device"
-            
+
             if not (os.path.exists(vendor_path) and os.path.exists(device_id_path)):
                 return False
-                
+
             # Try to read the files to ensure they're accessible
             with open(vendor_path, "r") as f:
                 f.read().strip()
             with open(device_id_path, "r") as f:
                 f.read().strip()
-                
+
             return True
         except Exception:
             return False
 
-    async def _check_driver_status(self, bdf: str, driver: Optional[str]) -> tuple[bool, bool]:
+    async def _check_driver_status(
+        self, bdf: str, driver: Optional[str]
+    ) -> tuple[bool, bool]:
         """Check driver binding and detachment status."""
         try:
             has_driver = driver is not None and driver != ""
             is_detached = False
-            
+
             if has_driver:
                 # Check if device is detached (bound to vfio-pci or similar)
                 is_detached = driver in ["vfio-pci", "pci-stub"]
-                
+
                 # Also check if driver directory exists but device is not actively using it
                 driver_path = f"/sys/bus/pci/devices/{bdf}/driver"
                 if os.path.islink(driver_path):
@@ -288,7 +290,7 @@ class DeviceManager:
                 else:
                     # Driver name exists but not actually bound
                     has_driver = False
-                    
+
             return has_driver, is_detached
         except Exception:
             return False, False
@@ -299,17 +301,17 @@ class DeviceManager:
             # Check if VFIO modules are available
             vfio_modules = ["/sys/module/vfio", "/sys/module/vfio_pci"]
             vfio_available = any(os.path.exists(module) for module in vfio_modules)
-            
+
             if not vfio_available:
                 return False
-            
+
             # Check if device can be bound to VFIO
             # This is a simplified check - in practice, you'd want to verify
             # that the device doesn't have dependencies that prevent VFIO binding
             device_path = f"/sys/bus/pci/devices/{bdf}"
             if not os.path.exists(device_path):
                 return False
-                
+
             # Check if device class is generally VFIO-compatible
             # Most devices can use VFIO, but some system-critical ones cannot
             try:
@@ -317,19 +319,19 @@ class DeviceManager:
                 if os.path.exists(class_path):
                     with open(class_path, "r") as f:
                         device_class = f.read().strip()
-                    
+
                     # Exclude some system-critical device classes
                     excluded_classes = [
                         "0x060000",  # Host bridge
                         "0x060100",  # ISA bridge
                         "0x060400",  # PCI bridge
                     ]
-                    
+
                     if device_class in excluded_classes:
                         return False
             except Exception:
                 pass
-                
+
             return True
         except Exception:
             return False
@@ -341,23 +343,23 @@ class DeviceManager:
             iommu_groups_path = "/sys/kernel/iommu_groups"
             if not os.path.exists(iommu_groups_path):
                 return False
-            
+
             # Check if device has a valid IOMMU group
             if iommu_group == "unknown" or iommu_group == "":
                 return False
-                
+
             # Check if the IOMMU group directory exists
             group_path = f"{iommu_groups_path}/{iommu_group}"
             if not os.path.exists(group_path):
                 return False
-                
+
             # Check if device is in the IOMMU group
             devices_path = f"{group_path}/devices"
             if os.path.exists(devices_path):
                 devices = os.listdir(devices_path)
                 if bdf not in devices:
                     return False
-                    
+
             return True
         except Exception:
             return False
@@ -369,7 +371,7 @@ class DeviceManager:
         bars: List[Dict[str, Any]],
         is_valid: bool = True,
         vfio_compatible: bool = False,
-        iommu_enabled: bool = False
+        iommu_enabled: bool = False,
     ) -> tuple[float, List[str]]:
         """Assess device suitability for firmware generation with enhanced checks."""
         base_score = 1.0
