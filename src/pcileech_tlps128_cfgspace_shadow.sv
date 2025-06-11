@@ -13,7 +13,7 @@
 
 module pcileech_tlps128_cfgspace_shadow #(
     parameter CONFIG_SPACE_SIZE = 4096,  // 4 KB configuration space
-    parameter OVERLAY_ENTRIES = 32       // Number of overlay RAM entries
+    parameter OVERLAY_ENTRIES = 32       // Number of overlay RAM entries (increased to support MSI-X)
 ) (
     // Clock and reset
     input  logic        clk,
@@ -52,6 +52,7 @@ module pcileech_tlps128_cfgspace_shadow #(
             10'h002: return 1;  // Status register (offset 0x08)
             10'h004: return 2;  // Cache Line Size register (offset 0x0C)
             10'h00D: return 3;  // Latency Timer / BIST register (offset 0x3C)
+            10'h01C: return 4;  // MSI-X capability register (offset 0x70)
             // Add more mappings as needed for other writable registers
             default: return -1; // No overlay entry
         endcase
@@ -64,6 +65,7 @@ module pcileech_tlps128_cfgspace_shadow #(
             10'h002: return 32'h0000FFFF;  // Status register - lower 16 bits writable
             10'h004: return 32'h000000FF;  // Cache Line Size - lower 8 bits writable
             10'h00D: return 32'h0000FF00;  // Latency Timer - bits 8-15 writable
+            10'h01C: return 32'hC000FFFF;  // MSI-X capability - Message Control bits [31:30] and [15:0] writable
             // Add more masks as needed
             default: return 32'h00000000;  // No writable bits
         endcase

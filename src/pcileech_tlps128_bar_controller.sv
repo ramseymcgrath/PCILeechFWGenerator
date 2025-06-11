@@ -71,12 +71,26 @@ module pcileech_tlps128_bar_controller #(
     // Extract MSI-X control information from config space
     logic msix_enabled;
     logic msix_function_masked;
+    logic [31:0] msix_capability_data;
     
-    // MSI-X capability is typically at a fixed offset in config space
-    // For this implementation, we'll assume it's read from the config space
-    // In a real implementation, these would be connected to the actual MSI-X capability registers
-    assign msix_enabled = 1'b1;  // Default to enabled for testing
-    assign msix_function_masked = 1'b0;  // Default to unmasked for testing
+    // MSI-X capability register access
+    // MSI-X capability ID is 0x11, typically found at offset 0x70-0x90 in config space
+    // The Message Control register is at capability_offset + 2
+    logic [9:0] msix_capability_reg;
+    assign msix_capability_reg = 10'h1C;  // Assuming MSI-X capability at offset 0x70 (0x70/4 = 0x1C)
+    
+    // Read MSI-X capability data from configuration space shadow
+    always_comb begin
+        // Access the configuration space shadow to get MSI-X capability data
+        // This connects to the actual MSI-X capability registers in config space
+        msix_capability_data = config_space.config_space_ram[msix_capability_reg];
+        
+        // Extract MSI-X enable bit (bit 15 of Message Control register)
+        msix_enabled = msix_capability_data[15];
+        
+        // Extract MSI-X function mask bit (bit 14 of Message Control register)
+        msix_function_masked = msix_capability_data[14];
+    end
     
     // Instantiate the MSI-X table module
     msix_table #(

@@ -76,6 +76,9 @@ pip install pcileechfwgenerator[tui]
 # Development installation
 pip install pcileechfwgenerator[dev]
 
+# Get sudo wrapper
+wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/heads/main/install-sudo-wrapper.sh
+
 # Install sudo wrapper scripts (recommended for TUI and build commands)
 ./install-sudo-wrapper.sh
 ```

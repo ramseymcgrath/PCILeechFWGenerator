@@ -317,9 +317,11 @@ localparam PBA_SIZE = {(table_size + 31) // 32};  // Number of 32-bit words need
 // MSI-X PBA storage
 reg [31:0] msix_pba[0:{pba_size-1}];
 
-// MSI-X control registers
-reg msix_enabled = {1 if msix_info["enabled"] else 0};
-reg msix_function_mask = {1 if msix_info["function_mask"] else 0};
+// MSI-X control registers - connected to configuration space capability registers
+// These signals should be driven by the actual MSI-X capability registers in config space
+// rather than being hardcoded values
+wire msix_enabled;        // Connected to MSI-X Message Control Enable bit
+wire msix_function_mask;  // Connected to MSI-X Message Control Function Mask bit
 
 // MSI-X Table access logic
 function logic is_msix_table_access(input logic [31:0] addr, input logic [2:0] bar_index);
@@ -403,9 +405,25 @@ task msix_deliver_interrupt(input logic [10:0] vector);
     
     if (msix_enabled && !msix_function_mask && !vector_masked) begin
         // Vector is enabled and not masked - deliver interrupt
-        // In a real implementation, this would trigger the PCIe core to send an MSI-X message
-        // For this simulation, we'll just log it
-        $display("MSI-X interrupt delivered for vector %0d", vector);
+        // Generate MSI-X message according to PCIe specification
+        logic [63:0] message_address;
+        logic [31:0] message_data;
+        
+        // Extract message address from MSI-X table entry (first two DWORDs)
+        message_address[31:0] = msix_table[vector * 4];      // Lower address DWORD
+        message_address[63:32] = msix_table[vector * 4 + 1]; // Upper address DWORD
+        
+        // Extract message data from MSI-X table entry (third DWORD)
+        message_data = msix_table[vector * 4 + 2];
+        
+        // Trigger MSI-X interrupt delivery through PCIe core interface
+        // Set interrupt request signal and vector information
+        msix_interrupt <= 1'b1;
+        msix_vector <= vector;
+        
+        // Log the MSI-X message details for debugging
+        $display("MSI-X message: addr=0x%016h, data=0x%08h, vector=%0d",
+                 message_address, message_data, vector);
     end else begin
         // Vector is masked - set pending bit
         pba_dword = vector >> 5;  // Divide by 32 to get DWORD index

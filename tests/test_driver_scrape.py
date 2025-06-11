@@ -40,42 +40,19 @@ class TestHelperFunctions:
             driver_scrape.run("false")
 
 
-class TestKernelSourceManagement:
-    """Test kernel source extraction and management."""
-
-    @pytest.mark.skip("Test is incompatible with current implementation")
-    @patch("pathlib.Path.glob")
-    @patch("pathlib.Path.exists")
-    @patch("tarfile.open")
-    def test_ensure_kernel_source_extract_needed(
-        self, mock_tarfile, mock_exists, mock_glob
-    ):
-        """Test kernel source extraction when needed."""
-        # This test is skipped as it's incompatible with the current implementation
-        pass
-
-    @pytest.mark.skip("Test is incompatible with current implementation")
-    @patch("pathlib.Path.glob")
-    @patch("pathlib.Path.exists")
-    def test_ensure_kernel_source_already_extracted(self, mock_exists, mock_glob):
-        """Test kernel source when already extracted."""
-        # This test is skipped as it's incompatible with the current implementation
-        pass
-
-    @pytest.mark.skip("Test is incompatible with current implementation")
-    @patch("pathlib.Path.glob")
-    def test_ensure_kernel_source_not_found(self, mock_glob):
-        """Test kernel source when package not found."""
-        # This test is skipped as it's incompatible with the current implementation
-        pass
-
+# TestKernelSourceManagement class removed - tests were incompatible with current implementation
+# The ensure_kernel_source() function has evolved to integrate with state machine analysis
+# and has platform-specific requirements that make the original tests obsolete.
 
 class TestModuleResolution:
     """Test kernel module resolution."""
 
+    @patch("driver_scrape.is_linux")
     @patch("driver_scrape.run")
-    def test_ko_name_from_alias_success(self, mock_run):
+    def test_ko_name_from_alias_success(self, mock_run, mock_is_linux):
         """Test successful module name resolution."""
+        # Mock Linux platform check
+        mock_is_linux.return_value = True
         mock_run.return_value = "e1000e\nsnd_hda_intel\n"
 
         # Mock the global variables
@@ -90,9 +67,12 @@ class TestModuleResolution:
             "modprobe --resolve-alias pci:v00008086d00001533*"
         )
 
+    @patch("driver_scrape.is_linux")
     @patch("driver_scrape.run")
-    def test_ko_name_from_alias_not_found(self, mock_run):
+    def test_ko_name_from_alias_not_found(self, mock_run, mock_is_linux):
         """Test module name resolution when no module found."""
+        # Mock Linux platform check
+        mock_is_linux.return_value = True
         mock_run.return_value = ""
 
         with (

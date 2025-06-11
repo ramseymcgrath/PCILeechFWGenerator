@@ -28,6 +28,14 @@ class PCIDevice:
     suitability_score: float
     compatibility_issues: List[str]
     compatibility_factors: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Enhanced compatibility indicators
+    is_valid: bool = True
+    has_driver: bool = False
+    is_detached: bool = False
+    vfio_compatible: bool = False
+    iommu_enabled: bool = False
+    detailed_status: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def display_name(self) -> str:
@@ -48,6 +56,52 @@ class PCIDevice:
             return "⚠️"
         else:
             return "✅"
+    
+    @property
+    def validity_indicator(self) -> str:
+        """Device validity indicator."""
+        return "✅" if self.is_valid else "❌"
+    
+    @property
+    def driver_indicator(self) -> str:
+        """Driver status indicator."""
+        if not self.has_driver:
+            return "🔌"  # No driver
+        elif self.is_detached:
+            return "🔓"  # Detached
+        else:
+            return "🔒"  # Bound
+    
+    @property
+    def vfio_indicator(self) -> str:
+        """VFIO compatibility indicator."""
+        return "🛡️" if self.vfio_compatible else "❌"
+    
+    @property
+    def iommu_indicator(self) -> str:
+        """IOMMU status indicator."""
+        return "🔒" if self.iommu_enabled else "❌"
+    
+    @property
+    def ready_indicator(self) -> str:
+        """Overall readiness indicator."""
+        if self.is_valid and self.vfio_compatible and self.iommu_enabled:
+            return "⚡"
+        elif self.is_suitable:
+            return "⚠️"
+        else:
+            return "❌"
+    
+    @property
+    def compact_status(self) -> str:
+        """Compact multi-indicator status for table display."""
+        indicators = []
+        indicators.append(self.validity_indicator)
+        indicators.append(self.driver_indicator)
+        indicators.append(self.vfio_indicator)
+        indicators.append(self.iommu_indicator)
+        indicators.append(self.ready_indicator)
+        return "".join(indicators)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -68,6 +122,12 @@ class PCIDevice:
             "suitability_score": self.suitability_score,
             "compatibility_issues": self.compatibility_issues,
             "compatibility_factors": self.compatibility_factors,
+            "is_valid": self.is_valid,
+            "has_driver": self.has_driver,
+            "is_detached": self.is_detached,
+            "vfio_compatible": self.vfio_compatible,
+            "iommu_enabled": self.iommu_enabled,
+            "detailed_status": self.detailed_status,
         }
 
     @classmethod

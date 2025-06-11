@@ -75,6 +75,11 @@ Footer {
     margin-bottom: 1;
 }
 
+/* Enhanced device table styling */
+#device-table .indicators-column {
+    text-align: center;
+}
+
 /* Configuration panel */
 #config-panel {
     width: 1fr;
@@ -86,13 +91,31 @@ Footer {
 }
 
 #compatibility-table {
-    height: 8;
+    height: 10;
     margin-top: 1;
 }
 
 #compatibility-score {
     margin: 1 0;
     text-style: bold;
+    min-height: 2;
+}
+
+/* Enhanced compatibility display */
+.status-row-valid {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.status-row-warning {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.status-row-error {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.status-row-info {
+    background: rgba(6, 182, 212, 0.1);
 }
 
 /* Build panel */
@@ -187,6 +210,60 @@ DataTable > .datatable--cursor {
 
 .status-info {
     color: $info;
+}
+
+/* Enhanced compatibility indicators */
+.indicator-valid {
+    color: $success;
+}
+
+.indicator-invalid {
+    color: $error;
+}
+
+.indicator-driver-bound {
+    color: $warning;
+}
+
+.indicator-driver-detached {
+    color: $success;
+}
+
+.indicator-driver-none {
+    color: $info;
+}
+
+.indicator-vfio-compatible {
+    color: $success;
+}
+
+.indicator-vfio-incompatible {
+    color: $error;
+}
+
+.indicator-iommu-enabled {
+    color: $success;
+}
+
+.indicator-iommu-disabled {
+    color: $error;
+}
+
+.indicator-ready {
+    color: $success;
+}
+
+.indicator-not-ready {
+    color: $error;
+}
+
+.indicator-caution {
+    color: $warning;
+}
+
+/* Compact status display */
+.compact-indicators {
+    text-align: center;
 }
 
 /* Text styles */

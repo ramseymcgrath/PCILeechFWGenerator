@@ -180,7 +180,7 @@ jobs:
         # Create basic Sphinx documentation structure if it doesn't exist
         if [ ! -f "docs/conf.py" ]; then
           mkdir -p docs
-          sphinx-quickstart -q -p "PCILeech Firmware Generator" -a "Ramsey McGrath" -v "0.2.1" --ext-autodoc --ext-viewcode --makefile --no-batchfile docs
+          sphinx-quickstart -q -p "PCILeech Firmware Generator" -a "Ramsey McGrath" -v "0.3.0" --ext-autodoc --ext-viewcode --makefile --no-batchfile docs
         fi
         # Build documentation
         cd docs && make html || echo "Documentation build test completed"

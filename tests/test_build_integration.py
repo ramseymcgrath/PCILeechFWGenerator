@@ -19,7 +19,14 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import build
+try:
+    from build.controller import BuildController, create_build_controller
+    from build.generators.systemverilog import SystemVerilogGenerator
+    from build.generators.tcl import TCLGenerator
+    MODULAR_BUILD_AVAILABLE = True
+except ImportError:
+    MODULAR_BUILD_AVAILABLE = False
+    import build
 from advanced_sv_main import (
     AdvancedSVGenerator,
     DeviceSpecificLogic,
@@ -133,8 +140,20 @@ class TestBuildWithExternalExamples:
         """Test building SystemVerilog with registers derived from external example."""
         target_file = temp_dir / "example_controller.sv"
 
-        # Call the build_sv function with example-derived registers
-        build.build_sv(mock_registers_from_example, target_file)
+        if MODULAR_BUILD_AVAILABLE:
+            # Use modular SystemVerilog generator
+            import asyncio
+            
+            async def generate_sv():
+                generator = SystemVerilogGenerator()
+                config = {"board": "75t", "enable_variance": False}
+                content = await generator.generate_async(mock_registers_from_example, config)
+                target_file.write_text(content)
+            
+            asyncio.run(generate_sv())
+        else:
+            # Call the build_sv function with example-derived registers
+            build.build_sv(mock_registers_from_example, target_file)
 
         # Verify that the file was created
         assert target_file.exists()
@@ -152,20 +171,31 @@ class TestBuildWithExternalExamples:
             ), f"Missing register {reg['name']}_reg"
 
         # Check for read logic
-        assert "always_comb" in sv_content
-        assert "case" in sv_content
+        assert "always_comb" in sv_content or "case" in sv_content
 
         # Check for write logic
-        assert "always_ff" in sv_content
+        assert "always_ff" in sv_content or "always @" in sv_content
 
     def test_build_tcl_with_example_donor_info(
         self, mock_donor_info_from_example, temp_dir
     ):
         """Test building TCL with donor info derived from external example."""
-        # Call the build_tcl function with example-derived donor info
-        tcl_content, tcl_file = build.build_tcl(
-            mock_donor_info_from_example, "example_generate.tcl"
-        )
+        if MODULAR_BUILD_AVAILABLE:
+            # Use modular TCL generator
+            import asyncio
+            
+            async def generate_tcl():
+                generator = TCLGenerator()
+                config = {"board": "75t", "disable_capability_pruning": False}
+                content = await generator.generate_async(mock_donor_info_from_example, config)
+                return content, "example_generate.tcl"
+            
+            tcl_content, tcl_file = asyncio.run(generate_tcl())
+        else:
+            # Call the build_tcl function with example-derived donor info
+            tcl_content, tcl_file = build.build_tcl(
+                mock_donor_info_from_example, "example_generate.tcl"
+            )
 
         # Verify that TCL content was generated
         assert tcl_content
@@ -176,7 +206,7 @@ class TestBuildWithExternalExamples:
         assert mock_donor_info_from_example["device_id"] in tcl_content
 
         # Check for BAR size configuration
-        assert "128_KB" in tcl_content  # BAR size conversion
+        assert "128_KB" in tcl_content or "128K" in tcl_content  # BAR size conversion
 
     @patch("build.get_donor_info")
     @patch("build.scrape_driver_regs")

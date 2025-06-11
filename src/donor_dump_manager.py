@@ -21,26 +21,189 @@ logger = logging.getLogger(__name__)
 
 class DonorDumpError(Exception):
     """Base exception for donor dump operations"""
-
-    pass
+    
+    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None):
+        """
+        Initialize donor dump error
+        
+        Args:
+            message: Error message
+            context: Additional context information about the error
+        """
+        super().__init__(message)
+        self.context = context or {}
+        
+    def __str__(self) -> str:
+        base_msg = super().__str__()
+        if self.context:
+            context_str = ", ".join(f"{k}: {v}" for k, v in self.context.items())
+            return f"{base_msg} (context: {context_str})"
+        return base_msg
 
 
 class KernelHeadersNotFoundError(DonorDumpError):
     """Raised when kernel headers are not available"""
-
-    pass
+    
+    def __init__(self, message: str, kernel_version: Optional[str] = None, install_command: Optional[str] = None):
+        """
+        Initialize kernel headers not found error
+        
+        Args:
+            message: Error message
+            kernel_version: The kernel version for which headers are missing
+            install_command: Suggested command to install the headers
+        """
+        context = {}
+        if kernel_version:
+            context["kernel_version"] = kernel_version
+        if install_command:
+            context["install_command"] = install_command
+            
+        super().__init__(message, context)
+        self.kernel_version = kernel_version
+        self.install_command = install_command
 
 
 class ModuleBuildError(DonorDumpError):
     """Raised when module build fails"""
-
-    pass
+    
+    def __init__(self, message: str, build_command: Optional[str] = None, stderr_output: Optional[str] = None, exit_code: Optional[int] = None):
+        """
+        Initialize module build error
+        
+        Args:
+            message: Error message
+            build_command: The build command that failed
+            stderr_output: Standard error output from the build
+            exit_code: Exit code from the build command
+        """
+        context = {}
+        if build_command:
+            context["build_command"] = build_command
+        if stderr_output:
+            context["stderr_output"] = stderr_output
+        if exit_code is not None:
+            context["exit_code"] = exit_code
+            
+        super().__init__(message, context)
+        self.build_command = build_command
+        self.stderr_output = stderr_output
+        self.exit_code = exit_code
 
 
 class ModuleLoadError(DonorDumpError):
     """Raised when module loading fails"""
+    
+    def __init__(self, message: str, module_path: Optional[str] = None, bdf: Optional[str] = None, stderr_output: Optional[str] = None):
+        """
+        Initialize module load error
+        
+        Args:
+            message: Error message
+            module_path: Path to the module that failed to load
+            bdf: PCI Bus:Device.Function that was being accessed
+            stderr_output: Standard error output from the load command
+        """
+        context = {}
+        if module_path:
+            context["module_path"] = module_path
+        if bdf:
+            context["bdf"] = bdf
+        if stderr_output:
+            context["stderr_output"] = stderr_output
+            
+        super().__init__(message, context)
+        self.module_path = module_path
+        self.bdf = bdf
+        self.stderr_output = stderr_output
 
-    pass
+
+class DonorDumpTimeoutError(DonorDumpError):
+    """Raised when donor dump operations timeout"""
+    
+    def __init__(self, message: str, timeout_seconds: Optional[float] = None, operation: Optional[str] = None):
+        """
+        Initialize timeout error
+        
+        Args:
+            message: Error message
+            timeout_seconds: The timeout value that was exceeded
+            operation: The operation that timed out
+        """
+        super().__init__(message)
+        self.timeout_seconds = timeout_seconds
+        self.operation = operation
+        
+    def __str__(self) -> str:
+        base_msg = super().__str__()
+        if self.operation and self.timeout_seconds:
+            return f"{base_msg} (operation: {self.operation}, timeout: {self.timeout_seconds}s)"
+        elif self.operation:
+            return f"{base_msg} (operation: {self.operation})"
+        elif self.timeout_seconds:
+            return f"{base_msg} (timeout: {self.timeout_seconds}s)"
+        return base_msg
+
+
+class DonorDumpPermissionError(DonorDumpError):
+    """Raised when donor dump operations fail due to insufficient permissions"""
+    
+    def __init__(self, message: str, required_permission: Optional[str] = None, file_path: Optional[str] = None):
+        """
+        Initialize permission error
+        
+        Args:
+            message: Error message
+            required_permission: The permission that was required (e.g., 'root', 'sudo')
+            file_path: The file or path that caused the permission error
+        """
+        super().__init__(message)
+        self.required_permission = required_permission
+        self.file_path = file_path
+        
+    def __str__(self) -> str:
+        base_msg = super().__str__()
+        if self.required_permission and self.file_path:
+            return f"{base_msg} (requires: {self.required_permission}, path: {self.file_path})"
+        elif self.required_permission:
+            return f"{base_msg} (requires: {self.required_permission})"
+        elif self.file_path:
+            return f"{base_msg} (path: {self.file_path})"
+        return base_msg
+
+
+class DonorDumpModuleError(DonorDumpError):
+    """Raised when kernel module operations fail"""
+    
+    def __init__(self, message: str, module_name: Optional[str] = None, error_code: Optional[int] = None, stderr_output: Optional[str] = None):
+        """
+        Initialize module error
+        
+        Args:
+            message: Error message
+            module_name: Name of the kernel module that failed
+            error_code: Exit code from the failed operation
+            stderr_output: Standard error output from the failed command
+        """
+        super().__init__(message)
+        self.module_name = module_name
+        self.error_code = error_code
+        self.stderr_output = stderr_output
+        
+    def __str__(self) -> str:
+        base_msg = super().__str__()
+        details = []
+        
+        if self.module_name:
+            details.append(f"module: {self.module_name}")
+        if self.error_code is not None:
+            details.append(f"exit_code: {self.error_code}")
+        if self.stderr_output:
+            details.append(f"stderr: {self.stderr_output}")
+            
+        if details:
+            return f"{base_msg} ({', '.join(details)})"
+        return base_msg
 
 
 class DonorDumpManager:

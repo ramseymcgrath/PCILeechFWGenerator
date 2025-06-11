@@ -405,7 +405,7 @@ def run_build_container(
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    # Build the build.py command with all arguments
+    # Build the build.py command with all arguments - use modular build system if available
     build_cmd_parts = [f"sudo python3 /app/build.py --bdf {bdf} --board {board}"]
 
     # Add advanced features arguments

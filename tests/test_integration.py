@@ -19,7 +19,12 @@ import generate
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import build
+try:
+    from build.controller import BuildController, create_build_controller
+    MODULAR_BUILD_AVAILABLE = True
+except ImportError:
+    MODULAR_BUILD_AVAILABLE = False
+    import build
 
 
 @pytest.mark.integration

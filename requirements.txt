@@ -6,3 +6,6 @@ psutil>=5.9.0
 
 # Configuration validation and serialization
 pydantic>=2.0.0
+
+# Async file I/O for modular build system
+aiofiles>=23.0.0
