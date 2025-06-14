@@ -14,6 +14,7 @@ Requires root privileges (sudo) for driver rebinding and VFIO operations.
 """
 
 import argparse
+import grp
 import logging
 import os
 import pathlib
@@ -25,6 +26,7 @@ import sys
 import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
+import stat
 
 # Import donor dump manager
 try:
@@ -776,38 +778,39 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    # Check device permissions
     try:
-        import stat
-
         vfio_stat = os.stat(vfio_device)
-        if not (vfio_stat.st_mode & stat.S_IRGRP) or not (
-            vfio_stat.st_mode & stat.S_IWGRP
-        ):
-            error_msg = (
-                f"VFIO device {vfio_device} does not have proper group permissions.\n\n"
-                " Current permissions: "
-                f"{stat.filemode(vfio_stat.st_mode)}\n"
-                f"Expected permissions: -rw-rw---- (group-readable and writable)\n\n"
-                "How to fix:\n"
-                "Either ensure your user (or docker user) is in the VFIO group:\n"
-                "   sudo usermod -aG vfio $USER\n"
-                "   then log out and back in (or `newgrp vfio`) so the group membership takes effect\n\n"
-                "Or for a persistent fix via udev, create a rule in /etc/udev/rules.d/99-vfio.rules:\n"
-                '    # Top-level VFIO control device\n'
-                f'    KERNEL=="{vfio_container}", SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
-                '    # VFIO devices for specific BDFs\n'
-                '    KERNEL=="vfio",       SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
-                '    KERNEL=="vfio[0-9]*", SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
-                "   and then run:\n"
-                "   sudo udevadm control --reload && sudo udevadm trigger\n\n"
-                f"Once {vfio_device} is group-readable and writable by the VFIO group—and your user "
-                "(or container runtime) is in that group—your VFIO binds/passthroughs should work cleanly."
-            )
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
+        mode  = vfio_stat.st_mode
+        group = vfio_stat.st_gid
+
+        # Group must be 'vfio' and mode must include group read/write
+        wants_mode = stat.S_IRGRP | stat.S_IWGRP
+        wants_group = grp.getgrnam("vfio").gr_gid
+
+        if (mode & wants_mode) != wants_mode or group != wants_group:
+            # Attempt to fix (only works if running as root)
+            try:
+                # Change mode to 0660
+                os.chmod(vfio_device, 0o660)
+                # Change group to vfio
+                os.chown(vfio_device, vfio_stat.st_uid, wants_group)
+            except PermissionError as pe:
+                raise RuntimeError(f"Insufficient rights to fix permissions on {vfio_device}: {pe}")
+
+            # Re-stat and verify
+            vfio_stat = os.stat(vfio_device)
+            mode  = vfio_stat.st_mode
+            group = vfio_stat.st_gid
+            if (mode & wants_mode) != wants_mode or group != wants_group:
+                raise RuntimeError(
+                    f"Auto-fix failed for {vfio_device}: now {stat.filemode(mode)}, "
+                    f"group {grp.getgrgid(group).gr_name}"
+                )
+        logger.info(
+            f"VFIO device {vfio_device} permissions are valid: {stat.filemode(mode)}, group: {grp.getgrgid(group).gr_name}"
+        )
     except OSError as e:
-        error_msg = f"Could not check VFIO device permissions: {e}"
+        error_msg = f"Failed to check VFIO device permissions: {e}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
