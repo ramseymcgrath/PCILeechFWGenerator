@@ -787,13 +787,10 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
             error_msg = (
                 f"VFIO device {vfio_device} does not have proper group permissions.\n\n"
                 "How to fix:\n"
-                "1. Ensure your user is in the VFIO group:\n"
+                "Either ensure your user (or docker user) is in the VFIO group:\n"
                 "   sudo usermod -aG vfio $USER\n"
-                "   # then log out and back in (or `newgrp vfio`) so the group membership takes effect\n\n"
-                "2. Alternatively, for a quick test, you can loosen the permissions (though it's less secure):\n"
-                f"   sudo chmod 0660 {vfio_device}\n"
-                f"   sudo chgrp vfio {vfio_device}\n\n"
-                "3. For a persistent fix via udev, create a rule in /etc/udev/rules.d/99-vfio.rules:\n"
+                "   then log out and back in (or `newgrp vfio`) so the group membership takes effect\n\n"
+                "Or for a persistent fix via udev, create a rule in /etc/udev/rules.d/99-vfio.rules:\n"
                 '   KERNEL=="vfio", MODE="0660", GROUP="vfio"\n'
                 "   and then run:\n"
                 "   sudo udevadm control --reload && sudo udevadm trigger\n\n"
