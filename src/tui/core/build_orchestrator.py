@@ -907,7 +907,7 @@ class BuildOrchestrator:
                 "-v",
                 f"{os.getcwd()}/output:/app/output",
                 "pcileech-fw-generator:latest",
-                f"sudo python3 /app/src/build.py --bdf {device.bdf} --board {config.board_type}",
+                f"python3 /app/src/build.py --bdf {device.bdf} --board {config.board_type}",
             ]
 
             # Add the same options to the container command

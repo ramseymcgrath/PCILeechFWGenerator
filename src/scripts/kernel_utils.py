@@ -77,7 +77,7 @@ def setup_debugfs() -> None:
     
     try:
         # Create the debug directory if it doesn't exist
-        run_command("sudo mkdir -p /sys/kernel/debug")
+        run_command("mkdir -p /sys/kernel/debug")
         
         # Check if debugfs is already mounted
         try:
@@ -89,7 +89,7 @@ def setup_debugfs() -> None:
             pass
         
         # Mount debugfs
-        run_command("sudo mount -t debugfs debugfs /sys/kernel/debug")
+        run_command("mount -t debugfs debugfs /sys/kernel/debug")
         
     except Exception as e:
         raise RuntimeError(f"Failed to setup debugfs: {e}") from e
