@@ -358,11 +358,19 @@ class TestVFIOBindingEnhanced:
             generate._validate_container_environment()
 
     @patch("generate.get_current_driver")
+    @patch("os.stat")
     @patch("os.path.exists")
-    def test_validate_vfio_device_access_success(self, mock_exists, mock_get_driver):
+    def test_validate_vfio_device_access_success(self, mock_exists, mock_stat, mock_get_driver):
         """Test successful VFIO device access validation."""
+        import stat
+        
         mock_exists.return_value = True
         mock_get_driver.return_value = "vfio-pci"
+        
+        # Mock stat to return proper group permissions
+        mock_stat_result = Mock()
+        mock_stat_result.st_mode = stat.S_IRGRP | stat.S_IWGRP | stat.S_IRUSR | stat.S_IWUSR
+        mock_stat.return_value = mock_stat_result
 
         # Should not raise any exception
         generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
@@ -386,6 +394,39 @@ class TestVFIOBindingEnhanced:
 
         with pytest.raises(RuntimeError, match="Device .* not bound to vfio-pci"):
             generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
+
+    @patch("generate.get_current_driver")
+    @patch("os.stat")
+    @patch("os.path.exists")
+    def test_validate_vfio_device_access_permission_failure(self, mock_exists, mock_stat, mock_get_driver):
+        """Test VFIO device access validation with permission failure."""
+        import stat
+
+        mock_exists.return_value = True
+        mock_get_driver.return_value = "vfio-pci"
+
+        # Mock stat to return insufficient group permissions
+        mock_stat_result = Mock()
+        mock_stat_result.st_mode = stat.S_IRUSR | stat.S_IWUSR  # Only owner permissions, no group permissions
+        mock_stat.return_value = mock_stat_result
+
+        with pytest.raises(RuntimeError, match="VFIO device .* does not have proper group permissions"):
+            generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
+
+    @patch("generate.get_current_driver")
+    @patch("os.stat")
+    @patch("os.path.exists")
+    def test_validate_vfio_device_access_stat_error(self, mock_exists, mock_stat, mock_get_driver):
+        """Test VFIO device access validation with stat error."""
+        mock_exists.return_value = True
+        mock_get_driver.return_value = "vfio-pci"
+
+        # Mock stat to raise OSError
+        mock_stat.side_effect = OSError("Permission denied")
+
+        with pytest.raises(RuntimeError, match="Could not check VFIO device permissions"):
+            generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
+
 
 
 class TestVFIOBindingStressTests:

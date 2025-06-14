@@ -784,11 +784,28 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         if not (vfio_stat.st_mode & stat.S_IRGRP) or not (
             vfio_stat.st_mode & stat.S_IWGRP
         ):
-            logger.warning(
-                f"VFIO device {vfio_device} may not have proper group permissions"
+            error_msg = (
+                f"VFIO device {vfio_device} does not have proper group permissions.\n\n"
+                "How to fix:\n"
+                "1. Ensure your user is in the VFIO group:\n"
+                "   sudo usermod -aG vfio $USER\n"
+                "   # then log out and back in (or `newgrp vfio`) so the group membership takes effect\n\n"
+                "2. Alternatively, for a quick test, you can loosen the permissions (though it's less secure):\n"
+                f"   sudo chmod 0660 {vfio_device}\n"
+                f"   sudo chgrp vfio {vfio_device}\n\n"
+                "3. For a persistent fix via udev, create a rule in /etc/udev/rules.d/99-vfio.rules:\n"
+                '   KERNEL=="vfio", MODE="0660", GROUP="vfio"\n'
+                "   and then run:\n"
+                "   sudo udevadm control --reload && sudo udevadm trigger\n\n"
+                f"Once {vfio_device} is group-readable and writable by the VFIO group—and your user "
+                "(or container runtime) is in that group—your VFIO binds/passthroughs should work cleanly."
             )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
     except OSError as e:
-        logger.warning(f"Could not check VFIO device permissions: {e}")
+        error_msg = f"Could not check VFIO device permissions: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
 
     # Verify device is actually bound to vfio-pci
     current_driver = get_current_driver(bdf)
