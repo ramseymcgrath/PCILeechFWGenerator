@@ -10,4 +10,4 @@ This package contains comprehensive tests for all core functionality including:
 - Behavior profiling (src/behavior_profiler.py)
 """
 
-__version__ = "1.0.0"
+__version__ = "0.3.1"

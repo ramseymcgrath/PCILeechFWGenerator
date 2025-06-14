@@ -116,9 +116,9 @@ class ErrorTemplates:
         return TUIError(
             severity=ErrorSeverity.ERROR,
             category="system",
-            message="Container image 'dma-fw' not found and automatic build failed",
+            message="Container image 'pcileech-fw-generator' not found and automatic build failed",
             suggested_actions=[
-                "Manually build the container image: podman build -t dma-fw .",
+                "Manually build the container image: podman build -t pcileech-fw-generator:latest .",
                 "Check if Podman is properly installed",
                 "Verify internet connectivity for downloading base images",
                 "Check for sufficient disk space",

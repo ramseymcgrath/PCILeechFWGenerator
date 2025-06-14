@@ -462,7 +462,9 @@ class TestEnvironmentValidation:
         """Test successful environment validation."""
         mock_geteuid.return_value = 0  # Root user
         mock_which.return_value = "/usr/bin/podman"
-        mock_run_command.return_value = "dma-fw"  # Simulate container image exists
+        mock_run_command.return_value = (
+            "pcileech-fw-generator"  # Simulate container image exists
+        )
 
         # Should not raise exception
         generate.validate_environment()

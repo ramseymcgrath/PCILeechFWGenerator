@@ -1,6 +1,6 @@
 # Makefile for PCILeech Firmware Generator
 
-.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release
+.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release container docker-build build-container
 
 # Default target
 help:
@@ -23,6 +23,10 @@ help:
 	@echo "  upload-test  - Upload to Test PyPI"
 	@echo "  upload-pypi  - Upload to PyPI"
 	@echo "  release      - Full release process"
+	@echo ""
+	@echo "Container:"
+	@echo "  container    - Build container image (dma-fw)"
+	@echo "  docker-build - Build container image (default tag)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  check-deps   - Check system dependencies"
@@ -86,9 +90,15 @@ security:
 	bandit -r src/
 	safety check
 
-# Docker targets
+# Container targets
+container:
+	./scripts/build_container.sh --tag dma-fw
+
 docker-build:
 	./scripts/build_container.sh
+
+# Alias for container
+build-container: container
 
 # Test package build
 test-build:

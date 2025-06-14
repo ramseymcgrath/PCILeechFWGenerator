@@ -480,6 +480,9 @@ class PCILeechTUI(App):
         self._devices = []
         self._system_status = {}
 
+        # Initialize current_config from config manager
+        self.current_config = self.config_manager.get_current_config()
+
         # Now call super().__init__()
         super().__init__()
 
@@ -563,6 +566,11 @@ class PCILeechTUI(App):
                     yield Button("📁 Open Output Dir", id="open-output")
                     yield Button("📊 View Last Build Report", id="view-report")
                     yield Button("🧩 Check Donor Module", id="check-donor-module")
+                    yield Button(
+                        "🎯 Enable Donor Dump",
+                        id="enable-donor-dump",
+                        variant="success",
+                    )
                     yield Button("⚙️ Advanced Settings", id="advanced-settings")
                     yield Button("📖 Documentation", id="documentation")
 
@@ -658,6 +666,9 @@ class PCILeechTUI(App):
             else:
                 build_mode = "Standard (With Donor Dump)"
             self.query_one("#build-mode", Static).update(f"Build Mode: {build_mode}")
+
+            # Update donor dump button
+            self._update_donor_dump_button()
         except Exception as e:
             # Handle any UI update errors gracefully
             print(f"Error updating configuration display: {e}")
@@ -794,6 +805,9 @@ class PCILeechTUI(App):
         elif button_id == "check-donor-module":
             await self._check_donor_module_status(show_notification=True)
 
+        elif button_id == "enable-donor-dump":
+            await self._toggle_donor_dump()
+
         elif button_id == "documentation":
             self.notify("Opening documentation...", severity="info")
 
@@ -905,6 +919,8 @@ class PCILeechTUI(App):
             if result is not None:
                 # Update current configuration
                 self.current_config = result
+                # Save the configuration to the config manager
+                self.config_manager.set_current_config(result)
                 print(
                     f"New configuration device_type: {self.current_config.device_type}"
                 )
@@ -1165,6 +1181,46 @@ class PCILeechTUI(App):
                 "issues": [f"Exception occurred: {str(e)}"],
                 "fixes": ["Check if donor_dump_manager.py is accessible"],
             }
+
+    async def _toggle_donor_dump(self) -> None:
+        """Toggle donor dump functionality"""
+        current_config = self.current_config.copy()
+
+        if current_config.donor_dump:
+            # Disable donor dump
+            current_config.donor_dump = False
+            current_config.local_build = True
+            self.current_config = current_config
+            self.config_manager.set_current_config(current_config)
+            self._update_config_display()
+            self._update_donor_dump_button()
+            self.notify("Donor dump disabled - using local build mode", severity="info")
+        else:
+            # Enable donor dump
+            current_config.donor_dump = True
+            current_config.local_build = False
+            self.current_config = current_config
+            self.config_manager.set_current_config(current_config)
+            self._update_config_display()
+            self._update_donor_dump_button()
+            self.notify(
+                "Donor dump enabled - device analysis will be performed",
+                severity="success",
+            )
+
+    def _update_donor_dump_button(self) -> None:
+        """Update the donor dump button text and style based on current state"""
+        try:
+            button = self.query_one("#enable-donor-dump", Button)
+            if self.current_config.donor_dump:
+                button.label = "🚫 Disable Donor Dump"
+                button.variant = "error"
+            else:
+                button.label = "🎯 Enable Donor Dump"
+                button.variant = "success"
+        except Exception:
+            # Button might not exist in tests
+            pass
 
 
 if __name__ == "__main__":

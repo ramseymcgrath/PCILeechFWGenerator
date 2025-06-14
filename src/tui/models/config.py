@@ -28,11 +28,11 @@ class BuildConfiguration:
     flash_after_build: bool = False
 
     # Donor dump configuration
-    donor_dump: bool = False  # Default to local builds (no donor dump)
+    donor_dump: bool = True  # Default to donor dump enabled
     auto_install_headers: bool = False
     donor_info_file: Optional[str] = None
     skip_board_check: bool = False
-    local_build: bool = True  # Default to local builds
+    local_build: bool = False  # Default to standard builds with donor dump
 
     # Profile metadata
     name: str = "Default Configuration"

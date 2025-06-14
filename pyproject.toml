@@ -80,7 +80,18 @@ pcileech-tui = "src.tui_cli:main"
 pcileech-build = "src.build_cli:main"
 
 [tool.setuptools]
-packages = ["src", "src.tui", "src.tui.core", "src.tui.models", "src.scripts"]
+packages = [
+    "src",
+    "src.tui",
+    "src.tui.core",
+    "src.tui.models",
+    "src.scripts",
+    "src.build",
+    "src.build.analysis",
+    "src.build.config",
+    "src.build.orchestration",
+    "src.build.generators"
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "src.__version__.__version__"}

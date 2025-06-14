@@ -84,6 +84,11 @@ module pcileech_tlps128_cfgspace_shadow #(
     logic [31:0] read_data;
     logic read_data_valid;
     
+    // Variables for overlay processing
+    int overlay_idx;
+    logic [31:0] overlay_mask;
+    logic [31:0] current_value;
+    
     // Configuration access state machine
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
@@ -110,10 +115,10 @@ module pcileech_tlps128_cfgspace_shadow #(
                     read_data <= config_space_ram[current_reg_num];
                     
                     // Check if this register has an overlay entry
-                    int overlay_idx = get_overlay_index(current_reg_num);
+                    overlay_idx = get_overlay_index(current_reg_num);
                     if (overlay_idx >= 0) begin
                         // Apply overlay data for writable bits
-                        logic [31:0] overlay_mask = get_overlay_mask(current_reg_num);
+                        overlay_mask = get_overlay_mask(current_reg_num);
                         read_data <= (config_space_ram[current_reg_num] & ~overlay_mask) | 
                                      (overlay_ram[overlay_idx] & overlay_mask);
                     end
@@ -124,11 +129,11 @@ module pcileech_tlps128_cfgspace_shadow #(
                 
                 CFG_WRITE: begin
                     // Handle write to configuration space
-                    int overlay_idx = get_overlay_index(current_reg_num);
+                    overlay_idx = get_overlay_index(current_reg_num);
                     if (overlay_idx >= 0) begin
                         // Only update writable bits in the overlay RAM
-                        logic [31:0] overlay_mask = get_overlay_mask(current_reg_num);
-                        logic [31:0] current_value = overlay_ram[overlay_idx];
+                        overlay_mask = get_overlay_mask(current_reg_num);
+                        current_value = overlay_ram[overlay_idx];
                         
                         // Apply byte enables
                         if (cfg_ext_write_byte_enable[0])
@@ -175,10 +180,10 @@ module pcileech_tlps128_cfgspace_shadow #(
                 host_read_data <= config_space_ram[host_addr[11:2]];
                 
                 // Check if this register has an overlay entry
-                int overlay_idx = get_overlay_index(host_addr[11:2]);
+                overlay_idx = get_overlay_index(host_addr[11:2]);
                 if (overlay_idx >= 0) begin
                     // Apply overlay data for writable bits
-                    logic [31:0] overlay_mask = get_overlay_mask(host_addr[11:2]);
+                    overlay_mask = get_overlay_mask(host_addr[11:2]);
                     host_read_data <= (config_space_ram[host_addr[11:2]] & ~overlay_mask) | 
                                      (overlay_ram[overlay_idx] & overlay_mask);
                 end

@@ -81,24 +81,35 @@ wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/he
 
 # Install sudo wrapper scripts (recommended for TUI and build commands)
 ./install-sudo-wrapper.sh
+
 ```
+
+If you have pip issues, it's usually easiest to just run from the repo. Make sure to install the python requirements.
+
+### Other Requirements
+
+Install Podman with your package manager. **Please just use podman!** Normal docker isn't able to mount the pcie devices correctly and you'll run into issues
 
 ### Usage
 
+This can all be run from a venv. Ubuntu especially likes to manage the default python and some of the packages are way too old, and a venv is way easier. 
+
 ```bash
-# Interactive TUI interface (recommended)
-pcileech-tui-sudo  # Use sudo wrapper (preserves Python path)
-# OR
-sudo pcileech-tui  # Direct sudo (may have module import issues)
 
-# Main orchestrator - handles device enumeration, driver binding, container execution
-pcileech-generate  # Interactive device selection and build
-# OR with sudo wrapper for full automation
-pcileech-build-sudo --bdf 0000:03:00.0 --board 75t  # Calls pcileech-generate with preserved Python path
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-# Direct orchestrator with sudo (recommended for automation)
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t
+## TUI 
+sudo python3 tui_generate.py
+
+## CLI
+sudo python3 generate.py
+
 ```
+
+If you run into issue with the donor dump process, follow the manual steps.
+
 
 ### Device Suitability Indicators
 
@@ -111,6 +122,9 @@ In the TUI, devices are evaluated for firmware generation compatibility:
 | ❌ | **Not Suitable**: Device is not compatible for firmware generation |
 
 A device is considered suitable when its suitability score is ≥ 0.7 and it has no compatibility issues.
+
+> [!NOTE]
+> Your device might still work even though it has an ❌. The TUI should usually explain why it thinks it isn't suitable but sometimes it's wrong
 
 ## 📋 Requirements
 
@@ -135,55 +149,6 @@ This is primarily tested in Linux, with some fiddling you could probably get it 
 |-----------|-------|
 | Donor PCIe card | Any inexpensive NIC, sound, or capture card works. One donor → one firmware. Destroy or quarantine the donor after extraction. |
 | DMA board | Supported Artix‑7 DMA boards (35T, 75T, 100T). Must expose the Screamer USB‑JTAG port. |
-
-## 🛠️ Installation & Setup
-
-### Method 1: pip Installation (Recommended)
-
-```bash
-# Install with TUI support
-pip install pcileechfwgenerator[tui]
-
-# Basic installation (CLI only)
-pip install pcileechfwgenerator
-
-# Development installation
-git clone https://github.com/ramseymcgrath/PCILeechFWGenerator
-cd PCILeechFWGenerator
-pip install -e .[dev]
-```
-
-### Method 2: Manual Installation
-
-```bash
-# Clone repository
-git clone https://github.com/ramseymcgrath/PCILeechFWGenerator
-cd PCILeechFWGenerator
-
-# Install system dependencies
-sudo ./install.sh
-
-# Install Python dependencies
-pip install -r requirements-tui.txt  # For TUI support
-# OR
-pip install -r requirements.txt      # Basic installation
-```
-
-Re‑login or run `newgrp` afterwards so rootless Podman picks up subuid/subgid mappings.
-
-## 🎮 Usage
-
-### Interactive TUI Mode (Recommended)
-
-The modern text-based interface provides guided workflows and real-time monitoring:
-
-```bash
-# Launch TUI (after pip installation)
-sudo pcileech-tui
-
-# Or from source
-sudo python3 tui_generate.py
-```
 
 **TUI Features:**
 - 🖥️ **Visual device browser** with enhanced PCIe device information
@@ -251,7 +216,7 @@ sudo python3 generate.py
 usbloader -f output/firmware.bin      # auto‑detects Screamer VID:PID 1d50:6130
 ```
 
-If multiple λConcept boards are attached, add `--vidpid <vid:pid>`.
+If multiple DMA boards are attached, add `--vidpid <vid:pid>`.
 
 ## 🚀 Advanced Features
 
@@ -469,9 +434,6 @@ sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
 - `--bdf`: PCIe Bus:Device.Function identifier (required)
 - `--board`: Target board type (35t, 75t, 100t) (required)
 
-**Build Options:**
-- `--container-engine`: Specify container engine to use (docker or podman, default: podman)
-
 **Donor Device Options:**
 - `--use-donor-dump`: Use the donor_dump kernel module (opt-in, not default)
 - `--donor-info-file`: Path to a JSON file containing donor information from a previous run
@@ -501,24 +463,11 @@ sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
 
 ## ⚠️ Disclaimer
 
-This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
+This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software. The firmware generation is best effort and you should always validate it before use.
 
 ## 📦 Development & Contributing
 
 For development setup instructions, please see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
-
-### Building from Source
-
-```bash
-# Build distributions
-python -m build
-
-# Install locally
-pip install dist/*.whl
-
-# Test installation
-pcileech-generate --help
-```
 
 ### Contributing
 
@@ -619,17 +568,7 @@ podman run --rm --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN pcileechfwgenerator:late
 sudo insmod src/donor_dump/donor_dump.ko bdf=0000:03:00.0
 cat /proc/donor_dump > donor_info.txt
 
-# Windows donor dump extraction
-# Run PowerShell as Administrator
-.\scripts\windows_donor_dump.ps1 -BDF "0000:03:00.0" -OutputFile "donor_info.json"
 ```
-
-**Container Security Best Practices:**
-- Use specific capabilities (`--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN`) instead of `--privileged` when possible
-- Always mount output directories to preserve generated files: `-v ./output:/app/output`
-- The container runs as non-root user `appuser` by default for security
-- Use the build script for automated testing: `./scripts/build_container.sh --test`
-
 ### Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/ramseymcgrath/PCILeechFWGenerator/issues)
@@ -649,7 +588,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## ⚠️ Legal Notice
 
-This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
+*AGAIN* This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
 
 **Security Considerations:**
 - Never build firmware on systems used for production or sensitive operations
@@ -658,6 +597,3 @@ This tool is intended for educational research and legitimate PCIe development p
 - Follow responsible disclosure practices for any security research
 
 ---
-
-**Version 0.3.1** - Major release with integrated features for comprehensive PCIe device emulation
-For educational research and legitimate PCIe development only. Misuse may violate laws and void warranties. The authors assume no liability.

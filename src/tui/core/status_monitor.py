@@ -6,6 +6,7 @@ Monitors system status including container availability, USB devices, and system
 
 import asyncio
 import os
+import platform
 import shutil
 import subprocess
 from pathlib import Path
@@ -90,38 +91,93 @@ class StatusMonitor:
                     return {"status": "not_found", "message": "Vivado not detected"}
 
             except ImportError:
-                # Fall back to original implementation if import fails
-                vivado_paths = [
-                    "/opt/Xilinx/Vivado",
-                    "/tools/Xilinx/Vivado",
-                    shutil.which("vivado"),
-                ]
+                # Fall back to manual discovery if import fails
+                # Check common installation paths
+                search_paths = []
+                system = platform.system().lower()
 
-                for path in vivado_paths:
-                    if path and os.path.exists(path):
-                        # Try to get version
-                        if os.path.isfile(path):
-                            result = await self._run_command(f"{path} -version")
-                            if result.returncode == 0:
-                                # Extract version from output
-                                version = self._extract_vivado_version(result.stdout)
-                                return {
-                                    "status": "detected",
-                                    "version": version,
-                                    "path": path,
-                                }
-                        elif os.path.isdir(path):
-                            # Look for version directories
+                if system == "linux":
+                    search_paths = [
+                        "/opt/Xilinx/Vivado",
+                        "/tools/Xilinx/Vivado",
+                        "/usr/local/Xilinx/Vivado",
+                        os.path.expanduser("~/Xilinx/Vivado"),
+                    ]
+                elif system == "windows":
+                    # Windows support removed as per requirements
+                    search_paths = []
+                elif system == "darwin":  # macOS
+                    search_paths = [
+                        "/Applications/Xilinx/Vivado",
+                        os.path.expanduser("~/Xilinx/Vivado"),
+                    ]
+
+                # Check each path for Vivado installation
+                for base_path in search_paths:
+                    if os.path.exists(base_path) and os.path.isdir(base_path):
+                        try:
+                            # Look for version directories (e.g., 2023.1)
                             versions = [
-                                d for d in os.listdir(path) if d.startswith("20")
+                                d
+                                for d in os.listdir(base_path)
+                                if d[0].isdigit()
+                                and os.path.isdir(os.path.join(base_path, d))
                             ]
                             if versions:
+                                # Sort versions and use the latest
                                 latest_version = sorted(versions)[-1]
-                                return {
-                                    "status": "detected",
-                                    "version": latest_version,
-                                    "path": path,
-                                }
+                                vivado_dir = os.path.join(base_path, latest_version)
+
+                                # Find bin directory and executable
+                                bin_dir = os.path.join(vivado_dir, "bin")
+                                if os.path.exists(bin_dir):
+                                    vivado_exe = os.path.join(bin_dir, "vivado")
+                                    if os.path.isfile(vivado_exe):
+                                        # Try to get version using discovered executable
+                                        result = await self._run_command(
+                                            f'"{vivado_exe}" -version'
+                                        )
+                                        if result.returncode == 0:
+                                            version = self._extract_vivado_version(
+                                                result.stdout
+                                            )
+                                            return {
+                                                "status": "detected",
+                                                "version": version,
+                                                "path": vivado_dir,
+                                                "executable": vivado_exe,
+                                            }
+                                        else:
+                                            # Fall back to version from path
+                                            return {
+                                                "status": "detected",
+                                                "version": latest_version,
+                                                "path": vivado_dir,
+                                                "executable": vivado_exe,
+                                            }
+                        except (PermissionError, FileNotFoundError, OSError):
+                            # Skip if we can't access the directory
+                            continue
+
+                # Check environment variables as last resort
+                xilinx_vivado = os.environ.get("XILINX_VIVADO")
+                if xilinx_vivado and os.path.exists(xilinx_vivado):
+                    bin_dir = os.path.join(xilinx_vivado, "bin")
+                    if os.path.exists(bin_dir):
+                        vivado_exe = os.path.join(bin_dir, "vivado")
+                        if os.path.isfile(vivado_exe):
+                            # Try to extract version from path
+                            path_parts = xilinx_vivado.split(os.path.sep)
+                            version = next(
+                                (p for p in path_parts if p[0].isdigit() and "." in p),
+                                "unknown",
+                            )
+                            return {
+                                "status": "detected",
+                                "version": version,
+                                "path": xilinx_vivado,
+                                "executable": vivado_exe,
+                            }
 
                 return {"status": "not_found", "message": "Vivado not detected"}
 
@@ -192,14 +248,14 @@ class StatusMonitor:
         """Check if DMA firmware container image exists"""
         try:
             result = await self._run_command(
-                "podman images dma-fw --format '{{.Repository}}:{{.Tag}}'"
+                "podman images pcileech-fw-generator --format '{{.Repository}}:{{.Tag}}'"
             )
-            if result.returncode == 0 and "dma-fw" in result.stdout:
+            if result.returncode == 0 and "pcileech-fw-generator" in result.stdout:
                 return {"available": True, "image": result.stdout.strip()}
             else:
                 return {
                     "available": False,
-                    "message": "Container image 'dma-fw' not found",
+                    "message": "Container image 'pcileech-fw-generator' not found",
                 }
 
         except Exception as e:

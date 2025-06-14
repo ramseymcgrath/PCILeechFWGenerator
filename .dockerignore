@@ -15,6 +15,7 @@ AUTHORS*
 # Build artifacts and output
 output/
 build/
+!src/build.py
 dist/
 *.bin
 *.bit

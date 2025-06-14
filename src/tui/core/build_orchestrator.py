@@ -271,19 +271,23 @@ class BuildOrchestrator:
 
             # Check if container image exists
             result = await self._run_command(
-                "podman images dma-fw --format '{{.Repository}}'"
+                "podman images pcileech-fw-generator --format '{{.Repository}}'"
             )
-            if "dma-fw" not in result.stdout:
+            if "pcileech-fw-generator" not in result.stdout:
                 # Container image not found, try to build it
                 if self._current_progress:
                     self._current_progress.current_operation = (
-                        "Building container image 'dma-fw'"
+                        "Building container image 'pcileech-fw-generator'"
                     )
                     await self._notify_progress()
 
                 try:
-                    print("[*] Container image 'dma-fw' not found. Building it now...")
-                    build_result = await self._run_command("podman build -t dma-fw .")
+                    print(
+                        "[*] Container image 'pcileech-fw-generator' not found. Building it now..."
+                    )
+                    build_result = await self._run_command(
+                        "podman build -t pcileech-fw-generator:latest ."
+                    )
                     if build_result.returncode != 0:
                         raise RuntimeError(
                             f"Failed to build container image: {build_result.stderr}"
@@ -291,7 +295,7 @@ class BuildOrchestrator:
                     print("[✓] Container image built successfully")
                 except Exception as e:
                     raise RuntimeError(
-                        f"Container image 'dma-fw' not found and build failed: {str(e)}"
+                        f"Container image 'pcileech-fw-generator' not found and build failed: {str(e)}"
                     )
         else:
             # For local builds, just check if Python and build.py are available
@@ -901,8 +905,8 @@ class BuildOrchestrator:
                 "--device=/dev/vfio/vfio",
                 "-v",
                 f"{os.getcwd()}/output:/app/output",
-                "dma-fw",
-                f"sudo python3 /app/build.py --bdf {device.bdf} --board {config.board_type}",
+                "pcileech-fw-generator:latest",
+                f"sudo python3 /app/src/build.py --bdf {device.bdf} --board {config.board_type}",
             ]
 
             # Add the same options to the container command
