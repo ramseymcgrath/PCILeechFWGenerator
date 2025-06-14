@@ -786,12 +786,19 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         ):
             error_msg = (
                 f"VFIO device {vfio_device} does not have proper group permissions.\n\n"
+                " Current permissions: "
+                f"{stat.filemode(vfio_stat.st_mode)}\n"
+                f"Expected permissions: -rw-rw---- (group-readable and writable)\n\n"
                 "How to fix:\n"
                 "Either ensure your user (or docker user) is in the VFIO group:\n"
                 "   sudo usermod -aG vfio $USER\n"
                 "   then log out and back in (or `newgrp vfio`) so the group membership takes effect\n\n"
                 "Or for a persistent fix via udev, create a rule in /etc/udev/rules.d/99-vfio.rules:\n"
-                '   KERNEL=="vfio", MODE="0660", GROUP="vfio"\n'
+                '    # Top-level VFIO control device\n'
+                f'    KERNEL=="{vfio_container}", SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
+                '    # VFIO devices for specific BDFs\n'
+                '    KERNEL=="vfio",       SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
+                '    KERNEL=="vfio[0-9]*", SUBSYSTEM=="misc", MODE="0660", GROUP="vfio"\n'
                 "   and then run:\n"
                 "   sudo udevadm control --reload && sudo udevadm trigger\n\n"
                 f"Once {vfio_device} is group-readable and writable by the VFIO group—and your user "
