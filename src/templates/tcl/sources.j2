@@ -1,0 +1,56 @@
+{#
+Sources Template - Source File Management
+Variables:
+- header: TCL header comment
+#}
+{{ header }}
+
+puts "Adding source files..."
+
+# Add all SystemVerilog files
+set sv_files [glob -nocomplain *.sv]
+if {[llength $sv_files] > 0} {
+    puts "Found [llength $sv_files] SystemVerilog files"
+    add_files -norecurse $sv_files
+    set_property file_type SystemVerilog [get_files *.sv]
+    foreach sv_file $sv_files {
+        puts "  - $sv_file"
+    }
+}
+
+# Add all Verilog files
+set v_files [glob -nocomplain *.v]
+if {[llength $v_files] > 0} {
+    puts "Found [llength $v_files] Verilog files"
+    add_files -norecurse $v_files
+    foreach v_file $v_files {
+        puts "  - $v_file"
+    }
+}
+
+# Set top module
+set top_module ""
+if {[file exists "pcileech_top.sv"]} {
+    set top_module "pcileech_top"
+} elseif {[file exists "pcileech_tlps128_bar_controller.sv"]} {
+    set top_module "pcileech_tlps128_bar_controller"
+} else {
+    set top_files [glob -nocomplain "*top*.sv"]
+    if {[llength $top_files] > 0} {
+        set top_file [lindex $top_files 0]
+        set top_module [file rootname [file tail $top_file]]
+    } else {
+        puts "ERROR: No suitable top module found!"
+        exit 1
+    }
+}
+
+if {$top_module != ""} {
+    set_property top $top_module [current_fileset]
+    puts "Set top module: $top_module"
+} else {
+    puts "ERROR: Failed to determine top module"
+    exit 1
+}
+
+puts "Source file management completed"

@@ -961,11 +961,11 @@ def run_build_container(
             f"--behavior-profile-duration {args.behavior_profile_duration}"
         )
 
-    " ".join(build_cmd_parts)
+    build_cmd = " ".join(build_cmd_parts)
 
     # Construct Podman command
     container_cmd = textwrap.dedent(
-        """
+        f"""
         podman run --rm -it --privileged \
           --device={vfio_device} \
           --device=/dev/vfio/vfio \
@@ -1421,7 +1421,7 @@ def main() -> int:
             raise RuntimeError(error_msg)
 
         selected_device = choose_device(devices)
-        bdf = selected_device["bd"]
+        bdf = selected_device["bdf"]
         vendor = selected_device["ven"]
         device = selected_device["dev"]
 

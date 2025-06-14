@@ -82,6 +82,9 @@ wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/he
 # Install sudo wrapper scripts (recommended for TUI and build commands)
 ./install-sudo-wrapper.sh
 
+sudo modprobe vfio
+sudo modprobe vfio-pci
+
 ```
 
 If you have pip issues, it's usually easiest to just run from the repo. Make sure to install the python requirements.
@@ -104,9 +107,10 @@ pip install -r requirements.txt
 sudo python3 tui_generate.py
 
 ## CLI
-sudo python3 generate.py
-
+sudo python3 generate.py --board [your board type] --advanced-sv --device-type [your device type] --enable-variance --behavior-profile-duration 5
 ```
+
+Your board type is generally one of: `pcileech_35t325_x4` (35T) `pcileech_75t` (75T) or `pcileech_100t` (ZDMA 100T)
 
 If you run into issue with the donor dump process, follow the manual steps.
 

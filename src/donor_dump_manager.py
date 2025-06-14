@@ -190,9 +190,7 @@ class DonorDumpPermissionError(DonorDumpError):
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.required_permission and self.file_path:
-            return f"{base_msg} (requires: {
-                self.required_permission}, path: {
-                self.file_path})"
+            return f"{base_msg} (requires: {self.required_permission}, path: {self.file_path})"
         elif self.required_permission:
             return f"{base_msg} (requires: {self.required_permission})"
         elif self.file_path:
@@ -478,10 +476,7 @@ class DonorDumpManager:
         """
         # First check if the source directory exists
         if not self.module_source_dir.exists():
-            logger.error(
-                f"Module source directory not found: {
-                    self.module_source_dir}"
-            )
+            logger.error(f"Module source directory not found: {self.module_source_dir}")
             raise ModuleBuildError(
                 f"Module source directory not found: {self.module_source_dir}"
             )
@@ -652,10 +647,7 @@ class DonorDumpManager:
                 )
 
             if not os.path.exists(self.proc_path):
-                raise ModuleLoadError(
-                    f"Module loaded but {
-                        self.proc_path} not created"
-                )
+                raise ModuleLoadError(f"Module loaded but {self.proc_path} not created")
 
             logger.info("Module loaded successfully")
             return True
@@ -847,10 +839,7 @@ class DonorDumpManager:
             Dictionary of device parameters
         """
         if not os.path.exists(self.proc_path):
-            raise DonorDumpError(
-                f"Module not loaded or {
-                    self.proc_path} not available"
-            )
+            raise DonorDumpError(f"Module not loaded or {self.proc_path} not available")
 
         try:
             device_info = {}
@@ -944,10 +933,7 @@ class DonorDumpManager:
             result["details"] = "Module is built but not currently loaded"
             result["issues"].append("Module is not loaded into the kernel")
             result["fixes"].append(
-                f"Load the module with: sudo insmod {
-                    status_info.get(
-                        'module_path',
-                        'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
+                f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
             )
             result["fixes"].append(
                 "Or use the DonorDumpManager.load_module() function with your device BDF"
@@ -962,12 +948,10 @@ class DonorDumpManager:
             # Check if headers are available
             if not status_info["headers_available"]:
                 result["issues"].append(
-                    f"Kernel headers not found for kernel {
-                        status_info['kernel_version']}"
+                    f"Kernel headers not found for kernel {status_info['kernel_version']}"
                 )
                 result["fixes"].append(
-                    f"Install kernel headers: sudo apt-get install linux-headers-{
-                        status_info['kernel_version']}"
+                    f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}"
                 )
             else:
                 result["issues"].append("Module has not been built yet")

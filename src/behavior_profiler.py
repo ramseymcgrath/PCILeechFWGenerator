@@ -1242,8 +1242,7 @@ def main():
             f"  Access frequency: {analysis['device_characteristics']['access_frequency_hz']:.2f} Hz"
         )
         print(
-            f"  Timing regularity: {
-                analysis['behavioral_signatures']['timing_regularity']:.2f}"
+            f"  Timing regularity: {analysis['behavioral_signatures']['timing_regularity']:.2f}"
         )
 
         print("\nRecommendations:")

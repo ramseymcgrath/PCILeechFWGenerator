@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from behavior_profiler import (
+from src.behavior_profiler import (
     BehaviorProfile,
     BehaviorProfiler,
     RegisterAccess,

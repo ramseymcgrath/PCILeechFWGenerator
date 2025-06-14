@@ -1,0 +1,44 @@
+{#
+Bitstream Template - Bitstream Generation
+Variables:
+- header: TCL header comment
+- vendor_id: PCI vendor ID
+- device_id: PCI device ID
+- board: Target board name
+#}
+{{ header }}
+
+puts "Generating bitstream..."
+launch_runs impl_1 -to_step write_bitstream -jobs 8
+wait_on_run impl_1
+
+# Check bitstream generation
+set bitstream_file "$project_dir/$project_name.runs/impl_1/[get_property top [current_fileset]].bit"
+if {[file exists $bitstream_file]} {
+    set output_bit "pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.bit"
+    file copy -force $bitstream_file $output_bit
+    puts "SUCCESS: Bitstream generated successfully!"
+    puts "Output file: $output_bit"
+
+    # Generate additional files
+    write_cfgmem -format mcs -size 16 -interface SPIx4 \
+        -loadbit "up 0x0 $output_bit" \
+        -file "pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.mcs"
+
+    if {[llength [get_debug_cores]] > 0} {
+        write_debug_probes -file "pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.ltx"
+    }
+
+    write_checkpoint -force "pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.dcp"
+
+    puts "Generated files:"
+    puts "  - Bitstream: pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.bit"
+    puts "  - MCS file: pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.mcs"
+    puts "  - Checkpoint: pcileech_{{ vendor_id }}_{{ device_id }}_{{ board }}.dcp"
+    puts "  - Reports: *.rpt"
+} else {
+    puts "ERROR: Bitstream generation failed!"
+    exit 1
+}
+
+puts "Bitstream generation completed successfully!"

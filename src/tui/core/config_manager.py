@@ -229,8 +229,7 @@ class ConfigManager:
                     severity=ErrorSeverity.WARNING,
                     category="config",
                     message="Some profile files could not be loaded",
-                    details=f"Skipped invalid files: {
-                        ', '.join(invalid_files)}",
+                    details=f"Skipped invalid files: {', '.join(invalid_files)}",
                     suggested_actions=[
                         "Check file permissions and format of the skipped files",
                         "Consider deleting corrupted profile files",
@@ -403,15 +402,11 @@ class ConfigManager:
                     if success:
                         created_count += 1
                     else:
-                        errors.append(
-                            f"Failed to create '{
-                                profile_data['name']}'"
-                        )
+                        errors.append(f"Failed to create '{profile_data['name']}'")
 
             if errors:
                 print(
-                    f"Warning: Created {created_count} of {
-                        len(default_profiles)} default profiles"
+                    f"Warning: Created {created_count} of {len(default_profiles)} default profiles"
                 )
                 print("\n".join(errors))
                 return created_count > 0
@@ -496,8 +491,7 @@ class ConfigManager:
                     message="Invalid JSON in import file",
                     details=f"Error at line {
                         e.lineno}, column {
-                        e.colno}: {
-                        e.msg}",
+                        e.colno}: {e.msg}",
                     suggested_actions=[
                         "Check if the file contains valid JSON data",
                         "Verify that the file is a valid configuration profile",
@@ -506,8 +500,7 @@ class ConfigManager:
                 print(
                     f"Invalid JSON in import file: Error at line {
                         e.lineno}, column {
-                        e.colno}: {
-                        e.msg}"
+                        e.colno}: {e.msg}"
                 )
                 return None
             except Exception as e:

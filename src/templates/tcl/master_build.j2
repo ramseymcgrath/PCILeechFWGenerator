@@ -1,0 +1,41 @@
+{#
+Master Build Template - PCILeech Firmware
+Variables:
+- header: TCL header comment
+- vendor_id: PCI vendor ID
+- device_id: PCI device ID
+- class_code: PCI class code
+- board: Target board name
+#}
+{{ header }}
+
+puts "Starting PCILeech firmware build process..."
+puts "Device: {{ vendor_id }}:{{ device_id }} (Class: {{ class_code }})"
+puts "Board: {{ board }}"
+puts ""
+
+# Source all build scripts in order
+set build_scripts [list \
+    "01_project_setup.tcl" \
+    "02_ip_config.tcl" \
+    "03_add_sources.tcl" \
+    "04_constraints.tcl" \
+    "05_synthesis.tcl" \
+    "06_implementation.tcl" \
+    "07_bitstream.tcl" \
+]
+
+foreach script $build_scripts {
+    if {[file exists $script]} {
+        puts "Executing: $script"
+        source $script
+        puts "Completed: $script"
+        puts ""
+    } else {
+        puts "ERROR: Required script not found: $script"
+        exit 1
+    }
+}
+
+puts "Build process completed successfully!"
+close_project
