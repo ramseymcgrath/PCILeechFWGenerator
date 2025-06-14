@@ -31,7 +31,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Check if capabilities are supported (Status register bit 4)
     status_offset = 6  # Status register is at offset 0x06
     status_byte_offset = status_offset * 2  # Each byte is 2 hex chars
-    status_bytes = cfg[status_byte_offset: status_byte_offset + 4]
+    status_bytes = cfg[status_byte_offset : status_byte_offset + 4]
     if len(status_bytes) < 4:
         logger.warning("Status register not found in configuration space")
         return None
@@ -48,7 +48,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Get capabilities pointer (offset 0x34)
     cap_ptr_offset = 0x34
     cap_ptr_byte_offset = cap_ptr_offset * 2
-    cap_ptr_bytes = cfg[cap_ptr_byte_offset: cap_ptr_byte_offset + 2]
+    cap_ptr_bytes = cfg[cap_ptr_byte_offset : cap_ptr_byte_offset + 2]
     if len(cap_ptr_bytes) < 2:
         logger.warning("Capabilities pointer not found in configuration space")
         return None
@@ -72,16 +72,13 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
         # Ensure we have enough data
         if current_byte_offset + 4 > len(cfg):
-            logger.warning(
-                f"Capability pointer {
-                    current_ptr:02x} is out of bounds")
+            logger.warning(f"Capability pointer {current_ptr:02x} is out of bounds")
             return None
 
         # Read capability ID and next pointer
         try:
-            cap_id_bytes = cfg[current_byte_offset: current_byte_offset + 2]
-            next_ptr_bytes = cfg[current_byte_offset +
-                                 2: current_byte_offset + 4]
+            cap_id_bytes = cfg[current_byte_offset : current_byte_offset + 2]
+            next_ptr_bytes = cfg[current_byte_offset + 2 : current_byte_offset + 4]
 
             current_cap_id = int(cap_id_bytes, 16)
             next_ptr = int(next_ptr_bytes, 16)
@@ -93,7 +90,8 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
         except ValueError:
             logger.warning(
                 f"Invalid capability data at offset {
-                    current_ptr:02x}")
+                    current_ptr:02x}"
+            )
             return None
 
     logger.info(f"Capability ID 0x{cap_id:02x} not found")
@@ -125,7 +123,7 @@ def msix_size(cfg: str) -> int:
         return 0
 
     try:
-        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset: msg_ctrl_byte_offset + 4]
+        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
 
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
@@ -150,8 +148,7 @@ def msix_size(cfg: str) -> int:
         table_size = (msg_ctrl & 0x7FF) + 1
         return table_size
     except ValueError:
-        logger.warning(
-            f"Invalid MSI-X Message Control value: {msg_ctrl_bytes}")
+        logger.warning(f"Invalid MSI-X Message Control value: {msg_ctrl_bytes}")
         return 0
 
 
@@ -197,7 +194,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         return result
 
     try:
-        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset: msg_ctrl_byte_offset + 4]
+        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
 
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
@@ -230,7 +227,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
             return result
 
         table_offset_bir_bytes = cfg[
-            table_offset_bir_byte_offset: table_offset_bir_byte_offset + 8
+            table_offset_bir_byte_offset : table_offset_bir_byte_offset + 8
         ]
         table_offset_bir = int(table_offset_bir_bytes, 16)
 
@@ -249,7 +246,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
             return result
 
         pba_offset_bir_bytes = cfg[
-            pba_offset_bir_byte_offset: pba_offset_bir_byte_offset + 8
+            pba_offset_bir_byte_offset : pba_offset_bir_byte_offset + 8
         ]
         pba_offset_bir = int(pba_offset_bir_bytes, 16)
 

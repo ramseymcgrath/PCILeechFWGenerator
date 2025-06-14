@@ -31,8 +31,7 @@ class TestDeviceIndicators:
             iommu_group="1",
             power_state="D0",
             link_speed="2.5 GT/s",
-            bars=[{"index": 0, "start": 0xF0000000,
-                   "size": 131072, "type": "memory"}],
+            bars=[{"index": 0, "start": 0xF0000000, "size": 131072, "type": "memory"}],
             suitability_score=0.8,
             compatibility_issues=[],
             # Enhanced compatibility indicators
@@ -68,13 +67,11 @@ class TestDeviceIndicators:
         assert no_driver_device.driver_indicator == "🔌"
 
         # Driver bound
-        bound_device = self._create_test_device(
-            has_driver=True, is_detached=False)
+        bound_device = self._create_test_device(has_driver=True, is_detached=False)
         assert bound_device.driver_indicator == "🔒"
 
         # Driver detached
-        detached_device = self._create_test_device(
-            has_driver=True, is_detached=True)
+        detached_device = self._create_test_device(has_driver=True, is_detached=True)
         assert detached_device.driver_indicator == "🔓"
 
     def test_vfio_indicator(self):
@@ -429,13 +426,7 @@ class TestTUIIntegration:
         # This would be tested in the actual TUI application
         # The device table should have columns: Status, BDF, Device,
         # Indicators, Driver, IOMMU
-        expected_columns = [
-            "Status",
-            "BDF",
-            "Device",
-            "Indicators",
-            "Driver",
-            "IOMMU"]
+        expected_columns = ["Status", "BDF", "Device", "Indicators", "Driver", "IOMMU"]
 
         # In the actual TUI, this is set up in on_mount:
         # device_table.add_columns("Status", "BDF", "Device", "Indicators", "Driver", "IOMMU")

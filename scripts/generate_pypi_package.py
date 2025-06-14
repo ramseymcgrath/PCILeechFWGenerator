@@ -155,8 +155,7 @@ class PackageValidator:
             sys.exit(1)
 
         if missing_optional:
-            Logger.warning(
-                "Missing optional dependencies (will be installed):")
+            Logger.warning("Missing optional dependencies (will be installed):")
             for tool in missing_optional:
                 Logger.warning(f"  - {tool}")
 
@@ -229,22 +228,19 @@ class VersionManager:
                 content = f.read()
 
             # Get git commit hash
-            result = CommandRunner.run(
-                "git rev-parse --short HEAD", check=False)
+            result = CommandRunner.run("git rev-parse --short HEAD", check=False)
             commit_hash = result.stdout.strip() if result.returncode == 0 else "unknown"
 
             # Update build metadata
             build_date = datetime.now().isoformat()
 
             content = re.sub(
-                r"__build_date__ = .*",
-                f'__build_date__ = "{build_date}"',
-                content)
+                r"__build_date__ = .*", f'__build_date__ = "{build_date}"', content
+            )
 
             content = re.sub(
-                r"__commit_hash__ = .*",
-                f'__commit_hash__ = "{commit_hash}"',
-                content)
+                r"__commit_hash__ = .*", f'__commit_hash__ = "{commit_hash}"', content
+            )
 
             with open(VERSION_FILE, "w") as f:
                 f.write(content)
@@ -277,8 +273,7 @@ class SecurityScanner:
             result = CommandRunner.run("safety check --json", check=False)
 
             if result.returncode == 0:
-                Logger.success(
-                    "No known vulnerabilities found in dependencies")
+                Logger.success("No known vulnerabilities found in dependencies")
             else:
                 # Parse safety output
                 try:
@@ -286,7 +281,8 @@ class SecurityScanner:
                     if vulnerabilities:
                         Logger.error(
                             f"Found {
-                                len(vulnerabilities)} vulnerabilities:")
+                                len(vulnerabilities)} vulnerabilities:"
+                        )
                         for vuln in vulnerabilities[:5]:  # Show first 5
                             Logger.error(
                                 f"  - {vuln.get('package', 'Unknown')}: {vuln.get('vulnerability', 'Unknown')}"
@@ -337,11 +333,9 @@ class QualityChecker:
             sys.exit(1)
 
         # Check import sorting
-        result = CommandRunner.run(
-            "isort --check-only src/ tests/", check=False)
+        result = CommandRunner.run("isort --check-only src/ tests/", check=False)
         if result.returncode != 0:
-            Logger.error(
-                "Import sorting issues found. Run 'isort src/ tests/' to fix.")
+            Logger.error("Import sorting issues found. Run 'isort src/ tests/' to fix.")
             sys.exit(1)
 
         Logger.success("Code formatting check passed")
@@ -352,8 +346,8 @@ class QualityChecker:
         Logger.info("Running flake8 linting...")
 
         result = CommandRunner.run(
-            "flake8 src/ tests/ --count --max-line-length=88 --statistics",
-            check=False)
+            "flake8 src/ tests/ --count --max-line-length=88 --statistics", check=False
+        )
 
         if result.returncode != 0:
             Logger.error("Linting issues found")
@@ -444,8 +438,7 @@ class PackageBuilder:
 
         Logger.success("Package distributions built:")
         for dist in distributions:
-            Logger.info(
-                f"  - {dist.name} ({dist.stat().st_size / 1024:.1f} KB)")
+            Logger.info(f"  - {dist.name} ({dist.stat().st_size / 1024:.1f} KB)")
 
         return distributions
 
@@ -477,7 +470,8 @@ class PackageBuilder:
                 with zipfile.ZipFile(dist, "r") as zf:
                     files = zf.namelist()
                     test_files = [
-                        f for f in files if "test" in f.lower() and f.endswith(".py")]
+                        f for f in files if "test" in f.lower() and f.endswith(".py")
+                    ]
                     if test_files:
                         Logger.warning(
                             f"Found test files in {dist.name}: {test_files[:5]}"
@@ -490,7 +484,8 @@ class PackageBuilder:
                 with tarfile.open(dist, "r:gz") as tf:
                     files = tf.getnames()
                     test_files = [
-                        f for f in files if "/tests/" in f and f.endswith(".py")]
+                        f for f in files if "/tests/" in f and f.endswith(".py")
+                    ]
                     if test_files:
                         Logger.warning(
                             f"Found test files in {dist.name}: {test_files[:5]}"
@@ -583,7 +578,8 @@ class PackageGenerator:
 
         Logger.info(
             f"Starting PyPI package generation for version {
-                self.version}")
+                self.version}"
+        )
         Logger.info(f"Project root: {PROJECT_ROOT}")
 
         try:
@@ -620,7 +616,8 @@ class PackageGenerator:
             elapsed_time = time.time() - start_time
             Logger.success(
                 f"Package generation completed successfully in {
-                    elapsed_time:.1f}s")
+                    elapsed_time:.1f}s"
+            )
 
             self._print_summary(distributions)
 
@@ -681,20 +678,17 @@ Examples:
 
     # Main options
     parser.add_argument(
-        "--test-pypi",
-        action="store_true",
-        help="Upload to Test PyPI instead of PyPI")
+        "--test-pypi", action="store_true", help="Upload to Test PyPI instead of PyPI"
+    )
 
     parser.add_argument(
-        "--skip-upload",
-        action="store_true",
-        help="Skip uploading to PyPI (build only)")
+        "--skip-upload", action="store_true", help="Skip uploading to PyPI (build only)"
+    )
 
     # Skip options
     parser.add_argument(
-        "--skip-validation",
-        action="store_true",
-        help="Skip project validation checks")
+        "--skip-validation", action="store_true", help="Skip project validation checks"
+    )
 
     parser.add_argument(
         "--skip-security", action="store_true", help="Skip security scanning"
@@ -705,14 +699,10 @@ Examples:
     )
 
     parser.add_argument(
-        "--skip-formatting",
-        action="store_true",
-        help="Skip code formatting checks")
+        "--skip-formatting", action="store_true", help="Skip code formatting checks"
+    )
 
-    parser.add_argument(
-        "--skip-tests",
-        action="store_true",
-        help="Skip running tests")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip running tests")
 
     parser.add_argument(
         "--skip-install-test",
@@ -727,10 +717,7 @@ Examples:
         help="Quick build (skip quality checks and tests)",
     )
 
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 

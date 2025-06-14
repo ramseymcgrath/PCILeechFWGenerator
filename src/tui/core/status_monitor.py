@@ -42,9 +42,7 @@ class StatusMonitor:
         """Check Podman availability and status"""
         try:
             if not shutil.which("podman"):
-                return {
-                    "status": "not_found",
-                    "message": "Podman not found in PATH"}
+                return {"status": "not_found", "message": "Podman not found in PATH"}
 
             # Check if Podman is running
             result = await self._run_command("podman version --format json")
@@ -90,9 +88,7 @@ class StatusMonitor:
                         "executable": vivado_info["executable"],
                     }
                 else:
-                    return {
-                        "status": "not_found",
-                        "message": "Vivado not detected"}
+                    return {"status": "not_found", "message": "Vivado not detected"}
 
             except ImportError:
                 # Fall back to manual discovery if import fails
@@ -130,14 +126,12 @@ class StatusMonitor:
                             if versions:
                                 # Sort versions and use the latest
                                 latest_version = sorted(versions)[-1]
-                                vivado_dir = os.path.join(
-                                    base_path, latest_version)
+                                vivado_dir = os.path.join(base_path, latest_version)
 
                                 # Find bin directory and executable
                                 bin_dir = os.path.join(vivado_dir, "bin")
                                 if os.path.exists(bin_dir):
-                                    vivado_exe = os.path.join(
-                                        bin_dir, "vivado")
+                                    vivado_exe = os.path.join(bin_dir, "vivado")
                                     if os.path.isfile(vivado_exe):
                                         # Try to get version using discovered
                                         # executable
@@ -146,7 +140,8 @@ class StatusMonitor:
                                         )
                                         if result.returncode == 0:
                                             version = self._extract_vivado_version(
-                                                result.stdout)
+                                                result.stdout
+                                            )
                                             return {
                                                 "status": "detected",
                                                 "version": version,
@@ -175,7 +170,9 @@ class StatusMonitor:
                             # Try to extract version from path
                             path_parts = xilinx_vivado.split(os.path.sep)
                             version = next(
-                                (p for p in path_parts if p[0].isdigit() and "." in p), "unknown", )
+                                (p for p in path_parts if p[0].isdigit() and "." in p),
+                                "unknown",
+                            )
                             return {
                                 "status": "detected",
                                 "version": version,
@@ -183,9 +180,7 @@ class StatusMonitor:
                                 "executable": vivado_exe,
                             }
 
-                return {
-                    "status": "not_found",
-                    "message": "Vivado not detected"}
+                return {"status": "not_found", "message": "Vivado not detected"}
 
         except Exception as e:
             return {"status": "error", "message": f"Vivado check failed: {e}"}
@@ -214,8 +209,7 @@ class StatusMonitor:
             devices = await asyncio.get_event_loop().run_in_executor(
                 None, list_usb_devices
             )
-            return {"count": len(devices),
-                    "devices": devices[:5]}  # Show first 5
+            return {"count": len(devices), "devices": devices[:5]}  # Show first 5
 
         except Exception as e:
             return {"count": 0, "error": str(e)}
@@ -378,18 +372,17 @@ class StatusMonitor:
         # Vivado status
         vivado = status.get("vivado", {})
         if vivado.get("status") == "detected":
-            summary["vivado"] = f"⚡ {
-                vivado.get(
-                    'version',
-                    'Unknown')} Detected"
+            summary["vivado"] = f"⚡ {vivado.get('version', 'Unknown')} Detected"
         else:
             summary["vivado"] = "❌ Not Detected"
 
         # USB devices
         usb = status.get("usb_devices", {})
         count = usb.get("count", 0)
-        summary["usb"] = f"🔌 {count} USB Device{
+        summary["usb"] = (
+            f"🔌 {count} USB Device{
             's' if count != 1 else ''} Found"
+        )
 
         # Disk space
         disk = status.get("disk_space", {})

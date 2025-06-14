@@ -24,8 +24,6 @@ from src.msix_capability import (
 from src.pci_capability import (
     PCICapabilityID,
     PCIExtCapabilityID,
-)
-from src.pci_capability import (
     find_ext_cap,
     prune_capabilities_by_rules,
 )
@@ -37,10 +35,8 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.donor_info_path = os.path.join(
-            self.temp_dir.name, "donor_info.json")
-        self.config_hex_path = os.path.join(
-            self.temp_dir.name, "config_space_init.hex")
+        self.donor_info_path = os.path.join(self.temp_dir.name, "donor_info.json")
+        self.config_hex_path = os.path.join(self.temp_dir.name, "config_space_init.hex")
 
         # Create a sample configuration space with all features
         self.config_space = self.create_sample_config_space()
@@ -74,14 +70,13 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = "00" * 4096
 
         # Set capabilities pointer at offset 0x34
-        config_space = config_space[: 0x34 * 2] + \
-            "40" + config_space[0x34 * 2 + 2:]
+        config_space = config_space[: 0x34 * 2] + "40" + config_space[0x34 * 2 + 2 :]
 
         # Set capabilities bit in status register (offset 0x06, bit 4)
-        status_value = int(config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
+        status_value = int(config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
         status_hex = f"{status_value:04x}"
         config_space = (
-            config_space[: 0x06 * 2] + status_hex + config_space[0x06 * 2 + 4:]
+            config_space[: 0x06 * 2] + status_hex + config_space[0x06 * 2 + 4 :]
         )
 
         # Add PCIe capability at offset 0x40
@@ -89,7 +84,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x40 * 2]
             + pcie_cap
-            + config_space[0x40 * 2 + len(pcie_cap):]
+            + config_space[0x40 * 2 + len(pcie_cap) :]
         )
 
         # Add Link Control Register at offset 0x50 (part of PCIe capability)
@@ -97,7 +92,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x50 * 2]
             + link_control
-            + config_space[0x50 * 2 + len(link_control):]
+            + config_space[0x50 * 2 + len(link_control) :]
         )
 
         # Add Device Control 2 Register at offset 0x68 (part of PCIe
@@ -106,13 +101,13 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x68 * 2]
             + dev_control2
-            + config_space[0x68 * 2 + len(dev_control2):]
+            + config_space[0x68 * 2 + len(dev_control2) :]
         )
 
         # Add Power Management capability at offset 0x50
         pm_cap = "01" + "60" + "0300" + "00000000"
         config_space = (
-            config_space[: 0x50 * 2] + pm_cap + config_space[0x50 * 2 + len(pm_cap):]
+            config_space[: 0x50 * 2] + pm_cap + config_space[0x50 * 2 + len(pm_cap) :]
         )
 
         # Add MSI-X capability at offset 0x60
@@ -120,7 +115,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x60 * 2]
             + msix_cap
-            + config_space[0x60 * 2 + len(msix_cap):]
+            + config_space[0x60 * 2 + len(msix_cap) :]
         )
 
         # Add Vendor-specific capability at offset 0x70
@@ -128,7 +123,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x70 * 2]
             + vendor_cap
-            + config_space[0x70 * 2 + len(vendor_cap):]
+            + config_space[0x70 * 2 + len(vendor_cap) :]
         )
 
         # Add L1 PM Substates extended capability at offset 0x100
@@ -136,7 +131,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x100 * 2]
             + l1pm_cap
-            + config_space[0x100 * 2 + len(l1pm_cap):]
+            + config_space[0x100 * 2 + len(l1pm_cap) :]
         )
 
         # Add SR-IOV extended capability at offset 0x140
@@ -144,7 +139,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x140 * 2]
             + sriov_cap
-            + config_space[0x140 * 2 + len(sriov_cap):]
+            + config_space[0x140 * 2 + len(sriov_cap) :]
         )
 
         return config_space
@@ -156,21 +151,18 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
 
         # Verify pruning results
         # Vendor-specific capability should be removed
-        vendor_offset = find_cap(
-            pruned_config,
-            PCICapabilityID.VENDOR_SPECIFIC.value)
+        vendor_offset = find_cap(pruned_config, PCICapabilityID.VENDOR_SPECIFIC.value)
         self.assertIsNone(vendor_offset)
 
         # SR-IOV extended capability should be removed
         sriov_offset = find_ext_cap(
-            pruned_config,
-            PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value)
+            pruned_config, PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value
+        )
         self.assertIsNone(sriov_offset)
 
         # Save pruned config space
         manager = DonorDumpManager()
-        result = manager.save_config_space_hex(
-            pruned_config, self.config_hex_path)
+        result = manager.save_config_space_hex(pruned_config, self.config_hex_path)
         self.assertTrue(result)
 
         # Verify the file exists
@@ -272,8 +264,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
 
         # Step 4: Save pruned config space
         manager = DonorDumpManager()
-        result = manager.save_config_space_hex(
-            pruned_config, self.config_hex_path)
+        result = manager.save_config_space_hex(pruned_config, self.config_hex_path)
         self.assertTrue(result)
 
         # Step 5: Generate SystemVerilog code for MSI-X table
@@ -294,8 +285,9 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         )
         self.assertIsNone(
             find_ext_cap(
-                pruned_config,
-                PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value))
+                pruned_config, PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value
+            )
+        )
 
         # 2. Verify MSI-X table
         self.assertIn("localparam NUM_MSIX = 8;", msix_sv_code)
@@ -368,9 +360,7 @@ class TestFeatureIntegrationEnhanced(unittest.TestCase):
         # Verify MSI-X info is identical
         self.assertEqual(msix_info1["table_size"], msix_info2["table_size"])
         self.assertEqual(msix_info1["table_bir"], msix_info2["table_bir"])
-        self.assertEqual(
-            msix_info1["table_offset"],
-            msix_info2["table_offset"])
+        self.assertEqual(msix_info1["table_offset"], msix_info2["table_offset"])
 
         # Generate MSI-X SystemVerilog code for both builds
         msix_sv_code1 = generate_msix_table_sv(msix_info1)

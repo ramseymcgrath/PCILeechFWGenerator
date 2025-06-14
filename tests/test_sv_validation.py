@@ -6,18 +6,19 @@ This test suite compares the SystemVerilog generation capabilities of the PCILee
 generator against real-world examples from the pcileech-wifi-v2 project.
 """
 
-from tests.utils import get_pcileech_wifi_sv_file
-from advanced_sv_main import (
-    DeviceSpecificLogic,
-    DeviceType,
-)
-from advanced_sv_main import AdvancedSVGenerator as MainSVGenerator
-from advanced_sv_error import ErrorHandlingConfig
 import re
 import sys
 from pathlib import Path
 
 import pytest
+
+from advanced_sv_error import ErrorHandlingConfig
+from advanced_sv_main import AdvancedSVGenerator as MainSVGenerator
+from advanced_sv_main import (
+    DeviceSpecificLogic,
+    DeviceType,
+)
+from tests.utils import get_pcileech_wifi_sv_file
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -32,9 +33,7 @@ class TestSystemVerilogValidation:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(
-                f"Failed to fetch SystemVerilog example from GitHub: {
-                    str(e)}")
+            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
 
     @pytest.fixture
     def mock_register_data(self):
@@ -87,15 +86,13 @@ class TestSystemVerilogValidation:
 
         # Generate SystemVerilog with our generator
         generator = MainSVGenerator()
-        sv_content = generator.generate_advanced_systemverilog(
-            mock_register_data)
+        sv_content = generator.generate_advanced_systemverilog(mock_register_data)
 
         # Extract module structure from our generated SystemVerilog
         generated_modules = self._extract_sv_modules(sv_content)
 
         # Verify that our SystemVerilog has modules
-        assert len(
-            generated_modules) > 0, "No modules found in generated SystemVerilog"
+        assert len(generated_modules) > 0, "No modules found in generated SystemVerilog"
 
         # Verify that our main module has similar structure to the example
         generated_modules[0]
@@ -117,8 +114,7 @@ class TestSystemVerilogValidation:
         """Test that register handling in SystemVerilog matches the example pattern."""
         # Generate SystemVerilog with our generator
         generator = MainSVGenerator()
-        sv_content = generator.generate_advanced_systemverilog(
-            mock_register_data)
+        sv_content = generator.generate_advanced_systemverilog(mock_register_data)
 
         # Check for register declarations
         for reg in mock_register_data:
@@ -140,8 +136,7 @@ class TestSystemVerilogValidation:
         clock_domains = self._extract_clock_domains(external_sv_example)
 
         # Generate SystemVerilog with clock domain support
-        device_config = DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK_CONTROLLER)
+        device_config = DeviceSpecificLogic(device_type=DeviceType.NETWORK_CONTROLLER)
         generator = MainSVGenerator(device_config=device_config)
 
         regs = [
@@ -174,8 +169,7 @@ class TestSystemVerilogValidation:
         example_interfaces = self._extract_interfaces(external_sv_example)
 
         # Generate SystemVerilog with our generator
-        device_config = DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK_CONTROLLER)
+        device_config = DeviceSpecificLogic(device_type=DeviceType.NETWORK_CONTROLLER)
         generator = MainSVGenerator(device_config=device_config)
 
         regs = [
@@ -206,9 +200,8 @@ class TestSystemVerilogValidation:
         if has_error_handling:
             # Generate SystemVerilog with error handling
             error_config = ErrorHandlingConfig(
-                enable_ecc=True,
-                enable_parity_check=True,
-                enable_crc_check=True)
+                enable_ecc=True, enable_parity_check=True, enable_crc_check=True
+            )
             generator = MainSVGenerator(error_config=error_config)
 
             regs = [
@@ -232,8 +225,7 @@ class TestSystemVerilogValidation:
 
     def _extract_clock_domains(self, sv_content):
         """Extract clock domain information from SystemVerilog content."""
-        clock_signals = re.findall(
-            r"input\s+(?:logic\s+)?(\w+clk\w*)", sv_content)
+        clock_signals = re.findall(r"input\s+(?:logic\s+)?(\w+clk\w*)", sv_content)
         return clock_signals
 
     def _extract_interfaces(self, sv_content):
@@ -256,7 +248,8 @@ class TestAdvancedSVFeatureValidation:
         except ValueError as e:
             pytest.skip(
                 f"Failed to fetch SystemVerilog example from GitHub: {
-                    str(e)}")
+                    str(e)}"
+            )
 
     def test_state_machine_generation(self, external_sv_example):
         """Test that our state machine generation is compatible with real-world examples."""
@@ -270,21 +263,22 @@ class TestAdvancedSVFeatureValidation:
             # Generate SystemVerilog with state machine
             generator = MainSVGenerator()
 
-            regs = [{"offset": 0x100,
-                     "name": "state_reg",
-                     "value": "0x0",
-                     "rw": "rw",
-                     "context": {"function": "state_control",
-                                 "timing": "runtime",
-                                 "sequences": [{"function": "init",
-                                                "position": 0,
-                                                "operation": "write"},
-                                               {"function": "init",
-                                                "position": 1,
-                                                "operation": "read"},
-                                               ],
-                                 },
-                     }]
+            regs = [
+                {
+                    "offset": 0x100,
+                    "name": "state_reg",
+                    "value": "0x0",
+                    "rw": "rw",
+                    "context": {
+                        "function": "state_control",
+                        "timing": "runtime",
+                        "sequences": [
+                            {"function": "init", "position": 0, "operation": "write"},
+                            {"function": "init", "position": 1, "operation": "read"},
+                        ],
+                    },
+                }
+            ]
 
             sv_content = generator.generate_advanced_systemverilog(regs)
 

@@ -225,8 +225,9 @@ class TestPCIDevice:
             compatibility_issues=[],
         )
 
-        assert (device.display_name ==
-                "Intel Corporation 82574L Gigabit Network Connection")
+        assert (
+            device.display_name == "Intel Corporation 82574L Gigabit Network Connection"
+        )
 
     @pytest.mark.unit
     def test_is_suitable(self):

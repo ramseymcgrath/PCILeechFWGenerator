@@ -73,10 +73,8 @@ class PowerManagementConfig:
 
     # Power state support
     supported_power_states: List[PowerState] = field(
-        default_factory=lambda: [
-            PowerState.D0,
-            PowerState.D1,
-            PowerState.D3_HOT])
+        default_factory=lambda: [PowerState.D0, PowerState.D1, PowerState.D3_HOT]
+    )
     supported_link_states: List[LinkState] = field(
         default_factory=lambda: [LinkState.L0, LinkState.L0S, LinkState.L1]
     )
@@ -253,8 +251,7 @@ class AdvancedSVGenerator:
         self._generate_clock_domains(variance_model)
         self._generate_interrupt_handling()
         self._generate_device_specific_logic()
-        register_logic = self._generate_advanced_register_logic(
-            regs, variance_model)
+        register_logic = self._generate_advanced_register_logic(regs, variance_model)
 
         # Combine into complete module
         module_content = """//==============================================================================
@@ -434,10 +431,8 @@ endmodule
 
         # Power management signals
         declarations.append("    // Power Management Signals")
-        declarations.append(
-            "    logic [1:0] current_power_state = 2'b00;  // D0 state")
-        declarations.append(
-            "    logic [1:0] current_link_state = 2'b00;   // L0 state")
+        declarations.append("    logic [1:0] current_power_state = 2'b00;  // D0 state")
+        declarations.append("    logic [1:0] current_link_state = 2'b00;   // L0 state")
         declarations.append("    logic [15:0] power_transition_timer = 16'h0;")
         declarations.append("    logic power_state_changing = 1'b0;")
         declarations.append("")
@@ -446,8 +441,7 @@ endmodule
         declarations.append("    // Error Handling Signals")
         declarations.append("    logic [7:0] error_status = 8'h0;")
         declarations.append("    logic [7:0] correctable_error_count = 8'h0;")
-        declarations.append(
-            "    logic [7:0] uncorrectable_error_count = 8'h0;")
+        declarations.append("    logic [7:0] uncorrectable_error_count = 8'h0;")
         declarations.append("    logic error_recovery_active = 1'b0;")
         declarations.append("    logic [15:0] error_recovery_timer = 16'h0;")
         declarations.append("")
@@ -455,25 +449,26 @@ endmodule
         # Performance counter signals
         declarations.append("    // Performance Counter Signals")
         declarations.append(
-            f"    logic [{
-                self.perf_config.counter_width_bits -
-                1}:0] transaction_counter = {
-                self.perf_config.counter_width_bits}'h0;")
+            f"    logic [{self.perf_config.counter_width_bits - 1}:0] transaction_counter = {self.perf_config.counter_width_bits}'h0;"
+        )
         declarations.append(
             f"    logic [{
                 self.perf_config.counter_width_bits -
                 1}:0] bandwidth_counter = {
-                self.perf_config.counter_width_bits}'h0;")
+                self.perf_config.counter_width_bits}'h0;"
+        )
         declarations.append(
             f"    logic [{
                 self.perf_config.counter_width_bits -
                 1}:0] latency_accumulator = {
-                self.perf_config.counter_width_bits}'h0;")
+                self.perf_config.counter_width_bits}'h0;"
+        )
         declarations.append(
             f"    logic [{
                 self.perf_config.counter_width_bits -
                 1}:0] error_rate_counter = {
-                self.perf_config.counter_width_bits}'h0;")
+                self.perf_config.counter_width_bits}'h0;"
+        )
         declarations.append("")
 
         # Clock domain signals
@@ -500,10 +495,8 @@ endmodule
             # Apply variance to initial values if model provided
             if variance_model:
                 # Add small variance to initial values for realism
-                variance_factor = 1.0 + \
-                    (random.random() - 0.5) * 0.01  # ±0.5% variance
-                varied_value = int(
-                    initial_value * variance_factor) & 0xFFFFFFFF
+                variance_factor = 1.0 + (random.random() - 0.5) * 0.01  # ±0.5% variance
+                varied_value = int(initial_value * variance_factor) & 0xFFFFFFFF
                 declarations.append(
                     f"    logic [31:0] {name}_reg = 32'h{varied_value:08X};"
                 )
@@ -514,8 +507,7 @@ endmodule
 
             # Add timing control signals
             declarations.append(f"    logic {name}_access_pending = 1'b0;")
-            declarations.append(
-                f"    logic [7:0] {name}_timing_counter = 8'h0;")
+            declarations.append(f"    logic [7:0] {name}_timing_counter = 8'h0;")
 
         declarations.append("")
 
@@ -547,8 +539,7 @@ endmodule
 
         # Power state transition logic
         power_logic.append("    // Power state transition logic")
-        power_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        power_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         power_logic.append("        if (!reset_n) begin")
         power_logic.append("            pm_state <= PM_D0_ACTIVE;")
         power_logic.append("            power_transition_timer <= 16'h0;")
@@ -575,8 +566,7 @@ endmodule
         power_logic.append("        ")
         power_logic.append("        case (pm_state)")
         power_logic.append("            PM_D0_ACTIVE: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b01) begin")
+        power_logic.append("                if (power_state_req == 2'b01) begin")
         power_logic.append("                    pm_next_state = PM_D0_TO_D1;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append(
@@ -591,15 +581,14 @@ endmodule
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.power_config.d0_to_d1_cycles}) begin")
-        power_logic.append(
-            "                    pm_next_state = PM_D1_STANDBY;")
+                self.power_config.d0_to_d1_cycles}) begin"
+        )
+        power_logic.append("                    pm_next_state = PM_D1_STANDBY;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
         power_logic.append("            PM_D1_STANDBY: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b00) begin")
+        power_logic.append("                if (power_state_req == 2'b00) begin")
         power_logic.append("                    pm_next_state = PM_D1_TO_D0;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append("                end")
@@ -609,7 +598,8 @@ endmodule
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.power_config.d1_to_d0_cycles}) begin")
+                self.power_config.d1_to_d0_cycles}) begin"
+        )
         power_logic.append("                    pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("                end")
         power_logic.append("            end")
@@ -618,15 +608,14 @@ endmodule
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.power_config.d0_to_d3_cycles}) begin")
-        power_logic.append(
-            "                    pm_next_state = PM_D3_SUSPEND;")
+                self.power_config.d0_to_d3_cycles}) begin"
+        )
+        power_logic.append("                    pm_next_state = PM_D3_SUSPEND;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
         power_logic.append("            PM_D3_SUSPEND: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b00) begin")
+        power_logic.append("                if (power_state_req == 2'b00) begin")
         power_logic.append("                    pm_next_state = PM_D3_TO_D0;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append("                end")
@@ -636,13 +625,13 @@ endmodule
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.power_config.d3_to_d0_cycles}) begin")
+                self.power_config.d3_to_d0_cycles}) begin"
+        )
         power_logic.append("                    pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
-        power_logic.append(
-            "            default: pm_next_state = PM_D0_ACTIVE;")
+        power_logic.append("            default: pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("        endcase")
         power_logic.append("    end")
         power_logic.append("")
@@ -710,18 +699,15 @@ endmodule
         error_logic.append("    logic [31:0] timeout_counter = 32'h0;")
         error_logic.append("    ")
         error_logic.append("    // Timeout detection")
-        error_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        error_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         error_logic.append("        if (!reset_n) begin")
         error_logic.append("            timeout_counter <= 32'h0;")
         error_logic.append("            timeout_error <= 1'b0;")
-        error_logic.append(
-            "        end else if (bar_wr_en || bar_rd_en) begin")
+        error_logic.append("        end else if (bar_wr_en || bar_rd_en) begin")
         error_logic.append("            timeout_counter <= 32'h0;")
         error_logic.append("            timeout_error <= 1'b0;")
         error_logic.append("        end else begin")
-        error_logic.append(
-            "            timeout_counter <= timeout_counter + 1;")
+        error_logic.append("            timeout_counter <= timeout_counter + 1;")
         error_logic.append(
             "            timeout_error <= (timeout_counter > 32'h00100000);  // ~10ms timeout"
         )
@@ -750,8 +736,7 @@ endmodule
 
         # Error state machine
         error_logic.append("    // Error state machine")
-        error_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        error_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         error_logic.append("        if (!reset_n) begin")
         error_logic.append("            error_state <= ERR_NORMAL;")
         error_logic.append("            retry_count <= 4'h0;")
@@ -763,8 +748,7 @@ endmodule
         error_logic.append(
             "                    if (parity_error || crc_error || timeout_error) begin"
         )
-        error_logic.append(
-            "                        error_state <= ERR_DETECTED;")
+        error_logic.append("                        error_state <= ERR_DETECTED;")
         error_logic.append("                        error_status <= 8'h01;")
         error_logic.append(
             "                        if (parity_error) error_code <= 8'h10;"
@@ -781,14 +765,12 @@ endmodule
         error_logic.append("                    error_state <= ERR_ANALYZING;")
         error_logic.append("                end")
         error_logic.append("                ERR_ANALYZING: begin")
-        error_logic.append(
-            "                    error_state <= ERR_RECOVERING;")
+        error_logic.append("                    error_state <= ERR_RECOVERING;")
         error_logic.append("                end")
         error_logic.append("                ERR_RECOVERING: begin")
         error_logic.append("                    if (retry_count < 4'h3) begin")
         error_logic.append("                        error_state <= ERR_RETRY;")
-        error_logic.append(
-            "                        retry_count <= retry_count + 1;")
+        error_logic.append("                        retry_count <= retry_count + 1;")
         error_logic.append("                    end else begin")
         error_logic.append("                        error_state <= ERR_FATAL;")
         error_logic.append("                        error_status <= 8'hFF;")
@@ -800,8 +782,7 @@ endmodule
         error_logic.append("                    error_code <= 8'h00;")
         error_logic.append("                end")
         error_logic.append("                ERR_FATAL: begin")
-        error_logic.append(
-            "                    // Stay in fatal state until reset")
+        error_logic.append("                    // Stay in fatal state until reset")
         error_logic.append("                end")
         error_logic.append("            endcase")
         error_logic.append("        end")
@@ -832,24 +813,19 @@ endmodule
 
             # Generate device-specific performance counters
             if self.device_config.device_type == DeviceType.NETWORK_CONTROLLER:
-                perf_logic.extend(
-                    self._generate_network_performance_counters())
+                perf_logic.extend(self._generate_network_performance_counters())
             elif self.device_config.device_type == DeviceType.STORAGE_CONTROLLER:
-                perf_logic.extend(
-                    self._generate_storage_performance_counters())
+                perf_logic.extend(self._generate_storage_performance_counters())
             elif self.device_config.device_type == DeviceType.GRAPHICS_CONTROLLER:
-                perf_logic.extend(
-                    self._generate_graphics_performance_counters())
+                perf_logic.extend(self._generate_graphics_performance_counters())
             elif self.device_config.device_type == DeviceType.AUDIO_CONTROLLER:
                 perf_logic.extend(self._generate_audio_performance_counters())
             else:
-                perf_logic.extend(
-                    self._generate_generic_performance_counters())
+                perf_logic.extend(self._generate_generic_performance_counters())
 
             # Common performance counter logic
             perf_logic.append("    // Performance counter state machine")
-            perf_logic.append(
-                "    always_ff @(posedge clk or negedge reset_n) begin")
+            perf_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
             perf_logic.append("        if (!reset_n) begin")
             perf_logic.append("            perf_counter_0 <= '0;")
             perf_logic.append("            perf_counter_1 <= '0;")
@@ -858,15 +834,12 @@ endmodule
             perf_logic.append("            cycle_counter <= 32'h0;")
             perf_logic.append("            perf_state <= PERF_IDLE;")
             perf_logic.append("        end else if (perf_enable) begin")
-            perf_logic.append(
-                "            cycle_counter <= cycle_counter + 1;")
+            perf_logic.append("            cycle_counter <= cycle_counter + 1;")
             perf_logic.append("            ")
             perf_logic.append("            case (perf_state)")
             perf_logic.append("                PERF_IDLE: begin")
-            perf_logic.append(
-                "                    if (bar_wr_en || bar_rd_en) begin")
-            perf_logic.append(
-                "                        perf_state <= PERF_ACTIVE;")
+            perf_logic.append("                    if (bar_wr_en || bar_rd_en) begin")
+            perf_logic.append("                        perf_state <= PERF_ACTIVE;")
             perf_logic.append(
                 "                        perf_counter_0 <= perf_counter_0 + 1;  // Transaction count"
             )
@@ -876,10 +849,8 @@ endmodule
             perf_logic.append(
                 "                    perf_counter_1 <= perf_counter_1 + 1;  // Active cycles"
             )
-            perf_logic.append(
-                "                    if (!bar_wr_en && !bar_rd_en) begin")
-            perf_logic.append(
-                "                        perf_state <= PERF_IDLE;")
+            perf_logic.append("                    if (!bar_wr_en && !bar_rd_en) begin")
+            perf_logic.append("                        perf_state <= PERF_IDLE;")
             perf_logic.append("                    end")
             perf_logic.append("                end")
             perf_logic.append("                PERF_STALL: begin")
@@ -970,8 +941,7 @@ endmodule
             "",
         ]
 
-    def _generate_clock_domains(
-            self, variance_model: Optional[VarianceModel]) -> str:
+    def _generate_clock_domains(self, variance_model: Optional[VarianceModel]) -> str:
         """Generate multiple clock domain support with variance compensation."""
 
         try:
@@ -995,8 +965,7 @@ endmodule
                     f"    // Clock frequency adjusted for manufacturing variance: {adjusted_freq:.2f} MHz"
                 )
 
-            clock_logic.append(
-                "    clock_domain_t active_domain = CLK_DOMAIN_CORE;")
+            clock_logic.append("    clock_domain_t active_domain = CLK_DOMAIN_CORE;")
             clock_logic.append(
                 "    logic [2:0] clock_domain_status = 3'b001;  // Core domain active"
             )
@@ -1006,13 +975,11 @@ endmodule
 
             clock_logic.append("    // Clock domain crossing detection")
             clock_logic.append("    logic domain_crossing_detected = 1'b0;")
-            clock_logic.append(
-                "    logic [1:0] prev_domain = CLK_DOMAIN_CORE;")
+            clock_logic.append("    logic [1:0] prev_domain = CLK_DOMAIN_CORE;")
             clock_logic.append("")
 
             clock_logic.append("    // Clock domain management")
-            clock_logic.append(
-                "    always_ff @(posedge clk or negedge reset_n) begin")
+            clock_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
             clock_logic.append("        if (!reset_n) begin")
             clock_logic.append("            active_domain <= CLK_DOMAIN_CORE;")
             clock_logic.append("            clock_domain_status <= 3'b001;")
@@ -1074,11 +1041,13 @@ endmodule
             int_logic.append(
                 f"    logic [{
                     self.device_config.msi_vectors -
-                    1}:0] msi_pending = '0;")
+                    1}:0] msi_pending = '0;"
+            )
             int_logic.append(
                 f"    logic [{
                     self.device_config.msi_vectors -
-                    1}:0] msi_mask = '0;")
+                    1}:0] msi_mask = '0;"
+            )
             int_logic.append("    logic [7:0] int_vector = 8'h00;")
             int_logic.append("    logic int_enable = 1'b1;")
             int_logic.append("")
@@ -1096,8 +1065,7 @@ endmodule
                 int_logic.extend(self._generate_generic_interrupts())
 
             int_logic.append("    // Interrupt state machine")
-            int_logic.append(
-                "    always_ff @(posedge clk or negedge reset_n) begin")
+            int_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
             int_logic.append("        if (!reset_n) begin")
             int_logic.append("            int_state <= INT_NONE;")
             int_logic.append("            msi_pending <= '0;")
@@ -1106,8 +1074,7 @@ endmodule
             int_logic.append("            case (int_state)")
             int_logic.append("                INT_NONE: begin")
             int_logic.append("                    if (|msi_pending) begin")
-            int_logic.append(
-                "                        int_state <= INT_PENDING;")
+            int_logic.append("                        int_state <= INT_PENDING;")
             int_logic.append(
                 "                        // Priority encoder for interrupt vector"
             )
@@ -1126,18 +1093,14 @@ endmodule
             int_logic.append("                    end")
             int_logic.append("                end")
             int_logic.append("                INT_PENDING: begin")
-            int_logic.append(
-                "                    int_state <= INT_PROCESSING;")
+            int_logic.append("                    int_state <= INT_PROCESSING;")
             int_logic.append("                end")
             int_logic.append("                INT_PROCESSING: begin")
-            int_logic.append(
-                "                    int_state <= INT_ACKNOWLEDGED;")
+            int_logic.append("                    int_state <= INT_ACKNOWLEDGED;")
             int_logic.append("                end")
             int_logic.append("                INT_ACKNOWLEDGED: begin")
-            int_logic.append(
-                "                    // Clear the processed interrupt")
-            int_logic.append(
-                "                    msi_pending[int_vector] <= 1'b0;")
+            int_logic.append("                    // Clear the processed interrupt")
+            int_logic.append("                    msi_pending[int_vector] <= 1'b0;")
             int_logic.append("                    int_state <= INT_NONE;")
             int_logic.append("                end")
             int_logic.append("                INT_ERROR: begin")
@@ -1695,12 +1658,12 @@ endmodule
                 reg_logic.append(
                     f"    logic [{
                         reg_size -
-                        1}:0] {reg_name}_reg = {reg_size}'h0;")
+                        1}:0] {reg_name}_reg = {reg_size}'h0;"
+                )
 
             reg_logic.append("")
             reg_logic.append("    // Register access state machine")
-            reg_logic.append(
-                "    always_ff @(posedge clk or negedge reset_n) begin")
+            reg_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
             reg_logic.append("        if (!reset_n) begin")
             reg_logic.append("            reg_state <= REG_IDLE;")
             reg_logic.append("            reg_data_buffer <= 32'h0;")
@@ -1717,10 +1680,8 @@ endmodule
             reg_logic.append("                    reg_access_valid <= 1'b0;")
             reg_logic.append("                    if (bar_wr_en) begin")
             reg_logic.append("                        reg_state <= REG_WRITE;")
-            reg_logic.append(
-                "                        reg_data_buffer <= bar_wr_data;")
-            reg_logic.append(
-                "                    end else if (bar_rd_en) begin")
+            reg_logic.append("                        reg_data_buffer <= bar_wr_data;")
+            reg_logic.append("                    end else if (bar_rd_en) begin")
             reg_logic.append("                        reg_state <= REG_READ;")
             reg_logic.append("                    end")
             reg_logic.append("                end")
@@ -1763,7 +1724,8 @@ endmodule
 
                 cases.append(f"            32'h{reg_addr:08X}: begin")
                 cases.append(
-                    f"                bar_rd_data = {reg_name}_reg;  // {reg_desc}")
+                    f"                bar_rd_data = {reg_name}_reg;  // {reg_desc}"
+                )
                 cases.append("            end")
 
             return "\n".join(cases)

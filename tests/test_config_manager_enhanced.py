@@ -145,9 +145,7 @@ class TestConfigManager(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             manager._ensure_config_directory()
 
-        self.assertIn(
-            "Failed to create config directory", str(
-                context.exception))
+        self.assertIn("Failed to create config directory", str(context.exception))
 
     def test_save_profile_success(self):
         """Test successful profile saving."""
@@ -483,8 +481,7 @@ class TestConfigManagerIntegration(unittest.TestCase):
 
         # Verify deletion
         profiles_after_delete = manager.list_profiles()
-        profile_names_after = [p.get("name", "")
-                               for p in profiles_after_delete]
+        profile_names_after = [p.get("name", "") for p in profiles_after_delete]
         self.assertNotIn("test_lifecycle", profile_names_after)
 
 

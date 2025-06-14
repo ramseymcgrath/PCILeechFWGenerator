@@ -50,34 +50,41 @@ def mock_donor_info():
 @pytest.fixture
 def mock_register_data():
     """Mock register data for testing."""
-    return [{"offset": 0x400,
-             "name": "reg_ctrl",
-             "value": "0x0",
-             "rw": "rw",
-             "context": {"function": "init_device",
-                         "dependencies": ["reg_status"],
-                         "timing": "early",
-                         "access_pattern": "write_then_read",
-                         "timing_constraints": [{"delay_us": 10,
-                                                 "context": "register_access"}],
-                         "sequences": [{"function": "init_device",
-                                        "position": 0,
-                                        "total_ops": 3,
-                                        "operation": "write",
-                                        }],
-                         },
-             },
-            {"offset": 0x404,
-             "name": "reg_status",
-             "value": "0x1",
-             "rw": "ro",
-             "context": {"function": "check_status",
-                         "dependencies": [],
-                         "timing": "runtime",
-                         "access_pattern": "read_heavy",
-                         },
-             },
-            ]
+    return [
+        {
+            "offset": 0x400,
+            "name": "reg_ctrl",
+            "value": "0x0",
+            "rw": "rw",
+            "context": {
+                "function": "init_device",
+                "dependencies": ["reg_status"],
+                "timing": "early",
+                "access_pattern": "write_then_read",
+                "timing_constraints": [{"delay_us": 10, "context": "register_access"}],
+                "sequences": [
+                    {
+                        "function": "init_device",
+                        "position": 0,
+                        "total_ops": 3,
+                        "operation": "write",
+                    }
+                ],
+            },
+        },
+        {
+            "offset": 0x404,
+            "name": "reg_status",
+            "value": "0x1",
+            "rw": "ro",
+            "context": {
+                "function": "check_status",
+                "dependencies": [],
+                "timing": "runtime",
+                "access_pattern": "read_heavy",
+            },
+        },
+    ]
 
 
 @pytest.fixture
@@ -256,8 +263,7 @@ def mock_container_runtime():
     """Mock container runtime (Podman) operations."""
     with patch("shutil.which") as mock_which, patch("subprocess.run") as mock_run:
         mock_which.return_value = "/usr/bin/podman"
-        mock_run.return_value = Mock(
-            returncode=0, stdout="Build successful", stderr="")
+        mock_run.return_value = Mock(returncode=0, stdout="Build successful", stderr="")
         yield mock_run
 
 
@@ -289,11 +295,11 @@ def generate_test_pci_devices(count: int) -> List[Dict[str, str]]:
     for i in range(count):
         devices.append(
             {
-                "bd": f"0000:0{
-                    i:01x}:00.0", "ven": f"80{
-                    i:02x}", "dev": f"15{
-                    i:02x}", "class": "0200", "pretty": f"0000:0{
-                        i:01x}:00.0 Test Device {i} [0200]: Test Vendor [80{
-                            i:02x}:15{
-                                i:02x}]", })
+                "bd": f"0000:0{i:01x}:00.0",
+                "ven": f"80{i:02x}",
+                "dev": f"15{i:02x}",
+                "class": "0200",
+                "pretty": f"0000:0{i:01x}:00.0 Test Device {i} [0200]: Test Vendor [80{i:02x}:15{i:02x}]",
+            }
+        )
     return devices

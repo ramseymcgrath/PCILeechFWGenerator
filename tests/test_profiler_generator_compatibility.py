@@ -5,10 +5,11 @@ This test suite verifies that the behavior profiler returns data that is
 compatible with the advanced SystemVerilog generator.
 """
 
-from src.manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
-from src.behavior_profiler import (
-    BehaviorProfiler,
-)
+import sys
+from pathlib import Path
+
+import pytest
+
 from src.advanced_sv_generator import (
     AdvancedSVGenerator,
     DeviceSpecificLogic,
@@ -17,10 +18,10 @@ from src.advanced_sv_generator import (
     PerformanceCounterConfig,
     PowerManagementConfig,
 )
-import sys
-from pathlib import Path
-
-import pytest
+from src.behavior_profiler import (
+    BehaviorProfiler,
+)
+from src.manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -126,8 +127,7 @@ class TestProfilerGeneratorCompatibility:
     def test_profiler_analysis_structure(self, mock_behavior_profile):
         """Test that the profiler analysis has the expected structure."""
         # Explicitly disable ftrace to avoid permission issues
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=False, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
         # Verify analysis structure
@@ -140,8 +140,7 @@ class TestProfilerGeneratorCompatibility:
         assert "access_frequency_hz" in analysis["device_characteristics"]
         assert "timing_regularity" in analysis["behavioral_signatures"]
 
-    def test_enhanced_registers_format(
-            self, mock_behavior_profile, mock_registers):
+    def test_enhanced_registers_format(self, mock_behavior_profile, mock_registers):
         """Test that enhanced registers have the expected format."""
         enhanced_regs = enhance_registers_with_profile(
             mock_behavior_profile, mock_registers
@@ -165,12 +164,10 @@ class TestProfilerGeneratorCompatibility:
             assert "access_frequency_hz" in reg["context"]["device_analysis"]
             assert "timing_regularity" in reg["context"]["device_analysis"]
 
-    def test_generator_compatibility(
-            self, mock_behavior_profile, mock_registers):
+    def test_generator_compatibility(self, mock_behavior_profile, mock_registers):
         """Test that the generator can use the profiler data."""
         # Create a mock profiler to analyze the profile
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=False, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         profiler.analyze_patterns(mock_behavior_profile)
 
         # Enhance registers with profile data
@@ -221,14 +218,10 @@ class TestProfilerGeneratorCompatibility:
         for reg in mock_registers:
             assert reg["name"] in sv_content
 
-    def test_end_to_end_integration(
-            self,
-            mock_behavior_profile,
-            mock_registers):
+    def test_end_to_end_integration(self, mock_behavior_profile, mock_registers):
         """Test end-to-end integration from profiler to generator."""
         # Create a mock profiler to analyze the profile
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=False, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         analysis = profiler.analyze_patterns(mock_behavior_profile)
 
         # Verify analysis structure
@@ -246,8 +239,9 @@ class TestProfilerGeneratorCompatibility:
         )
 
         # Verify that enhanced registers have behavioral timing information
-        assert any("behavioral_timing" in reg.get("context", {})
-                   for reg in enhanced_regs)
+        assert any(
+            "behavioral_timing" in reg.get("context", {}) for reg in enhanced_regs
+        )
 
         # Create variance simulator and model
         variance_simulator = ManufacturingVarianceSimulator()

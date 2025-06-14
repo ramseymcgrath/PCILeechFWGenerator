@@ -152,8 +152,7 @@ class OptionROMSizes:
                 return valid_size
 
         # Should never reach here due to MAX_SIZE check above
-        raise OptionROMError(
-            f"No valid Option-ROM size found for {size} bytes")
+        raise OptionROMError(f"No valid Option-ROM size found for {size} bytes")
 
     @classmethod
     def get_size_description(cls, size: int) -> str:
@@ -243,8 +242,7 @@ class OptionROMManager:
                 # this check
                 rom_path = self.output_dir / "donor.rom"
                 if not rom_path.exists():
-                    raise OptionROMExtractionError(
-                        f"PCI device not found: {bdf}")
+                    raise OptionROMExtractionError(f"PCI device not found: {bdf}")
 
             # Check if ROM file exists
             rom_sysfs_path = f"{device_path}/rom"
@@ -267,8 +265,7 @@ class OptionROMManager:
                     text=True,
                 )
             except subprocess.CalledProcessError as e:
-                raise OptionROMExtractionError(
-                    f"Failed to enable ROM access: {e}")
+                raise OptionROMExtractionError(f"Failed to enable ROM access: {e}")
 
             # Extract ROM content
             try:
@@ -302,8 +299,7 @@ class OptionROMManager:
             # Get the file size and verify it's not empty
             file_size = rom_path.stat().st_size
             if file_size == 0:
-                raise OptionROMExtractionError(
-                    "ROM extraction failed: file is empty")
+                raise OptionROMExtractionError("ROM extraction failed: file is empty")
 
             # Load the ROM data
             with open(rom_path, "rb") as f:
@@ -370,17 +366,14 @@ class OptionROMManager:
                 output_path = str(self.output_dir / "rom_init.hex")
 
             # Create directory if it doesn't exist
-            os.makedirs(
-                os.path.dirname(
-                    os.path.abspath(output_path)),
-                exist_ok=True)
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
             # Format the hex data for $readmemh (32-bit words, one per line)
             with open(output_path, "w") as f:
                 # Process 4 bytes at a time to create 32-bit words
                 for i in range(0, len(self.rom_data or b""), 4):
                     # Extract 4 bytes, pad with zeros if needed
-                    chunk = (self.rom_data or b"")[i: i + 4]
+                    chunk = (self.rom_data or b"")[i : i + 4]
                     while len(chunk) < 4:
                         chunk += b"\x00"
 
@@ -478,12 +471,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Option-ROM Extraction Tool")
     parser.add_argument(
-        "--bd",
-        required=True,
-        help="PCIe Bus:Device.Function (e.g., 0000:03:00.0)")
-    parser.add_argument(
-        "--output-dir",
-        help="Directory to save extracted ROM files")
+        "--bd", required=True, help="PCIe Bus:Device.Function (e.g., 0000:03:00.0)"
+    )
+    parser.add_argument("--output-dir", help="Directory to save extracted ROM files")
     parser.add_argument(
         "--rom-file", help="Use existing ROM file instead of extraction"
     )

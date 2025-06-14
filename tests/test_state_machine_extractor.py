@@ -495,10 +495,7 @@ class TestStateMachineExtractor:
         }
         """
 
-        registers = {
-            "REG_CONTROL": 0x1000,
-            "REG_CONFIG": 0x1004,
-            "REG_COMMAND": 0x1008}
+        registers = {"REG_CONTROL": 0x1000, "REG_CONFIG": 0x1004, "REG_COMMAND": 0x1008}
 
         sm = extractor._extract_global_state_machine(c_code, registers)
 
@@ -566,17 +563,14 @@ class TestStateMachineExtractor:
         assert extractor._categorize_function("device_config") == "config"
         assert extractor._categorize_function("setup_device") == "config"
 
-        assert extractor._categorize_function(
-            "device_irq_handler") == "interrupt"
-        assert extractor._categorize_function(
-            "handle_interrupt") == "interrupt"
+        assert extractor._categorize_function("device_irq_handler") == "interrupt"
+        assert extractor._categorize_function("handle_interrupt") == "interrupt"
 
         assert extractor._categorize_function("device_exit") == "cleanup"
         assert extractor._categorize_function("remove_device") == "cleanup"
 
         assert extractor._categorize_function("handle_error") == "error"
-        assert extractor._categorize_function(
-            "device_fault_handler") == "error"
+        assert extractor._categorize_function("device_fault_handler") == "error"
 
         assert extractor._categorize_function("process_data") == "runtime"
         assert extractor._categorize_function("device_io") == "runtime"
@@ -586,18 +580,12 @@ class TestStateMachineExtractor:
         extractor = StateMachineExtractor()
 
         assert extractor._get_state_type_for_category("init") == StateType.INIT
-        assert extractor._get_state_type_for_category(
-            "config") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category(
-            "runtime") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category(
-            "interrupt") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category(
-            "cleanup") == StateType.CLEANUP
-        assert extractor._get_state_type_for_category(
-            "error") == StateType.ERROR
-        assert extractor._get_state_type_for_category(
-            "unknown") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category("config") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category("runtime") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category("interrupt") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category("cleanup") == StateType.CLEANUP
+        assert extractor._get_state_type_for_category("error") == StateType.ERROR
+        assert extractor._get_state_type_for_category("unknown") == StateType.ACTIVE
 
     def test_optimize_state_machines(self):
         """Test optimizing extracted state machines."""
@@ -608,10 +596,8 @@ class TestStateMachineExtractor:
         sm1.add_state("IDLE", StateType.INIT)
         sm1.add_state("ACTIVE")
         sm1.add_transition(
-            StateTransition(
-                from_state="IDLE",
-                to_state="ACTIVE",
-                trigger="start"))
+            StateTransition(from_state="IDLE", to_state="ACTIVE", trigger="start")
+        )
 
         sm2 = StateMachine(name="sm2")
         sm2.add_state("STATE_A")
@@ -638,10 +624,8 @@ class TestStateMachineExtractor:
         sm1.add_state("IDLE", StateType.INIT)
         sm1.add_state("ACTIVE")
         sm1.add_transition(
-            StateTransition(
-                from_state="IDLE",
-                to_state="ACTIVE",
-                trigger="start"))
+            StateTransition(from_state="IDLE", to_state="ACTIVE", trigger="start")
+        )
         sm1.calculate_complexity()  # Should be simple
 
         sm2 = StateMachine(name="sm2")
@@ -650,20 +634,14 @@ class TestStateMachineExtractor:
         sm2.add_state("STATE_C")
         sm2.add_state("STATE_D")
         sm2.add_transition(
-            StateTransition(
-                from_state="STATE_A",
-                to_state="STATE_B",
-                trigger="t1"))
+            StateTransition(from_state="STATE_A", to_state="STATE_B", trigger="t1")
+        )
         sm2.add_transition(
-            StateTransition(
-                from_state="STATE_B",
-                to_state="STATE_C",
-                trigger="t2"))
+            StateTransition(from_state="STATE_B", to_state="STATE_C", trigger="t2")
+        )
         sm2.add_transition(
-            StateTransition(
-                from_state="STATE_C",
-                to_state="STATE_D",
-                trigger="t3"))
+            StateTransition(from_state="STATE_C", to_state="STATE_D", trigger="t3")
+        )
         sm2.calculate_complexity()  # Should be moderate
 
         extractor.extracted_machines = [sm1, sm2]
@@ -730,10 +708,7 @@ class TestStateMachineExtractor:
         }
         """
 
-        registers = {
-            "REG_CONTROL": 0x1000,
-            "REG_STATUS": 0x1004,
-            "REG_CONFIG": 0x1008}
+        registers = {"REG_CONTROL": 0x1000, "REG_STATUS": 0x1004, "REG_CONFIG": 0x1008}
 
         state_machines = extractor.extract_state_machines(c_code, registers)
 

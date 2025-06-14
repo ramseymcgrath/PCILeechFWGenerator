@@ -66,9 +66,8 @@ def update_version_file(new_version: str) -> None:
 
     # Update version
     content = re.sub(
-        r'__version__ = ["\'][^"\']+["\']',
-        f'__version__ = "{new_version}"',
-        content)
+        r'__version__ = ["\'][^"\']+["\']', f'__version__ = "{new_version}"', content
+    )
 
     # Update version_info tuple
     major, minor, patch = map(int, new_version.split("."))
@@ -171,22 +170,16 @@ def upload_to_pypi(test: bool = False) -> None:
 
 def main():
     """Main release script."""
-    parser = argparse.ArgumentParser(
-        description="Release PCILeech Firmware Generator")
+    parser = argparse.ArgumentParser(description="Release PCILeech Firmware Generator")
     parser.add_argument(
-        "bump_type",
-        choices=[
-            "major",
-            "minor",
-            "patch"],
-        help="Type of version bump")
+        "bump_type", choices=["major", "minor", "patch"], help="Type of version bump"
+    )
     parser.add_argument(
         "--release-notes", required=True, help="Release notes for this version"
     )
     parser.add_argument(
-        "--test-pypi",
-        action="store_true",
-        help="Upload to Test PyPI instead of PyPI")
+        "--test-pypi", action="store_true", help="Upload to Test PyPI instead of PyPI"
+    )
     parser.add_argument(
         "--skip-upload", action="store_true", help="Skip uploading to PyPI"
     )

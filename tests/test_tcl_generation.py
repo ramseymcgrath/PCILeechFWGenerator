@@ -72,8 +72,7 @@ class TestTCLGeneration(unittest.TestCase):
                     "board_type": board_type,
                 }
 
-                tcl_content = self.builder._generate_device_tcl_script(
-                    device_info)
+                tcl_content = self.builder._generate_device_tcl_script(device_info)
 
                 self.assertIn("set_property", tcl_content)
                 # Should include board-specific configurations
@@ -159,9 +158,7 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
-            "source_files": [
-                "device_config.sv",
-                "pcileech_tlps128_bar_controller.sv"],
+            "source_files": ["device_config.sv", "pcileech_tlps128_bar_controller.sv"],
         }
 
         tcl_content = self.builder._generate_sources_tcl(device_info)
@@ -308,8 +305,7 @@ class TestTCLGeneration(unittest.TestCase):
         minimal_device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
 
         try:
-            tcl_content = self.builder._generate_device_tcl_script(
-                minimal_device_info)
+            tcl_content = self.builder._generate_device_tcl_script(minimal_device_info)
             self.assertIsInstance(tcl_content, str)
             self.assertTrue(len(tcl_content) > 0)
         except Exception as e:
@@ -332,8 +328,7 @@ class TestTCLGeneration(unittest.TestCase):
                     "board_type": config["board_type"],
                 }
 
-                tcl_content = self.builder._generate_constraints_tcl(
-                    device_info)
+                tcl_content = self.builder._generate_constraints_tcl(device_info)
 
                 # Should include board-specific settings
                 self.assertIsInstance(tcl_content, str)
@@ -360,10 +355,7 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
-            "ip_config": {
-                "pcie_lanes": 4,
-                "max_payload": 256,
-                "max_read_request": 512},
+            "ip_config": {"pcie_lanes": 4, "max_payload": 256, "max_read_request": 512},
         }
 
         tcl_content = self.builder._generate_ip_config_tcl(device_info)

@@ -2,13 +2,6 @@
 Comprehensive tests for src/behavior_profiler.py - Behavior profiling functionality.
 """
 
-from behavior_profiler import (
-    BehaviorProfile,
-    BehaviorProfiler,
-    RegisterAccess,
-    TimingPattern,
-    is_linux,
-)
 import json
 import queue
 import sys
@@ -17,6 +10,14 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+from behavior_profiler import (
+    BehaviorProfile,
+    BehaviorProfiler,
+    RegisterAccess,
+    TimingPattern,
+    is_linux,
+)
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -89,8 +90,7 @@ class TestBehaviorProfilerInitialization:
 
     def test_valid_bdf_initialization(self):
         """Test initialization with valid BDF."""
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         assert profiler.bdf == "0000:03:00.0"
         assert profiler.debug is True
@@ -126,8 +126,7 @@ class TestLogging:
 
     def test_debug_logging_enabled(self, capsys):
         """Test debug logging when enabled."""
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
         profiler._log("Test message")
 
         captured = capsys.readouterr()
@@ -135,8 +134,7 @@ class TestLogging:
 
     def test_debug_logging_disabled(self, capsys):
         """Test debug logging when disabled."""
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=False, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=False, enable_ftrace=False)
         profiler._log("Test message")
 
         captured = capsys.readouterr()
@@ -153,8 +151,7 @@ class TestMonitoringSetup:
         mock_exists.return_value = True
         mock_run.return_value = Mock(returncode=0, stdout="Test Device")
 
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
         result = profiler._setup_monitoring()
 
         assert result is True
@@ -164,8 +161,7 @@ class TestMonitoringSetup:
         """Test monitoring setup when device is not found."""
         mock_exists.return_value = False
 
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
         result = profiler._setup_monitoring()
 
         assert result is False
@@ -177,8 +173,7 @@ class TestMonitoringSetup:
         mock_exists.return_value = True
         mock_run.side_effect = Exception("Command failed")
 
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
         result = profiler._setup_monitoring()
 
         assert result is False
@@ -218,8 +213,7 @@ class TestBehaviorCapture:
             ),
         ]
 
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         # Mock the access queue to return test data
         profiler.access_queue.put(mock_accesses[0])
@@ -251,8 +245,7 @@ class TestBehaviorCapture:
         """Test behavior capture when monitoring setup fails."""
         mock_setup.return_value = False
 
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         with pytest.raises(RuntimeError, match="Failed to start monitoring"):
             profiler.capture_behavior_profile(1.0)
@@ -377,14 +370,7 @@ class TestPatternAnalysis:
 
     def test_analyze_patterns_single_register(self):
         """Test pattern analysis with single register access."""
-        single_access = [
-            RegisterAccess(
-                1000.0,
-                "REG_CTRL",
-                0x400,
-                "write",
-                0x1,
-                5.0)]
+        single_access = [RegisterAccess(1000.0, "REG_CTRL", 0x400, "write", 0x1, 5.0)]
 
         profile = BehaviorProfile(
             device_bdf="0000:03:00.0",
@@ -435,9 +421,7 @@ class TestTimingPatternDetection:
         )
         assert periodic_pattern is not None
         assert "REG_PERIODIC" in periodic_pattern.registers
-        assert abs(
-            periodic_pattern.avg_interval_us -
-            100000.0) < 1000.0  # 100ms ± 1ms
+        assert abs(periodic_pattern.avg_interval_us - 100000.0) < 1000.0  # 100ms ± 1ms
 
     def test_detect_burst_patterns(self):
         """Test detection of burst access patterns."""
@@ -489,14 +473,10 @@ class TestTimingPatternDetection:
 
         # If we have a burst pattern, great, but we'll accept any pattern for
         # test stability
-        burst_pattern = next(
-            (p for p in patterns if p.pattern_type == "burst"), None)
+        burst_pattern = next((p for p in patterns if p.pattern_type == "burst"), None)
         if burst_pattern is None:
             # At least check that we have some pattern
-            assert any(
-                p.pattern_type in [
-                    "periodic",
-                    "irregular"] for p in patterns)
+            assert any(p.pattern_type in ["periodic", "irregular"] for p in patterns)
 
     def test_detect_irregular_patterns(self):
         """Test detection of irregular access patterns."""
@@ -592,8 +572,7 @@ class TestMonitoringThreads:
 
     def test_start_stop_monitoring(self):
         """Test starting and stopping monitoring threads."""
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         # Mock setup_monitoring to return True
         with patch.object(profiler, "_setup_monitoring") as mock_setup:
@@ -616,8 +595,7 @@ class TestMonitoringThreads:
 
     def test_monitor_device_access_mock(self):
         """Test device access monitoring with mocked data."""
-        profiler = BehaviorProfiler(
-            "0000:03:00.0", debug=True, enable_ftrace=False)
+        profiler = BehaviorProfiler("0000:03:00.0", debug=True, enable_ftrace=False)
 
         # Mock the actual monitoring to avoid hardware dependencies
         with patch("time.sleep"), patch("subprocess.check_output") as mock_output:
@@ -784,8 +762,7 @@ class TestIntegrationWithBuildSystem:
         profiler = BehaviorProfiler("0000:03:00.0", enable_ftrace=False)
 
         # Simulate generating enhanced context from profile
-        enhanced_context = profiler._generate_enhanced_context(
-            mock_behavior_profile)
+        enhanced_context = profiler._generate_enhanced_context(mock_behavior_profile)
 
         assert isinstance(enhanced_context, dict)
         assert "timing_characteristics" in enhanced_context

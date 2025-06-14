@@ -39,10 +39,8 @@ class PowerManagementConfig:
 
     # Power state support
     supported_power_states: List[PowerState] = field(
-        default_factory=lambda: [
-            PowerState.D0,
-            PowerState.D1,
-            PowerState.D3_HOT])
+        default_factory=lambda: [PowerState.D0, PowerState.D1, PowerState.D3_HOT]
+    )
     supported_link_states: List[LinkState] = field(
         default_factory=lambda: [LinkState.L0, LinkState.L0S, LinkState.L1]
     )
@@ -84,10 +82,8 @@ class PowerManagementGenerator:
         declarations = []
 
         declarations.append("    // Power Management Signals")
-        declarations.append(
-            "    logic [1:0] current_power_state = 2'b00;  // D0 state")
-        declarations.append(
-            "    logic [1:0] current_link_state = 2'b00;   // L0 state")
+        declarations.append("    logic [1:0] current_power_state = 2'b00;  // D0 state")
+        declarations.append("    logic [1:0] current_link_state = 2'b00;   // L0 state")
         declarations.append("    logic [15:0] power_transition_timer = 16'h0;")
         declarations.append("    logic power_state_changing = 1'b0;")
         declarations.append("    logic [15:0] link_transition_timer = 16'h0;")
@@ -132,8 +128,7 @@ class PowerManagementGenerator:
 
         # Power state transition logic
         power_logic.append("    // Power state transition logic")
-        power_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        power_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         power_logic.append("        if (!reset_n) begin")
         power_logic.append("            pm_state <= PM_D0_ACTIVE;")
         power_logic.append("            power_transition_timer <= 16'h0;")
@@ -160,8 +155,7 @@ class PowerManagementGenerator:
         power_logic.append("        ")
         power_logic.append("        case (pm_state)")
         power_logic.append("            PM_D0_ACTIVE: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b01) begin")
+        power_logic.append("                if (power_state_req == 2'b01) begin")
         power_logic.append("                    pm_next_state = PM_D0_TO_D1;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append(
@@ -175,16 +169,14 @@ class PowerManagementGenerator:
         power_logic.append("            PM_D0_TO_D1: begin")
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
-            f"                if (power_transition_timer >= {
-                self.config.d0_to_d1_cycles}) begin")
-        power_logic.append(
-            "                    pm_next_state = PM_D1_STANDBY;")
+            f"                if (power_transition_timer >= {self.config.d0_to_d1_cycles}) begin"
+        )
+        power_logic.append("                    pm_next_state = PM_D1_STANDBY;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
         power_logic.append("            PM_D1_STANDBY: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b00) begin")
+        power_logic.append("                if (power_state_req == 2'b00) begin")
         power_logic.append("                    pm_next_state = PM_D1_TO_D0;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append("                end")
@@ -194,7 +186,8 @@ class PowerManagementGenerator:
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.config.d1_to_d0_cycles}) begin")
+                self.config.d1_to_d0_cycles}) begin"
+        )
         power_logic.append("                    pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("                end")
         power_logic.append("            end")
@@ -203,15 +196,14 @@ class PowerManagementGenerator:
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.config.d0_to_d3_cycles}) begin")
-        power_logic.append(
-            "                    pm_next_state = PM_D3_SUSPEND;")
+                self.config.d0_to_d3_cycles}) begin"
+        )
+        power_logic.append("                    pm_next_state = PM_D3_SUSPEND;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
         power_logic.append("            PM_D3_SUSPEND: begin")
-        power_logic.append(
-            "                if (power_state_req == 2'b00) begin")
+        power_logic.append("                if (power_state_req == 2'b00) begin")
         power_logic.append("                    pm_next_state = PM_D3_TO_D0;")
         power_logic.append("                    power_state_changing = 1'b1;")
         power_logic.append("                end")
@@ -221,13 +213,13 @@ class PowerManagementGenerator:
         power_logic.append("                power_state_changing = 1'b1;")
         power_logic.append(
             f"                if (power_transition_timer >= {
-                self.config.d3_to_d0_cycles}) begin")
+                self.config.d3_to_d0_cycles}) begin"
+        )
         power_logic.append("                    pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("                end")
         power_logic.append("            end")
         power_logic.append("            ")
-        power_logic.append(
-            "            default: pm_next_state = PM_D0_ACTIVE;")
+        power_logic.append("            default: pm_next_state = PM_D0_ACTIVE;")
         power_logic.append("        endcase")
         power_logic.append("    end")
         power_logic.append("")
@@ -256,8 +248,7 @@ class PowerManagementGenerator:
 
         # Link state transition logic
         link_logic.append("    // Link state transition logic")
-        link_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        link_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         link_logic.append("        if (!reset_n) begin")
         link_logic.append("            link_state <= LINK_L0;")
         link_logic.append("            link_idle_counter <= 16'h0;")
@@ -265,51 +256,44 @@ class PowerManagementGenerator:
         link_logic.append("        end else begin")
         link_logic.append("            case (link_state)")
         link_logic.append("                LINK_L0: begin")
-        link_logic.append(
-            "                    if (bar_wr_en || bar_rd_en) begin")
-        link_logic.append(
-            "                        link_idle_counter <= 16'h0;")
+        link_logic.append("                    if (bar_wr_en || bar_rd_en) begin")
+        link_logic.append("                        link_idle_counter <= 16'h0;")
         link_logic.append("                    end else begin")
         link_logic.append(
             "                        link_idle_counter <= link_idle_counter + 1;"
         )
         link_logic.append(
             f"                        if (link_idle_counter >= {
-                self.config.l0_to_l0s_cycles}) begin")
-        link_logic.append(
-            "                            link_state <= LINK_L0S;")
-        link_logic.append(
-            "                            link_transition_timer <= 16'h0;")
+                self.config.l0_to_l0s_cycles}) begin"
+        )
+        link_logic.append("                            link_state <= LINK_L0S;")
+        link_logic.append("                            link_transition_timer <= 16'h0;")
         link_logic.append("                        end")
         link_logic.append("                    end")
         link_logic.append("                end")
         link_logic.append("                ")
         link_logic.append("                LINK_L0S: begin")
-        link_logic.append(
-            "                    if (bar_wr_en || bar_rd_en) begin")
+        link_logic.append("                    if (bar_wr_en || bar_rd_en) begin")
         link_logic.append("                        link_state <= LINK_L0;")
-        link_logic.append(
-            "                        link_idle_counter <= 16'h0;")
+        link_logic.append("                        link_idle_counter <= 16'h0;")
         link_logic.append("                    end else begin")
         link_logic.append(
             "                        link_transition_timer <= link_transition_timer + 1;"
         )
         link_logic.append(
             f"                        if (link_transition_timer >= {
-                self.config.l0_to_l1_cycles}) begin")
+                self.config.l0_to_l1_cycles}) begin"
+        )
         link_logic.append("                            link_state <= LINK_L1;")
         link_logic.append("                        end")
         link_logic.append("                    end")
         link_logic.append("                end")
         link_logic.append("                ")
         link_logic.append("                LINK_L1: begin")
-        link_logic.append(
-            "                    if (bar_wr_en || bar_rd_en) begin")
+        link_logic.append("                    if (bar_wr_en || bar_rd_en) begin")
         link_logic.append("                        link_state <= LINK_L0;")
-        link_logic.append(
-            "                        link_idle_counter <= 16'h0;")
-        link_logic.append(
-            "                        link_transition_timer <= 16'h0;")
+        link_logic.append("                        link_idle_counter <= 16'h0;")
+        link_logic.append("                        link_transition_timer <= 16'h0;")
         link_logic.append("                    end")
         link_logic.append("                end")
         link_logic.append("                ")
@@ -337,8 +321,7 @@ class PowerManagementGenerator:
             "            PM_D1_STANDBY: clock_enable = link_state == LINK_L0;"
         )
         clock_logic.append("            PM_D3_SUSPEND: clock_enable = 1'b0;")
-        clock_logic.append(
-            "            default: clock_enable = power_state_changing;")
+        clock_logic.append("            default: clock_enable = power_state_changing;")
         clock_logic.append("        endcase")
         clock_logic.append("    end")
         clock_logic.append("    ")

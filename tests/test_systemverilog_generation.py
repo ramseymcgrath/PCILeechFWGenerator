@@ -95,9 +95,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
         wrapper_content = self.builder._generate_top_level_wrapper(device_info)
 
         self.assertIsInstance(wrapper_content, str)
-        self.assertIn(
-            "module pcileech_tlps128_bar_controller",
-            wrapper_content)
+        self.assertIn("module pcileech_tlps128_bar_controller", wrapper_content)
         self.assertIn("input wire clk", wrapper_content)
         self.assertIn("output wire", wrapper_content)
 
@@ -108,10 +106,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
             "device_id": "0x1533",
             "board_type": "75t",
             "advanced_features": True,
-            "variance_model": {
-                "timing_adjustments": {
-                    "setup": 0.1,
-                    "hold": 0.05}},
+            "variance_model": {"timing_adjustments": {"setup": 0.1, "hold": 0.05}},
         }
 
         wrapper_content = self.builder._generate_top_level_wrapper(device_info)
@@ -130,13 +125,11 @@ class TestSystemVerilogGeneration(unittest.TestCase):
 
         for sv_file in sv_files:
             file_path = self.output_dir / sv_file
-            file_path.write_text(
-                f"// Mock SystemVerilog content for {sv_file}\n")
+            file_path.write_text(f"// Mock SystemVerilog content for {sv_file}\n")
 
         device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
 
-        discovered_files = self.builder._discover_and_copy_all_files(
-            device_info)
+        discovered_files = self.builder._discover_and_copy_all_files(device_info)
 
         self.assertIsInstance(discovered_files, list)
         # Should find the mock files we created
@@ -154,9 +147,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
         sv_content = self.builder._generate_device_config_module(device_info)
 
         # Basic syntax checks
-        self.assertEqual(
-            sv_content.count("module"),
-            sv_content.count("endmodule"))
+        self.assertEqual(sv_content.count("module"), sv_content.count("endmodule"))
         self.assertIn("always @(posedge clk)", sv_content)
         self.assertNotIn("syntax error", sv_content.lower())
 
@@ -187,23 +178,16 @@ class TestSystemVerilogGeneration(unittest.TestCase):
 
     def test_bar_size_handling(self):
         """Test BAR size configuration handling."""
-        test_cases = [{"bar_sizes": ["0x20000",
-                                     "0x0",
-                                     "0x0",
-                                     "0x0",
-                                     "0x0",
-                                     "0x0"],
-                       "expected_size": "0x20000",
-                       },
-                      {"bar_sizes": ["0x100000",
-                                     "0x1000",
-                                     "0x0",
-                                     "0x0",
-                                     "0x0",
-                                     "0x0"],
-                       "expected_size": "0x100000",
-                       },
-                      ]
+        test_cases = [
+            {
+                "bar_sizes": ["0x20000", "0x0", "0x0", "0x0", "0x0", "0x0"],
+                "expected_size": "0x20000",
+            },
+            {
+                "bar_sizes": ["0x100000", "0x1000", "0x0", "0x0", "0x0", "0x0"],
+                "expected_size": "0x100000",
+            },
+        ]
 
         for test_case in test_cases:
             with self.subTest(bar_sizes=test_case["bar_sizes"]):
@@ -213,8 +197,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
                     "bar_sizes": test_case["bar_sizes"],
                 }
 
-                sv_content = self.builder._generate_device_config_module(
-                    device_info)
+                sv_content = self.builder._generate_device_config_module(device_info)
                 self.assertIn(test_case["expected_size"], sv_content)
 
     def test_clock_domain_generation(self):
@@ -250,10 +233,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
-            "memory_interface": {
-                "type": "AXI4",
-                "data_width": 128,
-                "addr_width": 32},
+            "memory_interface": {"type": "AXI4", "data_width": 128, "addr_width": 32},
         }
 
         sv_content = self.builder._generate_device_config_module(device_info)
@@ -280,11 +260,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
-            "power_management": {
-                "d0": True,
-                "d1": False,
-                "d2": False,
-                "d3": True},
+            "power_management": {"d0": True, "d1": False, "d2": False, "d3": True},
         }
 
         sv_content = self.builder._generate_device_config_module(device_info)
@@ -304,8 +280,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
                     "device_type": device_type,
                 }
 
-                sv_content = self.builder._generate_device_config_module(
-                    device_info)
+                sv_content = self.builder._generate_device_config_module(device_info)
 
                 # Should generate valid SystemVerilog regardless of device type
                 self.assertIn("module device_config", sv_content)
@@ -341,8 +316,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
             mock_file = MagicMock()
             mock_open.return_value.__enter__.return_value = mock_file
 
-            generated_files = self.builder.generate_systemverilog_files(
-                device_info)
+            generated_files = self.builder.generate_systemverilog_files(device_info)
 
             self.assertIsInstance(generated_files, list)
             # Should have attempted to write files
@@ -355,10 +329,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
             "device_id": "0x1533",
             "advanced_sv": True,
             "device_type": "network",
-            "variance_model": {
-                "timing_adjustments": {
-                    "setup": 0.1,
-                    "hold": 0.05}},
+            "variance_model": {"timing_adjustments": {"setup": 0.1, "hold": 0.05}},
         }
 
         # Mock the advanced SV generator
@@ -369,8 +340,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
                 "// Advanced SV content"
             )
 
-            sv_content = self.builder._generate_device_config_module(
-                device_info)
+            sv_content = self.builder._generate_device_config_module(device_info)
 
             # Should still generate basic content even with advanced features
             self.assertIn("module device_config", sv_content)
@@ -391,8 +361,7 @@ class TestSystemVerilogGeneration(unittest.TestCase):
                 "timing_adjustments": {"setup": 0.1, "hold": 0.05}
             }
 
-            sv_content = self.builder._generate_device_config_module(
-                device_info)
+            sv_content = self.builder._generate_device_config_module(device_info)
 
             # Should generate content with variance considerations
             self.assertIn("module device_config", sv_content)
@@ -464,8 +433,7 @@ class TestSystemVerilogValidation(unittest.TestCase):
         # Basic structure validation - count actual module/endmodule pairs
         # Count lines that start with "module " (after whitespace)
         lines = sample_sv.split("\n")
-        module_count = sum(
-            1 for line in lines if line.strip().startswith("module "))
+        module_count = sum(1 for line in lines if line.strip().startswith("module "))
         endmodule_count = sample_sv.count("endmodule")
         self.assertEqual(module_count, endmodule_count)
         self.assertIn("always @(posedge clk)", sample_sv)

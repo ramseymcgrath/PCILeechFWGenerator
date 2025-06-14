@@ -6,13 +6,6 @@ This test suite validates that the build process can properly handle
 real-world patterns found in external PCILeech examples.
 """
 
-from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
-from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
-from advanced_sv_main import (
-    AdvancedSVGenerator,
-    DeviceSpecificLogic,
-    DeviceType,
-)
 import os
 import re
 import sys
@@ -20,6 +13,14 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+from advanced_sv_main import (
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    DeviceType,
+)
+from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -61,9 +62,7 @@ class TestBuildWithExternalExamples:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(
-                f"Failed to fetch SystemVerilog example from GitHub: {
-                    str(e)}")
+            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
 
     @pytest.fixture
     def external_tcl_example(self):
@@ -108,8 +107,7 @@ class TestBuildWithExternalExamples:
 
             reg_defs.append(
                 {
-                    "offset": 0x400
-                    + (i * 4),
+                    "offset": 0x400 + (i * 4),
                     # Assuming 4-byte aligned registers starting at 0x400
                     "name": reg_name,
                     "value": f"0x{reg_value}",
@@ -321,8 +319,7 @@ class TestBuildWithExternalExamples:
         )
 
         # Verify that the profiler was initialized correctly
-        mock_profiler_class.assert_called_once_with(
-            "0000:03:00.0", debug=False)
+        mock_profiler_class.assert_called_once_with("0000:03:00.0", debug=False)
 
         # Verify that the profiler methods were called
         mock_profiler.capture_behavior_profile.assert_called_once()
@@ -387,7 +384,8 @@ class TestAdvancedSVWithExternalExamples:
         except ValueError as e:
             pytest.skip(
                 f"Failed to fetch SystemVerilog example from GitHub: {
-                    str(e)}")
+                    str(e)}"
+            )
 
     @pytest.fixture
     def mock_registers_from_example(self, external_sv_example):
@@ -410,8 +408,7 @@ class TestAdvancedSVWithExternalExamples:
 
             reg_defs.append(
                 {
-                    "offset": 0x400
-                    + (i * 4),
+                    "offset": 0x400 + (i * 4),
                     # Assuming 4-byte aligned registers starting at 0x400
                     "name": reg_name,
                     "value": f"0x{reg_value}",
@@ -547,7 +544,8 @@ class TestBuildScriptIntegration:
         except ValueError as e:
             pytest.skip(
                 f"Failed to fetch SystemVerilog example from GitHub: {
-                    str(e)}")
+                    str(e)}"
+            )
 
     @pytest.fixture
     def external_tcl_example(self):

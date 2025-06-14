@@ -71,8 +71,7 @@ class ErrorHandlingGenerator:
         declarations.append("    // Error Handling Signals")
         declarations.append("    logic [7:0] error_status = 8'h0;")
         declarations.append("    logic [7:0] correctable_error_count = 8'h0;")
-        declarations.append(
-            "    logic [7:0] uncorrectable_error_count = 8'h0;")
+        declarations.append("    logic [7:0] uncorrectable_error_count = 8'h0;")
         declarations.append("    logic error_recovery_active = 1'b0;")
         declarations.append("    logic [15:0] error_recovery_timer = 16'h0;")
         declarations.append("    logic [3:0] retry_count = 4'h0;")
@@ -115,8 +114,7 @@ class ErrorHandlingGenerator:
             detection_logic.append("        if (!reset_n) begin")
             detection_logic.append("            timeout_counter <= 32'h0;")
             detection_logic.append("            timeout_error <= 1'b0;")
-            detection_logic.append(
-                "        end else if (bar_wr_en || bar_rd_en) begin")
+            detection_logic.append("        end else if (bar_wr_en || bar_rd_en) begin")
             detection_logic.append("            timeout_counter <= 32'h0;")
             detection_logic.append("            timeout_error <= 1'b0;")
             detection_logic.append("        end else begin")
@@ -124,8 +122,8 @@ class ErrorHandlingGenerator:
                 "            timeout_counter <= timeout_counter + 1;"
             )
             detection_logic.append(
-                f"            timeout_error <= (timeout_counter > 32'h{
-                    self.config.timeout_cycles:08X});")
+                f"            timeout_error <= (timeout_counter > 32'h{self.config.timeout_cycles:08X});"
+            )
             detection_logic.append("        end")
             detection_logic.append("    end")
             detection_logic.append("")
@@ -157,13 +155,11 @@ class ErrorHandlingGenerator:
             detection_logic.append("        if (!reset_n) begin")
             detection_logic.append("            calculated_crc <= 8'h0;")
             detection_logic.append("            crc_error <= 1'b0;")
-            detection_logic.append(
-                "        end else if (bar_wr_en || bar_rd_en) begin")
+            detection_logic.append("        end else if (bar_wr_en || bar_rd_en) begin")
             detection_logic.append(
                 "            calculated_crc <= bar_addr[7:0] ^ bar_wr_data[7:0];"
             )
-            detection_logic.append(
-                "            expected_crc <= bar_wr_data[15:8];")
+            detection_logic.append("            expected_crc <= bar_wr_data[15:8];")
             detection_logic.append(
                 "            crc_error <= (calculated_crc != expected_crc) && bar_wr_en;"
             )
@@ -183,8 +179,7 @@ class ErrorHandlingGenerator:
             detection_logic.append("        if (!reset_n) begin")
             detection_logic.append("            ecc_syndrome <= 7'h0;")
             detection_logic.append("            ecc_error <= 1'b0;")
-            detection_logic.append(
-                "        end else if (bar_wr_en || bar_rd_en) begin")
+            detection_logic.append("        end else if (bar_wr_en || bar_rd_en) begin")
             detection_logic.append("            // Simplified ECC calculation")
             detection_logic.append(
                 "            ecc_syndrome <= ^{bar_wr_data[31:0], bar_addr[6:0]};"
@@ -220,8 +215,7 @@ class ErrorHandlingGenerator:
 
         # Error state machine logic
         state_machine.append("    // Error state machine logic")
-        state_machine.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        state_machine.append("    always_ff @(posedge clk or negedge reset_n) begin")
         state_machine.append("        if (!reset_n) begin")
         state_machine.append("            error_state <= ERR_NORMAL;")
         state_machine.append("            retry_count <= 4'h0;")
@@ -230,8 +224,7 @@ class ErrorHandlingGenerator:
         state_machine.append("        end else begin")
         state_machine.append("            error_state <= error_next_state;")
         state_machine.append("            ")
-        state_machine.append(
-            "            if (error_state != ERR_NORMAL) begin")
+        state_machine.append("            if (error_state != ERR_NORMAL) begin")
         state_machine.append(
             "                error_recovery_timer <= error_recovery_timer + 1;"
         )
@@ -254,58 +247,51 @@ class ErrorHandlingGenerator:
         state_machine.append(
             "                if (parity_error || crc_error || timeout_error || ecc_error) begin"
         )
-        state_machine.append(
-            "                    error_next_state = ERR_DETECTED;")
+        state_machine.append("                    error_next_state = ERR_DETECTED;")
         state_machine.append("                end")
         state_machine.append("            end")
         state_machine.append("            ")
         state_machine.append("            ERR_DETECTED: begin")
-        state_machine.append(
-            "                error_next_state = ERR_ANALYZING;")
+        state_machine.append("                error_next_state = ERR_ANALYZING;")
         state_machine.append("            end")
         state_machine.append("            ")
         state_machine.append("            ERR_ANALYZING: begin")
         state_machine.append(
             f"                if (error_recovery_timer >= {
-                self.config.error_recovery_cycles}) begin")
+                self.config.error_recovery_cycles}) begin"
+        )
         state_machine.append("                    if (timeout_error) begin")
         state_machine.append(
             "                        error_next_state = ERR_FATAL;  // Timeout is fatal"
         )
         state_machine.append(
             f"                    end else if (retry_count < {
-                self.config.max_retry_count}) begin")
-        state_machine.append(
-            "                        error_next_state = ERR_RETRY;")
+                self.config.max_retry_count}) begin"
+        )
+        state_machine.append("                        error_next_state = ERR_RETRY;")
         state_machine.append("                    end else begin")
-        state_machine.append(
-            "                        error_next_state = ERR_FATAL;")
+        state_machine.append("                        error_next_state = ERR_FATAL;")
         state_machine.append("                    end")
         state_machine.append("                end")
         state_machine.append("            end")
         state_machine.append("            ")
         state_machine.append("            ERR_RETRY: begin")
         if self.config.enable_error_logging:
-            state_machine.append(
-                "                error_next_state = ERR_LOGGING;")
+            state_machine.append("                error_next_state = ERR_LOGGING;")
         else:
-            state_machine.append(
-                "                error_next_state = ERR_NORMAL;")
+            state_machine.append("                error_next_state = ERR_NORMAL;")
         state_machine.append("            end")
         state_machine.append("            ")
         if self.config.enable_error_logging:
             state_machine.append("            ERR_LOGGING: begin")
-            state_machine.append(
-                "                error_next_state = ERR_NORMAL;")
+            state_machine.append("                error_next_state = ERR_NORMAL;")
             state_machine.append("            end")
             state_machine.append("            ")
         state_machine.append("            ERR_FATAL: begin")
-        state_machine.append(
-            "                // Stay in fatal state until reset")
+        state_machine.append("                // Stay in fatal state until reset")
         state_machine.append("            end")
         state_machine.append("            ")
-        state_machine.append(
-            "            default: error_next_state = ERR_NORMAL;")
+        state_machine.append("            default: error_next_state = ERR_NORMAL;")
         state_machine.append("        endcase")
         state_machine.append("    end")
         state_machine.append("")
@@ -321,15 +307,13 @@ class ErrorHandlingGenerator:
         logging_logic = []
 
         logging_logic.append("    // Error Logging Logic")
-        logging_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        logging_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         logging_logic.append("        if (!reset_n) begin")
         logging_logic.append("            error_log_ptr <= 4'h0;")
         logging_logic.append("            for (int i = 0; i < 16; i++) begin")
         logging_logic.append("                error_log[i] <= 32'h0;")
         logging_logic.append("            end")
-        logging_logic.append(
-            "        end else if (error_state == ERR_LOGGING) begin")
+        logging_logic.append("        end else if (error_state == ERR_LOGGING) begin")
         logging_logic.append("            error_log[error_log_ptr] <= {")
         logging_logic.append("                8'h0,  // Reserved")
         logging_logic.append("                error_recovery_timer,")
@@ -351,15 +335,12 @@ class ErrorHandlingGenerator:
         counter_logic = []
 
         counter_logic.append("    // Error Counting Logic")
-        counter_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        counter_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         counter_logic.append("        if (!reset_n) begin")
         counter_logic.append("            correctable_error_count <= 8'h0;")
         counter_logic.append("            uncorrectable_error_count <= 8'h0;")
-        counter_logic.append(
-            "        end else if (error_state == ERR_DETECTED) begin")
-        counter_logic.append(
-            "            if (parity_error || ecc_error) begin")
+        counter_logic.append("        end else if (error_state == ERR_DETECTED) begin")
+        counter_logic.append("            if (parity_error || ecc_error) begin")
         counter_logic.append(
             "                correctable_error_count <= correctable_error_count + 1;"
         )
@@ -389,21 +370,17 @@ class ErrorHandlingGenerator:
         injection_logic.append("    logic inject_parity_error = 1'b0;")
         injection_logic.append("    logic inject_crc_error = 1'b0;")
         injection_logic.append("")
-        injection_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        injection_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         injection_logic.append("        if (!reset_n) begin")
         injection_logic.append("            injection_lfsr <= 16'hACE1;")
         injection_logic.append("            inject_parity_error <= 1'b0;")
         injection_logic.append("            inject_crc_error <= 1'b0;")
-        injection_logic.append(
-            "        end else if (error_injection_active) begin")
+        injection_logic.append("        end else if (error_injection_active) begin")
         injection_logic.append(
             "            injection_lfsr <= {injection_lfsr[14:0], injection_lfsr[15] ^ injection_lfsr[13] ^ injection_lfsr[12] ^ injection_lfsr[10]};"
         )
-        injection_logic.append(
-            "            inject_parity_error <= injection_lfsr[0];")
-        injection_logic.append(
-            "            inject_crc_error <= injection_lfsr[1];")
+        injection_logic.append("            inject_parity_error <= injection_lfsr[0];")
+        injection_logic.append("            inject_crc_error <= injection_lfsr[1];")
         injection_logic.append("        end else begin")
         injection_logic.append("            inject_parity_error <= 1'b0;")
         injection_logic.append("            inject_crc_error <= 1'b0;")
@@ -428,8 +405,7 @@ class ErrorHandlingGenerator:
         outputs.append(
             "    assign uncorrectable_error = (error_state == ERR_FATAL) || "
         )
-        outputs.append(
-            "                                 (timeout_error || crc_error);")
+        outputs.append("                                 (timeout_error || crc_error);")
         outputs.append("    assign error_code = {")
         outputs.append("        3'b0,")
         outputs.append("        error_state == ERR_FATAL,")

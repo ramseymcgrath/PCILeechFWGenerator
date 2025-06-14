@@ -211,8 +211,7 @@ module advanced_pcileech_controller #(
         register_logic = []
 
         register_logic.append("    // Advanced Register Access Logic")
-        register_logic.append(
-            "    logic [31:0] register_access_timer = 32'h0;")
+        register_logic.append("    logic [31:0] register_access_timer = 32'h0;")
         register_logic.append("    logic register_write_pending = 1'b0;")
         register_logic.append("")
 
@@ -227,10 +226,8 @@ module advanced_pcileech_controller #(
                 register_logic.append(f"    logic [31:0] {name}_reg = 32'h1;")
             # Apply variance to initial values if model provided
             elif variance_model:
-                variance_factor = 1.0 + \
-                    (random.random() - 0.5) * 0.01  # ±0.5% variance
-                varied_value = int(
-                    initial_value * variance_factor) & 0xFFFFFFFF
+                variance_factor = 1.0 + (random.random() - 0.5) * 0.01  # ±0.5% variance
+                varied_value = int(initial_value * variance_factor) & 0xFFFFFFFF
                 register_logic.append(
                     f"    logic [31:0] {name}_reg = 32'h{varied_value:08X};"
                 )
@@ -241,15 +238,13 @@ module advanced_pcileech_controller #(
 
             # Add timing control signals
             register_logic.append(f"    logic {name}_access_pending = 1'b0;")
-            register_logic.append(
-                f"    logic [7:0] {name}_timing_counter = 8'h0;")
+            register_logic.append(f"    logic [7:0] {name}_timing_counter = 8'h0;")
 
         register_logic.append("")
 
         # Global register access timing
         register_logic.append("    // Global register access timing")
-        register_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        register_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         register_logic.append("        if (!reset_n) begin")
         register_logic.append("            register_access_timer <= 32'h0;")
         register_logic.append("            register_write_pending <= 1'b0;")
@@ -261,13 +256,11 @@ module advanced_pcileech_controller #(
         register_logic.append(
             "            if (bar_wr_en && !register_write_pending) begin"
         )
-        register_logic.append(
-            "                register_write_pending <= 1'b1;")
+        register_logic.append("                register_write_pending <= 1'b1;")
         register_logic.append(
             "            end else if (register_write_pending && register_access_timer[3:0] == 4'hF) begin"
         )
-        register_logic.append(
-            "                register_write_pending <= 1'b0;")
+        register_logic.append("                register_write_pending <= 1'b0;")
         register_logic.append("            end")
         register_logic.append("        end")
         register_logic.append("    end")
@@ -291,13 +284,11 @@ module advanced_pcileech_controller #(
                 register_logic.append(
                     f"            {name}_reg <= 32'h{int(reg['value'], 16):08X};"
                 )
+                register_logic.append(f"            {name}_timing_counter <= 8'h0;")
+                register_logic.append(f"            {name}_access_pending <= 1'b0;")
                 register_logic.append(
-                    f"            {name}_timing_counter <= 8'h0;")
-                register_logic.append(
-                    f"            {name}_access_pending <= 1'b0;")
-                register_logic.append(
-                    f"        end else if (bar_wr_en && bar_addr == 32'h{
-                        offset:08X}) begin")
+                    f"        end else if (bar_wr_en && bar_addr == 32'h{offset:08X}) begin"
+                )
 
                 # Apply variance-aware timing if model provided
                 if variance_model:
@@ -305,10 +296,10 @@ module advanced_pcileech_controller #(
                     base_delay = max(
                         1, int(timing_variance / 10)
                     )  # Convert ns to cycles
+                    register_logic.append(f"            {name}_access_pending <= 1'b1;")
                     register_logic.append(
-                        f"            {name}_access_pending <= 1'b1;")
-                    register_logic.append(
-                        f"            {name}_timing_counter <= 8'd{base_delay};")
+                        f"            {name}_timing_counter <= 8'd{base_delay};"
+                    )
                     register_logic.append(
                         f"        end else if ({name}_access_pending) begin"
                     )
@@ -316,17 +307,16 @@ module advanced_pcileech_controller #(
                         f"            if ({name}_timing_counter > 0) begin"
                     )
                     register_logic.append(
-                        f"                {name}_timing_counter <= {name}_timing_counter - 1;")
+                        f"                {name}_timing_counter <= {name}_timing_counter - 1;"
+                    )
                     register_logic.append("            end else begin")
-                    register_logic.append(
-                        f"                {name}_reg <= bar_wr_data;")
+                    register_logic.append(f"                {name}_reg <= bar_wr_data;")
                     register_logic.append(
                         f"                {name}_access_pending <= 1'b0;"
                     )
                     register_logic.append("            end")
                 else:
-                    register_logic.append(
-                        f"            {name}_reg <= bar_wr_data;")
+                    register_logic.append(f"            {name}_reg <= bar_wr_data;")
 
                 register_logic.append("        end")
                 register_logic.append("    end")
@@ -361,14 +351,10 @@ module advanced_pcileech_controller #(
         )
         read_logic.append("            ")
         read_logic.append("            // Performance counter registers")
-        read_logic.append(
-            "            32'h00000010: bar_rd_data = perf_counter_0;")
-        read_logic.append(
-            "            32'h00000014: bar_rd_data = perf_counter_1;")
-        read_logic.append(
-            "            32'h00000018: bar_rd_data = perf_counter_2;")
-        read_logic.append(
-            "            32'h0000001C: bar_rd_data = perf_counter_3;")
+        read_logic.append("            32'h00000010: bar_rd_data = perf_counter_0;")
+        read_logic.append("            32'h00000014: bar_rd_data = perf_counter_1;")
+        read_logic.append("            32'h00000018: bar_rd_data = perf_counter_2;")
+        read_logic.append("            32'h0000001C: bar_rd_data = perf_counter_3;")
         read_logic.append("            ")
         read_logic.append("            // Device identification")
         read_logic.append(
@@ -419,30 +405,26 @@ module advanced_pcileech_controller #(
         interrupt_logic.append("")
 
         interrupt_logic.append("    // Interrupt generation logic")
-        interrupt_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        interrupt_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         interrupt_logic.append("        if (!reset_n) begin")
         interrupt_logic.append("            interrupt_pending <= 1'b0;")
         interrupt_logic.append("            interrupt_vector <= 8'h0;")
         interrupt_logic.append("            interrupt_priority <= 4'h0;")
         interrupt_logic.append("        end else begin")
-        interrupt_logic.append(
-            "            // Priority-based interrupt handling")
+        interrupt_logic.append("            // Priority-based interrupt handling")
         interrupt_logic.append("            if (uncorrectable_error) begin")
         interrupt_logic.append("                interrupt_pending <= 1'b1;")
         interrupt_logic.append(
             "                interrupt_vector <= 8'h02;  // High priority"
         )
         interrupt_logic.append("                interrupt_priority <= 4'hF;")
-        interrupt_logic.append(
-            "            end else if (correctable_error) begin")
+        interrupt_logic.append("            end else if (correctable_error) begin")
         interrupt_logic.append("                interrupt_pending <= 1'b1;")
         interrupt_logic.append(
             "                interrupt_vector <= 8'h01;  // Medium priority"
         )
         interrupt_logic.append("                interrupt_priority <= 4'h8;")
-        interrupt_logic.append(
-            "            end else if (bar_wr_en || bar_rd_en) begin")
+        interrupt_logic.append("            end else if (bar_wr_en || bar_rd_en) begin")
         interrupt_logic.append("                interrupt_pending <= 1'b1;")
         interrupt_logic.append(
             "                interrupt_vector <= 8'h00;  // Low priority"
@@ -488,8 +470,7 @@ module advanced_pcileech_controller #(
 
         # Clock monitoring
         clock_logic.append("    // Clock domain monitoring")
-        clock_logic.append(
-            "    always_ff @(posedge clk or negedge reset_n) begin")
+        clock_logic.append("    always_ff @(posedge clk or negedge reset_n) begin")
         clock_logic.append("        if (!reset_n) begin")
         clock_logic.append("            clk_monitor_counter <= 16'h0;")
         clock_logic.append("        end else begin")

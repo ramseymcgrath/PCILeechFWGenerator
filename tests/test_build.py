@@ -30,29 +30,22 @@ except ImportError:
         import build
     except ImportError:
         # Create minimal mock for tests
-        build = type("build",
-                     (),
-                     {"create_secure_tempfile": lambda *args,
-                      **kwargs: "/tmp/test_file",
-                      "get_donor_info": lambda *args,
-                      **kwargs: {},
-                      "scrape_driver_regs": lambda *args,
-                      **kwargs: ([],
-                                 {}),
-                         "integrate_behavior_profile": lambda *args,
-                         **kwargs: [],
-                         "build_sv": lambda *args,
-                         **kwargs: None,
-                         "build_tcl": lambda *args,
-                         **kwargs: ("",
-                                    ""),
-                         "run": lambda *args,
-                         **kwargs: None,
-                         "code_from_bytes": lambda x: 0,
-                         "BOARD_INFO": {},
-                         "APERTURE": {},
-                      },
-                     )()
+        build = type(
+            "build",
+            (),
+            {
+                "create_secure_tempfile": lambda *args, **kwargs: "/tmp/test_file",
+                "get_donor_info": lambda *args, **kwargs: {},
+                "scrape_driver_regs": lambda *args, **kwargs: ([], {}),
+                "integrate_behavior_profile": lambda *args, **kwargs: [],
+                "build_sv": lambda *args, **kwargs: None,
+                "build_tcl": lambda *args, **kwargs: ("", ""),
+                "run": lambda *args, **kwargs: None,
+                "code_from_bytes": lambda x: 0,
+                "BOARD_INFO": {},
+                "APERTURE": {},
+            },
+        )()
 
 
 class TestSecurityAndTempFiles:
@@ -60,8 +53,7 @@ class TestSecurityAndTempFiles:
 
     def test_create_secure_tempfile_success(self):
         """Test successful creation of secure temporary file."""
-        temp_path = build.create_secure_tempfile(
-            suffix=".test", prefix="test_")
+        temp_path = build.create_secure_tempfile(suffix=".test", prefix="test_")
 
         try:
             assert os.path.exists(temp_path)
@@ -132,8 +124,7 @@ mpr: 0x02"""
     @patch("os.chdir")
     @patch("build_compat.run")
     @patch("subprocess.check_output")
-    def test_get_donor_info_missing_fields(
-            self, mock_output, mock_run, mock_chdir):
+    def test_get_donor_info_missing_fields(self, mock_output, mock_run, mock_chdir):
         """Test donor info extraction with missing required fields."""
         # Mock incomplete output
         mock_proc_output = """vendor_id: 0x8086
@@ -147,8 +138,7 @@ device_id: 0x1533"""
     @patch("os.chdir")
     @patch("build_compat.run")
     @patch("subprocess.check_output")
-    def test_get_donor_info_malformed_output(
-            self, mock_output, mock_run, mock_chdir):
+    def test_get_donor_info_malformed_output(self, mock_output, mock_run, mock_chdir):
         """Test donor info extraction with malformed output."""
         mock_output.return_value = "malformed output without colons"
 
@@ -188,13 +178,13 @@ class TestDriverRegisterScraping:
         assert state_machine_analysis["optimized_state_machines"] == 1
 
         mock_output.assert_called_once_with(
-            "python3 src/scripts/driver_scrape.py 8086 1533", shell=True, text=True)
+            "python3 src/scripts/driver_scrape.py 8086 1533", shell=True, text=True
+        )
 
     @patch("subprocess.check_output")
     def test_scrape_driver_regs_command_failure(self, mock_output):
         """Test driver register scraping when command fails."""
-        mock_output.side_effect = subprocess.CalledProcessError(
-            1, "driver_scrape.py")
+        mock_output.side_effect = subprocess.CalledProcessError(1, "driver_scrape.py")
 
         regs, state_machine_analysis = build.scrape_driver_regs("8086", "1533")
         assert regs == []
@@ -244,8 +234,7 @@ class TestBehaviorProfiling:
         assert "behavioral_timing" in enhanced_regs[0]["context"]
         assert "device_analysis" in enhanced_regs[0]["context"]
 
-        mock_profiler_instance.capture_behavior_profile.assert_called_once_with(
-            5.0)
+        mock_profiler_instance.capture_behavior_profile.assert_called_once_with(5.0)
 
     @patch("builtins.__import__")
     def test_integrate_behavior_profile_import_error(
@@ -270,7 +259,8 @@ class TestBehaviorProfiling:
         mock_profiler_instance = Mock()
         mock_profiler_class.return_value = mock_profiler_instance
         mock_profiler_instance.capture_behavior_profile.side_effect = Exception(
-            "Profiling failed")
+            "Profiling failed"
+        )
 
         mock_module = Mock()
         mock_module.BehaviorProfiler = mock_profiler_class
@@ -628,8 +618,7 @@ class TestErrorHandlingAndEdgeCases:
 class TestPerformanceAndScaling:
     """Test performance and scaling characteristics."""
 
-    def test_large_register_set_generation(
-            self, temp_dir, performance_test_data):
+    def test_large_register_set_generation(self, temp_dir, performance_test_data):
         """Test SystemVerilog generation with large register sets."""
         from tests.conftest import generate_test_registers
 
@@ -691,8 +680,9 @@ class TestRegressionPrevention:
 
     def test_register_offset_formatting(self, temp_dir):
         """Test that register offsets are properly formatted in SystemVerilog."""
-        test_regs = [{"offset": 0x400, "name": "reg_test",
-                      "value": "0x12345678", "rw": "rw"}]
+        test_regs = [
+            {"offset": 0x400, "name": "reg_test", "value": "0x12345678", "rw": "rw"}
+        ]
 
         target_file = temp_dir / "offset_test.sv"
         build.build_sv(test_regs, target_file)
@@ -724,21 +714,28 @@ class TestRegressionPrevention:
 
     def test_timing_calculation_edge_cases(self, temp_dir):
         """Test edge cases in timing calculations."""
-        edge_case_regs = [{"offset": 0x400,
-                           "name": "zero_delay_reg",
-                           "value": "0x0",
-                           "rw": "rw",
-                           "context": {"timing_constraints": [{"delay_us": 0,
-                                                               "context": "immediate"}]},
-                           },
-                          {"offset": 0x404,
-                           "name": "large_delay_reg",
-                           "value": "0x0",
-                           "rw": "rw",
-                           "context": {"timing_constraints": [{"delay_us": 1000000,
-                                                               "context": "very_slow"}]},
-                           },
-                          ]
+        edge_case_regs = [
+            {
+                "offset": 0x400,
+                "name": "zero_delay_reg",
+                "value": "0x0",
+                "rw": "rw",
+                "context": {
+                    "timing_constraints": [{"delay_us": 0, "context": "immediate"}]
+                },
+            },
+            {
+                "offset": 0x404,
+                "name": "large_delay_reg",
+                "value": "0x0",
+                "rw": "rw",
+                "context": {
+                    "timing_constraints": [
+                        {"delay_us": 1000000, "context": "very_slow"}
+                    ]
+                },
+            },
+        ]
 
         target_file = temp_dir / "timing_edge_test.sv"
         build.build_sv(edge_case_regs, target_file)

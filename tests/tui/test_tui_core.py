@@ -57,7 +57,8 @@ class TestDeviceManager:
                 "dev": "10d3",
                 "class": "0200",
                 "pretty": "0000:03:00.0 Ethernet controller [0200]: Intel Corporation 82574L [8086:10d3]",
-            }]
+            }
+        ]
         mock_get_raw.return_value = raw_devices
 
         # Mock enhanced device
@@ -143,8 +144,7 @@ class TestDeviceManager:
         assert any("bound to e1000e" in issue for issue in issues)
 
         # Test device with no BARs
-        score, issues = manager._assess_device_suitability(
-            "0200", None, [])  # No BARs
+        score, issues = manager._assess_device_suitability("0200", None, [])  # No BARs
         assert score < 0.8
         assert any("No memory BARs" in issue for issue in issues)
 
@@ -497,11 +497,7 @@ class TestBuildOrchestrator:
     @patch("os.path.exists")
     @patch("os.makedirs")
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._run_command")
-    async def test_ensure_git_repo(
-            self,
-            mock_run_command,
-            mock_makedirs,
-            mock_exists):
+    async def test_ensure_git_repo(self, mock_run_command, mock_makedirs, mock_exists):
         """Test git repository cloning and updating"""
         orchestrator = BuildOrchestrator()
 
@@ -583,8 +579,7 @@ class TestStatusMonitor:
 
         # Test Vivado detected
         mock_exists.return_value = True
-        mock_run_command.return_value = MagicMock(
-            returncode=0, stdout="Vivado v2023.1")
+        mock_run_command.return_value = MagicMock(returncode=0, stdout="Vivado v2023.1")
 
         status = await monitor._check_vivado_status()
         assert status["status"] == "detected"

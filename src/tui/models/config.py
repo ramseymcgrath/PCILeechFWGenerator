@@ -197,12 +197,13 @@ class BuildConfiguration:
             )
         except OSError as e:
             raise OSError(
-                f"Failed to create directory or write file {filepath}: {
-                    str(e)}")
+                f"Failed to create directory or write file {filepath}: {str(e)}"
+            )
         except Exception as e:
             raise Exception(
                 f"Unexpected error when saving configuration to {filepath}: {
-                    str(e)}")
+                    str(e)}"
+            )
 
     @classmethod
     def load_from_file(cls, filepath: Path) -> "BuildConfiguration":
@@ -223,8 +224,7 @@ class BuildConfiguration:
             Exception: For any other unexpected errors
         """
         if not filepath.exists():
-            raise FileNotFoundError(
-                f"Configuration file not found: {filepath}")
+            raise FileNotFoundError(f"Configuration file not found: {filepath}")
 
         try:
             with open(filepath, "r") as f:
@@ -237,15 +237,20 @@ class BuildConfiguration:
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
                 f"Invalid JSON in configuration file {filepath}: {
-                    e.msg}", e.doc, e.pos)
+                    e.msg}",
+                e.doc,
+                e.pos,
+            )
         except ValueError as e:
             raise ValueError(
                 f"Invalid configuration data in {filepath}: {
-                    str(e)}")
+                    str(e)}"
+            )
         except Exception as e:
             raise Exception(
                 f"Unexpected error when loading configuration from {filepath}: {
-                    str(e)}")
+                    str(e)}"
+            )
 
     def copy(self) -> "BuildConfiguration":
         """Create a copy of this configuration"""

@@ -26,17 +26,16 @@ class TestMSIXCapability(unittest.TestCase):
 
         # Set capabilities pointer at offset 0x34
         self.config_space = (
-            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2:]
+            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2 :]
         )
 
         # Set capabilities bit in status register (offset 0x06, bit 4)
-        status_value = int(
-            self.config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
+        status_value = int(self.config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
         status_hex = f"{status_value:04x}"
         self.config_space = (
             self.config_space[: 0x06 * 2]
             + status_hex
-            + self.config_space[0x06 * 2 + 4:]
+            + self.config_space[0x06 * 2 + 4 :]
         )
 
         # Add MSI-X capability at offset 0x40
@@ -50,7 +49,7 @@ class TestMSIXCapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x40 * 2]
             + msix_cap
-            + self.config_space[0x40 * 2 + len(msix_cap):]
+            + self.config_space[0x40 * 2 + len(msix_cap) :]
         )
 
     def test_find_cap(self):
@@ -69,7 +68,7 @@ class TestMSIXCapability(unittest.TestCase):
 
         # Test with configuration space that doesn't support capabilities
         config_space_no_caps = (
-            self.config_space[: 0x06 * 2] + "0000" + self.config_space[0x06 * 2 + 4:]
+            self.config_space[: 0x06 * 2] + "0000" + self.config_space[0x06 * 2 + 4 :]
         )
         cap_offset = find_cap(config_space_no_caps, 0x11)
         self.assertIsNone(cap_offset)
@@ -86,7 +85,7 @@ class TestMSIXCapability(unittest.TestCase):
 
         # Test with configuration space without MSI-X
         config_space_no_msix = (
-            self.config_space[: 0x40 * 2] + "10" + self.config_space[0x40 * 2 + 2:]
+            self.config_space[: 0x40 * 2] + "10" + self.config_space[0x40 * 2 + 2 :]
         )
         size = msix_size(config_space_no_msix)
         self.assertEqual(size, 0)
@@ -111,7 +110,7 @@ class TestMSIXCapability(unittest.TestCase):
 
         # Test with configuration space without MSI-X
         config_space_no_msix = (
-            self.config_space[: 0x40 * 2] + "10" + self.config_space[0x40 * 2 + 2:]
+            self.config_space[: 0x40 * 2] + "10" + self.config_space[0x40 * 2 + 2 :]
         )
         msix_info = parse_msix_capability(config_space_no_msix)
         self.assertEqual(msix_info["table_size"], 0)

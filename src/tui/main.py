@@ -237,29 +237,27 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 board_type_select.value = board_type
             elif board_type_options:
                 print(
-                    f"Board type '{board_type}' not found, using '{
-                        board_type_options[0]}'")
+                    f"Board type '{board_type}' not found, using '{board_type_options[0]}'"
+                )
                 board_type_select.value = board_type_options[0]
 
             # Set device type safely
             try:
-                device_type_select = self.query_one(
-                    "#device-type-select", Select)
-                device_type_options = self._get_select_options(
-                    device_type_select)
+                device_type_select = self.query_one("#device-type-select", Select)
+                device_type_options = self._get_select_options(device_type_select)
 
                 # Only set the value if it's valid
                 device_type = config.device_type
                 if device_type in device_type_options:
                     device_type_select.value = device_type
                 elif "generic" in device_type_options:
-                    print(
-                        f"Device type '{device_type}' not found, using 'generic'")
+                    print(f"Device type '{device_type}' not found, using 'generic'")
                     device_type_select.value = "generic"
                 elif device_type_options:
                     print(
                         f"Device type '{device_type}' not found, using '{
-                            device_type_options[0]}'")
+                            device_type_options[0]}'"
+                    )
                     device_type_select.value = device_type_options[0]
             except Exception as e:
                 print(f"Error setting device type: {e}")
@@ -268,21 +266,15 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#config-description-input", Input).value = (
                 config.description
             )
-            self.query_one(
-                "#advanced-sv-switch",
-                Switch).value = config.advanced_sv
-            self.query_one(
-                "#variance-switch",
-                Switch).value = config.enable_variance
+            self.query_one("#advanced-sv-switch", Switch).value = config.advanced_sv
+            self.query_one("#variance-switch", Switch).value = config.enable_variance
             self.query_one("#profiling-switch", Switch).value = (
                 config.behavior_profiling
             )
             self.query_one("#disable-ftrace-switch", Switch).value = (
                 config.disable_ftrace
             )
-            self.query_one(
-                "#power-mgmt-switch",
-                Switch).value = config.power_management
+            self.query_one("#power-mgmt-switch", Switch).value = config.power_management
             self.query_one("#error-handling-switch", Switch).value = (
                 config.error_handling
             )
@@ -292,15 +284,11 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             self.query_one("#flash-after-switch", Switch).value = (
                 config.flash_after_build
             )
-            self.query_one(
-                "#donor-dump-switch",
-                Switch).value = config.donor_dump
+            self.query_one("#donor-dump-switch", Switch).value = config.donor_dump
             self.query_one("#auto-headers-switch", Switch).value = (
                 config.auto_install_headers
             )
-            self.query_one(
-                "#local-build-switch",
-                Switch).value = config.local_build
+            self.query_one("#local-build-switch", Switch).value = config.local_build
             self.query_one("#skip-board-check-switch", Switch).value = (
                 config.skip_board_check
             )
@@ -338,10 +326,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             print(f"Error getting select options: {e}")
             return []
 
-    def _sanitize_select_value(
-            self,
-            select: Select,
-            fallback: str = "") -> str:
+    def _sanitize_select_value(self, select: Select, fallback: str = "") -> str:
         """Ensure a select value is valid, with fallback options"""
         try:
             # Get current value (might be None or Select.BLANK)
@@ -378,8 +363,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
             # Get device type safely
             device_type_select = self.query_one("#device-type-select", Select)
             # Use "network" as default for test compatibility
-            device_type = self._sanitize_select_value(
-                device_type_select, "network")
+            device_type = self._sanitize_select_value(device_type_select, "network")
 
             # Get board type safely
             board_type_select = self.query_one("#board-type-select", Select)
@@ -439,8 +423,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 return default_value
             return float(value)
         except (ValueError, TypeError) as e:
-            print(
-                f"Error parsing float input: {e}, using default: {default_value}")
+            print(f"Error parsing float input: {e}, using default: {default_value}")
             return default_value
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -464,11 +447,10 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                     app.notify(
                         f"Configuration saved as '{
                             config.name}'",
-                        severity="success")
+                        severity="success",
+                    )
                 except Exception as e:
-                    app.notify(
-                        f"Failed to save profile: {e}",
-                        severity="error")
+                    app.notify(f"Failed to save profile: {e}", severity="error")
             self.dismiss(config)
 
 
@@ -481,8 +463,7 @@ class PCILeechTUI(App):
 
     # Reactive attributes
     selected_device: reactive[Optional[PCIDevice]] = reactive(None)
-    current_config: reactive[BuildConfiguration] = reactive(
-        BuildConfiguration())
+    current_config: reactive[BuildConfiguration] = reactive(BuildConfiguration())
     build_progress: reactive[Optional[BuildProgress]] = reactive(None)
 
     def __init__(self):
@@ -616,13 +597,13 @@ class PCILeechTUI(App):
         success = self.config_manager.create_default_profiles()
         if not success:
             self.notify(
-                "Warning: Failed to create default profiles",
-                severity="warning")
+                "Warning: Failed to create default profiles", severity="warning"
+            )
 
             # No longer have error object with suggested actions
             self.notify(
-                "Check configuration directory permissions",
-                severity="information")
+                "Check configuration directory permissions", severity="information"
+            )
 
         # Start system status monitoring
         asyncio.create_task(self._monitor_system_status())
@@ -684,10 +665,7 @@ class PCILeechTUI(App):
                 build_mode = "Local Build (No Donor Dump)"
             else:
                 build_mode = "Standard (With Donor Dump)"
-            self.query_one(
-                "#build-mode",
-                Static).update(
-                f"Build Mode: {build_mode}")
+            self.query_one("#build-mode", Static).update(f"Build Mode: {build_mode}")
 
             # Update donor dump button
             self._update_donor_dump_button()
@@ -708,9 +686,7 @@ class PCILeechTUI(App):
 
                 await asyncio.sleep(5)  # Update every 5 seconds
             except Exception as e:
-                self.notify(
-                    f"Status monitoring error: {e}",
-                    severity="warning")
+                self.notify(f"Status monitoring error: {e}", severity="warning")
                 await asyncio.sleep(10)  # Retry after 10 seconds on error
 
     def _update_status_display(self) -> None:
@@ -794,10 +770,7 @@ class PCILeechTUI(App):
         progress_bar.progress = progress.overall_progress
 
         # Update progress text
-        self.query_one(
-            "#progress-text",
-            Static).update(
-            progress.progress_bar_text)
+        self.query_one("#progress-text", Static).update(progress.progress_bar_text)
 
         # Update resource usage
         if progress.resource_usage:
@@ -828,9 +801,7 @@ class PCILeechTUI(App):
             try:
                 await self._open_configuration_dialog()
             except Exception as e:
-                self.notify(
-                    f"Error opening configuration: {e}",
-                    severity="error")
+                self.notify(f"Error opening configuration: {e}", severity="error")
 
         elif button_id == "open-output":
             import subprocess
@@ -846,8 +817,7 @@ class PCILeechTUI(App):
         elif button_id == "documentation":
             self.notify("Opening documentation...", severity="info")
 
-    async def on_data_table_row_selected(
-            self, event: DataTable.RowSelected) -> None:
+    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle device table row selection"""
         event.data_table
         row_key = event.row_key
@@ -871,7 +841,8 @@ class PCILeechTUI(App):
             self.notify(
                 f"Selected device: {
                     selected_device.bdf}",
-                severity="info")
+                severity="info",
+            )
 
     async def _start_build(self) -> None:
         """Start the build process"""
@@ -906,7 +877,8 @@ class PCILeechTUI(App):
                     self.notify(
                         f"Suggested fix: {
                             fixes[0]}",
-                        severity="information")
+                        severity="information",
+                    )
 
                 # Ask if user wants to continue anyway
                 should_continue = await self._confirm_with_warnings(
@@ -915,9 +887,7 @@ class PCILeechTUI(App):
                 )
 
                 if not should_continue:
-                    self.notify(
-                        "Build cancelled by user",
-                        severity="information")
+                    self.notify("Build cancelled by user", severity="information")
                     return
 
         try:
@@ -931,9 +901,7 @@ class PCILeechTUI(App):
             )
 
             if success:
-                self.notify(
-                    "Build completed successfully!",
-                    severity="success")
+                self.notify("Build completed successfully!", severity="success")
             else:
                 self.notify("Build was cancelled", severity="warning")
 
@@ -960,7 +928,8 @@ class PCILeechTUI(App):
             # Log current configuration before opening dialog
             print(
                 f"Current configuration device_type: {
-                    self.current_config.device_type}")
+                    self.current_config.device_type}"
+            )
 
             result = await self.push_screen(ConfigurationDialog())
             if result is not None:
@@ -970,11 +939,10 @@ class PCILeechTUI(App):
                 self.config_manager.set_current_config(result)
                 print(
                     f"New configuration device_type: {
-                        self.current_config.device_type}")
+                        self.current_config.device_type}"
+                )
                 self._update_config_display()
-                self.notify(
-                    "Configuration updated successfully",
-                    severity="success")
+                self.notify("Configuration updated successfully", severity="success")
         except Exception as e:
             error_msg = f"Failed to open configuration dialog: {e}"
             print(f"ERROR: {error_msg}")
@@ -986,9 +954,7 @@ class PCILeechTUI(App):
             result = await self.push_screen(ConfirmationDialog(title, message))
             return result is True
         except Exception as e:
-            self.notify(
-                f"Failed to open confirmation dialog: {e}",
-                severity="error")
+            self.notify(f"Failed to open confirmation dialog: {e}", severity="error")
             return False
 
     # Reactive watchers
@@ -1071,7 +1037,8 @@ class PCILeechTUI(App):
         """Add detailed status information to the compatibility table."""
         # Device validity
         valid_status = (
-            "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]")
+            "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]"
+        )
         table.add_row(
             "Device Accessibility",
             valid_status,
@@ -1133,8 +1100,7 @@ class PCILeechTUI(App):
     def _clear_compatibility_display(self) -> None:
         """Clear the compatibility display when no device is selected"""
         compatibility_title = self.query_one("#compatibility-title", Static)
-        compatibility_title.update(
-            "Select a device to view compatibility factors")
+        compatibility_title.update("Select a device to view compatibility factors")
 
         compatibility_score = self.query_one("#compatibility-score", Static)
         compatibility_score.update("")
@@ -1182,13 +1148,9 @@ class PCILeechTUI(App):
                 details = module_status.get("details", "")
 
                 if status == "installed":
-                    self.notify(
-                        f"Donor module status: {details}",
-                        severity="success")
+                    self.notify(f"Donor module status: {details}", severity="success")
                 elif status in ["built_not_loaded", "loaded_but_error"]:
-                    self.notify(
-                        f"Donor module status: {details}",
-                        severity="warning")
+                    self.notify(f"Donor module status: {details}", severity="warning")
 
                     # Show first issue and fix
                     issues = module_status.get("issues", [])
@@ -1200,11 +1162,10 @@ class PCILeechTUI(App):
                         self.notify(
                             f"Suggested fix: {
                                 fixes[0]}",
-                            severity="information")
+                            severity="information",
+                        )
                 else:
-                    self.notify(
-                        f"Donor module status: {details}",
-                        severity="error")
+                    self.notify(f"Donor module status: {details}", severity="error")
 
                     # Show first issue and fix
                     issues = module_status.get("issues", [])
@@ -1216,15 +1177,16 @@ class PCILeechTUI(App):
                         self.notify(
                             f"Suggested fix: {
                                 fixes[0]}",
-                            severity="information")
+                            severity="information",
+                        )
 
             return module_status
 
         except Exception as e:
             if show_notification:
                 self.notify(
-                    f"Failed to check donor module status: {e}",
-                    severity="error")
+                    f"Failed to check donor module status: {e}", severity="error"
+                )
 
             # Update status display with error
             if self._system_status is not None:
@@ -1255,9 +1217,7 @@ class PCILeechTUI(App):
             self.config_manager.set_current_config(current_config)
             self._update_config_display()
             self._update_donor_dump_button()
-            self.notify(
-                "Donor dump disabled - using local build mode",
-                severity="info")
+            self.notify("Donor dump disabled - using local build mode", severity="info")
         else:
             # Enable donor dump
             current_config.donor_dump = True

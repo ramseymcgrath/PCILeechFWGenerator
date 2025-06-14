@@ -2,7 +2,6 @@
 Tests for manufacturing variance simulation module.
 """
 
-
 from src.manufacturing_variance import (
     DeviceClass,
     ManufacturingVarianceSimulator,
@@ -279,10 +278,8 @@ class TestManufacturingVarianceSimulator:
         simulator1 = ManufacturingVarianceSimulator(seed=123)
         simulator2 = ManufacturingVarianceSimulator(seed=123)
 
-        model1 = simulator1.generate_variance_model(
-            "test", DeviceClass.CONSUMER)
-        model2 = simulator2.generate_variance_model(
-            "test", DeviceClass.CONSUMER)
+        model1 = simulator1.generate_variance_model("test", DeviceClass.CONSUMER)
+        model2 = simulator2.generate_variance_model("test", DeviceClass.CONSUMER)
 
         # Should be identical with same seed
         assert model1.clock_jitter_percent == model2.clock_jitter_percent

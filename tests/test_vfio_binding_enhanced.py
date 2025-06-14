@@ -2,13 +2,14 @@
 Enhanced tests for VFIO binding functionality with improved error handling and stability.
 """
 
-import generate
 import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import Mock, call, mock_open, patch
 
 import pytest
+
+import generate
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -233,8 +234,7 @@ class TestVFIOBindingEnhanced:
     ):
         """Test enhanced driver restoration."""
         mock_exists.return_value = True
-        mock_get_driver.side_effect = [
-            "vfio-pci", "e1000e"]  # before and after restore
+        mock_get_driver.side_effect = ["vfio-pci", "e1000e"]  # before and after restore
         mock_wait.side_effect = [True, True]  # unbind wait, bind wait
 
         generate.restore_original_driver("0000:03:00.0", "e1000e")
@@ -242,11 +242,9 @@ class TestVFIOBindingEnhanced:
         # Should have called unbind and bind
         expected_calls = [
             call(
-                "echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/unbind",
-                timeout=10),
-            call(
-                "echo 0000:03:00.0 > /sys/bus/pci/drivers/e1000e/bind",
-                timeout=10),
+                "echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/unbind", timeout=10
+            ),
+            call("echo 0000:03:00.0 > /sys/bus/pci/drivers/e1000e/bind", timeout=10),
         ]
         mock_run.assert_has_calls(expected_calls)
 
@@ -337,8 +335,7 @@ class TestVFIOBindingEnhanced:
             )
 
         mock_validate_container.assert_called_once()
-        mock_validate_vfio.assert_called_once_with(
-            "/dev/vfio/15", "0000:03:00.0")
+        mock_validate_vfio.assert_called_once_with("/dev/vfio/15", "0000:03:00.0")
 
     @patch("shutil.which")
     def test_validate_container_environment_no_podman(self, mock_which):
@@ -350,8 +347,7 @@ class TestVFIOBindingEnhanced:
 
     @patch("generate.run_command")
     @patch("shutil.which")
-    def test_validate_container_environment_no_image(
-            self, mock_which, mock_run):
+    def test_validate_container_environment_no_image(self, mock_which, mock_run):
         """Test container environment validation without container image."""
         mock_which.return_value = "/usr/bin/podman"
         mock_run.side_effect = subprocess.CalledProcessError(1, "podman", "")
@@ -363,8 +359,7 @@ class TestVFIOBindingEnhanced:
 
     @patch("generate.get_current_driver")
     @patch("os.path.exists")
-    def test_validate_vfio_device_access_success(
-            self, mock_exists, mock_get_driver):
+    def test_validate_vfio_device_access_success(self, mock_exists, mock_get_driver):
         """Test successful VFIO device access validation."""
         mock_exists.return_value = True
         mock_get_driver.return_value = "vfio-pci"
@@ -378,8 +373,7 @@ class TestVFIOBindingEnhanced:
         mock_exists.return_value = False
 
         with pytest.raises(RuntimeError, match="VFIO device .* not found"):
-            generate._validate_vfio_device_access(
-                "/dev/vfio/15", "0000:03:00.0")
+            generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
 
     @patch("generate.get_current_driver")
     @patch("os.path.exists")
@@ -391,8 +385,7 @@ class TestVFIOBindingEnhanced:
         mock_get_driver.return_value = "e1000e"
 
         with pytest.raises(RuntimeError, match="Device .* not bound to vfio-pci"):
-            generate._validate_vfio_device_access(
-                "/dev/vfio/15", "0000:03:00.0")
+            generate._validate_vfio_device_access("/dev/vfio/15", "0000:03:00.0")
 
 
 class TestVFIOBindingStressTests:

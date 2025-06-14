@@ -12,8 +12,7 @@ from pathlib import Path
 
 # Git repository information
 PCILEECH_FPGA_REPO = "https://github.com/ufrisk/pcileech-fpga.git"
-REPO_CACHE_DIR = Path(os.path.expanduser(
-    "~/.cache/pcileech-fw-generator/repos"))
+REPO_CACHE_DIR = Path(os.path.expanduser("~/.cache/pcileech-fw-generator/repos"))
 PCILEECH_FPGA_DIR = REPO_CACHE_DIR / "pcileech-fpga"
 
 
@@ -37,12 +36,8 @@ class RepoManager:
         """
         print(f"[+] {cmd}")
         return subprocess.run(
-            cmd,
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            **kwargs)
+            cmd, shell=True, check=True, capture_output=True, text=True, **kwargs
+        )
 
     @classmethod
     def ensure_git_repo(cls) -> None:
@@ -107,23 +102,21 @@ class RepoManager:
 
                         print("[✓] PCILeech FPGA repository updated successfully")
                     except Exception as e:
-                        print(
-                            f"[!] Warning: Failed to update repository: {
-                                str(e)}")
+                        print(f"[!] Warning: Failed to update repository: {str(e)}")
                     finally:
                         # Change back to original directory
                         os.chdir(current_dir)
             except Exception as e:
                 print(
                     f"[!] Warning: Error checking repository update status: {
-                        str(e)}")
+                        str(e)}"
+                )
         else:
             # Clone repository
             print(f"[*] Cloning PCILeech FPGA repository to {repo_dir}")
 
             try:
-                result = cls.run_command(
-                    f"git clone {PCILEECH_FPGA_REPO} {repo_dir}")
+                result = cls.run_command(f"git clone {PCILEECH_FPGA_REPO} {repo_dir}")
 
                 # Create last update timestamp
                 with open(repo_dir / ".last_update", "w") as f:

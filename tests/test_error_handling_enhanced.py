@@ -91,7 +91,8 @@ class TestErrorHandling(unittest.TestCase):
                     # Should handle invalid BDF gracefully
                     try:
                         builder = PCILeechFirmwareBuilder(
-                            bdf=invalid_bdf, board="75t", output_dir=self.output_dir)
+                            bdf=invalid_bdf, board="75t", output_dir=self.output_dir
+                        )
                         # If no exception, BDF should be stored as-is for later
                         # validation
                         self.assertEqual(builder.bdf, invalid_bdf)
@@ -219,8 +220,7 @@ class TestErrorHandling(unittest.TestCase):
             for device_info in malformed_device_infos:
                 with self.subTest(device_info=device_info):
                     try:
-                        result = builder._generate_device_config_module(
-                            device_info)
+                        result = builder._generate_device_config_module(device_info)
                         # Should handle malformed data gracefully
                         self.assertIsInstance(result, str)
                     except (ValueError, TypeError, KeyError):
@@ -247,8 +247,7 @@ class TestErrorHandling(unittest.TestCase):
         """Test handling of corrupted Git repositories."""
         with patch("src.repo_manager.subprocess.run") as mock_run:
             # Mock git status failure indicating corruption
-            mock_run.side_effect = subprocess.CalledProcessError(
-                128, "git status")
+            mock_run.side_effect = subprocess.CalledProcessError(128, "git status")
 
             from src.repo_manager import RepoManager
 
@@ -321,9 +320,7 @@ class TestErrorHandling(unittest.TestCase):
             sv_content = builder._generate_device_config_module(device_info)
 
             # Basic syntax validation
-            self.assertEqual(
-                sv_content.count("module"),
-                sv_content.count("endmodule"))
+            self.assertEqual(sv_content.count("module"), sv_content.count("endmodule"))
             self.assertNotIn("syntax error", sv_content.lower())
 
     def test_tcl_syntax_error_detection(self):
@@ -499,9 +496,7 @@ class TestErrorHandling(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             config = BuildConfiguration(profile_duration=-1.0)
 
-        self.assertIn(
-            "Profile duration must be positive", str(
-                context.exception))
+        self.assertIn("Profile duration must be positive", str(context.exception))
 
     def test_cleanup_on_error(self):
         """Test that resources are cleaned up on errors."""
@@ -561,9 +556,7 @@ class TestErrorRecovery(unittest.TestCase):
 
             # Should generate valid config space
             self.assertIsInstance(synthetic_config, bytes)
-            self.assertEqual(
-                len(synthetic_config),
-                4096)  # Extended config space
+            self.assertEqual(len(synthetic_config), 4096)  # Extended config space
 
             # Should have valid header
             self.assertNotEqual(synthetic_config[:4], b"\x00\x00\x00\x00")

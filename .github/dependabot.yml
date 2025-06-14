@@ -2,7 +2,7 @@ version: 2
 updates:
   # Python dependencies
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "/src"
     schedule:
       interval: "weekly"
       day: "monday"

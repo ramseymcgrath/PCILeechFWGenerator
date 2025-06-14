@@ -123,10 +123,7 @@ class TestModularBuildArchitecture:
         validator = ConfigValidator()
 
         # Test valid config
-        valid_config = {
-            "bd": "0000:03:00.0",
-            "board": "75t",
-            "device_type": "generic"}
+        valid_config = {"bd": "0000:03:00.0", "board": "75t", "device_type": "generic"}
 
         result = await validator.validate_build_config_async(valid_config)
         assert result["valid"] is True
@@ -267,9 +264,7 @@ if __name__ == "__main__":
         async def test_async():
             config_loader = ConfigLoader()
             config = await config_loader.load_build_config_async()
-            print(
-                f"✓ Async config loading works: {
-                    len(config)} settings loaded")
+            print(f"✓ Async config loading works: {len(config)} settings loaded")
 
             validator = ConfigValidator()
             result = await validator.validate_build_config_async(

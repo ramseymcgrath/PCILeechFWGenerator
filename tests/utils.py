@@ -1,5 +1,6 @@
 """
-Utility functions for PCILeech firmware generator tests.
+Utility functions for PCILeech FPGA firmware generator tests, now focused solely
+on the *official* `ufrisk/pcileech-fpga` repository (no Wi‑Fi forks).
 """
 
 import json
@@ -11,408 +12,231 @@ from typing import Optional
 
 import requests
 
-# Configure logging
+# ─────────────────────────── Logging ────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
-# GitHub repository information
-GITHUB_REPO = "dom0ng/pcileech-wifi-v2"
-GITHUB_BRANCH = "main"
+# ───────────────────── GitHub repository info ───────────────────
+GITHUB_REPO = "ufrisk/pcileech-fpga"
+GITHUB_BRANCH = "master"
 GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
 
-# Fallback repository if the primary one doesn't have the files we need
-FALLBACK_REPOS = [{"repo": "ufrisk/pcileech-fpga",
-                   "branch": "master",
-                   "sv_paths": ["artix7/pcileech_tlps_a7.sv",
-                                "artix7/pcileech_tlps128_bar_a7.sv"],
-                   "tcl_paths": ["artix7/vivado_generate_project_a7.tcl"],
-                   }]
+# Define specific paths for common SystemVerilog and TCL files
+SV_PATHS = [
+    "artix7/pcileech_tlps_a7.sv",
+    "artix7/pcileech_tlps128_bar_a7.sv",
+]
+TCL_PATHS = ["artix7/vivado_generate_project_a7.tcl"]
 
-# Cache directory for downloaded files
+# ──────────────────────── Cache settings ────────────────────────
 CACHE_DIR = Path(os.path.expanduser("~")) / ".pcileech_test_cache"
-CACHE_EXPIRY = 86400  # Cache expiry in seconds (24 hours)
+CACHE_EXPIRY = 86400  # 24 h
 
-# Local example files as a last resort
+# Local fallbacks (only used if GitHub is unreachable)
 LOCAL_EXAMPLE_SV = Path(__file__).parent.parent / "external_sv_example.sv"
 LOCAL_EXAMPLE_TCL = Path(__file__).parent.parent / "external_tcl_example.tcl"
 
+# ───────────────────────── Cache helpers ────────────────────────
+
 
 def ensure_cache_dir() -> Path:
-    """Ensure the cache directory exists."""
-    if not CACHE_DIR.exists():
-        CACHE_DIR.mkdir(parents=True)
+    """Create cache dir if needed and return it."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     return CACHE_DIR
 
 
-def get_cache_path(file_path: str) -> Path:
-    """Get the cache path for a file."""
-    # Convert the file path to a cache-friendly name
-    cache_name = file_path.replace("/", "_").replace("\\", "_")
-    return ensure_cache_dir() / cache_name
+def _cache_path(key: str) -> Path:
+    """Map an arbitrary key to a file inside the cache dir."""
+    safe_key = key.replace("/", "_").replace("\\", "_")
+    return ensure_cache_dir() / safe_key
 
 
-def is_cache_valid(cache_path: Path) -> bool:
-    """Check if the cache is still valid."""
-    if not cache_path.exists():
+def _cache_valid(path: Path) -> bool:
+    if not path.exists():
         return False
-
-    # Check if the cache has expired
-    cache_time = cache_path.stat().st_mtime
-    current_time = time.time()
-    return (current_time - cache_time) < CACHE_EXPIRY
+    return (time.time() - path.stat().st_mtime) < CACHE_EXPIRY
 
 
-def save_to_cache(file_path: str, content: str) -> None:
-    """Save content to cache."""
-    cache_path = get_cache_path(file_path)
-
-    # Save the content and metadata
-    cache_data = {
-        "file_path": file_path,
-        "timestamp": time.time(),
-        "content": content}
-
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(cache_data, f)
-
-
-def load_from_cache(file_path: str) -> Optional[str]:
-    """Load content from cache if valid."""
-    cache_path = get_cache_path(file_path)
-
-    if not is_cache_valid(cache_path):
+def _cache_load(key: str) -> Optional[str]:
+    path = _cache_path(key)
+    if not _cache_valid(path):
         return None
-
     try:
-        with open(cache_path, "r", encoding="utf-8") as f:
-            cache_data = json.load(f)
-            return cache_data.get("content")
+        with path.open("r", encoding="utf-8") as fh:
+            obj = json.load(fh)
+            return obj.get("content")
     except (json.JSONDecodeError, FileNotFoundError):
         return None
 
 
-def fetch_file_from_github(file_path: str, use_cache: bool = True) -> str:
-    """
-    Fetch a file from GitHub repository.
+def _cache_save(key: str, content: str) -> None:
+    path = _cache_path(key)
+    data = {"timestamp": time.time(), "content": content}
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh)
 
-    Args:
-        file_path: Path to the file in the repository
-        use_cache: Whether to use cached version if available
 
-    Returns:
-        The content of the file as a string
+# ─────────────────────── GitHub fetchers ────────────────────────
 
-    Raises:
-        ValueError: If the file cannot be fetched
-    """
-    # Check cache first if enabled
-    if use_cache:
-        cached_content = load_from_cache(file_path)
-        if cached_content is not None:
-            logger.info(f"Using cached version of {file_path}")
-            return cached_content
 
-    # Construct the URL
+def fetch_file_from_github(file_path: str, *, use_cache: bool = True) -> str:
+    """Download a file *once* from the canonical repo (with opt‑in cache)."""
+    if use_cache and (cached := _cache_load(file_path)):
+        logger.info("Using cached %s", file_path)
+        return cached
+
     url = f"{GITHUB_BASE_URL}/{file_path}"
-
+    logger.info("Fetching %s", url)
     try:
-        logger.info(f"Fetching {file_path} from GitHub")
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+    except requests.RequestException as exc:
+        msg = f"Failed to fetch {file_path}: {exc}"
+        logger.error(msg)
+        raise ValueError(msg) from exc
 
-        content = response.text
-
-        # Cache the content if caching is enabled
-        if use_cache:
-            save_to_cache(file_path, content)
-
-        return content
-    except requests.RequestException as e:
-        error_msg = f"Failed to fetch {file_path} from GitHub: {str(e)}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-
-def fetch_directory_listing(directory_path: str) -> list:
-    """
-    Fetch a listing of files in a directory from GitHub repository.
-
-    Args:
-        directory_path: Path to the directory in the repository
-
-    Returns:
-        A list of file information dictionaries
-
-    Raises:
-        ValueError: If the directory listing cannot be fetched
-    """
-    # Construct the URL
-    url = f"{GITHUB_API_URL}/{directory_path}"
-
-    try:
-        logger.info(
-            f"Fetching directory listing for {directory_path} from GitHub")
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-
-        return response.json()
-    except requests.RequestException as e:
-        error_msg = f"Failed to fetch directory listing for {directory_path} from GitHub: {
-            str(e)}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-
-def get_pcileech_wifi_file(file_path: str, use_cache: bool = True) -> str:
-    """
-    Get a file from the pcileech-wifi-v2 repository.
-
-    This is the main function that should be used by tests to fetch files.
-
-    Args:
-        file_path: Path to the file in the repository (relative to the repository root)
-        use_cache: Whether to use cached version if available
-
-    Returns:
-        The content of the file as a string
-
-    Raises:
-        ValueError: If the file cannot be fetched
-    """
-    try:
-        return fetch_file_from_github(file_path, use_cache)
-    except ValueError as e:
-        logger.error(f"Error fetching file: {str(e)}")
-        raise
-
-
-def search_repository_for_file_type(
-        extension: str,
-        use_cache: bool = True) -> list:
-    """
-    Search the entire repository for files with a specific extension.
-
-    Args:
-        extension: File extension to search for (e.g., ".sv")
-        use_cache: Whether to use cached results if available
-
-    Returns:
-        List of file paths
-    """
-    # Check cache first if enabled
-    cache_key = f"file_search_{extension}"
+    text = r.text
     if use_cache:
-        cached_content = load_from_cache(cache_key)
-        if cached_content is not None:
-            try:
-                return json.loads(cached_content)
-            except json.JSONDecodeError:
-                pass
+        _cache_save(file_path, text)
+    return text
 
-    # Start with common directories to check
-    directories_to_check = [
-        "",  # Root directory
-        "src",
-        "pcileech-wifi-DWA-556/src",
-        "pcileech-wifi-DWA-556",
-        "pcileech-wifi-v2/pcileech-wifi-DWA-556/src",
-    ]
 
-    found_files = []
+def fetch_directory_listing(directory: str) -> list[dict]:
+    """Return GitHub API JSON for files under *directory* (non‑recursive)."""
+    url = f"{GITHUB_API_URL}/{directory}"
+    logger.info("Listing %s", url)
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as exc:
+        msg = f"Failed to list {directory}: {exc}"
+        logger.error(msg)
+        raise ValueError(msg) from exc
 
-    # Check each directory
-    for directory in directories_to_check:
+
+# ─────────────────────── Repo search helpers ────────────────────
+
+
+def search_repository_for_extension(ext: str, *, use_cache: bool = True) -> list[str]:
+    """Recursively locate files with *ext* (e.g. ".sv", ".tcl")."""
+    key = f"find::{ext}"
+    if use_cache and (cached := _cache_load(key)):
         try:
-            files = fetch_directory_listing(directory)
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            pass
 
-            # Check for files with the specified extension
-            for file in files:
-                if file.get("type") == "file" and file.get(
-                        "name", "").endswith(extension):
-                    file_path = (
-                        f"{directory}/{file['name']}" if directory else file["name"]
-                    )
-                    found_files.append(file_path)
-                elif file.get("type") == "dir":
-                    # Add subdirectories to check
-                    subdir = (
-                        f"{directory}/{file['name']}" if directory else file["name"]
-                    )
-                    if subdir not in directories_to_check:
-                        directories_to_check.append(subdir)
+    to_visit: list[str] = [""]  # start at repo root
+    found: list[str] = []
+
+    while to_visit:
+        directory = to_visit.pop()
+        try:
+            for entry in fetch_directory_listing(directory):
+                typ, name = entry.get("type"), entry.get("name", "")
+                path = f"{directory}/{name}".lstrip("/") if directory else name
+                if typ == "file" and name.endswith(ext):
+                    found.append(path)
+                elif typ == "dir":
+                    if "wifi" in name.lower():
+                        continue
+                    to_visit.append(path)
         except ValueError:
-            # Directory might not exist, continue to the next one
+            continue  # ignore missing dirs
+
+    if use_cache:
+        _cache_save(key, json.dumps(found))
+    return found
+
+
+# ─────────────────────── Public convenience API ─────────────────
+
+
+def get_pcileech_file(file_path: str, *, use_cache: bool = True) -> str:
+    """Fetch *file_path* from the canonical repo, honouring cache."""
+    return fetch_file_from_github(file_path, use_cache=use_cache)
+
+
+def get_pcileech_sv_file(*, use_cache: bool = True) -> str:
+    """Return contents of a representative SystemVerilog file.
+
+    Preference order:
+      1. First file in `SV_PATHS` list that exists.
+      2. First *.sv* file discovered by repo search.
+      3. Local fallback `external_sv_example.sv` if present.
+    """
+    # 1) Try curated list
+    for p in SV_PATHS:
+        try:
+            return fetch_file_from_github(p, use_cache=use_cache)
+        except ValueError:
             continue
 
-    # Cache the results if caching is enabled
-    if use_cache and found_files:
-        save_to_cache(cache_key, json.dumps(found_files))
+    # 2) Fallback to search
+    sv_files = search_repository_for_extension(".sv", use_cache=use_cache)
+    if sv_files:
+        return fetch_file_from_github(sv_files[0], use_cache=use_cache)
 
-    return found_files
-
-
-def get_pcileech_wifi_sv_file(use_cache: bool = True) -> str:
-    """
-    Get a SystemVerilog file from the pcileech-wifi-v2 repository.
-
-    Returns:
-        The content of a SystemVerilog file
-
-    Raises:
-        ValueError: If no suitable file can be found
-    """
-    # First, check if local example exists and use it if it does
+    # 3) Local example
     if LOCAL_EXAMPLE_SV.exists():
-        logger.info(
-            f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
+        logger.info("Using local SV example %s", LOCAL_EXAMPLE_SV)
         return LOCAL_EXAMPLE_SV.read_text()
 
-    # If local example doesn't exist, try to fetch from GitHub
-    try:
-        # Search for SystemVerilog files in the repository
-        sv_files = search_repository_for_file_type(".sv", use_cache)
-
-        if not sv_files:
-            # If no .sv files found, try looking for .v files (Verilog)
-            v_files = search_repository_for_file_type(".v", use_cache)
-            if v_files:
-                sv_files = v_files
-            else:
-                raise ValueError(
-                    "No SystemVerilog files found in the repository and no local example available"
-                )
-
-        # Get the first SystemVerilog file
-        file_path = sv_files[0]
-        logger.info(f"Using SystemVerilog file: {file_path}")
-
-        return fetch_file_from_github(file_path, use_cache)
-    except ValueError as e:
-        # If we can't fetch from the primary repository, try fallback
-        # repositories
-        for fallback in FALLBACK_REPOS:
-            repo = fallback["repo"]
-            branch = fallback["branch"]
-            for path in fallback["sv_paths"]:
-                try:
-                    logger.info(
-                        f"Trying fallback SystemVerilog file from {repo}: {path}")
-                    return fetch_file_from_github_repo(
-                        repo, branch, path, use_cache)
-                except ValueError:
-                    continue
-
-        # If local example exists, use it as a last resort
-        if LOCAL_EXAMPLE_SV.exists():
-            logger.info(
-                f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
-            return LOCAL_EXAMPLE_SV.read_text()
-
-        logger.error(f"Error fetching SystemVerilog file: {str(e)}")
-        raise
+    raise ValueError("No SystemVerilog source found in repository or locally")
 
 
-def get_pcileech_wifi_tcl_file(use_cache: bool = True) -> str:
+def get_pcileech_tcl_file(*, use_cache: bool = True) -> str:
+    """Return contents of a representative Vivado TCL script.
+
+    Preference order mirrors `get_pcileech_sv_file()`.
     """
-    Get a TCL file from the pcileech-wifi-v2 repository.
+    # 1) Curated list
+    for p in TCL_PATHS:
+        try:
+            return fetch_file_from_github(p, use_cache=use_cache)
+        except ValueError:
+            continue
 
-    Returns:
-        The content of a TCL file
+    # 2) Search
+    tcl_files = search_repository_for_extension(".tcl", use_cache=use_cache)
+    if tcl_files:
+        return fetch_file_from_github(tcl_files[0], use_cache=use_cache)
 
-    Raises:
-        ValueError: If no suitable file can be found
-    """
-    # First, check if local example exists and use it if it does
+    # 3) Local example
     if LOCAL_EXAMPLE_TCL.exists():
-        logger.info(f"Using local TCL example file: {LOCAL_EXAMPLE_TCL}")
+        logger.info("Using local TCL example %s", LOCAL_EXAMPLE_TCL)
         return LOCAL_EXAMPLE_TCL.read_text()
 
-    # If local example doesn't exist, try to fetch from GitHub
-    try:
-        # Search for TCL files in the repository
-        tcl_files = search_repository_for_file_type(".tcl", use_cache)
+    raise ValueError("No TCL script found in repository or locally")
 
-        if not tcl_files:
-            raise ValueError(
-                "No TCL files found in the repository and no local example available"
-            )
 
-        # Get the first TCL file
-        file_path = tcl_files[0]
-        logger.info(f"Using TCL file: {file_path}")
-
-        return fetch_file_from_github(file_path, use_cache)
-    except ValueError as e:
-        # If we can't fetch from the primary repository, try fallback
-        # repositories
-        for fallback in FALLBACK_REPOS:
-            repo = fallback["repo"]
-            branch = fallback["branch"]
-            for path in fallback["tcl_paths"]:
-                try:
-                    logger.info(
-                        f"Trying fallback TCL file from {repo}: {path}")
-                    return fetch_file_from_github_repo(
-                        repo, branch, path, use_cache)
-                except ValueError:
-                    continue
-
-        # If local example exists, use it as a last resort
-        if LOCAL_EXAMPLE_TCL.exists():
-            logger.info(f"Using local TCL example file: {LOCAL_EXAMPLE_TCL}")
-            return LOCAL_EXAMPLE_TCL.read_text()
-
-        logger.error(f"Error fetching TCL file: {str(e)}")
-        raise
+# ───────────────────────── Misc helpers ─────────────────────────
 
 
 def fetch_file_from_github_repo(
-    repo: str, branch: str, file_path: str, use_cache: bool = True
+    repo: str, branch: str, file_path: str, *, use_cache: bool = True
 ) -> str:
-    """
-    Fetch a file from a specific GitHub repository.
+    """Generic helper unrelated to PCILeech; left unchanged for completeness."""
+    key = f"{repo}@{branch}:{file_path}"
+    if use_cache and (cached := _cache_load(key)):
+        return cached
 
-    Args:
-        repo: Repository name (e.g., "user/repo")
-        branch: Branch name
-        file_path: Path to the file in the repository
-        use_cache: Whether to use cached version if available
-
-    Returns:
-        The content of the file as a string
-
-    Raises:
-        ValueError: If the file cannot be fetched
-    """
-    # Check cache first if enabled
-    cache_key = f"{repo}_{branch}_{file_path}"
-    if use_cache:
-        cached_content = load_from_cache(cache_key)
-        if cached_content is not None:
-            logger.info(f"Using cached version of {file_path} from {repo}")
-            return cached_content
-
-    # Construct the URL
     url = f"https://raw.githubusercontent.com/{repo}/{branch}/{file_path}"
-
+    logger.info("Fetching %s", url)
     try:
-        logger.info(f"Fetching {file_path} from GitHub repository {repo}")
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+    except requests.RequestException as exc:
+        msg = f"Failed to fetch {file_path} from {repo}: {exc}"
+        logger.error(msg)
+        raise ValueError(msg) from exc
 
-        content = response.text
-
-        # Cache the content if caching is enabled
-        if use_cache:
-            save_to_cache(cache_key, content)
-
-        return content
-    except requests.RequestException as e:
-        error_msg = (
-            f"Failed to fetch {file_path} from GitHub repository {repo}: {
-                str(e)}")
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+    text = r.text
+    if use_cache:
+        _cache_save(key, text)
+    return text

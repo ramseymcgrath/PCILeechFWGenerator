@@ -92,9 +92,8 @@ class TestPowerManagementGenerator:
     def test_disabled_features(self):
         """Test generation with disabled features."""
         config = PowerManagementConfig(
-            supported_power_states=[],
-            enable_clock_gating=False,
-            enable_aspm=False)
+            supported_power_states=[], enable_clock_gating=False, enable_aspm=False
+        )
         generator = PowerManagementGenerator(config)
 
         state_machine = generator.generate_power_state_machine()
@@ -218,8 +217,7 @@ class TestPerformanceCounterGenerator:
         """Test device-specific counter generation."""
         # Test network controller
         config = PerformanceCounterConfig(enable_device_specific_counters=True)
-        generator = PerformanceCounterGenerator(
-            config, DeviceType.NETWORK_CONTROLLER)
+        generator = PerformanceCounterGenerator(config, DeviceType.NETWORK_CONTROLLER)
         network_counters = generator.generate_device_specific_counters()
 
         assert "Network Controller Performance Counters" in network_counters
@@ -227,8 +225,7 @@ class TestPerformanceCounterGenerator:
         assert "tx_packets" in network_counters
 
         # Test storage controller
-        generator = PerformanceCounterGenerator(
-            config, DeviceType.STORAGE_CONTROLLER)
+        generator = PerformanceCounterGenerator(config, DeviceType.STORAGE_CONTROLLER)
         storage_counters = generator.generate_device_specific_counters()
 
         assert "Storage Controller Performance Counters" in storage_counters
@@ -258,8 +255,7 @@ class TestAdvancedSVGenerator:
 
     def test_module_header_generation(self):
         """Test module header generation."""
-        device_config = DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK_CONTROLLER)
+        device_config = DeviceSpecificLogic(device_type=DeviceType.NETWORK_CONTROLLER)
         generator = AdvancedSVGenerator(device_config=device_config)
         header = generator.generate_module_header()
 
@@ -272,8 +268,7 @@ class TestAdvancedSVGenerator:
     def test_device_specific_ports(self):
         """Test device-specific port generation."""
         # Test network controller ports
-        device_config = DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK_CONTROLLER)
+        device_config = DeviceSpecificLogic(device_type=DeviceType.NETWORK_CONTROLLER)
         generator = AdvancedSVGenerator(device_config=device_config)
         ports = generator._generate_device_specific_ports()
 
@@ -282,8 +277,7 @@ class TestAdvancedSVGenerator:
         assert "link_speed" in ports
 
         # Test storage controller ports
-        device_config = DeviceSpecificLogic(
-            device_type=DeviceType.STORAGE_CONTROLLER)
+        device_config = DeviceSpecificLogic(device_type=DeviceType.STORAGE_CONTROLLER)
         generator = AdvancedSVGenerator(device_config=device_config)
         ports = generator._generate_device_specific_ports()
 
@@ -325,11 +319,11 @@ class TestAdvancedSVGenerator:
             base_frequency_mhz=100.0,
         )
 
-        regs = [{"name": "test_reg", "offset": "0x100",
-                 "value": "0x12345678", "rw": "rw"}]
+        regs = [
+            {"name": "test_reg", "offset": "0x100", "value": "0x12345678", "rw": "rw"}
+        ]
 
-        register_logic = generator.generate_register_logic(
-            regs, variance_model)
+        register_logic = generator.generate_register_logic(regs, variance_model)
 
         assert "test_reg_reg" in register_logic
         assert "timing_counter" in register_logic
@@ -405,9 +399,8 @@ class TestAdvancedSVGenerator:
         from src.advanced_sv_power import PowerManagementConfig
 
         power_config = PowerManagementConfig(
-            enable_clock_gating=True,
-            enable_aspm=True,
-            enable_power_domains=True)
+            enable_clock_gating=True, enable_aspm=True, enable_power_domains=True
+        )
 
         error_config = ErrorHandlingConfig(
             enable_ecc=True,
@@ -476,7 +469,8 @@ class TestAdvancedSVGenerator:
         assert "if enable_variance:" in integration_code
         assert "generator = AdvancedSVGenerator" in integration_code
         assert (
-            "sv_content = generator.generate_advanced_systemverilog" in integration_code)
+            "sv_content = generator.generate_advanced_systemverilog" in integration_code
+        )
         assert "write_text" in integration_code
         assert "shutil.copyfile" in integration_code
 
@@ -573,8 +567,9 @@ class TestAdvancedSVGenerator:
         generator = AdvancedSVGenerator()
 
         # Test with invalid register values
-        regs = [{"name": "invalid_hex", "offset": "0x100",
-                 "value": "invalid", "rw": "rw"}, ]
+        regs = [
+            {"name": "invalid_hex", "offset": "0x100", "value": "invalid", "rw": "rw"},
+        ]
 
         # This should handle the errors gracefully or raise appropriate
         # exceptions
@@ -589,8 +584,9 @@ class TestIntegration:
         """Test that SystemVerilog files can be generated and written."""
         generator = AdvancedSVGenerator()
 
-        regs = [{"name": "test_reg", "offset": "0x100",
-                 "value": "0x12345678", "rw": "rw"}]
+        regs = [
+            {"name": "test_reg", "offset": "0x100", "value": "0x12345678", "rw": "rw"}
+        ]
 
         sv_content = generator.generate_advanced_systemverilog(regs)
 
@@ -624,11 +620,11 @@ class TestIntegration:
             base_frequency_mhz=125.0,
         )
 
-        regs = [{"name": "test_reg", "offset": "0x100",
-                 "value": "0x12345678", "rw": "rw"}]
+        regs = [
+            {"name": "test_reg", "offset": "0x100", "value": "0x12345678", "rw": "rw"}
+        ]
 
-        sv_content = generator.generate_advanced_systemverilog(
-            regs, variance_model)
+        sv_content = generator.generate_advanced_systemverilog(regs, variance_model)
 
         # Should contain variance-aware timing logic
         assert "timing_counter" in sv_content

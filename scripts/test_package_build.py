@@ -61,8 +61,7 @@ def test_package_build():
             return False
 
         # Check that test files are NOT included
-        test_files = [f for f in files if "test" in f.lower()
-                      and f.endswith(".py")]
+        test_files = [f for f in files if "test" in f.lower() and f.endswith(".py")]
         if test_files:
             print(f"ERROR: Test files found in wheel: {test_files}")
             return False

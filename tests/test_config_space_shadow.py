@@ -18,14 +18,11 @@ class TestConfigSpaceShadow(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.donor_info_path = os.path.join(
-            self.temp_dir.name, "donor_info.json")
-        self.config_hex_path = os.path.join(
-            self.temp_dir.name, "config_space_init.hex")
+        self.donor_info_path = os.path.join(self.temp_dir.name, "donor_info.json")
+        self.config_hex_path = os.path.join(self.temp_dir.name, "config_space_init.hex")
 
         # Sample configuration space data (simplified for testing)
-        self.sample_config_space = "".join(
-            ["0123456789abcdef"] * 256)  # 4096 bytes
+        self.sample_config_space = "".join(["0123456789abcdef"] * 256)  # 4096 bytes
 
         # Sample device info
         self.sample_device_info = {
@@ -74,8 +71,7 @@ class TestConfigSpaceShadow(unittest.TestCase):
         manager = DonorDumpManager()
 
         # Save the donor info
-        result = manager.save_donor_info(
-            self.sample_device_info, self.donor_info_path)
+        result = manager.save_donor_info(self.sample_device_info, self.donor_info_path)
         self.assertTrue(result)
 
         # Verify both files exist
@@ -108,9 +104,8 @@ class TestConfigSpaceShadow(unittest.TestCase):
 
         # Call setup_module with config extraction
         device_info = manager.setup_module(
-            "0000:03:00.0",
-            save_to_file=self.donor_info_path,
-            extract_full_config=True)
+            "0000:03:00.0", save_to_file=self.donor_info_path, extract_full_config=True
+        )
 
         # Verify the result
         self.assertEqual(device_info["vendor_id"], "0x8086")

@@ -60,16 +60,12 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
             # Verify seed is reproducible
             seed2 = simulator.deterministic_seed(dsn, revision)
             self.assertEqual(
-                seed,
-                seed2,
-                f"Seed not reproducible for DSN={dsn}, revision={revision}")
+                seed, seed2, f"Seed not reproducible for DSN={dsn}, revision={revision}"
+            )
 
         # Verify all seeds are different
         unique_seeds = set(seeds.values())
-        self.assertEqual(
-            len(unique_seeds),
-            len(test_cases),
-            "Not all seeds are unique")
+        self.assertEqual(len(unique_seeds), len(test_cases), "Not all seeds are unique")
 
     def test_seed_algorithm_correctness(self):
         """Test that the seed algorithm matches the specified requirements."""
@@ -132,12 +128,8 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
         )
 
         # Verify all models have identical variance parameters
-        self.assertEqual(
-            model1.clock_jitter_percent,
-            model2.clock_jitter_percent)
-        self.assertEqual(
-            model1.clock_jitter_percent,
-            model3.clock_jitter_percent)
+        self.assertEqual(model1.clock_jitter_percent, model2.clock_jitter_percent)
+        self.assertEqual(model1.clock_jitter_percent, model3.clock_jitter_percent)
 
         self.assertEqual(
             model1.register_timing_jitter_ns, model2.register_timing_jitter_ns
@@ -146,19 +138,15 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
             model1.register_timing_jitter_ns, model3.register_timing_jitter_ns
         )
 
-        self.assertEqual(
-            model1.power_noise_percent,
-            model2.power_noise_percent)
-        self.assertEqual(
-            model1.power_noise_percent,
-            model3.power_noise_percent)
+        self.assertEqual(model1.power_noise_percent, model2.power_noise_percent)
+        self.assertEqual(model1.power_noise_percent, model3.power_noise_percent)
 
         self.assertEqual(
-            model1.temperature_drift_ppm_per_c,
-            model2.temperature_drift_ppm_per_c)
+            model1.temperature_drift_ppm_per_c, model2.temperature_drift_ppm_per_c
+        )
         self.assertEqual(
-            model1.temperature_drift_ppm_per_c,
-            model3.temperature_drift_ppm_per_c)
+            model1.temperature_drift_ppm_per_c, model3.temperature_drift_ppm_per_c
+        )
 
         self.assertEqual(
             model1.process_variation_percent, model2.process_variation_percent
@@ -167,12 +155,8 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
             model1.process_variation_percent, model3.process_variation_percent
         )
 
-        self.assertEqual(
-            model1.propagation_delay_ps,
-            model2.propagation_delay_ps)
-        self.assertEqual(
-            model1.propagation_delay_ps,
-            model3.propagation_delay_ps)
+        self.assertEqual(model1.propagation_delay_ps, model2.propagation_delay_ps)
+        self.assertEqual(model1.propagation_delay_ps, model3.propagation_delay_ps)
 
         self.assertEqual(model1.operating_temp_c, model2.operating_temp_c)
         self.assertEqual(model1.operating_temp_c, model3.operating_temp_c)
@@ -200,20 +184,17 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
 
         # Test with empty revision (should use first 20 chars, which is empty)
         empty_revision = ""
-        empty_seed = simulator.deterministic_seed(
-            0x1234567890ABCDEF, empty_revision)
+        empty_seed = simulator.deterministic_seed(0x1234567890ABCDEF, empty_revision)
         self.assertIsInstance(empty_seed, int)
         self.assertGreaterEqual(empty_seed, 0)
 
         # Test with very long revision (should only use first 20 chars)
         long_revision = "a" * 100
-        long_seed = simulator.deterministic_seed(
-            0x1234567890ABCDEF, long_revision)
+        long_seed = simulator.deterministic_seed(0x1234567890ABCDEF, long_revision)
 
         # Should be the same as using just the first 20 chars
         short_revision = "a" * 20
-        short_seed = simulator.deterministic_seed(
-            0x1234567890ABCDEF, short_revision)
+        short_seed = simulator.deterministic_seed(0x1234567890ABCDEF, short_revision)
 
         self.assertEqual(long_seed, short_seed)
 
@@ -236,8 +217,7 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
 
         # Verify the sequences are identical
         for i, (val1, val2) in enumerate(zip(sequence1, sequence2)):
-            self.assertEqual(
-                val1, val2, f"Random sequences diverged at position {i}")
+            self.assertEqual(val1, val2, f"Random sequences diverged at position {i}")
 
     def test_deterministic_timing_adjustments(self):
         """Test that timing adjustments are deterministic with the same seed."""
@@ -281,8 +261,7 @@ class TestDeterministicVarianceSeedingEnhanced(unittest.TestCase):
 
         # Verify the sequences are identical
         for i, (val1, val2) in enumerate(zip(timings1, timings2)):
-            self.assertEqual(
-                val1, val2, f"Timing sequences diverged at position {i}")
+            self.assertEqual(val1, val2, f"Timing sequences diverged at position {i}")
 
     def test_systemverilog_code_determinism(self):
         """Test that generated SystemVerilog code is deterministic with the same seed."""
@@ -400,8 +379,8 @@ class TestManufacturingVarianceIntegration(unittest.TestCase):
 
         # Verify that enterprise has lower variance than consumer
         self.assertLess(
-            enterprise_model.clock_jitter_percent,
-            consumer_model.clock_jitter_percent)
+            enterprise_model.clock_jitter_percent, consumer_model.clock_jitter_percent
+        )
 
         self.assertLess(
             enterprise_model.register_timing_jitter_ns,
@@ -423,13 +402,9 @@ class TestManufacturingVarianceIntegration(unittest.TestCase):
         industrial_params = simulator.DEFAULT_VARIANCE_PARAMS[DeviceClass.INDUSTRIAL]
         consumer_params = simulator.DEFAULT_VARIANCE_PARAMS[DeviceClass.CONSUMER]
 
-        self.assertLess(
-            industrial_params.temp_min_c,
-            consumer_params.temp_min_c)
+        self.assertLess(industrial_params.temp_min_c, consumer_params.temp_min_c)
 
-        self.assertGreater(
-            industrial_params.temp_max_c,
-            consumer_params.temp_max_c)
+        self.assertGreater(industrial_params.temp_max_c, consumer_params.temp_max_c)
 
     def test_deterministic_variance_with_different_device_classes(self):
         """Test that deterministic variance works with different device classes."""
@@ -461,24 +436,18 @@ class TestManufacturingVarianceIntegration(unittest.TestCase):
             )
 
             # Verify models are identical
+            self.assertEqual(model1.clock_jitter_percent, model2.clock_jitter_percent)
             self.assertEqual(
-                model1.clock_jitter_percent,
-                model2.clock_jitter_percent)
+                model1.register_timing_jitter_ns, model2.register_timing_jitter_ns
+            )
+            self.assertEqual(model1.power_noise_percent, model2.power_noise_percent)
             self.assertEqual(
-                model1.register_timing_jitter_ns,
-                model2.register_timing_jitter_ns)
+                model1.temperature_drift_ppm_per_c, model2.temperature_drift_ppm_per_c
+            )
             self.assertEqual(
-                model1.power_noise_percent,
-                model2.power_noise_percent)
-            self.assertEqual(
-                model1.temperature_drift_ppm_per_c,
-                model2.temperature_drift_ppm_per_c)
-            self.assertEqual(
-                model1.process_variation_percent,
-                model2.process_variation_percent)
-            self.assertEqual(
-                model1.propagation_delay_ps,
-                model2.propagation_delay_ps)
+                model1.process_variation_percent, model2.process_variation_percent
+            )
+            self.assertEqual(model1.propagation_delay_ps, model2.propagation_delay_ps)
             self.assertEqual(model1.operating_temp_c, model2.operating_temp_c)
             self.assertEqual(model1.supply_voltage_v, model2.supply_voltage_v)
 

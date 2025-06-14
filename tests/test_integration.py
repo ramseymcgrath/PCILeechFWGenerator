@@ -2,7 +2,6 @@
 Integration tests for PCILeech firmware generator workflow.
 """
 
-import generate
 import json
 import os
 import sys
@@ -10,6 +9,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+import generate
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -70,8 +71,7 @@ class TestFullWorkflow:
         # Verify workflow steps
         mock_validate.assert_called_once()
         mock_list_devices.assert_called_once()
-        mock_bind.assert_called_once_with(
-            "0000:03:00.0", "8086", "1533", "e1000e")
+        mock_bind.assert_called_once_with("0000:03:00.0", "8086", "1533", "e1000e")
         # Pass the args parameter to run_build_container
         mock_container.assert_called_once()
         args = mock_container.call_args[0][3]
@@ -199,8 +199,7 @@ class TestErrorPropagation:
     @patch("generate.validate_environment")
     def test_environment_validation_failure_propagation(self, mock_validate):
         """Test that environment validation failures propagate correctly."""
-        mock_validate.side_effect = RuntimeError(
-            "Environment validation failed")
+        mock_validate.side_effect = RuntimeError("Environment validation failed")
 
         with patch("sys.argv", ["generate.py", "--board", "75t"]):
             result = generate.main()
@@ -356,8 +355,7 @@ class TestHardwareSimulation:
         devices = generate.list_pci_devices()
 
         assert len(devices) == 3
-        assert any(dev["ven"] == "8086" and dev["dev"]
-                   == "1533" for dev in devices)
+        assert any(dev["ven"] == "8086" and dev["dev"] == "1533" for dev in devices)
 
     @patch("os.path.exists")
     @patch("subprocess.check_output")
@@ -429,8 +427,8 @@ class TestPerformanceIntegration:
 
         # Should process within reasonable time
         max_time = (
-            performance_test_data["large_device"]["expected_build_time_ms"] /
-            1000)
+            performance_test_data["large_device"]["expected_build_time_ms"] / 1000
+        )
         assert processing_time < max_time
         assert len(processed_regs) == len(large_reg_set)
 

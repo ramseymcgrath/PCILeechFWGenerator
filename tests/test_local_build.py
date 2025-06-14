@@ -7,8 +7,6 @@ These tests verify that the build process works correctly with:
 - Building without requiring a donor device
 """
 
-from src.donor_dump_manager import DonorDumpManager
-from src import build
 import json
 import os
 import sys
@@ -17,6 +15,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+from src import build
+from src.donor_dump_manager import DonorDumpManager
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -110,9 +111,7 @@ class TestLocalBuild:
             build.get_donor_info(
                 bdf="0000:00:00.0",
                 use_donor_dump=False,
-                donor_info_path=str(
-                    Path(__file__).parent /
-                    "sample_donor_info.json"),
+                donor_info_path=str(Path(__file__).parent / "sample_donor_info.json"),
                 device_type="generic",
             )
 
@@ -120,8 +119,7 @@ class TestLocalBuild:
             mock_get_donor_info.assert_called_once()
             args, kwargs = mock_get_donor_info.call_args
             assert kwargs.get("use_donor_dump") is False
-            assert "sample_donor_info.json" in kwargs.get(
-                "donor_info_path", "")
+            assert "sample_donor_info.json" in kwargs.get("donor_info_path", "")
 
     @patch("src.donor_dump_manager.DonorDumpManager.generate_donor_info")
     def test_generate_synthetic_donor_info(self, mock_generate_donor_info):
@@ -368,9 +366,7 @@ class TestBuildOrchestratorLocalBuild:
             device_type="network",
             local_build=True,
             donor_dump=False,
-            donor_info_file=str(
-                Path(__file__).parent /
-                "sample_donor_info.json"),
+            donor_info_file=str(Path(__file__).parent / "sample_donor_info.json"),
         )
 
         # Create a progress callback

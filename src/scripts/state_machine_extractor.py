@@ -153,10 +153,7 @@ class StateMachine:
             return ""
 
         # Generate state enumeration
-        state_enum = (
-            f"typedef enum logic [{max(1,
-                                       (len(self.states) - 1).bit_length() - 1)}:0] {{\n"
-        )
+        state_enum = f"typedef enum logic [{max(1, (len(self.states) - 1).bit_length() - 1)}:0] {{\n"
         for i, state in enumerate(sorted(self.states)):
             state_enum += f"        {state.upper()} = {i}"
             if i < len(self.states) - 1:
@@ -220,8 +217,7 @@ class StateMachine:
 
         return sm_logic
 
-    def _generate_transition_condition(
-            self, transition: StateTransition) -> str:
+    def _generate_transition_condition(self, transition: StateTransition) -> str:
         """Generate SystemVerilog condition for a transition."""
         conditions = []
 
@@ -231,14 +227,16 @@ class StateMachine:
         ):
             conditions.append(
                 f"bar_wr_en && bar_addr == 32'h{
-                    transition.register_offset:08X}")
+                    transition.register_offset:08X}"
+            )
         elif (
             transition.transition_type == TransitionType.REGISTER_READ
             and transition.register_offset
         ):
             conditions.append(
                 f"bar_rd_en && bar_addr == 32'h{
-                    transition.register_offset:08X}")
+                    transition.register_offset:08X}"
+            )
         elif transition.transition_type == TransitionType.TIMEOUT:
             conditions.append("timeout_expired")
         elif transition.transition_type == TransitionType.INTERRUPT:
@@ -349,7 +347,8 @@ class StateMachineExtractor:
         for func_name, func_body in functions.items():
             # Skip device_process if we already handled it
             if func_name == "device_process" and any(
-                    sm.name == "device_process_state_sm" for sm in self.extracted_machines):
+                sm.name == "device_process_state_sm" for sm in self.extracted_machines
+            ):
                 continue
 
             # Look for explicit state machines
@@ -469,8 +468,7 @@ class StateMachineExtractor:
             return sm
 
         # Look for switch-based state machines
-        switch_matches = self.state_patterns["state_switch"].finditer(
-            func_body)
+        switch_matches = self.state_patterns["state_switch"].finditer(func_body)
         for switch_match in switch_matches:
             state_var = switch_match.group(1)
             switch_body = switch_match.group(2)
@@ -489,8 +487,7 @@ class StateMachineExtractor:
                 sm.add_state(state_name)
 
             # Also look for state assignments to find additional states
-            state_assign_pattern = re.compile(
-                r"dev_state\s*=\s*(\w+)", re.DOTALL)
+            state_assign_pattern = re.compile(r"dev_state\s*=\s*(\w+)", re.DOTALL)
             for state_match in state_assign_pattern.finditer(switch_body):
                 state_name = state_match.group(1)
                 sm.add_state(state_name)
@@ -530,16 +527,13 @@ class StateMachineExtractor:
                     }
 
                     # Extract all state comparisons
-                    state_pattern = re.compile(
-                        rf"{re.escape(state_var)}\s*==\s*(\w+)")
-                    for state_match in state_pattern.finditer(
-                            if_chain_match.group(0)):
+                    state_pattern = re.compile(rf"{re.escape(state_var)}\s*==\s*(\w+)")
+                    for state_match in state_pattern.finditer(if_chain_match.group(0)):
                         state_name = state_match.group(1)
                         sm.add_state(state_name)
 
                     # Also look for state assignments
-                    assign_pattern = re.compile(
-                        rf"{re.escape(state_var)}\s*=\s*(\w+)")
+                    assign_pattern = re.compile(rf"{re.escape(state_var)}\s*=\s*(\w+)")
                     for assign_match in assign_pattern.finditer(
                         if_chain_match.group(0)
                     ):
@@ -577,8 +571,7 @@ class StateMachineExtractor:
         """Extract implicit state machines from register access sequences."""
         # Find register access sequences
         reg_accesses = []
-        for match in self.state_patterns["register_sequence"].finditer(
-                func_body):
+        for match in self.state_patterns["register_sequence"].finditer(func_body):
             operation = match.group(1).lower()
             reg_name = match.group(2)
             if reg_name in registers:
@@ -599,8 +592,7 @@ class StateMachineExtractor:
         # Create states based on register access sequence
         for i, (operation, reg_name, offset, pos) in enumerate(reg_accesses):
             state_name = f"access_{i}_{reg_name.lower()}"
-            sm.add_state(state_name, StateType.INIT if i ==
-                         0 else StateType.ACTIVE)
+            sm.add_state(state_name, StateType.INIT if i == 0 else StateType.ACTIVE)
 
             # Create transition to next state
             if i < len(reg_accesses) - 1:
@@ -645,8 +637,7 @@ class StateMachineExtractor:
         access_patterns = {}
 
         # Find all register accesses with function context
-        func_pattern = re.compile(
-            r"(\w+)\s*\([^)]*\)\s*\{([^}]*)\}", re.DOTALL)
+        func_pattern = re.compile(r"(\w+)\s*\([^)]*\)\s*\{([^}]*)\}", re.DOTALL)
 
         for func_match in func_pattern.finditer(content):
             func_name = func_match.group(1)
@@ -679,19 +670,12 @@ class StateMachineExtractor:
         }
 
         # Create states based on function categories
-        state_order = [
-            "init",
-            "config",
-            "runtime",
-            "interrupt",
-            "cleanup",
-            "error"]
+        state_order = ["init", "config", "runtime", "interrupt", "cleanup", "error"]
         created_states = []
 
         for category in state_order:
             if category in access_patterns:
-                sm.add_state(
-                    category, self._get_state_type_for_category(category))
+                sm.add_state(category, self._get_state_type_for_category(category))
                 created_states.append(category)
 
         # Create transitions between states
@@ -717,14 +701,13 @@ class StateMachineExtractor:
         transitions = []
 
         # Look for register writes that might trigger transitions
-        for reg_match in self.state_patterns["register_sequence"].finditer(
-                code):
+        for reg_match in self.state_patterns["register_sequence"].finditer(code):
             operation = reg_match.group(1).lower()
             reg_name = reg_match.group(2)
 
             if reg_name in registers:
                 # Look for state assignments after register access
-                remaining_code = code[reg_match.end():]
+                remaining_code = code[reg_match.end() :]
                 state_assign_pattern = re.compile(
                     r"(\w*state\w*|\w*mode\w*)\s*=\s*(\w+)", re.IGNORECASE
                 )
@@ -757,8 +740,7 @@ class StateMachineExtractor:
         """Find delay calls between two positions in code."""
         section = content[start_pos:end_pos]
 
-        for delay_match in self.state_patterns["delay_pattern"].finditer(
-                section):
+        for delay_match in self.state_patterns["delay_pattern"].finditer(section):
             delay_type = delay_match.group(1).lower()
             delay_value = int(delay_match.group(2))
 
@@ -780,12 +762,7 @@ class StateMachineExtractor:
         if "fault_handler" in name_lower or "error_handler" in name_lower:
             return "error"
 
-        if any(
-            keyword in name_lower for keyword in [
-                "init",
-                "probe",
-                "start",
-                "open"]):
+        if any(keyword in name_lower for keyword in ["init", "probe", "start", "open"]):
             return "init"
         elif any(keyword in name_lower for keyword in ["config", "setup", "configure"]):
             return "config"

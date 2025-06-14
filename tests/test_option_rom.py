@@ -24,10 +24,7 @@ except ImportError:
     # Handle import from different directory
     import sys
 
-    sys.path.append(
-        os.path.dirname(
-            os.path.dirname(
-                os.path.abspath(__file__))))
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from src.option_rom_manager import OptionROMManager
 
 
@@ -138,9 +135,7 @@ class TestOptionROMManager(unittest.TestCase):
         self.assertIsInstance(info, dict)
         self.assertEqual(info["rom_size"], "1024")
         self.assertEqual(info["valid_signature"], "True")
-        self.assertEqual(
-            info["rom_size_from_header"],
-            "1024")  # 2 blocks * 512 bytes
+        self.assertEqual(info["rom_size_from_header"], "1024")  # 2 blocks * 512 bytes
 
     @patch("subprocess.run")
     def test_setup_option_rom(self, mock_run):
@@ -155,8 +150,7 @@ class TestOptionROMManager(unittest.TestCase):
 
         # Test setup with existing ROM file
         self.manager.rom_file_path = str(self.sample_rom_path)
-        info = self.manager.setup_option_rom(
-            "0000:01:00.0", use_existing_rom=True)
+        info = self.manager.setup_option_rom("0000:01:00.0", use_existing_rom=True)
 
         # Verify results
         self.assertIsInstance(info, dict)

@@ -4,13 +4,14 @@ Tests for PCI configuration validation functionality.
 These tests verify that the validation of PCI configuration values works correctly.
 """
 
-from src.donor_dump_manager import DonorDumpManager
-from src import build
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+from src import build
+from src.donor_dump_manager import DonorDumpManager
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

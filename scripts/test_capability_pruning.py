@@ -8,6 +8,10 @@ This script demonstrates the capability pruning feature by:
 3. Displaying the changes made to the configuration space
 """
 
+import sys
+import tempfile
+from pathlib import Path
+
 from src.pci_capability import (
     PCICapabilityID,
     PCIExtCapabilityID,
@@ -17,9 +21,6 @@ from src.pci_capability import (
     get_all_ext_capabilities,
     prune_capabilities_by_rules,
 )
-import sys
-import tempfile
-from pathlib import Path
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,29 +32,28 @@ def create_sample_config_space():
     config_space = "00" * 4096
 
     # Set capabilities pointer at offset 0x34
-    config_space = config_space[: 0x34 * 2] + \
-        "40" + config_space[0x34 * 2 + 2:]
+    config_space = config_space[: 0x34 * 2] + "40" + config_space[0x34 * 2 + 2 :]
 
     # Set capabilities bit in status register (offset 0x06, bit 4)
-    status_value = int(config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
+    status_value = int(config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
     status_hex = f"{status_value:04x}"
-    config_space = config_space[: 0x06 * 2] + \
-        status_hex + config_space[0x06 * 2 + 4:]
+    config_space = config_space[: 0x06 * 2] + status_hex + config_space[0x06 * 2 + 4 :]
 
     # Add PCI Express capability at offset 0x40
     # Capability ID: 0x10 (PCIe)
     # Next pointer: 0x60 (next capability)
     # PCI Express Capabilities Register: 0x0002 (Endpoint device)
     pcie_cap = "10" + "60" + "0200" + "00000000" + "00000000" + "00000000"
-    config_space = (config_space[: 0x40 * 2] + pcie_cap +
-                    config_space[0x40 * 2 + len(pcie_cap):])
+    config_space = (
+        config_space[: 0x40 * 2] + pcie_cap + config_space[0x40 * 2 + len(pcie_cap) :]
+    )
 
     # Add Link Control Register at offset 0x50 (part of PCIe capability)
     link_control = "0001" + "0000"  # ASPM L0s enabled
     config_space = (
         config_space[: 0x50 * 2]
         + link_control
-        + config_space[0x50 * 2 + len(link_control):]
+        + config_space[0x50 * 2 + len(link_control) :]
     )
 
     # Add Device Control 2 Register at offset 0x68 (part of PCIe capability)
@@ -61,7 +61,7 @@ def create_sample_config_space():
     config_space = (
         config_space[: 0x68 * 2]
         + dev_control2
-        + config_space[0x68 * 2 + len(dev_control2):]
+        + config_space[0x68 * 2 + len(dev_control2) :]
     )
 
     # Add Power Management capability at offset 0x60
@@ -69,8 +69,9 @@ def create_sample_config_space():
     # Next pointer: 0x70 (next capability)
     # PM Capabilities Register: 0x03 (D0, D1, D2, D3hot supported)
     pm_cap = "01" + "70" + "0300" + "00000000"
-    config_space = (config_space[: 0x60 * 2] +
-                    pm_cap + config_space[0x60 * 2 + len(pm_cap):])
+    config_space = (
+        config_space[: 0x60 * 2] + pm_cap + config_space[0x60 * 2 + len(pm_cap) :]
+    )
 
     # Add MSI-X capability at offset 0x70
     # Capability ID: 0x11 (MSI-X)
@@ -79,8 +80,9 @@ def create_sample_config_space():
     # Table offset/BIR: 0x00002000 (offset 0x2000, BIR 0)
     # PBA offset/BIR: 0x00003000 (offset 0x3000, BIR 0)
     msix_cap = "11" + "00" + "0700" + "00002000" + "00003000"
-    config_space = (config_space[: 0x70 * 2] + msix_cap +
-                    config_space[0x70 * 2 + len(msix_cap):])
+    config_space = (
+        config_space[: 0x70 * 2] + msix_cap + config_space[0x70 * 2 + len(msix_cap) :]
+    )
 
     # Add Extended capabilities
 
@@ -92,8 +94,9 @@ def create_sample_config_space():
     # L1 Substates Control 1: 0x00000002
     # L1 Substates Control 2: 0x00000003
     l1pm_cap = "001E" + "1140" + "00000001" + "00000002" + "00000003"
-    config_space = (config_space[: 0x100 * 2] + l1pm_cap +
-                    config_space[0x100 * 2 + len(l1pm_cap):])
+    config_space = (
+        config_space[: 0x100 * 2] + l1pm_cap + config_space[0x100 * 2 + len(l1pm_cap) :]
+    )
 
     # Add SR-IOV extended capability at offset 0x140
     # Extended Capability ID: 0x0010 (SR-IOV)
@@ -107,7 +110,7 @@ def create_sample_config_space():
     config_space = (
         config_space[: 0x140 * 2]
         + sriov_cap
-        + config_space[0x140 * 2 + len(sriov_cap):]
+        + config_space[0x140 * 2 + len(sriov_cap) :]
     )
 
     return config_space
@@ -118,7 +121,8 @@ def print_capability_info(cap_type, cap_id, offset, name):
     print(
         f"  {cap_type} Capability: {name} (ID: 0x{
             cap_id:02x}, Offset: 0x{
-            offset:03x})")
+            offset:03x})"
+    )
 
 
 def analyze_config_space(config_space, title):
@@ -146,17 +150,18 @@ def analyze_config_space(config_space, title):
         # Check Link Control register
         link_control_offset = 0x50 * 2
         link_control = int(
-            config_space[link_control_offset: link_control_offset + 4], 16
+            config_space[link_control_offset : link_control_offset + 4], 16
         )
         aspm_enabled = link_control & 0x0003
         print(
             f"\nPCIe Link Control: ASPM {
-                'enabled' if aspm_enabled else 'disabled'}")
+                'enabled' if aspm_enabled else 'disabled'}"
+        )
 
         # Check Device Control 2 register
         dev_control2_offset = 0x68 * 2
         dev_control2 = int(
-            config_space[dev_control2_offset: dev_control2_offset + 4], 16
+            config_space[dev_control2_offset : dev_control2_offset + 4], 16
         )
         obff_ltr_enabled = dev_control2 & 0x6400
         print(
@@ -167,24 +172,28 @@ def analyze_config_space(config_space, title):
     pm_offset = find_cap(config_space, PCICapabilityID.POWER_MANAGEMENT.value)
     if pm_offset is not None:
         pm_cap_offset = (pm_offset + 2) * 2
-        pm_cap = int(config_space[pm_cap_offset: pm_cap_offset + 4], 16)
+        pm_cap = int(config_space[pm_cap_offset : pm_cap_offset + 4], 16)
         d1_support = pm_cap & 0x0002
         d2_support = pm_cap & 0x0004
         d3hot_support = pm_cap & 0x0008
         pme_support = pm_cap & 0x0F78
         print(
             f"\nPower Management: D1 {
-                'supported' if d1_support else 'not supported'}, " f"D2 {
-                'supported' if d2_support else 'not supported'}, " f"D3hot {
-                'supported' if d3hot_support else 'not supported'}, " f"PME {
-                    'supported' if pme_support else 'not supported'}")
+                'supported' if d1_support else 'not supported'}, "
+            f"D2 {
+                'supported' if d2_support else 'not supported'}, "
+            f"D3hot {
+                'supported' if d3hot_support else 'not supported'}, "
+            f"PME {
+                    'supported' if pme_support else 'not supported'}"
+        )
 
     # L1 PM Substates extended capability - direct check since find_ext_cap
     # might fail due to invalid next pointer
     l1pm_present = False
     l1pm_offset = 0x100  # Known offset from our test data
     if len(config_space) >= (l1pm_offset + 2) * 2:
-        header_bytes = config_space[l1pm_offset * 2: l1pm_offset * 2 + 4]
+        header_bytes = config_space[l1pm_offset * 2 : l1pm_offset * 2 + 4]
         try:
             cap_id = int(header_bytes, 16)
             if cap_id == PCIExtCapabilityID.L1_PM_SUBSTATES.value:
@@ -198,8 +207,7 @@ def analyze_config_space(config_space, title):
     sriov_offset = find_ext_cap(
         config_space, PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value
     )
-    print(
-        f"SR-IOV: {'present' if sriov_offset is not None else 'not present'}")
+    print(f"SR-IOV: {'present' if sriov_offset is not None else 'not present'}")
 
 
 def main():

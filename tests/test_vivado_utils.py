@@ -2,6 +2,11 @@
 Tests for src/vivado_utils.py
 """
 
+import sys
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
 
 # Add src to path for imports
 from src.vivado_utils import (
@@ -10,11 +15,6 @@ from src.vivado_utils import (
     get_vivado_version,
     run_vivado_command,
 )
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -162,8 +162,7 @@ class TestVivadoDetection:
             mock_run.return_value = mock_process
 
             # Should extract from path as fallback
-            version = get_vivado_version(
-                "/opt/Xilinx/Vivado/2022.2/bin/vivado")
+            version = get_vivado_version("/opt/Xilinx/Vivado/2022.2/bin/vivado")
             assert version == "2022.2"
 
     @patch("src.vivado_utils.find_vivado_installation")
@@ -333,12 +332,7 @@ class TestVivadoDetection:
         def mock_listdir_side_effect(path):
             if path == "/tools/Xilinx":
                 # Multiple versions, should pick the latest (2023.2)
-                return [
-                    "2021.2",
-                    "2022.1",
-                    "2023.1",
-                    "2023.2",
-                    "non_version_dir"]
+                return ["2021.2", "2022.1", "2023.1", "2023.2", "non_version_dir"]
             elif "/tools/Xilinx/2023.2/Vivado" in path:
                 return ["2023.2"]
             return []
@@ -384,8 +378,7 @@ class TestVivadoDetection:
 
     @patch("src.vivado_utils.find_vivado_installation")
     @patch("shutil.which")
-    def test_run_vivado_command_fallback_to_path(
-            self, mock_which, mock_find_vivado):
+    def test_run_vivado_command_fallback_to_path(self, mock_which, mock_find_vivado):
         """Test running Vivado commands with fallback to PATH."""
         # Mock discovery failure but PATH success
         mock_find_vivado.return_value = None
@@ -430,8 +423,7 @@ class TestVivadoDetection:
 
     @patch("src.vivado_utils.find_vivado_installation")
     @patch("shutil.which")
-    def test_run_vivado_command_both_methods_fail(
-            self, mock_which, mock_find_vivado):
+    def test_run_vivado_command_both_methods_fail(self, mock_which, mock_find_vivado):
         """Test running Vivado commands when both discovery and PATH fail."""
         # Mock both discovery and PATH failure
         mock_find_vivado.return_value = None

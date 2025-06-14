@@ -2,13 +2,14 @@
 Comprehensive tests for generate.py - Main orchestrator functionality.
 """
 
-import generate
 import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import Mock, call, patch
 
 import pytest
+
+import generate
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,14 +27,9 @@ class TestBDFValidation:
 
     def test_valid_bdf_formats(self):
         """Test valid BDF formats."""
-        valid_bdfs = [
-            "0000:03:00.0",
-            "0000:ff:1f.7",
-            "abcd:12:34.5",
-            "FFFF:FF:FF.7"]
+        valid_bdfs = ["0000:03:00.0", "0000:ff:1f.7", "abcd:12:34.5", "FFFF:FF:FF.7"]
         for bdf in valid_bdfs:
-            assert generate.validate_bdf_format(
-                bdf), f"BDF {bdf} should be valid"
+            assert generate.validate_bdf_format(bdf), f"BDF {bdf} should be valid"
 
     def test_invalid_bdf_formats(self):
         """Test invalid BDF formats."""
@@ -49,8 +45,7 @@ class TestBDFValidation:
             "not-a-bd",  # Completely invalid
         ]
         for bdf in invalid_bdfs:
-            assert not generate.validate_bdf_format(
-                bdf), f"BDF {bdf} should be invalid"
+            assert not generate.validate_bdf_format(bdf), f"BDF {bdf} should be invalid"
 
 
 class TestPCIDeviceEnumeration:
@@ -108,8 +103,7 @@ class TestDeviceSelection:
         assert selected == mock_pci_device
 
     @patch("builtins.input")
-    def test_choose_device_invalid_then_valid(
-            self, mock_input, mock_pci_device):
+    def test_choose_device_invalid_then_valid(self, mock_input, mock_pci_device):
         """Test invalid selection followed by valid selection."""
         devices = [mock_pci_device]
         mock_input.side_effect = ["invalid", "99", "0"]
@@ -125,11 +119,7 @@ class TestDriverManagement:
     @patch("os.path.exists")
     @patch("os.path.realpath")
     @patch("os.path.basename")
-    def test_get_current_driver_exists(
-            self,
-            mock_basename,
-            mock_realpath,
-            mock_exists):
+    def test_get_current_driver_exists(self, mock_basename, mock_realpath, mock_exists):
         """Test getting current driver when driver exists."""
         mock_exists.return_value = True
         mock_realpath.return_value = "/sys/bus/pci/drivers/e1000e"
@@ -137,8 +127,7 @@ class TestDriverManagement:
 
         driver = generate.get_current_driver("0000:03:00.0")
         assert driver == "e1000e"
-        mock_exists.assert_called_once_with(
-            "/sys/bus/pci/devices/0000:03:00.0/driver")
+        mock_exists.assert_called_once_with("/sys/bus/pci/devices/0000:03:00.0/driver")
 
     @patch("os.path.exists")
     def test_get_current_driver_none(self, mock_exists):
@@ -248,8 +237,7 @@ class TestDriverRestore:
         generate.restore_original_driver("0000:03:00.0", "e1000e")
 
         # Should not try to unbind from vfio-pci
-        unbind_call = call(
-            "echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/unbind")
+        unbind_call = call("echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/unbind")
         assert unbind_call not in mock_run.call_args_list
 
     @patch("generate.get_current_driver")
@@ -328,9 +316,8 @@ class TestFirmwareFlashing:
         generate.flash_firmware(firmware_path)
 
         mock_run.assert_called_once_with(
-            f"usbloader --vidpid 1d50:6130 -f {firmware_path}",
-            shell=True,
-            check=True)
+            f"usbloader --vidpid 1d50:6130 -f {firmware_path}", shell=True, check=True
+        )
 
     @patch("shutil.which")
     def test_flash_firmware_no_usbloader(self, mock_which):
@@ -343,8 +330,7 @@ class TestFirmwareFlashing:
     @patch("generate.select_usb_device")
     @patch("subprocess.run")
     @patch("shutil.which")
-    def test_flash_firmware_command_failure(
-            self, mock_which, mock_run, mock_select):
+    def test_flash_firmware_command_failure(self, mock_which, mock_run, mock_select):
         """Test firmware flashing when usbloader command fails."""
         mock_which.return_value = "/usr/bin/usbloader"
         mock_select.return_value = "1d50:6130"
@@ -360,8 +346,7 @@ class TestContainerExecution:
     @patch("subprocess.run")
     @patch("os.path.exists")
     @patch("os.makedirs")
-    def test_run_build_container_success(
-            self, mock_makedirs, mock_exists, mock_run):
+    def test_run_build_container_success(self, mock_makedirs, mock_exists, mock_run):
         """Test successful container execution."""
         mock_exists.return_value = True
         mock_run.return_value = Mock(returncode=0)
@@ -376,8 +361,7 @@ class TestContainerExecution:
         mock_args.disable_performance_counters = False
         mock_args.behavior_profile_duration = 30
 
-        generate.run_build_container(
-            "0000:03:00.0", "75t", "/dev/vfio/15", mock_args)
+        generate.run_build_container("0000:03:00.0", "75t", "/dev/vfio/15", mock_args)
 
         mock_makedirs.assert_called_once_with("output", exist_ok=True)
         mock_run.assert_called_once()
@@ -423,9 +407,7 @@ class TestContainerExecution:
         mock_args.behavior_profile_duration = 30
 
         with pytest.raises(ValueError, match="Invalid BDF format"):
-            generate.run_build_container(
-                "invalid-bd", "75t", "/dev/vfio/15", mock_args
-            )
+            generate.run_build_container("invalid-bd", "75t", "/dev/vfio/15", mock_args)
 
     @patch("subprocess.run")
     @patch("os.path.exists")
@@ -447,8 +429,7 @@ class TestContainerExecution:
         mock_args.disable_performance_counters = True
         mock_args.behavior_profile_duration = 60
 
-        generate.run_build_container(
-            "0000:03:00.0", "75t", "/dev/vfio/15", mock_args)
+        generate.run_build_container("0000:03:00.0", "75t", "/dev/vfio/15", mock_args)
 
         mock_makedirs.assert_called_once_with("output", exist_ok=True)
         mock_run.assert_called_once()
@@ -542,8 +523,7 @@ class TestMainWorkflow:
 
         assert result == 0
         mock_validate.assert_called_once()
-        mock_bind.assert_called_once_with(
-            "0000:03:00.0", "8086", "1533", "e1000e")
+        mock_bind.assert_called_once_with("0000:03:00.0", "8086", "1533", "e1000e")
         # Pass the args parameter to run_build_container
         mock_container.assert_called_once()
         args = mock_container.call_args[0][3]
@@ -588,8 +568,7 @@ class TestMainWorkflow:
 
         assert result == 0
         mock_validate.assert_called_once()
-        mock_bind.assert_called_once_with(
-            "0000:03:00.0", "8086", "1533", "e1000e")
+        mock_bind.assert_called_once_with("0000:03:00.0", "8086", "1533", "e1000e")
         # Pass the args parameter to run_build_container
         mock_container.assert_called_once()
         args = mock_container.call_args[0][3]

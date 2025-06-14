@@ -45,8 +45,7 @@ class PCIDevice:
     @property
     def is_suitable(self) -> bool:
         """Check if device is suitable for firmware generation."""
-        return self.suitability_score >= 0.7 and len(
-            self.compatibility_issues) == 0
+        return self.suitability_score >= 0.7 and len(self.compatibility_issues) == 0
 
     @property
     def status_indicator(self) -> str:
