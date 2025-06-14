@@ -303,7 +303,7 @@ class DonorDumpManager:
                 try:
                     # Update package list first
                     subprocess.run(
-                        ["sudo", "apt-get", "update"],
+                        ["apt-get", "update"],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -312,7 +312,6 @@ class DonorDumpManager:
                     # Install specific kernel headers
                     subprocess.run(
                         [
-                            "sudo",
                             "apt-get",
                             "install",
                             "-y",
@@ -336,7 +335,6 @@ class DonorDumpManager:
                 try:
                     subprocess.run(
                         [
-                            "sudo",
                             "dn",
                             "install",
                             "-y",
@@ -354,7 +352,7 @@ class DonorDumpManager:
                 # Arch Linux approach
                 try:
                     subprocess.run(
-                        ["sudo", "pacman", "-S", "--noconfirm", "linux-headers"],
+                        ["pacman", "-S", "--noconfirm", "linux-headers"],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -368,7 +366,6 @@ class DonorDumpManager:
                 try:
                     subprocess.run(
                         [
-                            "sudo",
                             "zypper",
                             "install",
                             "-y",
@@ -570,13 +567,13 @@ class DonorDumpManager:
             Command string to install headers
         """
         if distro == "debian" or distro == "ubuntu":
-            return f"sudo apt-get install linux-headers-{kernel_version}"
+            return f"apt-get install linux-headers-{kernel_version}"
         elif distro == "fedora" or distro == "centos" or distro == "rhel":
-            return f"sudo dnf install kernel-devel-{kernel_version}"
+            return f"dnf install kernel-devel-{kernel_version}"
         elif distro == "arch" or distro == "manjaro":
-            return "sudo pacman -S linux-headers"
+            return "pacman -S linux-headers"
         elif distro == "opensuse":
-            return f"sudo zypper install kernel-devel-{kernel_version}"
+            return f"zypper install kernel-devel-{kernel_version}"
         else:
             return "Please install kernel headers for your distribution"
 
