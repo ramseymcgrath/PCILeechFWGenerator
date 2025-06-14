@@ -935,7 +935,7 @@ def run_build_container(
 
     # Build the build.py command with all arguments - use modular build system
     # if available
-    build_cmd_parts = [f"sudo python3 /app/src/build.py --bdf {bdf} --board {board}"]
+    build_cmd_parts = [f"python3 /app/src/build.py --bdf {bdf} --board {board}"]
 
     # Add advanced features arguments
     if args.advanced_sv:

@@ -634,7 +634,7 @@ class DonorDumpManager:
         try:
             logger.info(f"Loading donor_dump module with BDF {bdf}")
             subprocess.run(
-                ["sudo", "insmod", str(module_ko), f"bdf={bdf}"],
+                ["insmod", str(module_ko), f"bdf={bdf}"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -672,7 +672,7 @@ class DonorDumpManager:
         try:
             logger.info("Unloading donor_dump module")
             subprocess.run(
-                ["sudo", "rmmod", self.module_name],
+                ["rmmod", self.module_name],
                 check=True,
                 capture_output=True,
                 text=True,
