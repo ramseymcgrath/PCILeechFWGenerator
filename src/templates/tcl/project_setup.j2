@@ -1,0 +1,43 @@
+{#
+Project Setup TCL Template for PCILeech Firmware Generation
+
+This template generates the Vivado project setup script with device-specific
+configuration using Jinja2 templating.
+
+Context variables expected:
+- fpga_part: FPGA part number (e.g., "xc7a35tcsg324-2")
+- vendor_id: PCI vendor ID
+- device_id: PCI device ID  
+- class_code: PCI class code
+- project_name: Vivado project name
+- project_dir: Project directory path
+- output_dir: Output directory path
+#}
+{{ header_comment }}
+
+# Project Configuration
+set project_name "{{ project_name }}"
+set project_dir "{{ project_dir }}"
+set output_dir "{{ output_dir }}"
+
+# Device Configuration
+set fpga_part "{{ fpga_part }}"
+set vendor_id 0x{{ vendor_id | hex(4) }}
+set device_id 0x{{ device_id | hex(4) }}
+set class_code 0x{{ class_code | hex(6) }}
+
+puts "Creating Vivado project: $project_name"
+puts "FPGA Part: $fpga_part"
+puts "Vendor ID: $vendor_id"
+puts "Device ID: $device_id"
+puts "Class Code: $class_code"
+
+# Create project
+create_project $project_name $project_dir -part $fpga_part -force
+
+# Set project properties
+set_property target_language Verilog [current_project]
+set_property simulator_language Mixed [current_project]
+set_property default_lib xil_defaultlib [current_project]
+
+puts "Project setup completed successfully"

@@ -201,8 +201,7 @@ class BuildConfiguration:
             )
         except Exception as e:
             raise Exception(
-                f"Unexpected error when saving configuration to {filepath}: {
-                    str(e)}"
+                f"Unexpected error when saving configuration to {filepath}: {str(e)}"
             )
 
     @classmethod
@@ -236,20 +235,15 @@ class BuildConfiguration:
             )
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
-                f"Invalid JSON in configuration file {filepath}: {
-                    e.msg}",
+                f"Invalid JSON in configuration file {filepath}: {e.msg}",
                 e.doc,
                 e.pos,
             )
         except ValueError as e:
-            raise ValueError(
-                f"Invalid configuration data in {filepath}: {
-                    str(e)}"
-            )
+            raise ValueError(f"Invalid configuration data in {filepath}: {str(e)}")
         except Exception as e:
             raise Exception(
-                f"Unexpected error when loading configuration from {filepath}: {
-                    str(e)}"
+                f"Unexpected error when loading configuration from {filepath}: {str(e)}"
             )
 
     def copy(self) -> "BuildConfiguration":

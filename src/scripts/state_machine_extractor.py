@@ -201,12 +201,10 @@ class StateMachine:
                     condition = self._generate_transition_condition(transition)
                     if condition:
                         sm_logic += f"\n                if ({condition}) {
-                            self.name}_next_state = {
-                            transition.to_state.upper()};"
+                            self.name}_next_state = {transition.to_state.upper()};"
                     else:
                         sm_logic += f"\n                {
-                            self.name}_next_state = {
-                            transition.to_state.upper()};"
+                            self.name}_next_state = {transition.to_state.upper()};"
 
             sm_logic += "\n            end"
 
@@ -226,16 +224,14 @@ class StateMachine:
             and transition.register_offset
         ):
             conditions.append(
-                f"bar_wr_en && bar_addr == 32'h{
-                    transition.register_offset:08X}"
+                f"bar_wr_en && bar_addr == 32'h{transition.register_offset:08X}"
             )
         elif (
             transition.transition_type == TransitionType.REGISTER_READ
             and transition.register_offset
         ):
             conditions.append(
-                f"bar_rd_en && bar_addr == 32'h{
-                    transition.register_offset:08X}"
+                f"bar_rd_en && bar_addr == 32'h{transition.register_offset:08X}"
             )
         elif transition.transition_type == TransitionType.TIMEOUT:
             conditions.append("timeout_expired")
@@ -542,8 +538,7 @@ class StateMachineExtractor:
 
                     # Extract transitions from the if-chain
                     if_blocks = re.finditer(
-                        rf"if\s*\(\s*{
-                            re.escape(state_var)}\s*==\s*(\w+)\s*\)\s*\{{([^}}]+?)\s*\}}",
+                        rf"if\s*\(\s*{re.escape(state_var)}\s*==\s*(\w+)\s*\)\s*\{{([^}}]+?)\s*\}}",
                         if_chain_match.group(0),
                         re.DOTALL,
                     )

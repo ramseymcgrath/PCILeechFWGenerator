@@ -1,0 +1,19 @@
+{#
+IP Configuration Template - PCIe Core Setup
+Variables:
+- header: TCL header comment
+- vendor_id: PCI vendor ID
+- device_id: PCI device ID
+- fpga_part: FPGA part number
+- board: Target board name
+- pcie_config: PCIe IP core configuration
+#}
+{{ header }}
+
+puts "Creating PCIe IP core for device {{ vendor_id }}:{{ device_id }}..."
+puts "FPGA Part: {{ fpga_part }}"
+puts "Board: {{ board }}"
+
+{{ pcie_config }}
+
+puts "PCIe IP core configuration completed"

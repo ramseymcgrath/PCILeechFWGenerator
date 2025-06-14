@@ -1,0 +1,95 @@
+{#- Power Management State Machine Template -#}
+    // Advanced Power Management State Machine
+    typedef enum logic [2:0] {
+        PM_D0_ACTIVE    = 3'b000,
+        PM_D0_TO_D1     = 3'b001,
+        PM_D1_STANDBY   = 3'b010,
+        PM_D1_TO_D0     = 3'b011,
+        PM_D0_TO_D3     = 3'b100,
+        PM_D3_SUSPEND   = 3'b101,
+        PM_D3_TO_D0     = 3'b110,
+        PM_ERROR        = 3'b111
+    } power_state_t;
+
+    power_state_t pm_state = PM_D0_ACTIVE;
+    power_state_t pm_next_state;
+
+    // Power state transition logic
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            pm_state <= PM_D0_ACTIVE;
+            power_transition_timer <= 16'h0;
+            power_state_changing <= 1'b0;
+        end else begin
+            pm_state <= pm_next_state;
+            
+            if (power_state_changing) begin
+                power_transition_timer <= power_transition_timer + 1;
+            end else begin
+                power_transition_timer <= 16'h0;
+            end
+        end
+    end
+
+    // Power state combinational logic
+    always_comb begin
+        pm_next_state = pm_state;
+        power_state_changing = 1'b0;
+        
+        case (pm_state)
+            PM_D0_ACTIVE: begin
+                if (power_down_request) begin
+                    pm_next_state = PM_D0_TO_D1;
+                    power_state_changing = 1'b1;
+                end
+            end
+            
+            PM_D0_TO_D1: begin
+                power_state_changing = 1'b1;
+                if (power_transition_timer >= {{ power_management.transition_cycles.d0_to_d1 }}) begin
+                    pm_next_state = PM_D1_STANDBY;
+                end
+            end
+            
+            PM_D1_STANDBY: begin
+                if (power_up_request) begin
+                    pm_next_state = PM_D1_TO_D0;
+                    power_state_changing = 1'b1;
+                end
+            end
+            
+            PM_D1_TO_D0: begin
+                power_state_changing = 1'b1;
+                if (power_transition_timer >= {{ power_management.transition_cycles.d1_to_d0 }}) begin
+                    pm_next_state = PM_D0_ACTIVE;
+                end
+            end
+            
+            PM_D0_TO_D3: begin
+                power_state_changing = 1'b1;
+                if (power_transition_timer >= {{ power_management.transition_cycles.d0_to_d3 }}) begin
+                    pm_next_state = PM_D3_SUSPEND;
+                end
+            end
+            
+            PM_D3_SUSPEND: begin
+                if (power_up_request) begin
+                    pm_next_state = PM_D3_TO_D0;
+                    power_state_changing = 1'b1;
+                end
+            end
+            
+            PM_D3_TO_D0: begin
+                power_state_changing = 1'b1;
+                if (power_transition_timer >= {{ power_management.transition_cycles.d3_to_d0 }}) begin
+                    pm_next_state = PM_D0_ACTIVE;
+                end
+            end
+            
+            default: pm_next_state = PM_ERROR;
+        endcase
+    end
+
+    // Power state outputs
+    assign current_power_state = pm_state[1:0];
+    assign power_ready = (pm_state == PM_D0_ACTIVE) || (pm_state == PM_D1_STANDBY);

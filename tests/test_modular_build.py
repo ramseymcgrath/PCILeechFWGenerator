@@ -16,15 +16,15 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from build.analysis.device import DeviceAnalyzer
-    from build.analysis.registers import RegisterAnalyzer
-    from build.config.loader import ConfigLoader
-    from build.config.validation import ConfigValidator
-    from build.controller import BuildController, create_build_controller
-    from build.generators.systemverilog import SystemVerilogGenerator
-    from build.generators.tcl import TCLGenerator
-    from build.orchestration.files import FileManager
-    from build.orchestration.processes import ProcessManager
+    from src.build.analysis.device import DeviceAnalyzer
+    from src.build.analysis.registers import RegisterAnalyzer
+    from src.build.config.loader import ConfigLoader
+    from src.build.config.validation import ConfigValidator
+    from src.build.controller import BuildController, create_build_controller
+    from src.build.generators.systemverilog import SystemVerilogGenerator
+    from src.build.generators.tcl import TCLGenerator
+    from src.build.orchestration.files import FileManager
+    from src.build.orchestration.processes import ProcessManager
 
     MODULAR_BUILD_AVAILABLE = True
 except ImportError as e:

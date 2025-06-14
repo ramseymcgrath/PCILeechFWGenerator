@@ -14,6 +14,7 @@ Requires root privileges (sudo) for driver rebinding and VFIO operations.
 """
 
 import argparse
+import grp
 import logging
 import os
 import pathlib
@@ -25,6 +26,7 @@ import sys
 import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
+import stat
 
 # Import donor dump manager
 try:
@@ -776,20 +778,6 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    # Check device permissions
-    try:
-        import stat
-
-        vfio_stat = os.stat(vfio_device)
-        if not (vfio_stat.st_mode & stat.S_IRGRP) or not (
-            vfio_stat.st_mode & stat.S_IWGRP
-        ):
-            logger.warning(
-                f"VFIO device {vfio_device} may not have proper group permissions"
-            )
-    except OSError as e:
-        logger.warning(f"Could not check VFIO device permissions: {e}")
-
     # Verify device is actually bound to vfio-pci
     current_driver = get_current_driver(bdf)
     if current_driver != "vfio-pci":
@@ -935,7 +923,7 @@ def run_build_container(
 
     # Build the build.py command with all arguments - use modular build system
     # if available
-    build_cmd_parts = [f"sudo python3 /app/src/build.py --bdf {bdf} --board {board}"]
+    build_cmd_parts = [f"python3 /app/src/build.py --bdf {bdf} --board {board}"]
 
     # Add advanced features arguments
     if args.advanced_sv:
@@ -961,11 +949,11 @@ def run_build_container(
             f"--behavior-profile-duration {args.behavior_profile_duration}"
         )
 
-    " ".join(build_cmd_parts)
+    build_cmd = " ".join(build_cmd_parts)
 
     # Construct Podman command
     container_cmd = textwrap.dedent(
-        """
+        f"""
         podman run --rm -it --privileged \
           --device={vfio_device} \
           --device=/dev/vfio/vfio \
@@ -1421,7 +1409,7 @@ def main() -> int:
             raise RuntimeError(error_msg)
 
         selected_device = choose_device(devices)
-        bdf = selected_device["bd"]
+        bdf = selected_device["bdf"]
         vendor = selected_device["ven"]
         device = selected_device["dev"]
 

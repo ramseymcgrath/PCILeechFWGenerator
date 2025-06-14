@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 from unittest.mock import mock_open, patch
 
-import driver_scrape
 import pytest
+
+from src.scripts import driver_scrape
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "scripts"))

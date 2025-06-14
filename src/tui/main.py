@@ -255,8 +255,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                     device_type_select.value = "generic"
                 elif device_type_options:
                     print(
-                        f"Device type '{device_type}' not found, using '{
-                            device_type_options[0]}'"
+                        f"Device type '{device_type}' not found, using '{device_type_options[0]}'"
                     )
                     device_type_select.value = device_type_options[0]
             except Exception as e:
@@ -445,8 +444,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 try:
                     app.config_manager.save_profile(config.name, config)
                     app.notify(
-                        f"Configuration saved as '{
-                            config.name}'",
+                        f"Configuration saved as '{config.name}'",
                         severity="success",
                     )
                 except Exception as e:
@@ -703,10 +701,7 @@ class PCILeechTUI(App):
         # Vivado status
         vivado = status.get("vivado", {})
         if vivado.get("status") == "detected":
-            vivado_text = f"⚡ Vivado: {
-                vivado.get(
-                    'version',
-                    'Unknown')} Detected"
+            vivado_text = f"⚡ Vivado: {vivado.get('version', 'Unknown')} Detected"
         else:
             vivado_text = "⚡ Vivado: Not Detected"
         self.query_one("#vivado-status", Static).update(vivado_text)
@@ -779,8 +774,7 @@ class PCILeechTUI(App):
             disk = progress.resource_usage.get("disk_free", 0)
             resource_text = f"Resources: CPU: {
                 cpu:.1f}% | Memory: {
-                memory:.1f}GB | Disk: {
-                disk:.1f}GB free"
+                memory:.1f}GB | Disk: {disk:.1f}GB free"
             self.query_one("#resource-usage", Static).update(resource_text)
 
     # Event handlers
@@ -839,8 +833,7 @@ class PCILeechTUI(App):
             )
 
             self.notify(
-                f"Selected device: {
-                    selected_device.bdf}",
+                f"Selected device: {selected_device.bdf}",
                 severity="info",
             )
 
@@ -875,8 +868,7 @@ class PCILeechTUI(App):
                     self.notify(f"Issues: {issues[0]}", severity="warning")
                 if fixes:
                     self.notify(
-                        f"Suggested fix: {
-                            fixes[0]}",
+                        f"Suggested fix: {fixes[0]}",
                         severity="information",
                     )
 
@@ -927,8 +919,7 @@ class PCILeechTUI(App):
         try:
             # Log current configuration before opening dialog
             print(
-                f"Current configuration device_type: {
-                    self.current_config.device_type}"
+                f"Current configuration device_type: {self.current_config.device_type}"
             )
 
             result = await self.push_screen(ConfigurationDialog())
@@ -938,8 +929,7 @@ class PCILeechTUI(App):
                 # Save the configuration to the config manager
                 self.config_manager.set_current_config(result)
                 print(
-                    f"New configuration device_type: {
-                        self.current_config.device_type}"
+                    f"New configuration device_type: {self.current_config.device_type}"
                 )
                 self._update_config_display()
                 self.notify("Configuration updated successfully", severity="success")
@@ -985,8 +975,7 @@ class PCILeechTUI(App):
         compatibility_title.update(f"Device: {device.display_name}")
 
         compatibility_score = self.query_one("#compatibility-score", Static)
-        score_text = f"Final Score: [bold]{
-            device.suitability_score:.2f}[/bold]"
+        score_text = f"Final Score: [bold]{device.suitability_score:.2f}[/bold]"
         if device.is_suitable:
             score_text = f"[green]{score_text}[/green]"
         else:
@@ -1049,8 +1038,7 @@ class PCILeechTUI(App):
         if device.has_driver:
             if device.is_detached:
                 driver_status = "[green]🔓 Detached[/green]"
-                driver_details = f"Device detached from {
-                    device.driver} for VFIO use"
+                driver_details = f"Device detached from {device.driver} for VFIO use"
             else:
                 driver_status = "[yellow]🔒 Bound[/yellow]"
                 driver_details = f"Device bound to {device.driver} driver"
@@ -1160,8 +1148,7 @@ class PCILeechTUI(App):
                         self.notify(f"Issue: {issues[0]}", severity="warning")
                     if fixes:
                         self.notify(
-                            f"Suggested fix: {
-                                fixes[0]}",
+                            f"Suggested fix: {fixes[0]}",
                             severity="information",
                         )
                 else:
@@ -1175,8 +1162,7 @@ class PCILeechTUI(App):
                         self.notify(f"Issue: {issues[0]}", severity="error")
                     if fixes:
                         self.notify(
-                            f"Suggested fix: {
-                                fixes[0]}",
+                            f"Suggested fix: {fixes[0]}",
                             severity="information",
                         )
 

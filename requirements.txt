@@ -9,3 +9,6 @@ pydantic>=2.0.0
 
 # Async file I/O for modular build system
 aiofiles>=23.0.0
+
+# Template rendering for TCL generation
+jinja2>=3.1.0
