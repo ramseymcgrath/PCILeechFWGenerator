@@ -5,10 +5,8 @@ Comprehensive tests for src/donor_dump/ kernel module functionality.
 import os
 import re
 import subprocess
-import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
@@ -94,7 +92,7 @@ class TestModuleParameters:
             "0000:3:00.0",  # Too short bus
             "0000:03:0.0",  # Too short device
             "0000:03:00.8",  # Invalid function
-            "invalid-bdf",  # Completely invalid
+            "invalid-bd",  # Completely invalid
         ]
 
         # These would be validated by the kernel module
@@ -106,7 +104,8 @@ class TestModuleParameters:
         )
 
         for bdf in valid_bdfs:
-            assert bdf_pattern.match(bdf), f"Valid BDF {bdf} should match pattern"
+            assert bdf_pattern.match(
+                bdf), f"Valid BDF {bdf} should match pattern"
 
         for bdf in invalid_bdfs:
             assert not bdf_pattern.match(
@@ -117,7 +116,7 @@ class TestModuleParameters:
         """Test module parameter parsing simulation."""
         # Simulate module parameter parsing
         test_parameters = {
-            "bdf": "0000:03:00.0",
+            "bd": "0000:03:00.0",
             "enable_extended_config": "1",
             "enable_enhanced_caps": "1",
             "debug": "0",
@@ -129,7 +128,7 @@ class TestModuleParameters:
             assert isinstance(value, str)
 
             # BDF parameter should match expected format
-            if param == "bdf":
+            if param == "bd":
                 import re
 
                 bdf_pattern = re.compile(
@@ -165,7 +164,10 @@ class TestModuleLoading:
         mock_run.side_effect = subprocess.CalledProcessError(1, "insmod")
 
         with pytest.raises(subprocess.CalledProcessError):
-            mock_run("insmod donor_dump.ko bdf=0000:03:00.0", shell=True, check=True)
+            mock_run(
+                "insmod donor_dump.ko bdf=0000:03:00.0",
+                shell=True,
+                check=True)
 
     @patch("subprocess.run")
     def test_module_unloading(self, mock_run):
@@ -175,16 +177,21 @@ class TestModuleLoading:
         # Simulate rmmod command
         mock_run("rmmod donor_dump", shell=True, check=True)
 
-        mock_run.assert_called_once_with("rmmod donor_dump", shell=True, check=True)
+        mock_run.assert_called_once_with(
+            "rmmod donor_dump", shell=True, check=True)
 
     @patch("subprocess.run")
     def test_module_already_loaded_handling(self, mock_run):
         """Test handling when module is already loaded."""
         # Simulate module already loaded error
-        mock_run.side_effect = subprocess.CalledProcessError(1, "insmod", "File exists")
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "insmod", "File exists")
 
         with pytest.raises(subprocess.CalledProcessError):
-            mock_run("insmod donor_dump.ko bdf=0000:03:00.0", shell=True, check=True)
+            mock_run(
+                "insmod donor_dump.ko bdf=0000:03:00.0",
+                shell=True,
+                check=True)
 
 
 @pytest.mark.unit
@@ -250,7 +257,8 @@ device_id: 0x1533"""
             "mpr",
         ]
 
-        missing_fields = [field for field in required_fields if field not in info]
+        missing_fields = [
+            field for field in required_fields if field not in info]
 
         # Should detect missing fields
         assert len(missing_fields) > 0
@@ -353,7 +361,10 @@ class TestErrorHandling:
         )
 
         with pytest.raises(subprocess.CalledProcessError):
-            mock_run("insmod donor_dump.ko bdf=0000:99:00.0", shell=True, check=True)
+            mock_run(
+                "insmod donor_dump.ko bdf=0000:99:00.0",
+                shell=True,
+                check=True)
 
     @patch("subprocess.run")
     def test_permission_denied_error(self, mock_run):
@@ -364,7 +375,10 @@ class TestErrorHandling:
         )
 
         with pytest.raises(subprocess.CalledProcessError):
-            mock_run("insmod donor_dump.ko bdf=0000:03:00.0", shell=True, check=True)
+            mock_run(
+                "insmod donor_dump.ko bdf=0000:03:00.0",
+                shell=True,
+                check=True)
 
     @patch("subprocess.run")
     def test_module_build_dependency_missing(self, mock_run):
@@ -432,7 +446,8 @@ mpr: 0x02"""
         mock_run(f"insmod donor_dump.ko bdf={bdf}", shell=True, check=True)
 
         # Read proc interface
-        proc_output = mock_output("cat /proc/donor_dump", shell=True, text=True)
+        proc_output = mock_output(
+            "cat /proc/donor_dump", shell=True, text=True)
 
         # Unload module
         mock_run("rmmod donor_dump", shell=True, check=True)
@@ -443,7 +458,8 @@ mpr: 0x02"""
         assert "vendor_id" in proc_output
 
     @patch("build.get_donor_info")
-    def test_integration_with_build_system(self, mock_get_donor_info, mock_donor_info):
+    def test_integration_with_build_system(
+            self, mock_get_donor_info, mock_donor_info):
         """Test integration with the build system."""
         mock_get_donor_info.return_value = mock_donor_info
 
@@ -609,7 +625,8 @@ class TestMakefileValidation:
                 if re.search(target_pattern, makefile_content, re.MULTILINE):
                     found_optional.append(target)
 
-            # Verify we found some optional targets (indicates a well-structured Makefile)
+            # Verify we found some optional targets (indicates a
+            # well-structured Makefile)
             assert (
                 len(found_optional) > 0
             ), "No optional targets found - Makefile may be incomplete"
@@ -617,8 +634,7 @@ class TestMakefileValidation:
         else:
             # If Makefile doesn't exist, skip target validation but log warning
             pytest.skip(
-                f"Makefile not found at {makefile_path}, skipping target validation"
-            )
+                f"Makefile not found at {makefile_path}, skipping target validation")
 
     def test_kernel_version_compatibility(self):
         """Test kernel version compatibility checks."""
@@ -644,15 +660,14 @@ class TestMakefileValidation:
             # Most PCIe direct memory access features require kernel 4.10+
             if major < 4 or (major == 4 and minor < 10):
                 pytest.skip(
-                    f"Kernel version {major}.{minor} may not support all required features (4.10+ recommended)"
-                )
+                    f"Kernel version {major}.{minor} may not support all required features (4.10+ recommended)")
 
-            # Check for known compatibility issues with specific kernel versions
+            # Check for known compatibility issues with specific kernel
+            # versions
             if major == 5 and 0 <= minor <= 3:
                 # Log a warning about known compatibility issues
                 print(
-                    f"WARNING: Kernel 5.0-5.3 has known issues with VFIO passthrough for some devices"
-                )
+                    "WARNING: Kernel 5.0-5.3 has known issues with VFIO passthrough for some devices")
 
         # Extract major.minor version from kernel release
         version_match = re.match(r"(\d+)\.(\d+)", kernel_release)
@@ -682,7 +697,8 @@ class TestMakefileValidation:
 
         if major_version >= 5:
             # Kernel 5.0+ has improved device tree and IOMMU support
-            self._log_kernel_feature_support("Advanced IOMMU support available")
+            self._log_kernel_feature_support(
+                "Advanced IOMMU support available")
 
     def _log_kernel_feature_support(self, message: str) -> None:
         """Log kernel feature support information."""
@@ -720,7 +736,8 @@ class TestMakefileValidation:
                 f"kernel_feature_{len(pytest.current_test_info)}"
             ] = message
         except (ImportError, AttributeError):
-            # pytest not available or not in test context, continue with standard logging
+            # pytest not available or not in test context, continue with
+            # standard logging
             pass
 
 
@@ -752,7 +769,8 @@ class TestDonorDumpManager:
 
     @patch("subprocess.check_output")
     @patch("os.path.exists")
-    def test_check_kernel_headers_available(self, mock_exists, mock_check_output):
+    def test_check_kernel_headers_available(
+            self, mock_exists, mock_check_output):
         """Test kernel headers check when headers are available."""
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
@@ -769,7 +787,8 @@ class TestDonorDumpManager:
 
     @patch("subprocess.check_output")
     @patch("os.path.exists")
-    def test_check_kernel_headers_missing(self, mock_exists, mock_check_output):
+    def test_check_kernel_headers_missing(
+            self, mock_exists, mock_check_output):
         """Test kernel headers check when headers are missing."""
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
@@ -862,7 +881,8 @@ class TestDonorDumpManager:
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
 
-        mock_run.return_value = Mock(returncode=0, stdout="other_module 12345 0")
+        mock_run.return_value = Mock(
+            returncode=0, stdout="other_module 12345 0")
 
         manager = DonorDumpManager()
         result = manager.is_module_loaded()
@@ -877,12 +897,16 @@ class TestDonorDumpManager:
         manager = DonorDumpManager()
 
         with pytest.raises(ModuleLoadError, match="Invalid BDF format"):
-            manager.load_module("invalid_bdf")
+            manager.load_module("invalid_bd")
 
     @patch("subprocess.run")
     @patch("os.path.exists")
     @patch("pathlib.Path.exists")
-    def test_load_module_success(self, mock_path_exists, mock_os_exists, mock_run):
+    def test_load_module_success(
+            self,
+            mock_path_exists,
+            mock_os_exists,
+            mock_run):
         """Test successful module loading."""
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
@@ -927,7 +951,10 @@ class TestDonorDumpManager:
         manager = DonorDumpManager()
         device_info = manager.read_device_info()
 
-        expected = {"vendor_id": "8086", "device_id": "1521", "class_code": "020000"}
+        expected = {
+            "vendor_id": "8086",
+            "device_id": "1521",
+            "class_code": "020000"}
         assert device_info == expected
 
     @patch("os.path.exists")
@@ -949,7 +976,8 @@ class TestDonorDumpManager:
     @patch("json.dump")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
-    def test_setup_module_complete_flow(self, mock_mkdir, mock_file, mock_json_dump):
+    def test_setup_module_complete_flow(
+            self, mock_mkdir, mock_file, mock_json_dump):
         """Test complete module setup flow."""
         if DonorDumpManager is None:
             pytest.skip("DonorDumpManager not available")
@@ -969,7 +997,8 @@ class TestDonorDumpManager:
                     with patch.object(
                         manager, "read_device_info", return_value=mock_device_info
                     ):
-                        # Pass save_to_file parameter to ensure json.dump is called
+                        # Pass save_to_file parameter to ensure json.dump is
+                        # called
                         result = manager.setup_module(
                             "0000:03:00.0", save_to_file="test_output.json"
                         )
@@ -1003,7 +1032,8 @@ class TestDonorDumpIntegration:
 
             # Test CLI args conversion
             cli_args = config.to_cli_args()
-            # The key in cli_args is actually "skip_donor_dump", not "donor_dump"
+            # The key in cli_args is actually "skip_donor_dump", not
+            # "donor_dump"
             assert "skip_donor_dump" in cli_args
             assert "auto_install_headers" in cli_args
 

@@ -4,25 +4,22 @@ Build Orchestrator
 Orchestrates the build process with real-time monitoring and progress tracking.
 """
 
-import argparse
+from ..models.progress import BuildProgress, BuildStage, ValidationResult
+from ..models.device import PCIDevice
+from ..models.config import BuildConfiguration
 import asyncio
 import datetime
 import os
-import shutil
 import subprocess
-import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Optional
 
 import psutil
 
 # Git repository information
 PCILEECH_FPGA_REPO = "https://github.com/ufrisk/pcileech-fpga.git"
-REPO_CACHE_DIR = Path(os.path.expanduser("~/.cache/pcileech-fw-generator/repos"))
-
-from ..models.config import BuildConfiguration
-from ..models.device import PCIDevice
-from ..models.progress import BuildProgress, BuildStage, ValidationResult
+REPO_CACHE_DIR = Path(os.path.expanduser(
+    "~/.cache/pcileech-fw-generator/repos"))
 
 
 class BuildOrchestrator:
@@ -31,7 +28,8 @@ class BuildOrchestrator:
     def __init__(self):
         self._current_progress: Optional[BuildProgress] = None
         self._build_process: Optional[asyncio.subprocess.Process] = None
-        self._progress_callback: Optional[Callable[[BuildProgress], None]] = None
+        self._progress_callback: Optional[Callable[[
+            BuildProgress], None]] = None
         self._is_building = False
         self._should_cancel = False
 
@@ -100,7 +98,8 @@ class BuildOrchestrator:
             await self._update_progress(
                 BuildStage.DEVICE_ANALYSIS, 100, "Device analysis complete"
             )
-            self._current_progress.mark_stage_complete(BuildStage.DEVICE_ANALYSIS)
+            self._current_progress.mark_stage_complete(
+                BuildStage.DEVICE_ANALYSIS)
 
             if self._should_cancel:
                 return False
@@ -113,7 +112,8 @@ class BuildOrchestrator:
             await self._update_progress(
                 BuildStage.REGISTER_EXTRACTION, 100, "Register extraction complete"
             )
-            self._current_progress.mark_stage_complete(BuildStage.REGISTER_EXTRACTION)
+            self._current_progress.mark_stage_complete(
+                BuildStage.REGISTER_EXTRACTION)
 
             if self._should_cancel:
                 return False
@@ -159,7 +159,8 @@ class BuildOrchestrator:
             await self._update_progress(
                 BuildStage.VIVADO_SYNTHESIS, 100, "Vivado synthesis complete"
             )
-            self._current_progress.mark_stage_complete(BuildStage.VIVADO_SYNTHESIS)
+            self._current_progress.mark_stage_complete(
+                BuildStage.VIVADO_SYNTHESIS)
 
             if self._should_cancel:
                 return False
@@ -172,7 +173,8 @@ class BuildOrchestrator:
             await self._update_progress(
                 BuildStage.BITSTREAM_GENERATION, 100, "Bitstream generation complete"
             )
-            self._current_progress.mark_stage_complete(BuildStage.BITSTREAM_GENERATION)
+            self._current_progress.mark_stage_complete(
+                BuildStage.BITSTREAM_GENERATION)
 
             # Build complete
             self._current_progress.completion_percent = 100.0
@@ -259,7 +261,8 @@ class BuildOrchestrator:
         if not local_build:
             # Check if running as root (only needed for non-local builds)
             if os.geteuid() != 0:
-                raise RuntimeError("Root privileges required for device binding")
+                raise RuntimeError(
+                    "Root privileges required for device binding")
 
             # Check if Podman is available (only needed for non-local builds)
             try:
@@ -290,8 +293,8 @@ class BuildOrchestrator:
                     )
                     if build_result.returncode != 0:
                         raise RuntimeError(
-                            f"Failed to build container image: {build_result.stderr}"
-                        )
+                            f"Failed to build container image: {
+                                build_result.stderr}")
                     print("[✓] Container image built successfully")
                 except Exception as e:
                     raise RuntimeError(
@@ -375,7 +378,7 @@ class BuildOrchestrator:
                 if update_needed:
                     if self._current_progress:
                         self._current_progress.current_operation = (
-                            f"Updating PCILeech FPGA repository"
+                            "Updating PCILeech FPGA repository"
                         )
                         await self._notify_progress()
 
@@ -395,7 +398,7 @@ class BuildOrchestrator:
 
                         if self._current_progress:
                             self._current_progress.current_operation = (
-                                f"PCILeech FPGA repository updated successfully"
+                                "PCILeech FPGA repository updated successfully"
                             )
                             await self._notify_progress()
                     except Exception as e:
@@ -430,7 +433,7 @@ class BuildOrchestrator:
 
                 if self._current_progress:
                     self._current_progress.current_operation = (
-                        f"PCILeech FPGA repository cloned successfully"
+                        "PCILeech FPGA repository cloned successfully"
                     )
                     await self._notify_progress()
             except Exception as e:
@@ -481,11 +484,14 @@ class BuildOrchestrator:
                     fixes = module_status.get("fixes", [])
 
                     if issues:
-                        self._current_progress.add_warning(f"Issue: {issues[0]}")
+                        self._current_progress.add_warning(
+                            f"Issue: {issues[0]}")
                     if fixes:
-                        self._current_progress.add_warning(f"Suggested fix: {fixes[0]}")
+                        self._current_progress.add_warning(
+                            f"Suggested fix: {fixes[0]}")
 
-                    # If auto_install_headers is enabled, try to fix common issues
+                    # If auto_install_headers is enabled, try to fix common
+                    # issues
                     if (
                         config.auto_install_headers
                         and status == "not_built"
@@ -497,9 +503,9 @@ class BuildOrchestrator:
                         await self._notify_progress()
 
                         # Get kernel version and distribution info
-                        kernel_version = module_status.get("raw_status", {}).get(
-                            "kernel_version", ""
-                        )
+                        kernel_version = module_status.get(
+                            "raw_status", {}).get(
+                            "kernel_version", "")
 
                         if kernel_version:
                             # Try to install headers using the manager's method
@@ -511,8 +517,7 @@ class BuildOrchestrator:
 
                                 # Install headers
                                 headers_installed = manager.install_kernel_headers(
-                                    kernel_version
-                                )
+                                    kernel_version)
 
                                 if headers_installed:
                                     self._current_progress.add_warning(
@@ -521,13 +526,13 @@ class BuildOrchestrator:
 
                                     # Try to build module
                                     self._current_progress.current_operation = (
-                                        "Building donor_dump module"
-                                    )
+                                        "Building donor_dump module")
                                     await self._notify_progress()
 
                                     # Build module
                                     try:
-                                        manager.build_module(force_rebuild=True)
+                                        manager.build_module(
+                                            force_rebuild=True)
                                         self._current_progress.add_warning(
                                             "Donor module built successfully"
                                         )
@@ -536,7 +541,8 @@ class BuildOrchestrator:
                                             f"Failed to build module: {str(build_error)}"
                                         )
                                         # Add more detailed error information
-                                        if "ModuleBuildError" in str(type(build_error)):
+                                        if "ModuleBuildError" in str(
+                                                type(build_error)):
                                             self._current_progress.add_warning(
                                                 "This may be due to kernel version mismatch or missing build tools."
                                             )
@@ -550,11 +556,9 @@ class BuildOrchestrator:
                                     # Add manual instructions
                                     distro = manager._detect_linux_distribution()
                                     install_cmd = manager._get_header_install_command(
-                                        distro, kernel_version
-                                    )
+                                        distro, kernel_version)
                                     self._current_progress.add_warning(
-                                        f"Please try installing headers manually: {install_cmd}"
-                                    )
+                                        f"Please try installing headers manually: {install_cmd}")
                             except Exception as e:
                                 self._current_progress.add_error(
                                     f"Failed to install kernel headers: {str(e)}"
@@ -627,7 +631,8 @@ class BuildOrchestrator:
                     # Check vendor ID
                     if device.vendor_id and "vendor_id" in donor_info:
                         device_vendor = device.vendor_id.lower().replace("0x", "")
-                        donor_vendor = donor_info["vendor_id"].lower().replace("0x", "")
+                        donor_vendor = donor_info["vendor_id"].lower().replace(
+                            "0x", "")
                         if device_vendor != donor_vendor:
                             validation_results.append(
                                 ValidationResult(
@@ -641,7 +646,8 @@ class BuildOrchestrator:
                     # Check device ID
                     if device.device_id and "device_id" in donor_info:
                         device_id = device.device_id.lower().replace("0x", "")
-                        donor_id = donor_info["device_id"].lower().replace("0x", "")
+                        donor_id = donor_info["device_id"].lower().replace(
+                            "0x", "")
                         if device_id != donor_id:
                             validation_results.append(
                                 ValidationResult(
@@ -658,8 +664,8 @@ class BuildOrchestrator:
                             "0x", ""
                         )
                         donor_subvendor = (
-                            donor_info["subvendor_id"].lower().replace("0x", "")
-                        )
+                            donor_info["subvendor_id"].lower().replace(
+                                "0x", ""))
                         if device_subvendor != donor_subvendor:
                             validation_results.append(
                                 ValidationResult(
@@ -676,8 +682,8 @@ class BuildOrchestrator:
                             "0x", ""
                         )
                         donor_subsystem = (
-                            donor_info["subsystem_id"].lower().replace("0x", "")
-                        )
+                            donor_info["subsystem_id"].lower().replace(
+                                "0x", ""))
                         if device_subsystem != donor_subsystem:
                             validation_results.append(
                                 ValidationResult(
@@ -708,20 +714,21 @@ class BuildOrchestrator:
                 except FileNotFoundError:
                     if self._current_progress:
                         self._current_progress.add_error(
-                            f"Donor info file not found: {config.donor_info_file}"
-                        )
+                            f"Donor info file not found: {
+                                config.donor_info_file}")
                 except json.JSONDecodeError:
                     if self._current_progress:
                         self._current_progress.add_error(
-                            f"Invalid JSON in donor info file: {config.donor_info_file}"
-                        )
+                            f"Invalid JSON in donor info file: {
+                                config.donor_info_file}")
                 except Exception as e:
                     if self._current_progress:
                         self._current_progress.add_error(
                             f"Error validating PCI configuration: {str(e)}"
                         )
 
-            # For non-local builds with donor_dump, validation happens during donor_dump extraction
+            # For non-local builds with donor_dump, validation happens during
+            # donor_dump extraction
             elif not config.local_build and config.donor_dump:
                 if self._current_progress:
                     self._current_progress.current_operation = (
@@ -766,7 +773,8 @@ class BuildOrchestrator:
         # Validate VFIO device path
         vfio_device = f"/dev/vfio/{iommu_group}"
         if not os.path.exists(vfio_device) and self._current_progress:
-            self._current_progress.add_warning(f"VFIO device {vfio_device} not found")
+            self._current_progress.add_warning(
+                f"VFIO device {vfio_device} not found")
 
     async def _extract_registers(self, device: PCIDevice) -> None:
         """Extract device registers"""
@@ -786,13 +794,16 @@ class BuildOrchestrator:
 
         # Log the start of profiling
         if self._current_progress:
-            self._current_progress.current_operation = f"Profiling device {device.bdf}"
+            self._current_progress.current_operation = f"Profiling device {
+                device.bdf}"
             await self._notify_progress()
 
-        # Run the profiling in a separate thread to avoid blocking the event loop
+        # Run the profiling in a separate thread to avoid blocking the event
+        # loop
         def run_profiling():
             try:
-                # Use enable_ftrace=True for real hardware, but it requires root privileges
+                # Use enable_ftrace=True for real hardware, but it requires
+                # root privileges
                 import os
 
                 enable_ftrace = not config.disable_ftrace and os.geteuid() == 0
@@ -987,7 +998,8 @@ class BuildOrchestrator:
                 stderr = await self._build_process.stderr.read()
                 error_msg = stderr.decode("utf-8")
             if self._current_progress:
-                self._current_progress.add_error(f"Build command failed: {error_msg}")
+                self._current_progress.add_error(
+                    f"Build command failed: {error_msg}")
             raise RuntimeError(
-                f"Build command failed with code {self._build_process.returncode}"
-            )
+                f"Build command failed with code {
+                    self._build_process.returncode}")

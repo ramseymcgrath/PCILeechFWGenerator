@@ -12,9 +12,8 @@ import os
 import random
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,9 @@ class DonorDumpError(Exception):
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.context:
-            context_str = ", ".join(f"{k}: {v}" for k, v in self.context.items())
+            context_str = ", ".join(
+                f"{k}: {v}" for k,
+                v in self.context.items())
             return f"{base_msg} (context: {context_str})"
         return base_msg
 
@@ -125,7 +126,7 @@ class ModuleLoadError(DonorDumpError):
         if module_path:
             context["module_path"] = module_path
         if bdf:
-            context["bdf"] = bdf
+            context["bd"] = bdf
         if stderr_output:
             context["stderr_output"] = stderr_output
 
@@ -159,7 +160,9 @@ class DonorDumpTimeoutError(DonorDumpError):
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.operation and self.timeout_seconds:
-            return f"{base_msg} (operation: {self.operation}, timeout: {self.timeout_seconds}s)"
+            return f"{base_msg} (operation: {
+                self.operation}, timeout: {
+                self.timeout_seconds}s)"
         elif self.operation:
             return f"{base_msg} (operation: {self.operation})"
         elif self.timeout_seconds:
@@ -191,7 +194,9 @@ class DonorDumpPermissionError(DonorDumpError):
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.required_permission and self.file_path:
-            return f"{base_msg} (requires: {self.required_permission}, path: {self.file_path})"
+            return f"{base_msg} (requires: {
+                self.required_permission}, path: {
+                self.file_path})"
         elif self.required_permission:
             return f"{base_msg} (requires: {self.required_permission})"
         elif self.file_path:
@@ -272,7 +277,8 @@ class DonorDumpManager:
             Tuple of (headers_available, kernel_version)
         """
         try:
-            kernel_version = subprocess.check_output(["uname", "-r"], text=True).strip()
+            kernel_version = subprocess.check_output(
+                ["uname", "-r"], text=True).strip()
 
             headers_path = f"/lib/modules/{kernel_version}/build"
             headers_available = os.path.exists(headers_path)
@@ -329,7 +335,8 @@ class DonorDumpManager:
                     return True
 
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to install kernel headers via apt-get: {e}")
+                    logger.error(
+                        f"Failed to install kernel headers via apt-get: {e}")
                     return False
 
             elif distro == "fedora" or distro == "centos" or distro == "rhel":
@@ -338,7 +345,7 @@ class DonorDumpManager:
                     subprocess.run(
                         [
                             "sudo",
-                            "dnf",
+                            "dn",
                             "install",
                             "-y",
                             f"kernel-devel-{kernel_version}",
@@ -348,7 +355,8 @@ class DonorDumpManager:
                         text=True,
                     )
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to install kernel headers via dnf: {e}")
+                    logger.error(
+                        f"Failed to install kernel headers via dnf: {e}")
                     return False
 
             elif distro == "arch" or distro == "manjaro":
@@ -361,7 +369,8 @@ class DonorDumpManager:
                         text=True,
                     )
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to install kernel headers via pacman: {e}")
+                    logger.error(
+                        f"Failed to install kernel headers via pacman: {e}")
                     return False
 
             elif distro == "opensuse":
@@ -380,12 +389,12 @@ class DonorDumpManager:
                         text=True,
                     )
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to install kernel headers via zypper: {e}")
+                    logger.error(
+                        f"Failed to install kernel headers via zypper: {e}")
                     return False
             else:
                 logger.warning(
-                    f"Unsupported distribution: {distro}. Cannot automatically install headers."
-                )
+                    f"Unsupported distribution: {distro}. Cannot automatically install headers.")
                 return False
 
             # Verify installation
@@ -477,7 +486,9 @@ class DonorDumpManager:
         """
         # First check if the source directory exists
         if not self.module_source_dir.exists():
-            logger.error(f"Module source directory not found: {self.module_source_dir}")
+            logger.error(
+                f"Module source directory not found: {
+                    self.module_source_dir}")
             raise ModuleBuildError(
                 f"Module source directory not found: {self.module_source_dir}"
             )
@@ -496,7 +507,8 @@ class DonorDumpManager:
         if not headers_available:
             # Get distribution-specific instructions
             distro = self._detect_linux_distribution()
-            install_cmd = self._get_header_install_command(distro, kernel_version)
+            install_cmd = self._get_header_install_command(
+                distro, kernel_version)
 
             logger.error(f"Kernel headers not found for {kernel_version}")
             # Raise the exception immediately when headers are not available
@@ -533,8 +545,7 @@ class DonorDumpManager:
             except subprocess.CalledProcessError as e:
                 # If the build fails, try with KERNELRELEASE explicitly set
                 logger.warning(
-                    f"Standard build failed, trying with explicit KERNELRELEASE"
-                )
+                    "Standard build failed, trying with explicit KERNELRELEASE")
                 try:
                     result = subprocess.run(
                         ["make", f"KERNELRELEASE={kernel_version}"],
@@ -559,7 +570,10 @@ class DonorDumpManager:
                 error_msg += f"\nStderr: {e.stderr}"
             raise ModuleBuildError(error_msg)
 
-    def _get_header_install_command(self, distro: str, kernel_version: str) -> str:
+    def _get_header_install_command(
+            self,
+            distro: str,
+            kernel_version: str) -> str:
         """
         Get the appropriate command to install kernel headers for the given distribution
 
@@ -585,7 +599,8 @@ class DonorDumpManager:
         """Check if the donor_dump module is currently loaded"""
         try:
             # Check if we're on Linux (lsmod available)
-            result = subprocess.run(["which", "lsmod"], capture_output=True, text=True)
+            result = subprocess.run(
+                ["which", "lsmod"], capture_output=True, text=True)
             if result.returncode != 0:
                 # Not on Linux, module loading not supported
                 return False
@@ -648,7 +663,9 @@ class DonorDumpManager:
                 )
 
             if not os.path.exists(self.proc_path):
-                raise ModuleLoadError(f"Module loaded but {self.proc_path} not created")
+                raise ModuleLoadError(
+                    f"Module loaded but {
+                        self.proc_path} not created")
 
             logger.info("Module loaded successfully")
             return True
@@ -688,7 +705,8 @@ class DonorDumpManager:
                 error_msg += f"\nStderr: {e.stderr}"
             raise ModuleLoadError(error_msg)
 
-    def generate_donor_info(self, device_type: str = "generic") -> Dict[str, str]:
+    def generate_donor_info(
+            self, device_type: str = "generic") -> Dict[str, str]:
         """
         Generate synthetic donor information for local builds
 
@@ -698,7 +716,8 @@ class DonorDumpManager:
         Returns:
             Dictionary of synthetic device parameters
         """
-        logger.info(f"Generating synthetic donor information for {device_type} device")
+        logger.info(
+            f"Generating synthetic donor information for {device_type} device")
 
         # Common device profiles
         device_profiles = {
@@ -743,7 +762,8 @@ class DonorDumpManager:
 
         return profile
 
-    def save_donor_info(self, device_info: Dict[str, str], output_path: str) -> bool:
+    def save_donor_info(
+            self, device_info: Dict[str, str], output_path: str) -> bool:
         """
         Save donor information to a JSON file for future use
 
@@ -756,13 +776,17 @@ class DonorDumpManager:
         """
         try:
             # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            os.makedirs(
+                os.path.dirname(
+                    os.path.abspath(output_path)),
+                exist_ok=True)
 
             with open(output_path, "w") as f:
                 json.dump(device_info, f, indent=2)
             logger.info(f"Saved donor information to {output_path}")
 
-            # If extended configuration space is available, save it in a format suitable for $readmemh
+            # If extended configuration space is available, save it in a format
+            # suitable for $readmemh
             if (
                 "extended_config" in device_info
                 and device_info["extended_config"] != "disabled"
@@ -780,7 +804,10 @@ class DonorDumpManager:
             logger.error(f"Failed to save donor information: {e}")
             return False
 
-    def save_config_space_hex(self, config_hex_str: str, output_path: str) -> bool:
+    def save_config_space_hex(
+            self,
+            config_hex_str: str,
+            output_path: str) -> bool:
         """
         Save configuration space data in a format suitable for SystemVerilog $readmemh
 
@@ -793,9 +820,13 @@ class DonorDumpManager:
         """
         try:
             # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            os.makedirs(
+                os.path.dirname(
+                    os.path.abspath(output_path)),
+                exist_ok=True)
 
-            # Ensure we have at least 4KB (8192 hex chars) or truncate if larger
+            # Ensure we have at least 4KB (8192 hex chars) or truncate if
+            # larger
             target_size = 8192  # 4KB = 4096 bytes = 8192 hex chars
             if len(config_hex_str) < target_size:
                 # Pad with zeros to reach target size
@@ -812,9 +843,10 @@ class DonorDumpManager:
                 for i in range(0, len(config_hex_str), 8):
                     if i + 8 <= len(config_hex_str):
                         # Extract 4 bytes (8 hex chars)
-                        word_hex = config_hex_str[i : i + 8]
+                        word_hex = config_hex_str[i: i + 8]
                         # Convert to little-endian format (reverse byte order)
-                        # Take each pair of hex chars (1 byte) and reverse the order
+                        # Take each pair of hex chars (1 byte) and reverse the
+                        # order
                         byte0 = word_hex[0:2]  # First byte
                         byte1 = word_hex[2:4]  # Second byte
                         byte2 = word_hex[4:6]  # Third byte
@@ -837,7 +869,9 @@ class DonorDumpManager:
             Dictionary of device parameters
         """
         if not os.path.exists(self.proc_path):
-            raise DonorDumpError(f"Module not loaded or {self.proc_path} not available")
+            raise DonorDumpError(
+                f"Module not loaded or {
+                    self.proc_path} not available")
 
         try:
             device_info = {}
@@ -931,8 +965,10 @@ class DonorDumpManager:
             result["details"] = "Module is built but not currently loaded"
             result["issues"].append("Module is not loaded into the kernel")
             result["fixes"].append(
-                f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
-            )
+                f"Load the module with: sudo insmod {
+                    status_info.get(
+                        'module_path',
+                        'donor_dump.ko')} bdf=YOUR_DEVICE_BDF")
             result["fixes"].append(
                 "Or use the DonorDumpManager.load_module() function with your device BDF"
             )
@@ -946,11 +982,11 @@ class DonorDumpManager:
             # Check if headers are available
             if not status_info["headers_available"]:
                 result["issues"].append(
-                    f"Kernel headers not found for kernel {status_info['kernel_version']}"
-                )
+                    f"Kernel headers not found for kernel {
+                        status_info['kernel_version']}")
                 result["fixes"].append(
-                    f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}"
-                )
+                    f"Install kernel headers: sudo apt-get install linux-headers-{
+                        status_info['kernel_version']}")
             else:
                 result["issues"].append("Module has not been built yet")
                 result["fixes"].append(
@@ -981,7 +1017,8 @@ class DonorDumpManager:
         if status_info["module_loaded"] and not status_info["proc_available"]:
             result["status"] = "loaded_but_error"
             result["details"] = "Module is loaded but /proc/donor_dump is not available"
-            result["issues"].append("Module loaded with errors or incorrect parameters")
+            result["issues"].append(
+                "Module loaded with errors or incorrect parameters")
             result["fixes"].append("Unload the module: sudo rmmod donor_dump")
             result["fixes"].append(
                 "Check kernel logs for errors: dmesg | grep donor_dump"
@@ -995,7 +1032,8 @@ class DonorDumpManager:
         result["status"] = "unknown_error"
         result["details"] = "Unknown module installation state"
         result["issues"].append("Could not determine module status")
-        result["fixes"].append("Check the module source directory and build logs")
+        result["fixes"].append(
+            "Check the module source directory and build logs")
         result["fixes"].append("Try rebuilding the module: make clean && make")
 
         return result
@@ -1030,11 +1068,11 @@ class DonorDumpManager:
             headers_available, kernel_version = self.check_kernel_headers()
             if not headers_available:
                 if auto_install_headers:
-                    logger.info("Kernel headers missing, attempting to install...")
+                    logger.info(
+                        "Kernel headers missing, attempting to install...")
                     if not self.install_kernel_headers(kernel_version):
                         raise KernelHeadersNotFoundError(
-                            f"Failed to install kernel headers for {kernel_version}"
-                        )
+                            f"Failed to install kernel headers for {kernel_version}")
                 else:
                     raise KernelHeadersNotFoundError(
                         f"Kernel headers not found for {kernel_version}. "
@@ -1066,8 +1104,9 @@ class DonorDumpManager:
             if save_to_file and device_info:
                 # Ensure the directory exists
                 os.makedirs(
-                    os.path.dirname(os.path.abspath(save_to_file)), exist_ok=True
-                )
+                    os.path.dirname(
+                        os.path.abspath(save_to_file)),
+                    exist_ok=True)
 
                 # Save the device info to the file
                 with open(save_to_file, "w") as f:
@@ -1076,15 +1115,13 @@ class DonorDumpManager:
                 logger.info(f"Saved donor information to {save_to_file}")
             elif device_info and not save_to_file:
                 # If we have device info but no save path, use a default path
-                default_save_path = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)), "donor_info.json"
-                )
+                default_save_path = os.path.join(os.path.dirname(
+                    os.path.abspath(__file__)), "donor_info.json")
                 with open(default_save_path, "w") as f:
                     json.dump(device_info, f, indent=2)
 
                 logger.info(
-                    f"Saved donor information to default path: {default_save_path}"
-                )
+                    f"Saved donor information to default path: {default_save_path}")
 
             return device_info
 
@@ -1092,31 +1129,39 @@ class DonorDumpManager:
             logger.error(f"Failed to set up donor_dump module: {e}")
 
             if generate_if_unavailable:
-                logger.info("Generating synthetic donor information as fallback")
+                logger.info(
+                    "Generating synthetic donor information as fallback")
                 device_info = self.generate_donor_info(device_type)
 
                 # Add synthetic extended configuration space if needed
                 if extract_full_config and "extended_config" not in device_info:
-                    logger.info("Generating synthetic configuration space data")
-                    # Generate a basic 4KB configuration space with device/vendor IDs
+                    logger.info(
+                        "Generating synthetic configuration space data")
+                    # Generate a basic 4KB configuration space with
+                    # device/vendor IDs
                     config_space = ["00"] * 4096  # Initialize with zeros
 
                     # Set vendor ID (bytes 0-1)
                     vendor_id = device_info.get("vendor_id", "0x8086")[
                         2:
                     ]  # Remove "0x" prefix
-                    config_space[0] = vendor_id[2:4] if len(vendor_id) >= 4 else "86"
-                    config_space[1] = vendor_id[0:2] if len(vendor_id) >= 2 else "80"
+                    config_space[0] = vendor_id[2:4] if len(
+                        vendor_id) >= 4 else "86"
+                    config_space[1] = vendor_id[0:2] if len(
+                        vendor_id) >= 2 else "80"
 
                     # Set device ID (bytes 2-3)
                     device_id = device_info.get("device_id", "0x1533")[
                         2:
                     ]  # Remove "0x" prefix
-                    config_space[2] = device_id[2:4] if len(device_id) >= 4 else "33"
-                    config_space[3] = device_id[0:2] if len(device_id) >= 2 else "15"
+                    config_space[2] = device_id[2:4] if len(
+                        device_id) >= 4 else "33"
+                    config_space[3] = device_id[0:2] if len(
+                        device_id) >= 2 else "15"
 
                     # Set subsystem vendor ID (bytes 44-45)
-                    subvendor_id = device_info.get("subvendor_id", "0x8086")[2:]
+                    subvendor_id = device_info.get(
+                        "subvendor_id", "0x8086")[2:]
                     config_space[44] = (
                         subvendor_id[2:4] if len(subvendor_id) >= 4 else "86"
                     )
@@ -1125,7 +1170,8 @@ class DonorDumpManager:
                     )
 
                     # Set subsystem ID (bytes 46-47)
-                    subsystem_id = device_info.get("subsystem_id", "0x0000")[2:]
+                    subsystem_id = device_info.get(
+                        "subsystem_id", "0x0000")[2:]
                     config_space[46] = (
                         subsystem_id[2:4] if len(subsystem_id) >= 4 else "00"
                     )
@@ -1155,24 +1201,35 @@ def main():
     """CLI interface for donor dump manager"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Donor Dump Kernel Module Manager")
+    parser = argparse.ArgumentParser(
+        description="Donor Dump Kernel Module Manager")
     parser.add_argument(
-        "--bdf", required=True, help="PCIe Bus:Device.Function (e.g., 0000:03:00.0)"
-    )
-    parser.add_argument("--source-dir", help="Path to donor_dump source directory")
+        "--bd",
+        required=True,
+        help="PCIe Bus:Device.Function (e.g., 0000:03:00.0)")
+    parser.add_argument(
+        "--source-dir",
+        help="Path to donor_dump source directory")
     parser.add_argument(
         "--auto-install-headers",
         action="store_true",
         help="Automatically install kernel headers if missing",
     )
     parser.add_argument(
-        "--force-rebuild", action="store_true", help="Force rebuild of kernel module"
-    )
+        "--force-rebuild",
+        action="store_true",
+        help="Force rebuild of kernel module")
     parser.add_argument(
-        "--unload", action="store_true", help="Unload the module instead of loading"
-    )
-    parser.add_argument("--status", action="store_true", help="Show module status")
-    parser.add_argument("--save-to", help="Save donor information to specified file")
+        "--unload",
+        action="store_true",
+        help="Unload the module instead of loading")
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show module status")
+    parser.add_argument(
+        "--save-to",
+        help="Save donor information to specified file")
     parser.add_argument(
         "--generate",
         action="store_true",

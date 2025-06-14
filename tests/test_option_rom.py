@@ -19,13 +19,16 @@ except ImportError:
 
 # Import the modules to test
 try:
-    from src.option_rom_manager import OptionROMError, OptionROMManager
+    from src.option_rom_manager import OptionROMManager
 except ImportError:
     # Handle import from different directory
     import sys
 
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from src.option_rom_manager import OptionROMError, OptionROMManager
+    sys.path.append(
+        os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__))))
+    from src.option_rom_manager import OptionROMManager
 
 
 class TestOptionROMManager(unittest.TestCase):
@@ -119,7 +122,8 @@ class TestOptionROMManager(unittest.TestCase):
         with open(hex_path, "r") as f:
             lines = f.readlines()
             self.assertGreaterEqual(len(lines), 1)
-            # First line should contain the ROM signature (0x55AA) in little-endian format
+            # First line should contain the ROM signature (0x55AA) in
+            # little-endian format
             self.assertTrue(lines[0].strip().endswith("aa55"))
 
     def test_get_rom_info(self):
@@ -134,7 +138,9 @@ class TestOptionROMManager(unittest.TestCase):
         self.assertIsInstance(info, dict)
         self.assertEqual(info["rom_size"], "1024")
         self.assertEqual(info["valid_signature"], "True")
-        self.assertEqual(info["rom_size_from_header"], "1024")  # 2 blocks * 512 bytes
+        self.assertEqual(
+            info["rom_size_from_header"],
+            "1024")  # 2 blocks * 512 bytes
 
     @patch("subprocess.run")
     def test_setup_option_rom(self, mock_run):
@@ -149,7 +155,8 @@ class TestOptionROMManager(unittest.TestCase):
 
         # Test setup with existing ROM file
         self.manager.rom_file_path = str(self.sample_rom_path)
-        info = self.manager.setup_option_rom("0000:01:00.0", use_existing_rom=True)
+        info = self.manager.setup_option_rom(
+            "0000:01:00.0", use_existing_rom=True)
 
         # Verify results
         self.assertIsInstance(info, dict)
@@ -180,13 +187,16 @@ if PYTEST_AVAILABLE:
                 # Size in 512-byte blocks, handle large sizes properly
                 size_blocks = rom_size // 512
                 if size_blocks <= 255:
-                    f.write(bytes([size_blocks]))  # Size in 512-byte blocks (1 byte)
+                    # Size in 512-byte blocks (1 byte)
+                    f.write(bytes([size_blocks]))
                 else:
-                    # For larger sizes, use a fixed value and rely on actual file size
+                    # For larger sizes, use a fixed value and rely on actual
+                    # file size
                     f.write(bytes([0xFF]))  # Maximum size indicator (1 byte)
 
                 # Padding to reach the desired size
-                # We've already written 3 bytes (signature + size), so subtract 3
+                # We've already written 3 bytes (signature + size), so subtract
+                # 3
                 f.write(bytes([0x00] * (rom_size - 3)))  # Padding
 
             # Load the ROM
@@ -194,7 +204,8 @@ if PYTEST_AVAILABLE:
 
             # Verify size
             # The ROM size should be exactly rom_size bytes
-            # We've adjusted the padding to account for the signature and size byte
+            # We've adjusted the padding to account for the signature and size
+            # byte
             assert manager.rom_size == rom_size
 
             # Save as hex and verify
@@ -224,7 +235,8 @@ else:
                     with open(sample_rom_path, "wb") as f:
                         # Create a valid ROM with signature 0x55AA
                         f.write(bytes([0x55, 0xAA]))  # ROM signature
-                        f.write(bytes([rom_size // 512]))  # Size in 512-byte blocks
+                        # Size in 512-byte blocks
+                        f.write(bytes([rom_size // 512]))
                         f.write(bytes([0x00] * (rom_size - 2)))  # Padding
 
                     # Load the ROM
@@ -238,7 +250,8 @@ else:
                     manager.save_rom_hex(str(hex_path))
                     self.assertTrue(hex_path.exists())
 
-                    # Count lines in hex file (should be rom_size/4 for 32-bit words)
+                    # Count lines in hex file (should be rom_size/4 for 32-bit
+                    # words)
                     with open(hex_path, "r") as f:
                         lines = f.readlines()
                         self.assertEqual(len(lines), rom_size // 4)

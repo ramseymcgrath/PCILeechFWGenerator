@@ -5,6 +5,8 @@ Tests to verify that configuration changes are properly applied and
 that the donor dump functionality is accessible.
 """
 
+from tui.models.config import BuildConfiguration
+from tui.core.config_manager import ConfigManager
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -13,9 +15,6 @@ import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from tui.core.config_manager import ConfigManager
-from tui.models.config import BuildConfiguration
 
 
 class TestConfigurationFixes:
@@ -95,8 +94,10 @@ class TestConfigurationFixes:
     def test_configuration_feature_summary_with_donor_dump(self):
         """Test that feature summary includes donor dump when enabled"""
         config = BuildConfiguration(
-            donor_dump=True, local_build=False, advanced_sv=True, enable_variance=True
-        )
+            donor_dump=True,
+            local_build=False,
+            advanced_sv=True,
+            enable_variance=True)
 
         summary = config.feature_summary
 
@@ -107,8 +108,10 @@ class TestConfigurationFixes:
     def test_configuration_feature_summary_without_donor_dump(self):
         """Test that feature summary includes local build when donor dump disabled"""
         config = BuildConfiguration(
-            donor_dump=False, local_build=True, advanced_sv=False, enable_variance=False
-        )
+            donor_dump=False,
+            local_build=True,
+            advanced_sv=False,
+            enable_variance=False)
 
         summary = config.feature_summary
 
@@ -128,9 +131,8 @@ class TestConfigurationFixes:
 
         assert copied_config.donor_dump == original_config.donor_dump
         assert copied_config.local_build == original_config.local_build
-        assert (
-            copied_config.auto_install_headers == original_config.auto_install_headers
-        )
+        assert (copied_config.auto_install_headers ==
+                original_config.auto_install_headers)
         assert copied_config.donor_info_file == original_config.donor_info_file
 
     def test_configuration_validation_with_valid_settings(self):
@@ -185,7 +187,8 @@ class TestTUIConfigurationIntegration:
         mock_app.config_manager.set_current_config(test_config)
 
         # Verify that set_current_config was called
-        mock_config_manager.set_current_config.assert_called_once_with(test_config)
+        mock_config_manager.set_current_config.assert_called_once_with(
+            test_config)
 
     def test_donor_dump_toggle_functionality(self):
         """Test donor dump toggle functionality"""

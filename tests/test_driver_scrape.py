@@ -2,21 +2,17 @@
 Comprehensive tests for src/scripts/driver_scrape.py - Driver analysis functionality.
 """
 
+import driver_scrape
 import json
-import os
 import subprocess
 import sys
-import tarfile
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "scripts"))
-
-import driver_scrape
 
 
 class TestHelperFunctions:
@@ -101,7 +97,8 @@ static int init_device(struct pci_dev *pdev) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_CTRL")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_CTRL")
 
         assert context["function"] == "init_device"
         assert "REG_STATUS" in context["dependencies"]
@@ -125,7 +122,8 @@ static irqreturn_t device_irq_handler(int irq, void *dev_id) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_IRQ_STATUS")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_IRQ_STATUS")
 
         assert context["function"] == "device_irq_handler"
         assert context["timing"] == "interrupt"
@@ -159,7 +157,8 @@ static int some_function(void) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_MISSING")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_MISSING")
 
         assert context["function"] is None
         assert context["dependencies"] == []
@@ -176,7 +175,8 @@ static void device_remove(struct pci_dev *pdev) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_ENABLE")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_ENABLE")
 
         assert context["function"] == "device_remove"
         assert context["timing"] == "late"
@@ -197,7 +197,8 @@ void configure_device(void) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_CONFIG")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_CONFIG")
         assert context["access_pattern"] == "write_heavy"
 
     def test_access_pattern_read_heavy(self):
@@ -213,7 +214,8 @@ void monitor_device(void) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_STATUS")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_STATUS")
         assert context["access_pattern"] == "read_heavy"
 
     def test_access_pattern_balanced(self):
@@ -227,7 +229,8 @@ void balanced_access(void) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_DATA")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_DATA")
         assert context["access_pattern"] == "balanced"
 
     def test_access_pattern_write_then_read(self):
@@ -239,7 +242,8 @@ void write_then_read(void) {
 }
 """
 
-        context = driver_scrape.analyze_function_context(file_content, "REG_COMMAND")
+        context = driver_scrape.analyze_function_context(
+            file_content, "REG_COMMAND")
         assert context["access_pattern"] == "write_then_read"
 
 
@@ -258,7 +262,8 @@ void init_sequence(void) {
 }
 """
 
-        constraints = driver_scrape.analyze_timing_constraints(file_content, "REG_INIT")
+        constraints = driver_scrape.analyze_timing_constraints(
+            file_content, "REG_INIT")
 
         assert len(constraints) > 0
         # Should detect udelay(10) and msleep(5)
@@ -321,7 +326,8 @@ void init_device(void) {
 }
 """
 
-        sequences = driver_scrape.analyze_access_sequences(file_content, "REG_ENABLE")
+        sequences = driver_scrape.analyze_access_sequences(
+            file_content, "REG_ENABLE")
 
         assert len(sequences) > 0
         seq = sequences[0]
@@ -346,7 +352,8 @@ void stop_device(void) {
 }
 """
 
-        sequences = driver_scrape.analyze_access_sequences(file_content, "REG_CTRL")
+        sequences = driver_scrape.analyze_access_sequences(
+            file_content, "REG_CTRL")
 
         assert len(sequences) >= 3  # At least one per function
         functions = [seq["function"] for seq in sequences]
@@ -366,10 +373,12 @@ void complex_operation(void) {
 }
 """
 
-        sequences = driver_scrape.analyze_access_sequences(file_content, "REG_TARGET")
+        sequences = driver_scrape.analyze_access_sequences(
+            file_content, "REG_TARGET")
 
         # Should find 3 accesses to REG_TARGET
-        target_sequences = [seq for seq in sequences if "REG_TARGET" in file_content]
+        target_sequences = [
+            seq for seq in sequences if "REG_TARGET" in file_content]
         assert len(target_sequences) >= 3
 
         # Check positions
@@ -400,7 +409,8 @@ class TestRegisterExtraction:
 """
 
         with patch("builtins.open", mock_open(read_data=header_content)):
-            registers = driver_scrape.extract_registers_from_file("test_header.h")
+            registers = driver_scrape.extract_registers_from_file(
+                "test_header.h")
 
         assert len(registers) == 4
         reg_names = [reg["name"] for reg in registers]
@@ -476,8 +486,7 @@ class TestMainWorkflow:
         mock_ensure.return_value = Path("/usr/src/linux-source-5.15")
         mock_ko_name.return_value = "e1000e"
         mock_find.return_value = [
-            Path("/usr/src/linux-source-5.15/drivers/net/ethernet/intel/e1000e")
-        ]
+            Path("/usr/src/linux-source-5.15/drivers/net/ethernet/intel/e1000e")]
 
         mock_registers = [
             {
@@ -498,7 +507,8 @@ class TestMainWorkflow:
         # Mock sys.argv
         with patch("sys.argv", ["driver_scrape.py", "8086", "1533"]):
             with patch("builtins.print") as mock_print:
-                # This would normally call main(), but we'll test the workflow components
+                # This would normally call main(), but we'll test the workflow
+                # components
                 pass
 
         # Verify workflow steps would be called
@@ -522,7 +532,8 @@ class TestErrorHandling:
     def test_file_not_found_handling(self):
         """Test handling of missing source files."""
         with patch("builtins.open", side_effect=FileNotFoundError):
-            registers = driver_scrape.extract_registers_from_file("nonexistent.h")
+            registers = driver_scrape.extract_registers_from_file(
+                "nonexistent.h")
             assert registers == []
 
     def test_malformed_register_definitions(self):
@@ -534,7 +545,8 @@ class TestErrorHandling:
 """
 
         with patch("builtins.open", mock_open(read_data=malformed_content)):
-            registers = driver_scrape.extract_registers_from_file("malformed.h")
+            registers = driver_scrape.extract_registers_from_file(
+                "malformed.h")
 
         # Should only extract valid definitions
         assert len(registers) == 1
@@ -564,7 +576,7 @@ class TestPerformanceAndScaling:
         # Generate large source content
         large_content = []
         for i in range(1000):
-            large_content.append(f"#define REG_{i:04d}    0x{i*4:04X}")
+            large_content.append(f"#define REG_{i:04d}    0x{i * 4:04X}")
             large_content.append(f"static void func_{i}(void) {{")
             large_content.append(f"    writel(0x{i}, REG_{i:04d});")
             large_content.append("}")
@@ -575,7 +587,8 @@ class TestPerformanceAndScaling:
             import time
 
             start_time = time.time()
-            registers = driver_scrape.extract_registers_from_file("large_file.h")
+            registers = driver_scrape.extract_registers_from_file(
+                "large_file.h")
             processing_time = time.time() - start_time
 
         # Should process within reasonable time
@@ -589,27 +602,25 @@ class TestPerformanceAndScaling:
         # Create large register dataset
         large_registers = []
         for i in range(10000):
-            large_registers.append(
-                {
-                    "offset": i * 4,
-                    "name": f"REG_{i:05d}",
-                    "value": f"0x{i:08X}",
-                    "rw": "rw" if i % 2 == 0 else "ro",
-                    "context": {
-                        "function": f"func_{i}",
-                        "dependencies": [
-                            f"REG_{j:05d}" for j in range(max(0, i - 3), i)
-                        ],
-                        "timing": ["early", "runtime", "late"][i % 3],
-                        "access_pattern": ["read_heavy", "write_heavy", "balanced"][
-                            i % 3
-                        ],
-                    },
-                }
-            )
+            large_registers.append({"offset": i * 4,
+                                    "name": f"REG_{i:05d}",
+                                    "value": f"0x{i:08X}",
+                                    "rw": "rw" if i % 2 == 0 else "ro",
+                                    "context": {"function": f"func_{i}",
+                                                "dependencies": [f"REG_{j:05d}" for j in range(max(0,
+                                                                                                   i - 3),
+                                                                                               i)],
+                                                "timing": ["early",
+                                                           "runtime",
+                                                           "late"][i % 3],
+                                                "access_pattern": ["read_heavy",
+                                                                   "write_heavy",
+                                                                   "balanced"][i % 3],
+                                                },
+                                    })
 
         # Measure memory usage
-        initial_size = sys.getsizeof(large_registers)
+        sys.getsizeof(large_registers)
 
         # Process the data (simulate JSON serialization)
         json_output = json.dumps(large_registers)

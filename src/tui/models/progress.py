@@ -51,7 +51,8 @@ class BuildProgress:
     @property
     def completed_stages(self) -> int:
         """Number of completed stages."""
-        return sum(1 for completed in self.stage_completion.values() if completed)
+        return sum(
+            1 for completed in self.stage_completion.values() if completed)
 
     @property
     def total_stages(self) -> int:
@@ -85,7 +86,10 @@ class BuildProgress:
     @property
     def progress_bar_text(self) -> str:
         """Progress bar text with stage information."""
-        return f"{self.overall_progress:.1f}% ({self.completed_stages}/{self.total_stages} stages)"
+        return f"{
+            self.overall_progress:.1f}% ({
+            self.completed_stages}/{
+            self.total_stages} stages)"
 
     def mark_stage_complete(self, stage: BuildStage) -> None:
         """Mark a stage as complete."""
@@ -105,7 +109,10 @@ class BuildProgress:
         self, cpu: float, memory: float, disk_free: float
     ) -> None:
         """Update resource usage metrics."""
-        self.resource_usage = {"cpu": cpu, "memory": memory, "disk_free": disk_free}
+        self.resource_usage = {
+            "cpu": cpu,
+            "memory": memory,
+            "disk_free": disk_free}
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""

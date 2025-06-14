@@ -28,17 +28,15 @@ import argparse
 import json
 import logging
 import os
-import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Import project modules
 try:
     from behavior_profiler import BehaviorProfiler
-    from donor_dump_manager import DonorDumpError, DonorDumpManager
+    from donor_dump_manager import DonorDumpManager
     from manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
@@ -49,7 +47,7 @@ except ImportError as e:
     # Try relative imports for container environment
     try:
         from .behavior_profiler import BehaviorProfiler
-        from .donor_dump_manager import DonorDumpError, DonorDumpManager
+        from .donor_dump_manager import DonorDumpManager
         from .manufacturing_variance import (
             DeviceClass,
             ManufacturingVarianceSimulator,
@@ -76,10 +74,10 @@ except ImportError:
         AdvancedSystemVerilogGenerator = None
 
 try:
-    from msix_capability import generate_msix_table_sv, parse_msix_capability
+    pass
 except ImportError:
     try:
-        from .msix_capability import generate_msix_table_sv, parse_msix_capability
+        pass
     except ImportError:
         MSIXCapabilityManager = None
 
@@ -125,7 +123,11 @@ logger = logging.getLogger(__name__)
 class PCILeechFirmwareBuilder:
     """Main firmware builder class."""
 
-    def __init__(self, bdf: str, board: str, output_dir: Optional[Path] = None):
+    def __init__(
+            self,
+            bdf: str,
+            board: str,
+            output_dir: Optional[Path] = None):
         self.bdf = bdf
         self.board = board
 
@@ -146,13 +148,13 @@ class PCILeechFirmwareBuilder:
         self.donor_manager = DonorDumpManager() if DonorDumpManager else None
         self.sv_generator = None
         self.variance_simulator = (
-            ManufacturingVarianceSimulator() if ManufacturingVarianceSimulator else None
-        )
+            ManufacturingVarianceSimulator() if ManufacturingVarianceSimulator else None)
         self.behavior_profiler = None
         self.msix_manager = MSIXCapabilityManager() if MSIXCapabilityManager else None
         self.option_rom_manager = OptionROMManager() if OptionROMManager else None
 
-        logger.info(f"Initialized PCILeech firmware builder for {bdf} on {board}")
+        logger.info(
+            f"Initialized PCILeech firmware builder for {bdf} on {board}")
 
     def read_vfio_config_space(self) -> bytes:
         """Read PCI configuration space via VFIO."""
@@ -160,7 +162,9 @@ class PCILeechFirmwareBuilder:
             # Find IOMMU group for the device
             iommu_group_path = f"/sys/bus/pci/devices/{self.bdf}/iommu_group"
             if not os.path.exists(iommu_group_path):
-                raise RuntimeError(f"IOMMU group not found for device {self.bdf}")
+                raise RuntimeError(
+                    f"IOMMU group not found for device {
+                        self.bdf}")
 
             iommu_group = os.path.basename(os.readlink(iommu_group_path))
             vfio_device = f"/dev/vfio/{iommu_group}"
@@ -169,8 +173,8 @@ class PCILeechFirmwareBuilder:
                 raise RuntimeError(f"VFIO device {vfio_device} not found")
 
             logger.info(
-                f"Reading configuration space for device {self.bdf} via VFIO group {iommu_group}"
-            )
+                f"Reading configuration space for device {
+                    self.bdf} via VFIO group {iommu_group}")
 
             # Read actual configuration space from sysfs as fallback
             config_path = f"/sys/bus/pci/devices/{self.bdf}/config"
@@ -178,11 +182,12 @@ class PCILeechFirmwareBuilder:
                 with open(config_path, "rb") as f:
                     config_space = f.read(256)  # Read first 256 bytes
                 logger.info(
-                    f"Successfully read {len(config_space)} bytes of configuration space"
-                )
+                    f"Successfully read {
+                        len(config_space)} bytes of configuration space")
                 return config_space
             else:
-                # Generate synthetic configuration space if real one not available
+                # Generate synthetic configuration space if real one not
+                # available
                 logger.warning(
                     "Real config space not available, generating synthetic data"
                 )
@@ -253,7 +258,8 @@ class PCILeechFirmwareBuilder:
         }
 
         # Select profile based on device characteristics or default to network
-        profile = device_profiles["network"]  # Default to most common PCILeech target
+        # Default to most common PCILeech target
+        profile = device_profiles["network"]
 
         # Standard PCI Configuration Header (0x00-0x3F)
         # Vendor ID and Device ID
@@ -261,10 +267,12 @@ class PCILeechFirmwareBuilder:
         config_space[2:4] = profile["device_id"].to_bytes(2, "little")
 
         # Command Register - Enable memory space, bus master, disable I/O space
-        config_space[4:6] = (0x0006).to_bytes(2, "little")  # Memory Space + Bus Master
+        config_space[4:6] = (0x0006).to_bytes(
+            2, "little")  # Memory Space + Bus Master
 
         # Status Register - Capabilities list, 66MHz capable, fast back-to-back
-        config_space[6:8] = (0x0210).to_bytes(2, "little")  # Cap List + Fast B2B
+        config_space[6:8] = (0x0210).to_bytes(
+            2, "little")  # Cap List + Fast B2B
 
         # Revision ID and Class Code
         config_space[8] = 0x04  # Revision ID
@@ -282,7 +290,7 @@ class PCILeechFirmwareBuilder:
         # Base Address Registers (BARs)
         for i, bar_val in enumerate(profile["bar_configs"]):
             offset = 16 + (i * 4)
-            config_space[offset : offset + 4] = bar_val.to_bytes(4, "little")
+            config_space[offset: offset + 4] = bar_val.to_bytes(4, "little")
 
         # Cardbus CIS Pointer (unused)
         config_space[40:44] = (0x00000000).to_bytes(4, "little")
@@ -313,10 +321,10 @@ class PCILeechFirmwareBuilder:
         if "pm" in profile["capabilities"]:
             config_space[cap_offset] = 0x01  # PM Capability ID
             config_space[cap_offset + 1] = 0x50  # Next capability pointer
-            config_space[cap_offset + 2 : cap_offset + 4] = (0x0003).to_bytes(
+            config_space[cap_offset + 2: cap_offset + 4] = (0x0003).to_bytes(
                 2, "little"
             )  # PM Capabilities
-            config_space[cap_offset + 4 : cap_offset + 6] = (0x0000).to_bytes(
+            config_space[cap_offset + 4: cap_offset + 6] = (0x0000).to_bytes(
                 2, "little"
             )  # PM Control/Status
             cap_offset = 0x50
@@ -325,16 +333,15 @@ class PCILeechFirmwareBuilder:
         if "msi" in profile["capabilities"]:
             config_space[cap_offset] = 0x05  # MSI Capability ID
             config_space[cap_offset + 1] = 0x60  # Next capability pointer
-            config_space[cap_offset + 2 : cap_offset + 4] = (0x0080).to_bytes(
+            config_space[cap_offset + 2: cap_offset + 4] = (0x0080).to_bytes(
                 2, "little"
             )  # MSI Control (64-bit)
-            config_space[cap_offset + 4 : cap_offset + 8] = (0x00000000).to_bytes(
-                4, "little"
-            )  # Message Address
-            config_space[cap_offset + 8 : cap_offset + 12] = (0x00000000).to_bytes(
+            config_space[cap_offset + 4: cap_offset +
+                         8] = (0x00000000).to_bytes(4, "little")  # Message Address
+            config_space[cap_offset + 8: cap_offset + 12] = (0x00000000).to_bytes(
                 4, "little"
             )  # Message Upper Address
-            config_space[cap_offset + 12 : cap_offset + 14] = (0x0000).to_bytes(
+            config_space[cap_offset + 12: cap_offset + 14] = (0x0000).to_bytes(
                 2, "little"
             )  # Message Data
             cap_offset = 0x60
@@ -343,15 +350,13 @@ class PCILeechFirmwareBuilder:
         if "msix" in profile["capabilities"]:
             config_space[cap_offset] = 0x11  # MSI-X Capability ID
             config_space[cap_offset + 1] = 0x70  # Next capability pointer
-            config_space[cap_offset + 2 : cap_offset + 4] = (0x0000).to_bytes(
+            config_space[cap_offset + 2: cap_offset + 4] = (0x0000).to_bytes(
                 2, "little"
             )  # MSI-X Control
-            config_space[cap_offset + 4 : cap_offset + 8] = (0x00000000).to_bytes(
-                4, "little"
-            )  # Table Offset/BIR
-            config_space[cap_offset + 8 : cap_offset + 12] = (0x00002000).to_bytes(
-                4, "little"
-            )  # PBA Offset/BIR
+            config_space[cap_offset + 4: cap_offset +
+                         8] = (0x00000000).to_bytes(4, "little")  # Table Offset/BIR
+            config_space[cap_offset + 8: cap_offset +
+                         12] = (0x00002000).to_bytes(4, "little")  # PBA Offset/BIR
             cap_offset = 0x70
 
         # PCIe Capability (for modern devices)
@@ -360,32 +365,34 @@ class PCILeechFirmwareBuilder:
             config_space[cap_offset + 1] = (
                 0x00  # Next capability pointer (end of chain)
             )
-            config_space[cap_offset + 2 : cap_offset + 4] = (0x0002).to_bytes(
+            config_space[cap_offset + 2: cap_offset + 4] = (0x0002).to_bytes(
                 2, "little"
             )  # PCIe Capabilities
-            config_space[cap_offset + 4 : cap_offset + 8] = (0x00000000).to_bytes(
+            config_space[cap_offset + 4: cap_offset + 8] = (0x00000000).to_bytes(
                 4, "little"
             )  # Device Capabilities
-            config_space[cap_offset + 8 : cap_offset + 10] = (0x0000).to_bytes(
+            config_space[cap_offset + 8: cap_offset + 10] = (0x0000).to_bytes(
                 2, "little"
             )  # Device Control
-            config_space[cap_offset + 10 : cap_offset + 12] = (0x0000).to_bytes(
+            config_space[cap_offset + 10: cap_offset + 12] = (0x0000).to_bytes(
                 2, "little"
             )  # Device Status
-            config_space[cap_offset + 12 : cap_offset + 16] = (0x00000000).to_bytes(
-                4, "little"
-            )  # Link Capabilities
-            config_space[cap_offset + 16 : cap_offset + 18] = (0x0000).to_bytes(
+            config_space[cap_offset + 12: cap_offset +
+                         16] = (0x00000000).to_bytes(4, "little")  # Link Capabilities
+            config_space[cap_offset + 16: cap_offset + 18] = (0x0000).to_bytes(
                 2, "little"
             )  # Link Control
-            config_space[cap_offset + 18 : cap_offset + 20] = (0x0000).to_bytes(
+            config_space[cap_offset + 18: cap_offset + 20] = (0x0000).to_bytes(
                 2, "little"
             )  # Link Status
 
         logger.info(
-            f"Generated synthetic config space: VID={profile['vendor_id']:04x}, DID={profile['device_id']:04x}, Class={profile['class_code']:06x}"
-        )
-        return bytes(config_space[:256])  # Return standard 256-byte config space
+            f"Generated synthetic config space: VID={
+                profile['vendor_id']:04x}, DID={
+                profile['device_id']:04x}, Class={
+                profile['class_code']:06x}")
+        # Return standard 256-byte config space
+        return bytes(config_space[:256])
 
     def extract_device_info(self, config_space: bytes) -> Dict[str, Any]:
         """Extract device information from configuration space."""
@@ -403,7 +410,7 @@ class PCILeechFirmwareBuilder:
             bar_offset = 16 + (i * 4)
             if bar_offset + 4 <= len(config_space):
                 bar_value = int.from_bytes(
-                    config_space[bar_offset : bar_offset + 4], "little"
+                    config_space[bar_offset: bar_offset + 4], "little"
                 )
                 bars.append(bar_value)
 
@@ -412,7 +419,7 @@ class PCILeechFirmwareBuilder:
             "device_id": f"{device_id:04x}",
             "class_code": f"{class_code:04x}",
             "revision_id": f"{revision_id:02x}",
-            "bdf": self.bdf,
+            "bd": self.bdf,
             "board": self.board,
             "bars": bars,
             "config_space_hex": config_space.hex(),
@@ -420,8 +427,9 @@ class PCILeechFirmwareBuilder:
         }
 
         logger.info(
-            f"Extracted device info: VID={device_info['vendor_id']}, DID={device_info['device_id']}"
-        )
+            f"Extracted device info: VID={
+                device_info['vendor_id']}, DID={
+                device_info['device_id']}")
         return device_info
 
     def generate_systemverilog_files(
@@ -435,7 +443,8 @@ class PCILeechFirmwareBuilder:
         generated_files = []
 
         try:
-            # Initialize advanced SystemVerilog generator if available and requested
+            # Initialize advanced SystemVerilog generator if available and
+            # requested
             if advanced_sv and AdvancedSVGenerator:
                 logger.info("Generating advanced SystemVerilog modules")
                 self.sv_generator = AdvancedSVGenerator()
@@ -449,7 +458,8 @@ class PCILeechFirmwareBuilder:
             if enable_variance and ManufacturingVarianceSimulator:
                 logger.info("Applying manufacturing variance simulation")
                 self.variance_simulator = ManufacturingVarianceSimulator()
-                variance_files = self._apply_manufacturing_variance(device_info)
+                variance_files = self._apply_manufacturing_variance(
+                    device_info)
                 generated_files.extend(variance_files)
 
         except Exception as e:
@@ -458,7 +468,8 @@ class PCILeechFirmwareBuilder:
 
         return generated_files
 
-    def _discover_and_copy_all_files(self, device_info: Dict[str, Any]) -> List[str]:
+    def _discover_and_copy_all_files(
+            self, device_info: Dict[str, Any]) -> List[str]:
         """Scalable discovery and copying of all relevant project files."""
         copied_files = []
         src_dir = Path(__file__).parent
@@ -481,12 +492,12 @@ class PCILeechFirmwareBuilder:
                         copied_files.append(str(dest_path))
                         valid_sv_files.append(sv_file.name)
                         logger.info(
-                            f"Copied valid SystemVerilog module: {sv_file.name}"
-                        )
+                            f"Copied valid SystemVerilog module: {
+                                sv_file.name}")
                     else:
                         logger.warning(
-                            f"Skipping invalid SystemVerilog file: {sv_file.name}"
-                        )
+                            f"Skipping invalid SystemVerilog file: {
+                                sv_file.name}")
             except Exception as e:
                 logger.error(f"Error processing {sv_file.name}: {e}")
 
@@ -514,7 +525,9 @@ class PCILeechFirmwareBuilder:
                 copied_files.append(str(dest_path))
                 logger.info(f"Copied constraint file: {xdc_file.name}")
             except Exception as e:
-                logger.error(f"Error copying constraint file {xdc_file.name}: {e}")
+                logger.error(
+                    f"Error copying constraint file {
+                        xdc_file.name}: {e}")
 
         # Discover and copy any Verilog files
         v_files = list(src_dir.rglob("*.v"))
@@ -545,15 +558,16 @@ class PCILeechFirmwareBuilder:
 
         return copied_files
 
-    def _generate_device_config_module(self, device_info: Dict[str, Any]) -> str:
+    def _generate_device_config_module(
+            self, device_info: Dict[str, Any]) -> str:
         """Generate device-specific configuration module using actual device data."""
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
-        class_code = device_info["class_code"]
-        revision_id = device_info["revision_id"]
-        bars = device_info["bars"]
+        device_info["vendor_id"]
+        device_info["device_id"]
+        device_info["class_code"]
+        device_info["revision_id"]
+        device_info["bars"]
 
-        return f"""
+        return """
 //==============================================================================
 // Device Configuration Module - Generated for {vendor_id}:{device_id}
 // Board: {device_info['board']}
@@ -583,7 +597,7 @@ module device_config #(
     assign cfg_device_id = {{DEVICE_ID, VENDOR_ID}};
     assign cfg_class_code = {{8'h00, CLASS_CODE}};
     assign cfg_subsystem_id = {{SUBSYSTEM_DEVICE_ID, SUBSYSTEM_VENDOR_ID}};
-    
+
     // BAR configuration
     assign cfg_bar[0] = BAR0_APERTURE;
     assign cfg_bar[1] = BAR1_APERTURE;
@@ -597,7 +611,7 @@ endmodule
 
     def _generate_top_level_wrapper(self, device_info: Dict[str, Any]) -> str:
         """Generate top-level wrapper that integrates all modules."""
-        return f"""
+        return """
 //==============================================================================
 // PCILeech Top-Level Wrapper - Generated for {device_info['vendor_id']}:{device_info['device_id']}
 // Board: {self.board}
@@ -607,13 +621,13 @@ module pcileech_top (
     // Clock and reset
     input  logic        clk,
     input  logic        reset_n,
-    
+
     // PCIe interface (connect to PCIe hard IP)
     input  logic [31:0] pcie_rx_data,
     input  logic        pcie_rx_valid,
     output logic [31:0] pcie_tx_data,
     output logic        pcie_tx_valid,
-    
+
     // Configuration space interface
     input  logic        cfg_ext_read_received,
     input  logic        cfg_ext_write_received,
@@ -623,12 +637,12 @@ module pcileech_top (
     input  logic [3:0]  cfg_ext_write_byte_enable,
     output logic [31:0] cfg_ext_read_data,
     output logic        cfg_ext_read_data_valid,
-    
+
     // MSI-X interrupt interface
     output logic        msix_interrupt,
     output logic [10:0] msix_vector,
     input  logic        msix_interrupt_ack,
-    
+
     // Debug/status outputs
     output logic [31:0] debug_status,
     output logic        device_ready
@@ -640,7 +654,7 @@ module pcileech_top (
     logic        bar_wr_en;
     logic        bar_rd_en;
     logic [31:0] bar_rd_data;
-    
+
     // Device configuration signals
     logic [31:0] cfg_device_id;
     logic [31:0] cfg_class_code;
@@ -690,14 +704,14 @@ module pcileech_top (
         TLP_HEADER,
         TLP_PROCESSING
     }} tlp_state_t;
-    
+
     tlp_state_t tlp_state;
     logic [31:0] tlp_header [0:3];
     logic [7:0]  tlp_header_count;
     logic [10:0] tlp_length;
     logic [6:0]  tlp_type;
     logic [31:0] tlp_address;
-    
+
     // Simplified PCIe TLP processing for basic protocol compliance
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
@@ -710,38 +724,38 @@ module pcileech_top (
         end else begin
             // Default assignments
             pcie_tx_valid <= 1'b0;
-            
+
             case (tlp_state)
                 TLP_IDLE: begin
                     if (pcie_rx_valid) begin
                         tlp_header[0] <= pcie_rx_data;
                         tlp_header_count <= 8'h1;
                         tlp_state <= TLP_HEADER;
-                        
+
                         // Extract TLP type and length from first header
                         tlp_type <= pcie_rx_data[30:24];
                         tlp_length <= pcie_rx_data[9:0];
                     end
                     device_ready <= 1'b1;
                 end
-                
+
                 TLP_HEADER: begin
                     if (pcie_rx_valid) begin
                         tlp_header[tlp_header_count] <= pcie_rx_data;
                         tlp_header_count <= tlp_header_count + 1;
-                        
+
                         // For memory requests, capture address from header[1]
                         if (tlp_header_count == 8'h1) begin
                             tlp_address <= pcie_rx_data;
                         end
-                        
+
                         // Basic TLP acknowledgment
                         if (tlp_header_count >= 8'h2) begin
                             tlp_state <= TLP_PROCESSING;
                         end
                     end
                 end
-                
+
                 TLP_PROCESSING: begin
                     // Basic protocol compliance - acknowledge and return to idle
                     // Real DMA functionality would be implemented here by connecting
@@ -749,7 +763,7 @@ module pcileech_top (
                     tlp_state <= TLP_IDLE;
                 end
             endcase
-            
+
             // Update debug status with device ID and current state
             debug_status <= {{16'h{device_info['vendor_id']}, 8'h{device_info['device_id'][2:]}, 5'h0, tlp_state}};
         end
@@ -773,11 +787,11 @@ endmodule
         # Get device-specific parameters
         vendor_id = device_info["vendor_id"]
         device_id = device_info["device_id"]
-        class_code = device_info["class_code"]
+        device_info["class_code"]
         revision_id = device_info["revision_id"]
 
         # Generate clean TCL script with device-specific configuration
-        tcl_content = f"""#==============================================================================
+        tcl_content = """#==============================================================================
 # PCILeech Firmware Build Script
 # Generated for device {vendor_id}:{device_id} (Class: {class_code})
 # Board: {self.board}
@@ -814,7 +828,8 @@ puts "Board: {self.board}"
 
         # Generate appropriate PCIe IP configuration based on FPGA family
         if "xc7a35t" in fpga_part:
-            # For Artix-7 35T, use AXI PCIe IP core which is available for smaller parts
+            # For Artix-7 35T, use AXI PCIe IP core which is available for
+            # smaller parts
             pcie_config = self._generate_axi_pcie_config(
                 vendor_id, device_id, revision_id
             )
@@ -834,7 +849,7 @@ puts "Board: {self.board}"
                 vendor_id, device_id, revision_id
             )
 
-        tcl_content += f"""
+        tcl_content += """
 
 {pcie_config}
 
@@ -908,7 +923,7 @@ set timing_constraints {{
     create_clock -period 10.000 -name sys_clk [get_ports clk]
     set_input_delay -clock sys_clk 2.000 [get_ports {{reset_n pcie_rx_*}}]
     set_output_delay -clock sys_clk 2.000 [get_ports {{pcie_tx_* msix_* debug_* device_ready}}]
-    
+
     # Device-specific constraints for {vendor_id}:{device_id}
     # Board-specific pin assignments for {self.board}
     set_property PACKAGE_PIN E3 [get_ports clk]
@@ -979,18 +994,18 @@ if {{[file exists $bitstream_file]}} {{
     file copy -force $bitstream_file $output_bit
     puts "SUCCESS: Bitstream generated successfully!"
     puts "Output file: $output_bit"
-    
+
     # Generate additional files
     write_cfgmem -format mcs -size 16 -interface SPIx4 \\
         -loadbit "up 0x0 $output_bit" \\
         -file "pcileech_{vendor_id}_{device_id}_{self.board}.mcs"
-    
+
     if {{[llength [get_debug_cores]] > 0}} {{
         write_debug_probes -file "pcileech_{vendor_id}_{device_id}_{self.board}.ltx"
     }}
-    
+
     write_checkpoint -force "pcileech_{vendor_id}_{device_id}_{self.board}.dcp"
-    
+
     puts "Generated files:"
     puts "  - Bitstream: pcileech_{vendor_id}_{device_id}_{self.board}.bit"
     puts "  - MCS file: pcileech_{vendor_id}_{device_id}_{self.board}.mcs"
@@ -1007,7 +1022,8 @@ close_project
 
         return tcl_content
 
-    def _generate_separate_tcl_files(self, device_info: Dict[str, Any]) -> List[str]:
+    def _generate_separate_tcl_files(
+            self, device_info: Dict[str, Any]) -> List[str]:
         """Generate separate TCL files for different build components."""
         tcl_files = []
 
@@ -1084,12 +1100,12 @@ close_project
             "pcileech_75t": "xc7a75tfgg484-2",
             "pcileech_100t": "xczu3eg-sbva484-1-e",
         }
-        fpga_part = board_parts.get(self.board, "xc7a35tcsg324-2")
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
-        class_code = device_info["class_code"]
+        board_parts.get(self.board, "xc7a35tcsg324-2")
+        device_info["vendor_id"]
+        device_info["device_id"]
+        device_info["class_code"]
 
-        return f"""#==============================================================================
+        return """#==============================================================================
 # Project Setup - PCILeech Firmware Build
 # Generated for device {vendor_id}:{device_id} (Class: {class_code})
 # Board: {self.board}
@@ -1150,7 +1166,7 @@ puts "Project setup completed successfully"
                 vendor_id, device_id, revision_id
             )
 
-        return f"""#==============================================================================
+        return """#==============================================================================
 # IP Core Configuration - PCIe Core Setup
 # Device: {vendor_id}:{device_id}
 # FPGA Part: {fpga_part}
@@ -1170,7 +1186,7 @@ puts "PCIe IP core configuration completed"
         self, vendor_id: str, device_id: str, revision_id: str
     ) -> str:
         """Generate custom PCIe configuration for Artix-7 35T parts (no IP cores needed)."""
-        return f"""# Artix-7 35T PCIe Configuration
+        return """# Artix-7 35T PCIe Configuration
 # This part uses custom SystemVerilog modules instead of Xilinx IP cores
 # Device configuration: {vendor_id}:{device_id} (Rev: {revision_id})
 
@@ -1192,7 +1208,7 @@ puts "Revision ID: $REVISION_ID"
         self, vendor_id: str, device_id: str, revision_id: str
     ) -> str:
         """Generate PCIe 7-series IP configuration for Kintex-7 and larger parts."""
-        return f"""# Create PCIe 7-series IP core
+        return """# Create PCIe 7-series IP core
 create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_0
 
 # Configure PCIe IP core with device-specific settings
@@ -1218,7 +1234,7 @@ set_property -dict [list \\
         self, vendor_id: str, device_id: str, revision_id: str
     ) -> str:
         """Generate PCIe UltraScale IP configuration for Zynq UltraScale+ parts."""
-        return f"""# Create PCIe UltraScale IP core
+        return """# Create PCIe UltraScale IP core
 create_ip -name pcie4_uscale_plus -vendor xilinx.com -library ip -module_name pcie4_uscale_plus_0
 
 # Configure PCIe UltraScale IP core with device-specific settings
@@ -1297,10 +1313,10 @@ puts "Source file management completed"
 
     def _generate_constraints_tcl(self, device_info: Dict[str, Any]) -> str:
         """Generate constraints TCL script."""
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
+        device_info["vendor_id"]
+        device_info["device_id"]
 
-        return f"""#==============================================================================
+        return """#==============================================================================
 # Constraints Management
 # Device: {vendor_id}:{device_id}
 # Board: {self.board}
@@ -1310,29 +1326,29 @@ puts "Adding constraint files..."
 
 # Add all constraint files
 set xdc_files [glob -nocomplain *.xdc]
-if {{[llength $xdc_files] > 0}} {{
-    puts "Found [llength $xdc_files] constraint files"
-    add_files -fileset constrs_1 -norecurse $xdc_files
-    foreach xdc_file $xdc_files {{
-        puts "  - $xdc_file"
-    }}
-}}
+if {[llength $xdc_files] > 0}  {
+            puts "Found [llength $xdc_files] constraint files"
+            add_files - fileset constrs_1 - norecurse $xdc_files
+            foreach xdc_file $xdc_files {
+                puts "  - $xdc_file"
+            }
+        }
 
 # Generate device-specific timing constraints
 puts "Adding device-specific timing constraints..."
-set timing_constraints {{
-    # Clock constraints
-    create_clock -period 10.000 -name sys_clk [get_ports clk]
-    set_input_delay -clock sys_clk 2.000 [get_ports {{reset_n pcie_rx_*}}]
-    set_output_delay -clock sys_clk 2.000 [get_ports {{pcie_tx_* msix_* debug_* device_ready}}]
-    
-    # Device-specific constraints for {vendor_id}:{device_id}
-    # Board-specific pin assignments for {self.board}
-    set_property PACKAGE_PIN E3 [get_ports clk]
-    set_property IOSTANDARD LVCMOS33 [get_ports clk]
-    set_property PACKAGE_PIN C12 [get_ports reset_n]
-    set_property IOSTANDARD LVCMOS33 [get_ports reset_n]
-}}
+set timing_constraints {
+            # Clock constraints
+            create_clock - period 10.000 - name sys_clk[get_ports clk]
+            set_input_delay - clock sys_clk 2.000 [get_ports {reset_n pcie_rx_ *}]
+            set_output_delay - clock sys_clk 2.000 [get_ports {pcie_tx_ * msix_ * debug_ * device_ready}]
+
+            # Device-specific constraints for {vendor_id}:{device_id}
+            # Board-specific pin assignments for {self.board}
+            set_property PACKAGE_PIN E3[get_ports clk]
+            set_property IOSTANDARD LVCMOS33[get_ports clk]
+            set_property PACKAGE_PIN C12[get_ports reset_n]
+            set_property IOSTANDARD LVCMOS33[get_ports reset_n]
+        }
 
 # Write timing constraints to file
 set constraints_file "$project_dir/device_constraints.xdc"
@@ -1399,10 +1415,10 @@ report_drc -file drc_report.rpt
 
     def _generate_bitstream_tcl(self, device_info: Dict[str, Any]) -> str:
         """Generate bitstream generation TCL script."""
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
+        device_info["vendor_id"]
+        device_info["device_id"]
 
-        return f"""#==============================================================================
+        return """#==============================================================================
 # Bitstream Generation
 # Device: {vendor_id}:{device_id}
 # Board: {self.board}
@@ -1419,18 +1435,18 @@ if {{[file exists $bitstream_file]}} {{
     file copy -force $bitstream_file $output_bit
     puts "SUCCESS: Bitstream generated successfully!"
     puts "Output file: $output_bit"
-    
+
     # Generate additional files
     write_cfgmem -format mcs -size 16 -interface SPIx4 \\
         -loadbit "up 0x0 $output_bit" \\
         -file "pcileech_{vendor_id}_{device_id}_{self.board}.mcs"
-    
+
     if {{[llength [get_debug_cores]] > 0}} {{
         write_debug_probes -file "pcileech_{vendor_id}_{device_id}_{self.board}.ltx"
     }}
-    
+
     write_checkpoint -force "pcileech_{vendor_id}_{device_id}_{self.board}.dcp"
-    
+
     puts "Generated files:"
     puts "  - Bitstream: pcileech_{vendor_id}_{device_id}_{self.board}.bit"
     puts "  - MCS file: pcileech_{vendor_id}_{device_id}_{self.board}.mcs"
@@ -1446,11 +1462,11 @@ puts "Bitstream generation completed successfully!"
 
     def _generate_master_build_tcl(self, device_info: Dict[str, Any]) -> str:
         """Generate master build script that sources all other TCL files."""
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
-        class_code = device_info["class_code"]
+        device_info["vendor_id"]
+        device_info["device_id"]
+        device_info["class_code"]
 
-        return f"""#==============================================================================
+        return """#==============================================================================
 # Master Build Script - PCILeech Firmware
 # Generated for device {vendor_id}:{device_id} (Class: {class_code})
 # Board: {self.board}
@@ -1473,23 +1489,24 @@ set build_scripts [list \\
     "07_bitstream.tcl" \\
 ]
 
-foreach script $build_scripts {{
-    if {{[file exists $script]}} {{
-        puts "Executing: $script"
-        source $script
-        puts "Completed: $script"
-        puts ""
-    }} else {{
-        puts "ERROR: Required script not found: $script"
-        exit 1
-    }}
-}}
+foreach script $build_scripts {
+            if {[file exists $script]}  {
+                puts "Executing: $script"
+                source $script
+                puts "Completed: $script"
+                puts ""
+            } else {
+                puts "ERROR: Required script not found: $script"
+                exit 1
+            }
+        }
 
 puts "Build process completed successfully!"
 close_project
 """
 
-    def _apply_manufacturing_variance(self, device_info: Dict[str, Any]) -> List[str]:
+    def _apply_manufacturing_variance(
+            self, device_info: Dict[str, Any]) -> List[str]:
         """Apply manufacturing variance simulation."""
         variance_files = []
 
@@ -1541,7 +1558,9 @@ close_project
                 json.dump(variance_data, f, indent=2)
             variance_files.append(str(variance_file))
 
-            logger.info(f"Applied manufacturing variance for {device_class.value}")
+            logger.info(
+                f"Applied manufacturing variance for {
+                    device_class.value}")
 
         except Exception as e:
             logger.error(f"Error applying manufacturing variance: {e}")
@@ -1561,11 +1580,12 @@ close_project
             self.behavior_profiler = BehaviorProfiler(self.bdf)
 
             # Capture behavior profile
-            profile_data = self.behavior_profiler.capture_behavior_profile(duration)
+            profile_data = self.behavior_profiler.capture_behavior_profile(
+                duration)
 
             # Convert to serializable format
             profile_dict = {
-                "device_bdf": profile_data.device_bdf,
+                "device_bd": profile_data.device_bdf,
                 "capture_duration": profile_data.capture_duration,
                 "total_accesses": profile_data.total_accesses,
                 "register_accesses": [
@@ -1600,7 +1620,8 @@ close_project
             with open(profile_file, "w") as f:
                 json.dump(profile_dict, f, indent=2)
 
-            logger.info(f"Behavior profiling completed, saved to {profile_file}")
+            logger.info(
+                f"Behavior profiling completed, saved to {profile_file}")
             return str(profile_file)
 
         except Exception as e:
@@ -1644,7 +1665,8 @@ close_project
         logger.info(f"Generated {len(build_files)} build files")
         return build_files
 
-    def _generate_project_file(self, device_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_project_file(
+            self, device_info: Dict[str, Any]) -> Dict[str, Any]:
         """Generate project configuration file."""
         return {
             "project_name": "pcileech_firmware",
@@ -1662,11 +1684,14 @@ close_project
             },
         }
 
-    def _generate_file_manifest(self, device_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_file_manifest(
+            self, device_info: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a manifest of all files for verification."""
         manifest = {
             "project_info": {
-                "device": f"{device_info['vendor_id']}:{device_info['device_id']}",
+                "device": f"{
+                    device_info['vendor_id']}:{
+                    device_info['device_id']}",
                 "board": self.board,
                 "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             },
@@ -1772,11 +1797,13 @@ close_project
                                 try:
                                     shutil.rmtree(file_path)
                                     cleaned_files.append(str(file_path))
-                                    logger.info(f"Cleaned directory: {file_path.name}")
+                                    logger.info(
+                                        f"Cleaned directory: {
+                                            file_path.name}")
                                 except Exception as e:
                                     logger.warning(
-                                        f"Could not clean directory {file_path.name}: {e}"
-                                    )
+                                        f"Could not clean directory {
+                                            file_path.name}: {e}")
                                 break
                         else:
                             # File pattern
@@ -1786,16 +1813,18 @@ close_project
                                 try:
                                     file_path.unlink()
                                     cleaned_files.append(str(file_path))
-                                    logger.debug(f"Cleaned file: {file_path.name}")
+                                    logger.debug(
+                                        f"Cleaned file: {file_path.name}")
                                 except Exception as e:
                                     logger.warning(
-                                        f"Could not clean file {file_path.name}: {e}"
-                                    )
+                                        f"Could not clean file {
+                                            file_path.name}: {e}")
                                 break
 
             logger.info(
-                f"Cleanup completed: preserved {len(preserved_files)} files, cleaned {len(cleaned_files)} items"
-            )
+                f"Cleanup completed: preserved {
+                    len(preserved_files)} files, cleaned {
+                    len(cleaned_files)} items")
 
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
@@ -1912,9 +1941,8 @@ close_project
                 if validation_results["build_mode"] == "full_vivado":
                     # Full Vivado build - check bitstream
                     if validation_results["bitstream_info"]:
-                        if (
-                            validation_results["bitstream_info"]["size_bytes"] > 1000000
-                        ):  # > 1MB
+                        if (validation_results["bitstream_info"]
+                                ["size_bytes"] > 1000000):  # > 1MB
                             validation_results["validation_status"] = (
                                 "success_full_build"
                             )
@@ -1925,7 +1953,8 @@ close_project
                     else:
                         validation_results["validation_status"] = "failed_no_bitstream"
                 else:
-                    # TCL-only build - check TCL file quality (this is the main output)
+                    # TCL-only build - check TCL file quality (this is the main
+                    # output)
                     tcl_info = validation_results["tcl_file_info"]
                     if tcl_info["has_device_config"] and tcl_info["size_bytes"] > 1000:
                         validation_results["validation_status"] = "success_tcl_ready"
@@ -2023,9 +2052,10 @@ close_project
             build_results["validation"] = validation_results
 
             logger.info(
-                f"Firmware build completed successfully in {build_results['build_time']:.2f} seconds"
-            )
-            logger.info(f"Generated {len(build_results['files_generated'])} files")
+                f"Firmware build completed successfully in {
+                    build_results['build_time']:.2f} seconds")
+            logger.info(
+                f"Generated {len(build_results['files_generated'])} files")
             logger.info(f"Preserved {len(preserved_files)} final output files")
 
             # Print detailed validation information
@@ -2069,9 +2099,12 @@ close_project
         # TCL file information (always show if present)
         if validation_results.get("tcl_file_info"):
             info = validation_results["tcl_file_info"]
-            print(f"\n📜 BUILD SCRIPT:")
+            print("\n📜 BUILD SCRIPT:")
             print(f"   File: {info['filename']}")
-            print(f"   Size: {info['size_kb']} KB ({info['size_bytes']:,} bytes)")
+            print(
+                f"   Size: {
+                    info['size_kb']} KB ({
+                    info['size_bytes']:,        } bytes)")
             print(f"   SHA256: {info['sha256'][:16]}...")
 
             # TCL script validation
@@ -2098,9 +2131,12 @@ close_project
         # Bitstream information (only if Vivado was run)
         if validation_results.get("bitstream_info"):
             info = validation_results["bitstream_info"]
-            print(f"\n📁 BITSTREAM FILE:")
+            print("\n📁 BITSTREAM FILE:")
             print(f"   File: {info['filename']}")
-            print(f"   Size: {info['size_mb']} MB ({info['size_bytes']:,} bytes)")
+            print(
+                f"   Size: {
+                    info['size_mb']} MB ({
+                    info['size_bytes']:,        } bytes)")
             print(f"   SHA256: {info['sha256'][:16]}...")
 
             # Validate bitstream size
@@ -2114,21 +2150,24 @@ close_project
         # Flash file information
         if validation_results.get("flash_file_info"):
             info = validation_results["flash_file_info"]
-            print(f"\n💾 FLASH FILE:")
+            print("\n💾 FLASH FILE:")
             print(f"   File: {info['filename']}")
-            print(f"   Size: {info['size_mb']} MB ({info['size_bytes']:,} bytes)")
+            print(
+                f"   Size: {
+                    info['size_mb']} MB ({
+                    info['size_bytes']:,        } bytes)")
             print(f"   SHA256: {info['sha256'][:16]}...")
 
         # Debug file information
         if validation_results.get("debug_file_info"):
             info = validation_results["debug_file_info"]
-            print(f"\n🔍 DEBUG FILE:")
+            print("\n🔍 DEBUG FILE:")
             print(f"   File: {info['filename']}")
             print(f"   Size: {info['size_bytes']:,} bytes")
 
         # Report files
         if validation_results.get("reports_info"):
-            print(f"\n📊 ANALYSIS REPORTS:")
+            print("\n📊 ANALYSIS REPORTS:")
             for report in validation_results["reports_info"]:
                 print(
                     f"   {report['filename']} ({report['type']}) - {report['size_bytes']:,} bytes"
@@ -2136,7 +2175,7 @@ close_project
 
         # File checksums for verification
         if validation_results.get("checksums"):
-            print(f"\n🔐 FILE CHECKSUMS (for verification):")
+            print("\n🔐 FILE CHECKSUMS (for verification):")
             for filename, checksum in validation_results["checksums"].items():
                 print(f"   {filename}: {checksum}")
 
@@ -2154,7 +2193,7 @@ def main():
         description="PCILeech FPGA Firmware Builder - Production System"
     )
     parser.add_argument(
-        "--bdf", required=True, help="Bus:Device.Function (e.g., 0000:03:00.0)"
+        "--bd", required=True, help="Bus:Device.Function (e.g., 0000:03:00.0)"
     )
     parser.add_argument("--board", required=True, help="Target board")
     parser.add_argument(
@@ -2177,7 +2216,10 @@ def main():
         default=30,
         help="Duration for behavior profiling in seconds (0 to disable)",
     )
-    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Verbose output")
 
     args = parser.parse_args()
 
@@ -2199,20 +2241,24 @@ def main():
         # Print results
         if results["success"]:
             print(
-                f"[✓] Build completed successfully in {results['build_time']:.2f} seconds"
-            )
+                f"[✓] Build completed successfully in {
+                    results['build_time']:.2f} seconds")
 
             # Show preserved files (final outputs)
             if "preserved_files" in results and results["preserved_files"]:
-                print(f"[✓] Final output files ({len(results['preserved_files'])}):")
+                print(
+                    f"[✓] Final output files ({len(results['preserved_files'])}):")
                 for file_path in results["preserved_files"]:
                     print(f"    - {file_path}")
 
-            # Validation results are already printed by _print_final_output_info
+            # Validation results are already printed by
+            # _print_final_output_info
 
             return 0
         else:
-            print(f"[✗] Build failed after {results['build_time']:.2f} seconds")
+            print(
+                f"[✗] Build failed after {
+                    results['build_time']:.2f} seconds")
             for error in results["errors"]:
                 print(f"    Error: {error}")
             return 1

@@ -5,17 +5,16 @@ Utility functions for PCILeech firmware generator tests.
 import json
 import logging
 import os
-import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional
 
 import requests
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # GitHub repository information
@@ -25,14 +24,12 @@ GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRAN
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
 
 # Fallback repository if the primary one doesn't have the files we need
-FALLBACK_REPOS = [
-    {
-        "repo": "ufrisk/pcileech-fpga",
-        "branch": "master",
-        "sv_paths": ["artix7/pcileech_tlps_a7.sv", "artix7/pcileech_tlps128_bar_a7.sv"],
-        "tcl_paths": ["artix7/vivado_generate_project_a7.tcl"],
-    }
-]
+FALLBACK_REPOS = [{"repo": "ufrisk/pcileech-fpga",
+                   "branch": "master",
+                   "sv_paths": ["artix7/pcileech_tlps_a7.sv",
+                                "artix7/pcileech_tlps128_bar_a7.sv"],
+                   "tcl_paths": ["artix7/vivado_generate_project_a7.tcl"],
+                   }]
 
 # Cache directory for downloaded files
 CACHE_DIR = Path(os.path.expanduser("~")) / ".pcileech_test_cache"
@@ -73,7 +70,10 @@ def save_to_cache(file_path: str, content: str) -> None:
     cache_path = get_cache_path(file_path)
 
     # Save the content and metadata
-    cache_data = {"file_path": file_path, "timestamp": time.time(), "content": content}
+    cache_data = {
+        "file_path": file_path,
+        "timestamp": time.time(),
+        "content": content}
 
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(cache_data, f)
@@ -153,13 +153,15 @@ def fetch_directory_listing(directory_path: str) -> list:
     url = f"{GITHUB_API_URL}/{directory_path}"
 
     try:
-        logger.info(f"Fetching directory listing for {directory_path} from GitHub")
+        logger.info(
+            f"Fetching directory listing for {directory_path} from GitHub")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
 
         return response.json()
     except requests.RequestException as e:
-        error_msg = f"Failed to fetch directory listing for {directory_path} from GitHub: {str(e)}"
+        error_msg = f"Failed to fetch directory listing for {directory_path} from GitHub: {
+            str(e)}"
         logger.error(error_msg)
         raise ValueError(error_msg)
 
@@ -187,7 +189,9 @@ def get_pcileech_wifi_file(file_path: str, use_cache: bool = True) -> str:
         raise
 
 
-def search_repository_for_file_type(extension: str, use_cache: bool = True) -> list:
+def search_repository_for_file_type(
+        extension: str,
+        use_cache: bool = True) -> list:
     """
     Search the entire repository for files with a specific extension.
 
@@ -226,9 +230,8 @@ def search_repository_for_file_type(extension: str, use_cache: bool = True) -> l
 
             # Check for files with the specified extension
             for file in files:
-                if file.get("type") == "file" and file.get("name", "").endswith(
-                    extension
-                ):
+                if file.get("type") == "file" and file.get(
+                        "name", "").endswith(extension):
                     file_path = (
                         f"{directory}/{file['name']}" if directory else file["name"]
                     )
@@ -263,7 +266,8 @@ def get_pcileech_wifi_sv_file(use_cache: bool = True) -> str:
     """
     # First, check if local example exists and use it if it does
     if LOCAL_EXAMPLE_SV.exists():
-        logger.info(f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
+        logger.info(
+            f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
         return LOCAL_EXAMPLE_SV.read_text()
 
     # If local example doesn't exist, try to fetch from GitHub
@@ -287,22 +291,24 @@ def get_pcileech_wifi_sv_file(use_cache: bool = True) -> str:
 
         return fetch_file_from_github(file_path, use_cache)
     except ValueError as e:
-        # If we can't fetch from the primary repository, try fallback repositories
+        # If we can't fetch from the primary repository, try fallback
+        # repositories
         for fallback in FALLBACK_REPOS:
             repo = fallback["repo"]
             branch = fallback["branch"]
             for path in fallback["sv_paths"]:
                 try:
                     logger.info(
-                        f"Trying fallback SystemVerilog file from {repo}: {path}"
-                    )
-                    return fetch_file_from_github_repo(repo, branch, path, use_cache)
+                        f"Trying fallback SystemVerilog file from {repo}: {path}")
+                    return fetch_file_from_github_repo(
+                        repo, branch, path, use_cache)
                 except ValueError:
                     continue
 
         # If local example exists, use it as a last resort
         if LOCAL_EXAMPLE_SV.exists():
-            logger.info(f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
+            logger.info(
+                f"Using local SystemVerilog example file: {LOCAL_EXAMPLE_SV}")
             return LOCAL_EXAMPLE_SV.read_text()
 
         logger.error(f"Error fetching SystemVerilog file: {str(e)}")
@@ -340,14 +346,17 @@ def get_pcileech_wifi_tcl_file(use_cache: bool = True) -> str:
 
         return fetch_file_from_github(file_path, use_cache)
     except ValueError as e:
-        # If we can't fetch from the primary repository, try fallback repositories
+        # If we can't fetch from the primary repository, try fallback
+        # repositories
         for fallback in FALLBACK_REPOS:
             repo = fallback["repo"]
             branch = fallback["branch"]
             for path in fallback["tcl_paths"]:
                 try:
-                    logger.info(f"Trying fallback TCL file from {repo}: {path}")
-                    return fetch_file_from_github_repo(repo, branch, path, use_cache)
+                    logger.info(
+                        f"Trying fallback TCL file from {repo}: {path}")
+                    return fetch_file_from_github_repo(
+                        repo, branch, path, use_cache)
                 except ValueError:
                     continue
 
@@ -403,7 +412,7 @@ def fetch_file_from_github_repo(
         return content
     except requests.RequestException as e:
         error_msg = (
-            f"Failed to fetch {file_path} from GitHub repository {repo}: {str(e)}"
-        )
+            f"Failed to fetch {file_path} from GitHub repository {repo}: {
+                str(e)}")
         logger.error(error_msg)
         raise ValueError(error_msg)

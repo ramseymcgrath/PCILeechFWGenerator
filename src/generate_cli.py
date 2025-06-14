@@ -4,7 +4,6 @@ CLI entry point for pcileech-generate console script.
 This module provides the main() function that setuptools will use as an entry point.
 """
 
-import os
 import sys
 from pathlib import Path
 

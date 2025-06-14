@@ -43,7 +43,8 @@ class TestBuildProgress:
         assert progress.warnings == []
         assert progress.errors == []
         assert len(progress.stage_completion) == len(BuildStage)
-        assert all(not completed for completed in progress.stage_completion.values())
+        assert all(
+            not completed for completed in progress.stage_completion.values())
 
     @pytest.mark.unit
     def test_completed_stages_property(self):
@@ -181,7 +182,8 @@ class TestBuildProgress:
             current_operation="Analyzing device",
         )
 
-        progress.update_resource_usage(cpu=45.2, memory=2048.5, disk_free=10240.0)
+        progress.update_resource_usage(
+            cpu=45.2, memory=2048.5, disk_free=10240.0)
 
         assert progress.resource_usage["cpu"] == 45.2
         assert progress.resource_usage["memory"] == 2048.5
@@ -200,7 +202,8 @@ class TestBuildProgress:
         progress.mark_stage_complete(BuildStage.ENVIRONMENT_VALIDATION)
         progress.mark_stage_complete(BuildStage.DEVICE_ANALYSIS)
         progress.add_warning("Low disk space")
-        progress.update_resource_usage(cpu=30.0, memory=1500.0, disk_free=5000.0)
+        progress.update_resource_usage(
+            cpu=30.0, memory=1500.0, disk_free=5000.0)
 
         data = progress.to_dict()
 

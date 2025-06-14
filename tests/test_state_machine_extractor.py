@@ -6,8 +6,6 @@ This module tests the state machine extraction capabilities for analyzing
 driver code patterns and generating SystemVerilog state machines.
 """
 
-import re
-from unittest.mock import patch
 
 import pytest
 
@@ -186,7 +184,8 @@ class TestStateMachine:
         # Calculate complexity
         complexity = sm.calculate_complexity()
 
-        # 3 states * 0.5 + 2 transitions * 0.3 + 1 register * 0.2 + 1 conditional * 0.1 = 2.2
+        # 3 states * 0.5 + 2 transitions * 0.3 + 1 register * 0.2 + 1
+        # conditional * 0.1 = 2.2
         assert complexity == 2.2
         assert sm.complexity_score == 2.2
 
@@ -346,7 +345,7 @@ class TestStateMachineExtractor:
             int ret = 0;
             return ret;
         }
-        
+
         int test_probe(struct pci_dev *pdev) {
             int status;
             status = device_init(pdev);
@@ -445,7 +444,7 @@ class TestStateMachineExtractor:
             writel(0x1, dev->base + REG_CONTROL);
             udelay(100);
             writel(0x2, dev->base + REG_CONFIG);
-            
+
             status = readl(dev->base + REG_STATUS);
             if (status & 0x1) {
                 writel(0x3, dev->base + REG_COMMAND);
@@ -480,23 +479,26 @@ class TestStateMachineExtractor:
             writel(0x1, dev->base + REG_CONTROL);
             return 0;
         }
-        
+
         static int device_config(struct device *dev) {
             writel(0x2, dev->base + REG_CONFIG);
             return 0;
         }
-        
+
         static int device_start(struct device *dev) {
             writel(0x3, dev->base + REG_COMMAND);
             return 0;
         }
-        
+
         static void device_stop(struct device *dev) {
             writel(0x0, dev->base + REG_CONTROL);
         }
         """
 
-        registers = {"REG_CONTROL": 0x1000, "REG_CONFIG": 0x1004, "REG_COMMAND": 0x1008}
+        registers = {
+            "REG_CONTROL": 0x1000,
+            "REG_CONFIG": 0x1004,
+            "REG_COMMAND": 0x1008}
 
         sm = extractor._extract_global_state_machine(c_code, registers)
 
@@ -514,7 +516,7 @@ class TestStateMachineExtractor:
         code_block = """
             writel(0x1, dev->base + REG_CONTROL);
             dev_state = STATE_ACTIVE;
-            
+
             if (readl(dev->base + REG_STATUS) & 0x1) {
                 dev_state = STATE_DONE;
             }
@@ -539,9 +541,9 @@ class TestStateMachineExtractor:
             writel(0x1, dev->base + REG_CONTROL);
             udelay(100);
             writel(0x2, dev->base + REG_CONFIG);
-            
+
             mdelay(10);
-            
+
             writel(0x3, dev->base + REG_COMMAND);
         """
 
@@ -564,14 +566,17 @@ class TestStateMachineExtractor:
         assert extractor._categorize_function("device_config") == "config"
         assert extractor._categorize_function("setup_device") == "config"
 
-        assert extractor._categorize_function("device_irq_handler") == "interrupt"
-        assert extractor._categorize_function("handle_interrupt") == "interrupt"
+        assert extractor._categorize_function(
+            "device_irq_handler") == "interrupt"
+        assert extractor._categorize_function(
+            "handle_interrupt") == "interrupt"
 
         assert extractor._categorize_function("device_exit") == "cleanup"
         assert extractor._categorize_function("remove_device") == "cleanup"
 
         assert extractor._categorize_function("handle_error") == "error"
-        assert extractor._categorize_function("device_fault_handler") == "error"
+        assert extractor._categorize_function(
+            "device_fault_handler") == "error"
 
         assert extractor._categorize_function("process_data") == "runtime"
         assert extractor._categorize_function("device_io") == "runtime"
@@ -581,12 +586,18 @@ class TestStateMachineExtractor:
         extractor = StateMachineExtractor()
 
         assert extractor._get_state_type_for_category("init") == StateType.INIT
-        assert extractor._get_state_type_for_category("config") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category("runtime") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category("interrupt") == StateType.ACTIVE
-        assert extractor._get_state_type_for_category("cleanup") == StateType.CLEANUP
-        assert extractor._get_state_type_for_category("error") == StateType.ERROR
-        assert extractor._get_state_type_for_category("unknown") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category(
+            "config") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category(
+            "runtime") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category(
+            "interrupt") == StateType.ACTIVE
+        assert extractor._get_state_type_for_category(
+            "cleanup") == StateType.CLEANUP
+        assert extractor._get_state_type_for_category(
+            "error") == StateType.ERROR
+        assert extractor._get_state_type_for_category(
+            "unknown") == StateType.ACTIVE
 
     def test_optimize_state_machines(self):
         """Test optimizing extracted state machines."""
@@ -597,8 +608,10 @@ class TestStateMachineExtractor:
         sm1.add_state("IDLE", StateType.INIT)
         sm1.add_state("ACTIVE")
         sm1.add_transition(
-            StateTransition(from_state="IDLE", to_state="ACTIVE", trigger="start")
-        )
+            StateTransition(
+                from_state="IDLE",
+                to_state="ACTIVE",
+                trigger="start"))
 
         sm2 = StateMachine(name="sm2")
         sm2.add_state("STATE_A")
@@ -625,8 +638,10 @@ class TestStateMachineExtractor:
         sm1.add_state("IDLE", StateType.INIT)
         sm1.add_state("ACTIVE")
         sm1.add_transition(
-            StateTransition(from_state="IDLE", to_state="ACTIVE", trigger="start")
-        )
+            StateTransition(
+                from_state="IDLE",
+                to_state="ACTIVE",
+                trigger="start"))
         sm1.calculate_complexity()  # Should be simple
 
         sm2 = StateMachine(name="sm2")
@@ -635,14 +650,20 @@ class TestStateMachineExtractor:
         sm2.add_state("STATE_C")
         sm2.add_state("STATE_D")
         sm2.add_transition(
-            StateTransition(from_state="STATE_A", to_state="STATE_B", trigger="t1")
-        )
+            StateTransition(
+                from_state="STATE_A",
+                to_state="STATE_B",
+                trigger="t1"))
         sm2.add_transition(
-            StateTransition(from_state="STATE_B", to_state="STATE_C", trigger="t2")
-        )
+            StateTransition(
+                from_state="STATE_B",
+                to_state="STATE_C",
+                trigger="t2"))
         sm2.add_transition(
-            StateTransition(from_state="STATE_C", to_state="STATE_D", trigger="t3")
-        )
+            StateTransition(
+                from_state="STATE_C",
+                to_state="STATE_D",
+                trigger="t3"))
         sm2.calculate_complexity()  # Should be moderate
 
         extractor.extracted_machines = [sm1, sm2]
@@ -667,20 +688,20 @@ class TestStateMachineExtractor:
         #define REG_CONTROL 0x1000
         #define REG_STATUS  0x1004
         #define REG_CONFIG  0x1008
-        
+
         enum device_state {
             STATE_IDLE,
             STATE_ACTIVE,
             STATE_DONE,
             STATE_ERROR
         };
-        
+
         static int device_init(struct device *dev) {
             dev->state = STATE_IDLE;
             writel(0x1, dev->base + REG_CONTROL);
             return 0;
         }
-        
+
         static int device_process(struct device *dev) {
             switch (dev->state) {
                 case STATE_IDLE:
@@ -702,14 +723,17 @@ class TestStateMachineExtractor:
             }
             return 0;
         }
-        
+
         static void device_cleanup(struct device *dev) {
             writel(0x0, dev->base + REG_CONTROL);
             dev->state = STATE_IDLE;
         }
         """
 
-        registers = {"REG_CONTROL": 0x1000, "REG_STATUS": 0x1004, "REG_CONFIG": 0x1008}
+        registers = {
+            "REG_CONTROL": 0x1000,
+            "REG_STATUS": 0x1004,
+            "REG_CONFIG": 0x1008}
 
         state_machines = extractor.extract_state_machines(c_code, registers)
 

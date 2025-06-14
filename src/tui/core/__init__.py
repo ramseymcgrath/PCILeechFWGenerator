@@ -10,4 +10,8 @@ from .config_manager import ConfigManager
 from .device_manager import DeviceManager
 from .status_monitor import StatusMonitor
 
-__all__ = ["DeviceManager", "ConfigManager", "BuildOrchestrator", "StatusMonitor"]
+__all__ = [
+    "DeviceManager",
+    "ConfigManager",
+    "BuildOrchestrator",
+    "StatusMonitor"]

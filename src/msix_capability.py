@@ -7,8 +7,7 @@ PCI configuration space and generate SystemVerilog code for MSI-X table replicat
 """
 
 import logging
-import struct
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Check if capabilities are supported (Status register bit 4)
     status_offset = 6  # Status register is at offset 0x06
     status_byte_offset = status_offset * 2  # Each byte is 2 hex chars
-    status_bytes = cfg[status_byte_offset : status_byte_offset + 4]
+    status_bytes = cfg[status_byte_offset: status_byte_offset + 4]
     if len(status_bytes) < 4:
         logger.warning("Status register not found in configuration space")
         return None
@@ -49,7 +48,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Get capabilities pointer (offset 0x34)
     cap_ptr_offset = 0x34
     cap_ptr_byte_offset = cap_ptr_offset * 2
-    cap_ptr_bytes = cfg[cap_ptr_byte_offset : cap_ptr_byte_offset + 2]
+    cap_ptr_bytes = cfg[cap_ptr_byte_offset: cap_ptr_byte_offset + 2]
     if len(cap_ptr_bytes) < 2:
         logger.warning("Capabilities pointer not found in configuration space")
         return None
@@ -73,13 +72,16 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
         # Ensure we have enough data
         if current_byte_offset + 4 > len(cfg):
-            logger.warning(f"Capability pointer {current_ptr:02x} is out of bounds")
+            logger.warning(
+                f"Capability pointer {
+                    current_ptr:02x} is out of bounds")
             return None
 
         # Read capability ID and next pointer
         try:
-            cap_id_bytes = cfg[current_byte_offset : current_byte_offset + 2]
-            next_ptr_bytes = cfg[current_byte_offset + 2 : current_byte_offset + 4]
+            cap_id_bytes = cfg[current_byte_offset: current_byte_offset + 2]
+            next_ptr_bytes = cfg[current_byte_offset +
+                                 2: current_byte_offset + 4]
 
             current_cap_id = int(cap_id_bytes, 16)
             next_ptr = int(next_ptr_bytes, 16)
@@ -89,7 +91,9 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
             current_ptr = next_ptr
         except ValueError:
-            logger.warning(f"Invalid capability data at offset {current_ptr:02x}")
+            logger.warning(
+                f"Invalid capability data at offset {
+                    current_ptr:02x}")
             return None
 
     logger.info(f"Capability ID 0x{cap_id:02x} not found")
@@ -121,7 +125,7 @@ def msix_size(cfg: str) -> int:
         return 0
 
     try:
-        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
+        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset: msg_ctrl_byte_offset + 4]
 
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
@@ -146,7 +150,8 @@ def msix_size(cfg: str) -> int:
         table_size = (msg_ctrl & 0x7FF) + 1
         return table_size
     except ValueError:
-        logger.warning(f"Invalid MSI-X Message Control value: {msg_ctrl_bytes}")
+        logger.warning(
+            f"Invalid MSI-X Message Control value: {msg_ctrl_bytes}")
         return 0
 
 
@@ -192,7 +197,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         return result
 
     try:
-        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset : msg_ctrl_byte_offset + 4]
+        msg_ctrl_bytes = cfg[msg_ctrl_byte_offset: msg_ctrl_byte_offset + 4]
 
         # In the test, the Message Control value is set as "0700" or "0007"
         # We need to handle both formats correctly
@@ -225,7 +230,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
             return result
 
         table_offset_bir_bytes = cfg[
-            table_offset_bir_byte_offset : table_offset_bir_byte_offset + 8
+            table_offset_bir_byte_offset: table_offset_bir_byte_offset + 8
         ]
         table_offset_bir = int(table_offset_bir_bytes, 16)
 
@@ -244,7 +249,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
             return result
 
         pba_offset_bir_bytes = cfg[
-            pba_offset_bir_byte_offset : pba_offset_bir_byte_offset + 8
+            pba_offset_bir_byte_offset: pba_offset_bir_byte_offset + 8
         ]
         pba_offset_bir = int(pba_offset_bir_bytes, 16)
 
@@ -290,7 +295,7 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     table_size = msix_info["table_size"]
     pba_size = (table_size + 31) // 32  # Number of 32-bit words needed for PBA
 
-    sv_code = f"""
+    sv_code = """
 // MSI-X Table and PBA implementation
 // Table size: {table_size} entries
 // Table BIR: {msix_info["table_bir"]}
@@ -315,7 +320,7 @@ localparam PBA_SIZE = {(table_size + 31) // 32};  // Number of 32-bit words need
 (* ram_style="block" *) reg [31:0] msix_table[0:NUM_MSIX*4-1];  // 4 DWORDs per entry
 
 // MSI-X PBA storage
-reg [31:0] msix_pba[0:{pba_size-1}];
+reg [31:0] msix_pba[0:{pba_size - 1}];
 
 // MSI-X control registers - connected to configuration space capability registers
 // These signals should be driven by the actual MSI-X capability registers in config space
@@ -325,15 +330,15 @@ wire msix_function_mask;  // Connected to MSI-X Message Control Function Mask bi
 
 // MSI-X Table access logic
 function logic is_msix_table_access(input logic [31:0] addr, input logic [2:0] bar_index);
-    return (bar_index == MSIX_TABLE_BIR) && 
-           (addr >= MSIX_TABLE_OFFSET) && 
+    return (bar_index == MSIX_TABLE_BIR) &&
+           (addr >= MSIX_TABLE_OFFSET) &&
            (addr < (MSIX_TABLE_OFFSET + NUM_MSIX * 16));
 endfunction
 
 // MSI-X PBA access logic
 function logic is_msix_pba_access(input logic [31:0] addr, input logic [2:0] bar_index);
-    return (bar_index == MSIX_PBA_BIR) && 
-           (addr >= MSIX_PBA_OFFSET) && 
+    return (bar_index == MSIX_PBA_BIR) &&
+           (addr >= MSIX_PBA_OFFSET) &&
            (addr < (MSIX_PBA_OFFSET + {pba_size} * 4));
 endfunction
 
@@ -348,16 +353,16 @@ endfunction
 task msix_table_write(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] byte_enable);
     logic [31:0] table_addr;
     logic [31:0] current_value;
-    
+
     table_addr = (addr - MSIX_TABLE_OFFSET) >> 2;  // Convert to DWORD index
     current_value = msix_table[table_addr];
-    
+
     // Apply byte enables
     if (byte_enable[0]) current_value[7:0] = data[7:0];
     if (byte_enable[1]) current_value[15:8] = data[15:8];
     if (byte_enable[2]) current_value[23:16] = data[23:16];
     if (byte_enable[3]) current_value[31:24] = data[31:24];
-    
+
     msix_table[table_addr] = current_value;
 endtask
 
@@ -372,16 +377,16 @@ endfunction
 task msix_pba_write(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] byte_enable);
     logic [31:0] pba_addr;
     logic [31:0] current_value;
-    
+
     pba_addr = (addr - MSIX_PBA_OFFSET) >> 2;  // Convert to DWORD index
     current_value = msix_pba[pba_addr];
-    
+
     // Apply byte enables
     if (byte_enable[0]) current_value[7:0] = data[7:0];
     if (byte_enable[1]) current_value[15:8] = data[15:8];
     if (byte_enable[2]) current_value[23:16] = data[23:16];
     if (byte_enable[3]) current_value[31:24] = data[31:24];
-    
+
     msix_pba[pba_addr] = current_value;
 endtask
 
@@ -392,35 +397,35 @@ task msix_deliver_interrupt(input logic [10:0] vector);
     logic [31:0] control_dword;
     logic [31:0] pba_dword;
     logic [4:0] pba_bit;
-    
+
     // Check if vector is valid
     if (vector >= NUM_MSIX) return;
-    
+
     // Get control DWORD (third DWORD in the entry)
     table_addr = vector * 4 + 3;
     control_dword = msix_table[table_addr];
-    
+
     // Check if vector is masked
     vector_masked = control_dword[0];
-    
+
     if (msix_enabled && !msix_function_mask && !vector_masked) begin
         // Vector is enabled and not masked - deliver interrupt
         // Generate MSI-X message according to PCIe specification
         logic [63:0] message_address;
         logic [31:0] message_data;
-        
+
         // Extract message address from MSI-X table entry (first two DWORDs)
         message_address[31:0] = msix_table[vector * 4];      // Lower address DWORD
         message_address[63:32] = msix_table[vector * 4 + 1]; // Upper address DWORD
-        
+
         // Extract message data from MSI-X table entry (third DWORD)
         message_data = msix_table[vector * 4 + 2];
-        
+
         // Trigger MSI-X interrupt delivery through PCIe core interface
         // Set interrupt request signal and vector information
         msix_interrupt <= 1'b1;
         msix_vector <= vector;
-        
+
         // Log the MSI-X message details for debugging
         $display("MSI-X message: addr=0x%016h, data=0x%08h, vector=%0d",
                  message_address, message_data, vector);
@@ -428,7 +433,7 @@ task msix_deliver_interrupt(input logic [10:0] vector);
         // Vector is masked - set pending bit
         pba_dword = vector >> 5;  // Divide by 32 to get DWORD index
         pba_bit = vector & 5'h1F;  // Modulo 32 to get bit position
-        
+
         // Set the pending bit
         msix_pba[pba_dword] = msix_pba[pba_dword] | (1 << pba_bit);
     end
@@ -440,7 +445,7 @@ initial begin
     for (int i = 0; i < NUM_MSIX * 4; i++) begin
         msix_table[i] = 32'h0;
     end
-    
+
     // Initialize MSI-X PBA to zeros
     for (int i = 0; i < {pba_size}; i++) begin
         msix_pba[i] = 32'h0;

@@ -60,7 +60,10 @@ class TUIError:
     @property
     def title(self) -> str:
         """Get formatted title for display."""
-        return f"{self.severity_icon} {self.severity.value.title()}: {self.message}"
+        return f"{
+            self.severity_icon} {
+            self.severity.value.title()}: {
+            self.message}"
 
     def add_action(self, action: str) -> None:
         """Add a suggested action."""
@@ -102,7 +105,8 @@ class ErrorTemplates:
             details=details,
             suggested_actions=[
                 "Check if IOMMU is enabled in BIOS",
-                "Verify vfio-pci module is loaded: " "lsmod | grep vfio",
+                "Verify vfio-pci module is loaded: "
+                "lsmod | grep vfio",
                 "Ensure device is not in use by another driver",
                 "Try unbinding the current driver first",
             ],

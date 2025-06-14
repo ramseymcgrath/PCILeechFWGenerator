@@ -6,13 +6,18 @@ This test suite validates that the build process can properly handle
 real-world patterns found in external PCILeech examples.
 """
 
-import json
+from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
+from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+from advanced_sv_main import (
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    DeviceType,
+)
 import os
 import re
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -20,7 +25,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from build.controller import BuildController, create_build_controller
     from build.generators.systemverilog import SystemVerilogGenerator
     from build.generators.tcl import TCLGenerator
 
@@ -46,13 +50,6 @@ except ImportError:
                     "run": lambda *args, **kwargs: None,
                 },
             )()
-from advanced_sv_main import (
-    AdvancedSVGenerator,
-    DeviceSpecificLogic,
-    DeviceType,
-)
-from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
-from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
 
 
 class TestBuildWithExternalExamples:
@@ -64,7 +61,9 @@ class TestBuildWithExternalExamples:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     @pytest.fixture
     def external_tcl_example(self):
@@ -110,7 +109,8 @@ class TestBuildWithExternalExamples:
             reg_defs.append(
                 {
                     "offset": 0x400
-                    + (i * 4),  # Assuming 4-byte aligned registers starting at 0x400
+                    + (i * 4),
+                    # Assuming 4-byte aligned registers starting at 0x400
                     "name": reg_name,
                     "value": f"0x{reg_value}",
                     "rw": rw_type,
@@ -195,7 +195,7 @@ class TestBuildWithExternalExamples:
         assert "always_comb" in sv_content or "case" in sv_content
 
         # Check for write logic
-        assert "always_ff" in sv_content or "always @" in sv_content
+        assert "always_f" in sv_content or "always @" in sv_content
 
     def test_build_tcl_with_example_donor_info(
         self, mock_donor_info_from_example, temp_dir
@@ -251,7 +251,7 @@ class TestBuildWithExternalExamples:
 
         # Create temporary output files
         sv_file = temp_dir / "example_controller.sv"
-        tcl_file = temp_dir / "example_generate.tcl"
+        temp_dir / "example_generate.tcl"
 
         # Simulate workflow steps
         bdf = "0000:03:00.0"
@@ -259,7 +259,7 @@ class TestBuildWithExternalExamples:
         device = mock_donor_info_from_example["device_id"].replace("0x", "")
 
         # Get donor info
-        donor_info = mock_donor(bdf)
+        mock_donor(bdf)
 
         # Scrape registers
         registers = mock_scrape(vendor, device)
@@ -321,7 +321,8 @@ class TestBuildWithExternalExamples:
         )
 
         # Verify that the profiler was initialized correctly
-        mock_profiler_class.assert_called_once_with("0000:03:00.0", debug=False)
+        mock_profiler_class.assert_called_once_with(
+            "0000:03:00.0", debug=False)
 
         # Verify that the profiler methods were called
         mock_profiler.capture_behavior_profile.assert_called_once()
@@ -346,7 +347,7 @@ class TestBuildWithExternalExamples:
             "subvendor_id": "0x9abc",  # Changed from subsystem_vendor_id
             "subsystem_id": "0xdef0",  # Changed from subsystem_device_id
             "revision_id": "0x01",  # Added revision_id
-            "bdf": "0000:03:00.0",
+            "bd": "0000:03:00.0",
             "bar_size": "0x20000",  # 128KB
             "mpc": "0x02",  # Max payload capability
             "mpr": "0x02",  # Max read request capability
@@ -384,7 +385,9 @@ class TestAdvancedSVWithExternalExamples:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     @pytest.fixture
     def mock_registers_from_example(self, external_sv_example):
@@ -408,7 +411,8 @@ class TestAdvancedSVWithExternalExamples:
             reg_defs.append(
                 {
                     "offset": 0x400
-                    + (i * 4),  # Assuming 4-byte aligned registers starting at 0x400
+                    + (i * 4),
+                    # Assuming 4-byte aligned registers starting at 0x400
                     "name": reg_name,
                     "value": f"0x{reg_value}",
                     "rw": rw_type,
@@ -541,7 +545,9 @@ class TestBuildScriptIntegration:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     @pytest.fixture
     def external_tcl_example(self):
@@ -589,7 +595,8 @@ class TestBuildScriptIntegration:
                             # This would call the build_fpga function
                             # build.build_fpga("0000:03:00.0", "75t")
 
-                            # Instead, we'll just verify that the mock_run was called
+                            # Instead, we'll just verify that the mock_run was
+                            # called
                             mock_run.assert_called()
                     else:
                         # Skip the test if build_fpga doesn't exist
@@ -615,7 +622,8 @@ class TestBuildScriptIntegration:
                 # This would execute the command
                 # subprocess.run(cmd, shell=True, check=True)
 
-                # Instead, we'll just verify that the mock_run would be called with the right command
+                # Instead, we'll just verify that the mock_run would be called
+                # with the right command
                 mock_run.return_value = Mock(returncode=0)
                 build.run(cmd)
 

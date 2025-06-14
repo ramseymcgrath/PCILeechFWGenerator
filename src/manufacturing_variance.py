@@ -10,13 +10,12 @@ at the same commit fall in the same timing band.
 """
 
 import hashlib
-import math
 import random
 import statistics
 import struct
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class DeviceClass(Enum):
@@ -131,7 +130,9 @@ class VarianceModel:
             "process_factor": process_factor,
             "power_factor": power_factor,
             "propagation_delay_ps": self.propagation_delay_ps,
-            "combined_timing_factor": temp_factor * process_factor * power_factor,
+            "combined_timing_factor": temp_factor *
+            process_factor *
+            power_factor,
         }
 
 
@@ -198,13 +199,17 @@ class ManufacturingVarianceSimulator:
             seed: Random seed for reproducible variance generation. Can be an integer
                  or a string (which will be hashed to produce an integer seed).
         """
-        # Create a local random number generator instance instead of using the global one
+        # Create a local random number generator instance instead of using the
+        # global one
         self.rng = random.Random()
 
         if seed is not None:
             if isinstance(seed, str):
                 # Convert string seed to integer using hash
-                seed_int = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % (2**32)
+                seed_int = int(
+                    hashlib.sha256(
+                        seed.encode()).hexdigest(),
+                    16) % (2**32)
                 self.rng.seed(seed_int)
             else:
                 self.rng.seed(seed)
@@ -279,8 +284,8 @@ class ManufacturingVarianceSimulator:
         )
 
         register_timing_jitter = self.rng.uniform(
-            params.register_timing_jitter_ns_min, params.register_timing_jitter_ns_max
-        )
+            params.register_timing_jitter_ns_min,
+            params.register_timing_jitter_ns_max)
 
         power_noise = self.rng.uniform(
             params.power_noise_percent_min, params.power_noise_percent_max
@@ -292,8 +297,8 @@ class ManufacturingVarianceSimulator:
         )
 
         process_variation = self.rng.uniform(
-            params.process_variation_percent_min, params.process_variation_percent_max
-        )
+            params.process_variation_percent_min,
+            params.process_variation_percent_max)
 
         propagation_delay = self.rng.uniform(
             params.propagation_delay_ps_min, params.propagation_delay_ps_max
@@ -401,7 +406,8 @@ class ManufacturingVarianceSimulator:
         adjustments = variance_model.timing_adjustments
 
         # Apply base timing factor
-        adjusted_timing = base_timing_ns * adjustments["combined_timing_factor"]
+        adjusted_timing = base_timing_ns * \
+            adjustments["combined_timing_factor"]
 
         # Add operation-specific jitter using the private RNG
         if operation_type == "register_access":
@@ -446,36 +452,37 @@ class ManufacturingVarianceSimulator:
             adjustments["register_access_jitter_ns"] / 10.0
         )  # Assuming 100MHz clock
 
-        adjusted_base_cycles = max(1, int(base_delay_cycles * timing_factor))
-        max_jitter_cycles = max(1, jitter_cycles)
+        max(1, int(base_delay_cycles * timing_factor))
+        max(1, jitter_cycles)
 
         # Generate a deterministic initial LFSR value based on register offset
-        # This ensures that different registers have different but deterministic jitter patterns
+        # This ensures that different registers have different but
+        # deterministic jitter patterns
         initial_lfsr_value = (offset & 0xFF) | 0x01  # Ensure it's non-zero
 
         # Generate variance-aware SystemVerilog code
-        code = f"""
+        code = """
     // Variance-aware timing for {register_name}
     // Device class: {variance_model.device_class.value}
     // Base cycles: {base_delay_cycles}, Adjusted: {adjusted_base_cycles}
     // Jitter range: ±{max_jitter_cycles} cycles
     // This is a variance-aware implementation for realistic hardware simulation
-    logic [{max(1, (adjusted_base_cycles + max_jitter_cycles).bit_length()-1)}:0] {register_name}_delay_counter = 0;
-    logic [{max(1, max_jitter_cycles.bit_length()-1)}:0] {register_name}_jitter_lfsr = {initial_lfsr_value}; // Deterministic initial LFSR value
+    logic [{max(1, (adjusted_base_cycles + max_jitter_cycles).bit_length() - 1)}:0] {register_name}_delay_counter = 0;
+    logic [{max(1, max_jitter_cycles.bit_length() - 1)}:0] {register_name}_jitter_lfsr = {initial_lfsr_value}; // Deterministic initial LFSR value
     logic {register_name}_write_pending = 0;
-    
+
     // LFSR for timing jitter generation
     always_ff @(posedge clk) begin
         if (!reset_n) begin
             {register_name}_jitter_lfsr <= {initial_lfsr_value};
         end else begin
             // Simple LFSR for pseudo-random jitter
-            {register_name}_jitter_lfsr <= {{{register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-2}:0],
-                                             {register_name}_jitter_lfsr[{max_jitter_cycles.bit_length()-1}] ^
-                                             {register_name}_jitter_lfsr[{max(0, max_jitter_cycles.bit_length()-3)}]}};
+            {register_name}_jitter_lfsr <= {{{register_name}_jitter_lfsr[{max_jitter_cycles.bit_length() - 2}:0],
+                                             {register_name}_jitter_lfsr[{max_jitter_cycles.bit_length() - 1}] ^
+                                             {register_name}_jitter_lfsr[{max(0, max_jitter_cycles.bit_length() - 3)}]}};
         end
     end
-    
+
     // Variance-aware timing logic
     always_ff @(posedge clk) begin
         if (!reset_n) begin
@@ -496,7 +503,8 @@ class ManufacturingVarianceSimulator:
 
         return code
 
-    def get_variance_metadata(self, variance_model: VarianceModel) -> Dict[str, Any]:
+    def get_variance_metadata(
+            self, variance_model: VarianceModel) -> Dict[str, Any]:
         """
         Get metadata about the variance model for profiling integration.
 
@@ -522,5 +530,7 @@ class ManufacturingVarianceSimulator:
                 "supply_voltage_v": variance_model.supply_voltage_v,
             },
             "timing_adjustments": variance_model.timing_adjustments,
-            "deterministic_seeding": hasattr(self, "rng") and self.rng is not random,
+            "deterministic_seeding": hasattr(
+                self,
+                "rng") and self.rng is not random,
         }

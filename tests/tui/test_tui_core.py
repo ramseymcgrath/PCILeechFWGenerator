@@ -4,7 +4,6 @@ Test TUI Core Modules
 Tests for the TUI core modules (build_orchestrator, config_manager, device_manager, status_monitor).
 """
 
-import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
@@ -53,13 +52,12 @@ class TestDeviceManager:
         # Mock raw device data
         raw_devices = [
             {
-                "bdf": "0000:03:00.0",
+                "bd": "0000:03:00.0",
                 "ven": "8086",
                 "dev": "10d3",
                 "class": "0200",
                 "pretty": "0000:03:00.0 Ethernet controller [0200]: Intel Corporation 82574L [8086:10d3]",
-            }
-        ]
+            }]
         mock_get_raw.return_value = raw_devices
 
         # Mock enhanced device
@@ -145,7 +143,8 @@ class TestDeviceManager:
         assert any("bound to e1000e" in issue for issue in issues)
 
         # Test device with no BARs
-        score, issues = manager._assess_device_suitability("0200", None, [])  # No BARs
+        score, issues = manager._assess_device_suitability(
+            "0200", None, [])  # No BARs
         assert score < 0.8
         assert any("No memory BARs" in issue for issue in issues)
 
@@ -445,7 +444,8 @@ class TestBuildOrchestrator:
 
         assert result is True
         assert not orchestrator.is_building()  # Should be done
-        assert len(progress_updates) > 0  # Should have received progress updates
+        # Should have received progress updates
+        assert len(progress_updates) > 0
 
     @pytest.mark.unit
     async def test_build_already_running(self):
@@ -497,7 +497,11 @@ class TestBuildOrchestrator:
     @patch("os.path.exists")
     @patch("os.makedirs")
     @patch("src.tui.core.build_orchestrator.BuildOrchestrator._run_command")
-    async def test_ensure_git_repo(self, mock_run_command, mock_makedirs, mock_exists):
+    async def test_ensure_git_repo(
+            self,
+            mock_run_command,
+            mock_makedirs,
+            mock_exists):
         """Test git repository cloning and updating"""
         orchestrator = BuildOrchestrator()
 
@@ -579,7 +583,8 @@ class TestStatusMonitor:
 
         # Test Vivado detected
         mock_exists.return_value = True
-        mock_run_command.return_value = MagicMock(returncode=0, stdout="Vivado v2023.1")
+        mock_run_command.return_value = MagicMock(
+            returncode=0, stdout="Vivado v2023.1")
 
         status = await monitor._check_vivado_status()
         assert status["status"] == "detected"

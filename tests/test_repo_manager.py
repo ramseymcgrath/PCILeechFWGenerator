@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 from src.repo_manager import RepoManager
 
@@ -43,8 +43,11 @@ class TestRepoManager(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "success")
         mock_run.assert_called_once_with(
-            "test command", shell=True, check=True, capture_output=True, text=True
-        )
+            "test command",
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True)
 
     @patch("subprocess.run")
     def test_run_command_failure(self, mock_run):
@@ -78,7 +81,8 @@ class TestRepoManager(unittest.TestCase):
     )
     @patch("os.path.exists")
     @patch("subprocess.run")
-    def test_ensure_git_repo_existing_repo(self, mock_run, mock_exists, mock_repo_dir):
+    def test_ensure_git_repo_existing_repo(
+            self, mock_run, mock_exists, mock_repo_dir):
         """Test ensuring Git repo when repository already exists."""
         mock_exists.side_effect = lambda path: str(path).endswith("test-repo")
 
@@ -98,7 +102,8 @@ class TestRepoManager(unittest.TestCase):
         "src.repo_manager.PCILEECH_FPGA_DIR",
         new_callable=lambda: Path("/tmp/test-repo"),
     )
-    @patch("src.repo_manager.REPO_CACHE_DIR", new_callable=lambda: Path("/tmp"))
+    @patch("src.repo_manager.REPO_CACHE_DIR",
+           new_callable=lambda: Path("/tmp"))
     @patch("os.path.exists")
     @patch("subprocess.run")
     def test_ensure_git_repo_clone_new(
@@ -156,9 +161,8 @@ class TestRepoManager(unittest.TestCase):
             RepoManager.ensure_git_repo()
 
             # Should pull updates
-            self.assertTrue(
-                any("git pull" in str(call) for call in mock_run.call_args_list)
-            )
+            self.assertTrue(any("git pull" in str(call)
+                                for call in mock_run.call_args_list))
 
     @patch("subprocess.run")
     def test_ensure_git_repo_git_not_available(self, mock_run):
@@ -192,7 +196,8 @@ class TestRepoManager(unittest.TestCase):
         """Test getting board path for valid board type."""
         with patch("os.path.exists", return_value=True):
             board_path = RepoManager.get_board_path("75t")
-            expected_path = Path("/tmp/test-repo") / "PCIeSquirrel" / "src" / "75t"
+            expected_path = Path("/tmp/test-repo") / \
+                "PCIeSquirrel" / "src" / "75t"
             self.assertEqual(board_path, expected_path)
 
     @patch(
@@ -214,7 +219,8 @@ class TestRepoManager(unittest.TestCase):
         new_callable=lambda: Path("/tmp/test-repo"),
     )
     @patch("os.path.exists")
-    def test_get_board_path_multiple_locations(self, mock_exists, mock_repo_dir):
+    def test_get_board_path_multiple_locations(
+            self, mock_exists, mock_repo_dir):
         """Test board path resolution with multiple possible locations."""
 
         # Mock exists to return True for the second location
@@ -251,7 +257,8 @@ class TestRepoManager(unittest.TestCase):
     )
     @patch("os.path.exists")
     @patch("subprocess.run")
-    def test_ensure_git_repo_network_error(self, mock_run, mock_exists, mock_repo_dir):
+    def test_ensure_git_repo_network_error(
+            self, mock_run, mock_exists, mock_repo_dir):
         """Test handling of network errors during clone."""
         mock_exists.return_value = False
         mock_run.side_effect = subprocess.CalledProcessError(
@@ -271,7 +278,8 @@ class TestRepoManager(unittest.TestCase):
     )
     @patch("os.path.exists")
     @patch("subprocess.run")
-    def test_ensure_git_repo_corrupted_repo(self, mock_run, mock_exists, mock_repo_dir):
+    def test_ensure_git_repo_corrupted_repo(
+            self, mock_run, mock_exists, mock_repo_dir):
         """Test handling of corrupted repository."""
         mock_exists.side_effect = lambda path: str(path).endswith("test-repo")
 
@@ -281,7 +289,9 @@ class TestRepoManager(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             RepoManager.ensure_git_repo()
 
-        self.assertIn("Repository appears to be corrupted", str(context.exception))
+        self.assertIn(
+            "Repository appears to be corrupted", str(
+                context.exception))
 
     def test_repo_constants(self):
         """Test that repository constants are properly defined."""

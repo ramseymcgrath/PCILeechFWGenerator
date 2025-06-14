@@ -86,17 +86,18 @@ def run_code_quality_checks():
     print("=" * 60)
 
     checks = [
-        ("black --check --diff .", "Code formatting check (Black)"),
-        ("isort --check-only --diff .", "Import sorting check (isort)"),
-        (
-            "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics",
+        ("black --check --diff .",
+         "Code formatting check (Black)"),
+        ("isort --check-only --diff .",
+         "Import sorting check (isort)"),
+        ("flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics",
             "Critical linting (flake8)",
-        ),
-        (
-            "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics",
+         ),
+        ("flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics",
             "Full linting (flake8)",
-        ),
-        ("bandit -r src/ generate.py", "Security scanning (bandit)"),
+         ),
+        ("bandit -r src/ generate.py",
+         "Security scanning (bandit)"),
     ]
 
     results = {}
@@ -112,7 +113,7 @@ def run_code_quality_checks():
             results[description] = False
 
     # Summary
-    print(f"\n[*] Code Quality Summary:")
+    print("\n[*] Code Quality Summary:")
     for check, passed in results.items():
         status = "✓" if passed else "✗"
         print(f"  {status} {check}")
@@ -145,7 +146,8 @@ def run_unit_tests(coverage=False, verbose=False):
     if verbose:
         cmd_parts.append("-v")
 
-    cmd_parts.extend(["--tb=short", "--durations=10", "--junit-xml=junit-unit.xml"])
+    cmd_parts.extend(["--tb=short", "--durations=10",
+                     "--junit-xml=junit-unit.xml"])
 
     cmd = " ".join(cmd_parts)
 
@@ -245,7 +247,9 @@ def run_legacy_tests():
         return True
 
     try:
-        run_command("python test_enhancements.py", "Running legacy enhancement tests")
+        run_command(
+            "python test_enhancements.py",
+            "Running legacy enhancement tests")
         print("[✓] Legacy tests passed")
         return True
     except subprocess.CalledProcessError:
@@ -280,7 +284,7 @@ def run_security_tests():
             results[description] = False
 
     # Summary
-    print(f"\n[*] Security Test Summary:")
+    print("\n[*] Security Test Summary:")
     for check, passed in results.items():
         status = "✓" if passed else "✗"
         print(f"  {status} {check}")
@@ -297,10 +301,11 @@ def generate_test_report(results):
     total_tests = len(results)
     passed_tests = sum(1 for result in results.values() if result)
 
-    print(f"\nOverall Results: {passed_tests}/{total_tests} test suites passed")
-    print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+    print(
+        f"\nOverall Results: {passed_tests}/{total_tests} test suites passed")
+    print(f"Success Rate: {(passed_tests / total_tests) * 100:.1f}%")
 
-    print(f"\nDetailed Results:")
+    print("\nDetailed Results:")
     for test_name, passed in results.items():
         status = "✓ PASS" if passed else "✗ FAIL"
         print(f"  {status} {test_name}")
@@ -322,7 +327,7 @@ def generate_test_report(results):
             artifacts.append(artifact)
 
     if artifacts:
-        print(f"\nGenerated Artifacts:")
+        print("\nGenerated Artifacts:")
         for artifact in artifacts:
             print(f"  - {artifact}")
 
@@ -345,8 +350,14 @@ Examples:
         """,
     )
 
-    parser.add_argument("--quick", action="store_true", help="Run only fast unit tests")
-    parser.add_argument("--full", action="store_true", help="Run complete test suite")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run only fast unit tests")
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run complete test suite")
     parser.add_argument(
         "--ci", action="store_true", help="Run in CI mode (non-interactive)"
     )
@@ -360,15 +371,21 @@ Examples:
         "--security", action="store_true", help="Run security tests only"
     )
     parser.add_argument(
-        "--legacy", action="store_true", help="Run legacy enhancement tests only"
-    )
+        "--legacy",
+        action="store_true",
+        help="Run legacy enhancement tests only")
     parser.add_argument(
-        "--external", action="store_true", help="Run external example tests only"
-    )
+        "--external",
+        action="store_true",
+        help="Run external example tests only")
     parser.add_argument(
         "--no-quality", action="store_true", help="Skip code quality checks"
     )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Verbose output")
 
     args = parser.parse_args()
 
@@ -420,17 +437,20 @@ Examples:
 
     # External example tests
     if args.external or args.full or args.ci:
-        results["External Example Tests"] = run_external_tests(verbose=args.verbose)
+        results["External Example Tests"] = run_external_tests(
+            verbose=args.verbose)
 
     # Unit tests
-    if args.quick or args.full or args.ci or not (args.performance or args.external):
+    if args.quick or args.full or args.ci or not (
+            args.performance or args.external):
         results["Unit Tests"] = run_unit_tests(
-            coverage=args.coverage or args.full or args.ci, verbose=args.verbose
-        )
+            coverage=args.coverage or args.full or args.ci,
+            verbose=args.verbose)
 
     # Integration tests
     if args.full or args.ci:
-        results["Integration Tests"] = run_integration_tests(verbose=args.verbose)
+        results["Integration Tests"] = run_integration_tests(
+            verbose=args.verbose)
 
     # Generate final report
     elapsed_time = time.time() - start_time
@@ -439,10 +459,10 @@ Examples:
     success = generate_test_report(results)
 
     if success:
-        print(f"\n🎉 All tests passed successfully!")
+        print("\n🎉 All tests passed successfully!")
         return 0
     else:
-        print(f"\n⚠️  Some tests failed. Please review the output above.")
+        print("\n⚠️  Some tests failed. Please review the output above.")
         return 1
 
 

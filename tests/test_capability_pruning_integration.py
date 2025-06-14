@@ -24,8 +24,10 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.donor_info_path = os.path.join(self.temp_dir.name, "donor_info.json")
-        self.config_hex_path = os.path.join(self.temp_dir.name, "config_space_init.hex")
+        self.donor_info_path = os.path.join(
+            self.temp_dir.name, "donor_info.json")
+        self.config_hex_path = os.path.join(
+            self.temp_dir.name, "config_space_init.hex")
 
         # Create a sample configuration space with capabilities
 
@@ -34,16 +36,17 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
 
         # Set capabilities pointer at offset 0x34
         self.config_space = (
-            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2 :]
+            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2:]
         )
 
         # Set capabilities bit in status register (offset 0x06, bit 4)
-        status_value = int(self.config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
+        status_value = int(
+            self.config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
         status_hex = f"{status_value:04x}"
         self.config_space = (
             self.config_space[: 0x06 * 2]
             + status_hex
-            + self.config_space[0x06 * 2 + 4 :]
+            + self.config_space[0x06 * 2 + 4:]
         )
 
         # Add PCI Express capability at offset 0x40
@@ -54,7 +57,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x40 * 2]
             + pcie_cap
-            + self.config_space[0x40 * 2 + len(pcie_cap) :]
+            + self.config_space[0x40 * 2 + len(pcie_cap):]
         )
 
         # Add Link Control Register at offset 0x50 (part of PCIe capability)
@@ -62,15 +65,16 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x50 * 2]
             + link_control
-            + self.config_space[0x50 * 2 + len(link_control) :]
+            + self.config_space[0x50 * 2 + len(link_control):]
         )
 
-        # Add Device Control 2 Register at offset 0x68 (part of PCIe capability)
+        # Add Device Control 2 Register at offset 0x68 (part of PCIe
+        # capability)
         dev_control2 = "6400" + "0000"  # OBFF and LTR enabled
         self.config_space = (
             self.config_space[: 0x68 * 2]
             + dev_control2
-            + self.config_space[0x68 * 2 + len(dev_control2) :]
+            + self.config_space[0x68 * 2 + len(dev_control2):]
         )
 
         # Add Power Management capability at offset 0x60
@@ -81,7 +85,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x60 * 2]
             + pm_cap
-            + self.config_space[0x60 * 2 + len(pm_cap) :]
+            + self.config_space[0x60 * 2 + len(pm_cap):]
         )
 
         # Add MSI-X capability at offset 0x70
@@ -94,7 +98,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x70 * 2]
             + msix_cap
-            + self.config_space[0x70 * 2 + len(msix_cap) :]
+            + self.config_space[0x70 * 2 + len(msix_cap):]
         )
 
         # Add Extended capabilities
@@ -110,7 +114,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x100 * 2]
             + l1pm_cap
-            + self.config_space[0x100 * 2 + len(l1pm_cap) :]
+            + self.config_space[0x100 * 2 + len(l1pm_cap):]
         )
 
         # Add SR-IOV extended capability at offset 0x140
@@ -125,7 +129,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x140 * 2]
             + sriov_cap
-            + self.config_space[0x140 * 2 + len(sriov_cap) :]
+            + self.config_space[0x140 * 2 + len(sriov_cap):]
         )
 
         # Sample device info
@@ -181,7 +185,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
             json.dump(self.sample_device_info, f)
 
         # Run the build process with mocked functions
-        with patch("sys.argv", ["build.py", "--bdf", "0000:03:00.0", "--board", "75t"]):
+        with patch("sys.argv", ["build.py", "--bd", "0000:03:00.0", "--board", "75t"]):
             with patch("argparse.ArgumentParser.parse_args", return_value=args):
                 with patch(
                     "src.build.RepoManager.get_board_path", return_value=Path(".")
@@ -199,7 +203,8 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                         "src.build.scrape_driver_regs", return_value=(sample_regs, {})
                     ):
                         with patch("src.build.build_sv"):
-                            # Patch the build_tcl function to create the config_hex_path file
+                            # Patch the build_tcl function to create the
+                            # config_hex_path file
                             original_build_tcl = build.build_tcl
 
                             def patched_build_tcl(info, gen_tcl, args=None):
@@ -210,7 +215,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                                 link_control_offset = 0x50 * 2
                                 link_control = int(
                                     pruned_config[
-                                        link_control_offset : link_control_offset + 4
+                                        link_control_offset: link_control_offset + 4
                                     ],
                                     16,
                                 )
@@ -219,14 +224,15 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                                 pruned_config = (
                                     pruned_config[:link_control_offset]
                                     + link_control_hex
-                                    + pruned_config[link_control_offset + 4 :]
+                                    + pruned_config[link_control_offset + 4:]
                                 )
 
-                                # Clear OBFF and LTR bits in Device Control 2 register
+                                # Clear OBFF and LTR bits in Device Control 2
+                                # register
                                 dev_control2_offset = 0x68 * 2
                                 dev_control2 = int(
                                     pruned_config[
-                                        dev_control2_offset : dev_control2_offset + 4
+                                        dev_control2_offset: dev_control2_offset + 4
                                     ],
                                     16,
                                 )
@@ -235,21 +241,21 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                                 pruned_config = (
                                     pruned_config[:dev_control2_offset]
                                     + dev_control2_hex
-                                    + pruned_config[dev_control2_offset + 4 :]
+                                    + pruned_config[dev_control2_offset + 4:]
                                 )
 
-                                # Modify PM capability to only support D0 and D3hot
+                                # Modify PM capability to only support D0 and
+                                # D3hot
                                 pm_offset = find_cap(
                                     pruned_config,
                                     PCICapabilityID.POWER_MANAGEMENT.value,
                                 )
                                 if pm_offset is not None:
-                                    pm_cap_offset = (
-                                        pm_offset + 2
-                                    ) * 2  # +2 for the PM capabilities register
+                                    # +2 for the PM capabilities register
+                                    pm_cap_offset = (pm_offset + 2) * 2
                                     pm_cap = int(
                                         pruned_config[
-                                            pm_cap_offset : pm_cap_offset + 4
+                                            pm_cap_offset: pm_cap_offset + 4
                                         ],
                                         16,
                                     )
@@ -263,7 +269,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                                     pruned_config = (
                                         pruned_config[:pm_cap_offset]
                                         + pm_cap_hex
-                                        + pruned_config[pm_cap_offset + 4 :]
+                                        + pruned_config[pm_cap_offset + 4:]
                                     )
 
                                 # Zero out the L1 PM Substates capability
@@ -273,20 +279,22 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                                 pruned_config = (
                                     pruned_config[:l1pm_offset]
                                     + "00000000"
-                                    + pruned_config[l1pm_offset + 8 :]
+                                    + pruned_config[l1pm_offset + 8:]
                                 )
 
-                                # Zero out the rest of the L1 PM Substates capability (typically 6 DWORDs)
+                                # Zero out the rest of the L1 PM Substates
+                                # capability (typically 6 DWORDs)
                                 for j in range(4, 24, 4):
                                     field_offset = (0x100 + j // 2) * 2
                                     if field_offset + 8 <= len(pruned_config):
                                         pruned_config = (
                                             pruned_config[:field_offset]
                                             + "00000000"
-                                            + pruned_config[field_offset + 8 :]
+                                            + pruned_config[field_offset + 8:]
                                         )
 
-                                # Update the donor info with the pruned configuration
+                                # Update the donor info with the pruned
+                                # configuration
                                 info["extended_config"] = pruned_config
 
                                 # Save the donor info to a file
@@ -316,37 +324,43 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
         pruned_config = donor_info["extended_config"]
 
         # Verify that PCIe capability is still present but modified
-        pcie_offset = find_cap(pruned_config, PCICapabilityID.PCI_EXPRESS.value)
+        pcie_offset = find_cap(
+            pruned_config,
+            PCICapabilityID.PCI_EXPRESS.value)
         self.assertIsNotNone(pcie_offset)
 
         # Check that ASPM bits are cleared in Link Control register
         link_control_offset = 0x50 * 2
         link_control = int(
-            pruned_config[link_control_offset : link_control_offset + 4], 16
+            pruned_config[link_control_offset: link_control_offset + 4], 16
         )
-        self.assertEqual(link_control & 0x0003, 0)  # ASPM bits should be cleared
+        self.assertEqual(
+            link_control & 0x0003,
+            0)  # ASPM bits should be cleared
 
         # Check that OBFF and LTR bits are cleared in Device Control 2 register
         dev_control2_offset = 0x68 * 2
         dev_control2 = int(
-            pruned_config[dev_control2_offset : dev_control2_offset + 4], 16
+            pruned_config[dev_control2_offset: dev_control2_offset + 4], 16
         )
         self.assertEqual(
             dev_control2 & 0x6400, 0
         )  # OBFF and LTR bits should be cleared
 
         # Check that PM capability is still present but modified
-        pm_offset = find_cap(pruned_config, PCICapabilityID.POWER_MANAGEMENT.value)
+        pm_offset = find_cap(pruned_config,
+                             PCICapabilityID.POWER_MANAGEMENT.value)
         self.assertIsNotNone(pm_offset)
 
         # Check that only D0 and D3hot are supported in PM capability
         if pm_offset is not None:
             pm_cap_offset = (pm_offset + 2) * 2
-            pm_cap = int(pruned_config[pm_cap_offset : pm_cap_offset + 4], 16)
+            pm_cap = int(pruned_config[pm_cap_offset: pm_cap_offset + 4], 16)
             self.assertEqual(
                 pm_cap & 0x0007, 0
             )  # D1, D2, D3cold bits should be cleared
-            self.assertEqual(pm_cap & 0x0008, 0x0008)  # D3hot bit should be set
+            # D3hot bit should be set
+            self.assertEqual(pm_cap & 0x0008, 0x0008)
             self.assertEqual(
                 pm_cap & 0x0F70, 0
             )  # PME support bits should be cleared (excluding D3hot bit)
@@ -363,8 +377,8 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
 
         # Check that SR-IOV extended capability is removed
         sriov_offset = find_ext_cap(
-            pruned_config, PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value
-        )
+            pruned_config,
+            PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value)
         self.assertIsNone(sriov_offset)
 
     @patch("src.build.get_donor_info")
@@ -405,7 +419,7 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
             "sys.argv",
             [
                 "build.py",
-                "--bdf",
+                "--bd",
                 "0000:03:00.0",
                 "--board",
                 "75t",
@@ -429,7 +443,8 @@ class TestCapabilityPruningIntegration(unittest.TestCase):
                         "src.build.scrape_driver_regs", return_value=(sample_regs, {})
                     ):
                         with patch("src.build.build_sv"):
-                            # Patch the build_tcl function to create the config_hex_path file
+                            # Patch the build_tcl function to create the
+                            # config_hex_path file
                             original_build_tcl = build.build_tcl
 
                             def patched_build_tcl(info, gen_tcl, args=None):

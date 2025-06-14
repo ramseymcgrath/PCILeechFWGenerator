@@ -65,13 +65,15 @@ def discover_and_run_enhanced_tests():
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
-    print(f"Skipped: {len(result.skipped) if hasattr(result, 'skipped') else 0}")
+    print(
+        f"Skipped: {len(result.skipped) if hasattr(result, 'skipped') else 0}")
 
     if result.failures:
         print()
         print("FAILURES:")
         for test, traceback in result.failures:
-            print(f"  - {test}: {traceback.split('AssertionError:')[-1].strip()}")
+            print(
+                f"  - {test}: {traceback.split('AssertionError:')[-1].strip()}")
 
     if result.errors:
         print()
@@ -118,7 +120,9 @@ def run_specific_test_category(category):
         try:
             module_suite = loader.loadTestsFromName(module_name)
             suite.addTest(module_suite)
-            print(f"Loaded {module_suite.countTestCases()} tests from {module_name}")
+            print(
+                f"Loaded {
+                    module_suite.countTestCases()} tests from {module_name}")
         except Exception as e:
             print(f"Failed to load {module_name}: {e}")
 

@@ -2,17 +2,14 @@
 Tests for VFIO binding functionality, specifically for edge cases.
 """
 
-import os
+import generate
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import call, patch
 
-import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import generate
 
 
 class TestVFIOBindingEdgeCases:
@@ -21,7 +18,8 @@ class TestVFIOBindingEdgeCases:
     @patch("generate.get_current_driver")
     @patch("generate.run_command")
     @patch("os.path.exists")
-    def test_bind_to_vfio_already_bound(self, mock_exists, mock_run, mock_get_driver):
+    def test_bind_to_vfio_already_bound(
+            self, mock_exists, mock_run, mock_get_driver):
         """Test binding when device is already bound to vfio-pci."""
         # Setup mocks
         mock_exists.return_value = True
@@ -33,13 +31,15 @@ class TestVFIOBindingEdgeCases:
         unbind_call = call(
             "echo 0000:03:00.0 > /sys/bus/pci/devices/0000:03:00.0/driver/unbind"
         )
-        bind_call = call("echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/bind")
+        bind_call = call(
+            "echo 0000:03:00.0 > /sys/bus/pci/drivers/vfio-pci/bind")
 
         assert unbind_call not in mock_run.call_args_list
         assert bind_call not in mock_run.call_args_list
 
         # Verify that we still register the device ID with vfio-pci
-        register_call = call("echo 8086 1533 > /sys/bus/pci/drivers/vfio-pci/new_id")
+        register_call = call(
+            "echo 8086 1533 > /sys/bus/pci/drivers/vfio-pci/new_id")
         assert register_call not in mock_run.call_args_list  # We should skip this too
 
     @patch("generate.get_current_driver")

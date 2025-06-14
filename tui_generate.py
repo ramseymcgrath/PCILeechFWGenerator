@@ -4,7 +4,6 @@ TUI version of PCILeech firmware generator.
 Provides an interactive interface for the generate.py workflow.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,7 @@ def main():
     try:
         # Check if Textual is available
         try:
-            import textual
+            pass
         except ImportError:
             print("Error: Textual framework not installed.")
             print("Please install with: pip install textual rich psutil")

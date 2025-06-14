@@ -5,9 +5,7 @@ This test suite validates the newly implemented TUI compatibility indicators
 to ensure they work correctly and provide accurate device status information.
 """
 
-import asyncio
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -33,7 +31,8 @@ class TestDeviceIndicators:
             iommu_group="1",
             power_state="D0",
             link_speed="2.5 GT/s",
-            bars=[{"index": 0, "start": 0xF0000000, "size": 131072, "type": "memory"}],
+            bars=[{"index": 0, "start": 0xF0000000,
+                   "size": 131072, "type": "memory"}],
             suitability_score=0.8,
             compatibility_issues=[],
             # Enhanced compatibility indicators
@@ -69,11 +68,13 @@ class TestDeviceIndicators:
         assert no_driver_device.driver_indicator == "🔌"
 
         # Driver bound
-        bound_device = self._create_test_device(has_driver=True, is_detached=False)
+        bound_device = self._create_test_device(
+            has_driver=True, is_detached=False)
         assert bound_device.driver_indicator == "🔒"
 
         # Driver detached
-        detached_device = self._create_test_device(has_driver=True, is_detached=True)
+        detached_device = self._create_test_device(
+            has_driver=True, is_detached=True)
         assert detached_device.driver_indicator == "🔓"
 
     def test_vfio_indicator(self):
@@ -162,7 +163,8 @@ class TestDeviceIndicators:
 
         # Score should be high with all positive factors
         assert score > 0.8
-        # Note: May have issues about limited BARs since we only provided one BAR
+        # Note: May have issues about limited BARs since we only provided one
+        # BAR
         assert len(issues) <= 1
 
         # Test with negative factors
@@ -194,7 +196,8 @@ class TestDeviceIndicators:
         status = device.detailed_status
         # The detailed_status is populated by the device manager, not the device itself
         # For a device created directly, it will be empty by default
-        # This test should verify the structure when populated by device manager
+        # This test should verify the structure when populated by device
+        # manager
         assert isinstance(status, dict)
 
         # If status is populated, check the expected keys
@@ -244,7 +247,7 @@ class TestDeviceIndicators:
     def _create_test_device(self, **kwargs) -> PCIDevice:
         """Helper method to create test devices with default values."""
         defaults = {
-            "bdf": "0000:01:00.0",
+            "bd": "0000:01:00.0",
             "vendor_id": "8086",
             "device_id": "10d3",
             "vendor_name": "Intel Corporation",
@@ -379,7 +382,7 @@ class TestDeviceManagerEnhancements:
     async def test_enhanced_device_info_creation(self, device_manager):
         """Test enhanced device information creation."""
         raw_device = {
-            "bdf": "0000:01:00.0",
+            "bd": "0000:01:00.0",
             "ven": "8086",
             "dev": "10d3",
             "class": "0200",
@@ -424,8 +427,15 @@ class TestTUIIntegration:
     def test_device_table_columns(self):
         """Test that device table includes the new Indicators column."""
         # This would be tested in the actual TUI application
-        # The device table should have columns: Status, BDF, Device, Indicators, Driver, IOMMU
-        expected_columns = ["Status", "BDF", "Device", "Indicators", "Driver", "IOMMU"]
+        # The device table should have columns: Status, BDF, Device,
+        # Indicators, Driver, IOMMU
+        expected_columns = [
+            "Status",
+            "BDF",
+            "Device",
+            "Indicators",
+            "Driver",
+            "IOMMU"]
 
         # In the actual TUI, this is set up in on_mount:
         # device_table.add_columns("Status", "BDF", "Device", "Indicators", "Driver", "IOMMU")
@@ -611,7 +621,8 @@ class TestSpecificDeviceScenarios:
         # The ready_indicator logic: if not (is_valid and vfio_compatible and iommu_enabled),
         # then check is_suitable. Since iommu_enabled=False, it goes to is_suitable check.
         # is_suitable = suitability_score >= 0.7 and len(compatibility_issues) == 0
-        # suitability_score=0.4 < 0.7, so is_suitable=False, so ready_indicator="❌"
+        # suitability_score=0.4 < 0.7, so is_suitable=False, so
+        # ready_indicator="❌"
         assert device.ready_indicator == "❌"
         assert device.iommu_indicator == "❌"
 

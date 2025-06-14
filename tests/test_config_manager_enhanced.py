@@ -6,18 +6,14 @@ Tests configuration management, profile persistence, error handling,
 and security features.
 """
 
-import json
 import os
-import stat
 import tempfile
 import unittest
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 from src.tui.core.config_manager import ConfigManager
 from src.tui.models.config import BuildConfiguration
-from src.tui.models.error import ErrorSeverity, TUIError
 
 
 class TestConfigManager(unittest.TestCase):
@@ -58,7 +54,7 @@ class TestConfigManager(unittest.TestCase):
             side_effect=Exception("Test error"),
         ):
             with patch("builtins.print") as mock_print:
-                manager = ConfigManager()
+                ConfigManager()
 
                 mock_print.assert_called_once()
                 self.assertIn(
@@ -149,7 +145,9 @@ class TestConfigManager(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             manager._ensure_config_directory()
 
-        self.assertIn("Failed to create config directory", str(context.exception))
+        self.assertIn(
+            "Failed to create config directory", str(
+                context.exception))
 
     def test_save_profile_success(self):
         """Test successful profile saving."""
@@ -206,7 +204,8 @@ class TestConfigManager(unittest.TestCase):
         with patch.object(ConfigManager, "_ensure_config_directory"):
             manager = ConfigManager()
 
-            # Test various problematic characters based on actual implementation
+            # Test various problematic characters based on actual
+            # implementation
             test_cases = [
                 ("normal_name", "normal_name"),
                 ("name with spaces", "name with spaces"),  # Spaces are preserved
@@ -233,7 +232,7 @@ class TestConfigManager(unittest.TestCase):
             test_config_data = {
                 "name": "test_profile",
                 "board_type": "75t",
-                "device_bdf": "0000:03:00.0",
+                "device_bd": "0000:03:00.0",
                 "created_at": "2023-01-01T00:00:00",
                 "last_used": "2023-01-01T00:00:00",
             }
@@ -361,7 +360,7 @@ class TestConfigManager(unittest.TestCase):
     def test_get_profile_metadata(self):
         """Test getting profile metadata."""
         with patch.object(ConfigManager, "_ensure_config_directory"):
-            manager = ConfigManager()
+            ConfigManager()
 
             test_config_data = {
                 "name": "test_profile",
@@ -372,36 +371,33 @@ class TestConfigManager(unittest.TestCase):
 
             # Note: get_profile_metadata method doesn't exist in actual implementation
             # This test would need to be implemented if the method is added
-            pass
 
     def test_get_profile_metadata_not_found(self):
         """Test getting metadata for non-existent profile."""
-        # Note: get_profile_metadata method doesn't exist in actual implementation
-        pass
+        # Note: get_profile_metadata method doesn't exist in actual
+        # implementation
 
     def test_export_profile_success(self):
         """Test successful profile export."""
         # Note: export_profile method doesn't exist in actual implementation
         # This test would need to be implemented if the method is added
-        pass
 
     def test_export_profile_error(self):
         """Test profile export with error."""
         # Note: export_profile method doesn't exist in actual implementation
-        pass
 
     def test_import_profile_success(self):
         """Test successful profile import."""
         with patch.object(ConfigManager, "_ensure_config_directory"):
-            manager = ConfigManager()
+            ConfigManager()
 
             test_config_data = {
                 "name": "imported_profile",
                 "board_type": "100t",
-                "device_bdf": "0000:04:00.0",
+                "device_bd": "0000:04:00.0",
             }
 
-            import_path = Path(self.temp_dir) / "import_profile.json"
+            Path(self.temp_dir) / "import_profile.json"
 
             with patch("pathlib.Path.exists", return_value=True):
                 with patch.object(BuildConfiguration, "load_from_file") as mock_load:
@@ -412,32 +408,31 @@ class TestConfigManager(unittest.TestCase):
 
                     # Note: import_profile method doesn't exist in actual implementation
                     # This would need to be implemented
-                    pass
 
     def test_import_profile_not_found(self):
         """Test importing non-existent profile."""
         with patch.object(ConfigManager, "_ensure_config_directory"):
-            manager = ConfigManager()
+            ConfigManager()
 
-            import_path = Path(self.temp_dir) / "nonexistent.json"
+            Path(self.temp_dir) / "nonexistent.json"
 
             with patch("pathlib.Path.exists", return_value=False):
-                # Note: import_profile method doesn't exist in actual implementation
+                # Note: import_profile method doesn't exist in actual
+                # implementation
                 pass
 
     def test_validate_profile_name_valid(self):
         """Test validation of valid profile names."""
         with patch.object(ConfigManager, "_ensure_config_directory"):
-            manager = ConfigManager()
+            ConfigManager()
 
             # Note: validate_profile_name method doesn't exist in actual implementation
             # This test would need to be implemented if the method is added
-            pass
 
     def test_validate_profile_name_invalid(self):
         """Test validation of invalid profile names."""
-        # Note: validate_profile_name method doesn't exist in actual implementation
-        pass
+        # Note: validate_profile_name method doesn't exist in actual
+        # implementation
 
 
 class TestConfigManagerIntegration(unittest.TestCase):
@@ -488,7 +483,8 @@ class TestConfigManagerIntegration(unittest.TestCase):
 
         # Verify deletion
         profiles_after_delete = manager.list_profiles()
-        profile_names_after = [p.get("name", "") for p in profiles_after_delete]
+        profile_names_after = [p.get("name", "")
+                               for p in profiles_after_delete]
         self.assertNotIn("test_lifecycle", profile_names_after)
 
 

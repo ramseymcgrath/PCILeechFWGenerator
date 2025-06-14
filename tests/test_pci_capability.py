@@ -3,12 +3,7 @@
 Test suite for PCI capability analysis and pruning.
 """
 
-import json
-import os
-import tempfile
 import unittest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from src.pci_capability import (
     EmulationCategory,
@@ -38,16 +33,17 @@ class TestPCICapability(unittest.TestCase):
 
         # Set capabilities pointer at offset 0x34
         self.config_space = (
-            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2 :]
+            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2:]
         )
 
         # Set capabilities bit in status register (offset 0x06, bit 4)
-        status_value = int(self.config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
+        status_value = int(
+            self.config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
         status_hex = f"{status_value:04x}"
         self.config_space = (
             self.config_space[: 0x06 * 2]
             + status_hex
-            + self.config_space[0x06 * 2 + 4 :]
+            + self.config_space[0x06 * 2 + 4:]
         )
 
         # Add PCI Express capability at offset 0x40
@@ -58,7 +54,7 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x40 * 2]
             + pcie_cap
-            + self.config_space[0x40 * 2 + len(pcie_cap) :]
+            + self.config_space[0x40 * 2 + len(pcie_cap):]
         )
 
         # Add Link Control Register at offset 0x50 (part of PCIe capability)
@@ -66,15 +62,16 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x50 * 2]
             + link_control
-            + self.config_space[0x50 * 2 + len(link_control) :]
+            + self.config_space[0x50 * 2 + len(link_control):]
         )
 
-        # Add Device Control 2 Register at offset 0x68 (part of PCIe capability)
+        # Add Device Control 2 Register at offset 0x68 (part of PCIe
+        # capability)
         dev_control2 = "6400" + "0000"  # OBFF and LTR enabled
         self.config_space = (
             self.config_space[: 0x68 * 2]
             + dev_control2
-            + self.config_space[0x68 * 2 + len(dev_control2) :]
+            + self.config_space[0x68 * 2 + len(dev_control2):]
         )
 
         # Add Power Management capability at offset 0x60
@@ -85,7 +82,7 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x60 * 2]
             + pm_cap
-            + self.config_space[0x60 * 2 + len(pm_cap) :]
+            + self.config_space[0x60 * 2 + len(pm_cap):]
         )
 
         # Add MSI-X capability at offset 0x70
@@ -98,7 +95,7 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x70 * 2]
             + msix_cap
-            + self.config_space[0x70 * 2 + len(msix_cap) :]
+            + self.config_space[0x70 * 2 + len(msix_cap):]
         )
 
         # Add Extended capabilities
@@ -114,7 +111,7 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x100 * 2]
             + l1pm_cap
-            + self.config_space[0x100 * 2 + len(l1pm_cap) :]
+            + self.config_space[0x100 * 2 + len(l1pm_cap):]
         )
 
         # Add SR-IOV extended capability at offset 0x140
@@ -129,7 +126,7 @@ class TestPCICapability(unittest.TestCase):
         self.config_space = (
             self.config_space[: 0x140 * 2]
             + sriov_cap
-            + self.config_space[0x140 * 2 + len(sriov_cap) :]
+            + self.config_space[0x140 * 2 + len(sriov_cap):]
         )
 
     def test_find_cap(self):
@@ -177,7 +174,9 @@ class TestPCICapability(unittest.TestCase):
         self.assertIn(0x70, capabilities)
 
         # Check the capability IDs
-        self.assertEqual(capabilities[0x40]["id"], PCICapabilityID.PCI_EXPRESS.value)
+        self.assertEqual(
+            capabilities[0x40]["id"],
+            PCICapabilityID.PCI_EXPRESS.value)
         self.assertEqual(
             capabilities[0x60]["id"], PCICapabilityID.POWER_MANAGEMENT.value
         )
@@ -201,8 +200,8 @@ class TestPCICapability(unittest.TestCase):
 
         # Check the capability IDs
         self.assertEqual(
-            ext_capabilities[0x100]["id"], PCIExtCapabilityID.L1_PM_SUBSTATES.value
-        )
+            ext_capabilities[0x100]["id"],
+            PCIExtCapabilityID.L1_PM_SUBSTATES.value)
         self.assertEqual(
             ext_capabilities[0x140]["id"],
             PCIExtCapabilityID.SINGLE_ROOT_IO_VIRTUALIZATION.value,
@@ -222,13 +221,19 @@ class TestPCICapability(unittest.TestCase):
         std_categories = categorize_capabilities(std_caps)
 
         # Check that PCIe is partially supported
-        self.assertEqual(std_categories[0x40], EmulationCategory.PARTIALLY_SUPPORTED)
+        self.assertEqual(
+            std_categories[0x40],
+            EmulationCategory.PARTIALLY_SUPPORTED)
 
         # Check that PM is partially supported
-        self.assertEqual(std_categories[0x60], EmulationCategory.PARTIALLY_SUPPORTED)
+        self.assertEqual(
+            std_categories[0x60],
+            EmulationCategory.PARTIALLY_SUPPORTED)
 
         # Check that MSI-X is fully supported
-        self.assertEqual(std_categories[0x70], EmulationCategory.FULLY_SUPPORTED)
+        self.assertEqual(
+            std_categories[0x70],
+            EmulationCategory.FULLY_SUPPORTED)
 
         # Categorize extended capabilities
         ext_categories = categorize_capabilities(ext_caps)
@@ -260,7 +265,9 @@ class TestPCICapability(unittest.TestCase):
         self.assertEqual(
             std_actions[0x60], PruningAction.MODIFY
         )  # PM should be modified
-        self.assertEqual(std_actions[0x70], PruningAction.KEEP)  # MSI-X should be kept
+        self.assertEqual(
+            std_actions[0x70],
+            PruningAction.KEEP)  # MSI-X should be kept
 
         # Check extended capability actions
         self.assertEqual(
@@ -300,14 +307,16 @@ class TestPCICapability(unittest.TestCase):
         # Check that ASPM bits are cleared in Link Control register
         link_control_offset = 0x50 * 2
         link_control = int(
-            pruned_cfg[link_control_offset : link_control_offset + 4], 16
+            pruned_cfg[link_control_offset: link_control_offset + 4], 16
         )
-        self.assertEqual(link_control & 0x0003, 0)  # ASPM bits should be cleared
+        self.assertEqual(
+            link_control & 0x0003,
+            0)  # ASPM bits should be cleared
 
         # Check that OBFF and LTR bits are cleared in Device Control 2 register
         dev_control2_offset = 0x68 * 2
         dev_control2 = int(
-            pruned_cfg[dev_control2_offset : dev_control2_offset + 4], 16
+            pruned_cfg[dev_control2_offset: dev_control2_offset + 4], 16
         )
         self.assertEqual(
             dev_control2 & 0x6400, 0
@@ -321,11 +330,12 @@ class TestPCICapability(unittest.TestCase):
         # Check that only D0 and D3hot are supported in PM capability
         if pm_offset is not None:
             pm_cap_offset = (pm_offset + 2) * 2
-            pm_cap = int(pruned_cfg[pm_cap_offset : pm_cap_offset + 4], 16)
+            pm_cap = int(pruned_cfg[pm_cap_offset: pm_cap_offset + 4], 16)
             self.assertEqual(
                 pm_cap & 0x0007, 0
             )  # D1, D2, D3cold bits should be cleared
-            self.assertEqual(pm_cap & 0x0008, 0x0008)  # D3hot bit should be set
+            # D3hot bit should be set
+            self.assertEqual(pm_cap & 0x0008, 0x0008)
             self.assertEqual(
                 pm_cap & 0x0F70, 0
             )  # PME support bits should be cleared (excluding D3hot bit)
@@ -357,14 +367,16 @@ class TestPCICapability(unittest.TestCase):
         # Check that ASPM bits are cleared in Link Control register
         link_control_offset = 0x50 * 2
         link_control = int(
-            pruned_cfg[link_control_offset : link_control_offset + 4], 16
+            pruned_cfg[link_control_offset: link_control_offset + 4], 16
         )
-        self.assertEqual(link_control & 0x0003, 0)  # ASPM bits should be cleared
+        self.assertEqual(
+            link_control & 0x0003,
+            0)  # ASPM bits should be cleared
 
         # Check that OBFF and LTR bits are cleared in Device Control 2 register
         dev_control2_offset = 0x68 * 2
         dev_control2 = int(
-            pruned_cfg[dev_control2_offset : dev_control2_offset + 4], 16
+            pruned_cfg[dev_control2_offset: dev_control2_offset + 4], 16
         )
         self.assertEqual(
             dev_control2 & 0x6400, 0
@@ -378,11 +390,12 @@ class TestPCICapability(unittest.TestCase):
         # Check that only D0 and D3hot are supported in PM capability
         if pm_offset is not None:
             pm_cap_offset = (pm_offset + 2) * 2
-            pm_cap = int(pruned_cfg[pm_cap_offset : pm_cap_offset + 4], 16)
+            pm_cap = int(pruned_cfg[pm_cap_offset: pm_cap_offset + 4], 16)
             self.assertEqual(
                 pm_cap & 0x0007, 0
             )  # D1, D2, D3cold bits should be cleared
-            self.assertEqual(pm_cap & 0x0008, 0x0008)  # D3hot bit should be set
+            # D3hot bit should be set
+            self.assertEqual(pm_cap & 0x0008, 0x0008)
             self.assertEqual(
                 pm_cap & 0x0F70, 0
             )  # PME support bits should be cleared (excluding D3hot bit)

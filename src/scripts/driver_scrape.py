@@ -11,7 +11,7 @@ Outputs JSON list:
   ...
 ]
 """
-import ast
+from src.scripts.state_machine_extractor import StateMachineExtractor
 import json
 import os
 import pathlib
@@ -20,7 +20,6 @@ import re
 import subprocess
 import sys
 import tarfile
-import tempfile
 
 
 def is_linux() -> bool:
@@ -34,19 +33,21 @@ def check_linux_requirement(operation: str) -> None:
         raise RuntimeError(
             f"{operation} requires Linux. "
             f"Current platform: {platform.system()}. "
-            f"This functionality is only available on Linux systems."
+            "This functionality is only available on Linux systems."
         )
 
 
 # Import state machine extractor
-import os
-import sys
 
 # Add the project root directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "../..")))
 
 # Now import the state machine extractor
-from src.scripts.state_machine_extractor import StateMachineExtractor
 
 # Module-level variables will be set in main()
 VENDOR = None
@@ -113,8 +114,10 @@ def analyze_function_context(file_content, reg_name):
 
     # Find function containing the register usage
     func_pattern = re.compile(
-        r"(\w+)\s*\([^)]*\)\s*\{[^}]*" + re.escape(reg_name) + r"[^}]*\}", re.DOTALL
-    )
+        r"(\w+)\s*\([^)]*\)\s*\{[^}]*" +
+        re.escape(reg_name) +
+        r"[^}]*\}",
+        re.DOTALL)
     func_match = func_pattern.search(file_content)
 
     if func_match:
@@ -148,15 +151,20 @@ def analyze_function_context(file_content, reg_name):
 
         # Analyze access patterns
         write_count = len(
-            re.findall(r"write[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body)
-        )
+            re.findall(
+                r"write[blwq]?\s*\([^)]*" +
+                re.escape(reg_name),
+                func_body))
         read_count = len(
-            re.findall(r"read[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body)
-        )
+            re.findall(
+                r"read[blwq]?\s*\([^)]*" +
+                re.escape(reg_name),
+                func_body))
 
         # Check for specific patterns based on read/write counts
         if write_count > 0 and read_count > 0:
-            # Check for write-then-read pattern (exactly one write followed by one read)
+            # Check for write-then-read pattern (exactly one write followed by
+            # one read)
             if write_count == 1 and read_count == 1:
                 write_pos = re.search(
                     r"write[blwq]?\s*\([^)]*" + re.escape(reg_name), func_body
@@ -235,11 +243,15 @@ def analyze_access_sequences(file_content, reg_name=None):
 
                 # Add preceding and following operations for context
                 if i > 0:
-                    sequence["preceded_by"] = accesses[i - 1][1]  # Register name
-                    sequence["preceded_by_op"] = accesses[i - 1][0]  # Operation
+                    # Register name
+                    sequence["preceded_by"] = accesses[i - 1][1]
+                    # Operation
+                    sequence["preceded_by_op"] = accesses[i - 1][0]
                 if i < len(accesses) - 1:
-                    sequence["followed_by"] = accesses[i + 1][1]  # Register name
-                    sequence["followed_by_op"] = accesses[i + 1][0]  # Operation
+                    # Register name
+                    sequence["followed_by"] = accesses[i + 1][1]
+                    # Operation
+                    sequence["followed_by_op"] = accesses[i + 1][0]
 
                 sequences.append(sequence)
 
@@ -306,7 +318,9 @@ def analyze_state_patterns(func_body, accesses, registers):
         state_info["complexity_indicators"].append("switch_statement")
 
     # Look for if-else chains
-    if_else_pattern = re.compile(r"if\s*\([^)]+\)[^}]*else\s+if", re.IGNORECASE)
+    if_else_pattern = re.compile(
+        r"if\s*\([^)]+\)[^}]*else\s+i",
+        re.IGNORECASE)
     if if_else_pattern.search(func_body):
         state_info["has_conditional_logic"] = True
         state_info["complexity_indicators"].append("if_else_chain")
@@ -323,11 +337,11 @@ def analyze_state_patterns(func_body, accesses, registers):
             current_access = accesses[i]
             next_access = accesses[i + 1]
 
-            # Look for delays between accesses (indicates state transition timing)
-            section = func_body[current_access[2] : next_access[2]]
+            # Look for delays between accesses (indicates state transition
+            # timing)
+            section = func_body[current_access[2]: next_access[2]]
             delay_pattern = re.compile(
-                r"(udelay|mdelay|msleep|usleep_range)\s*\(\s*(\d+)", re.IGNORECASE
-            )
+                r"(udelay|mdelay|msleep|usleep_range)\s*\(\s*(\d+)", re.IGNORECASE)
             delay_match = delay_pattern.search(section)
 
             transition = {
@@ -418,8 +432,8 @@ def analyze_timing_constraints(file_content, reg_name=None):
             }
 
             # Determine if this is a post-write or pre-read delay
-            pre_context = file_content[context_start : delay_match.start()]
-            post_context = file_content[delay_match.end() : context_end]
+            pre_context = file_content[context_start: delay_match.start()]
+            post_context = file_content[delay_match.end(): context_end]
 
             if re.search(r"write[blwq]?\s*\([^)]*", pre_context):
                 constraint["type"] = "post_write_delay"
@@ -504,12 +518,13 @@ def main():
         print(f"[driver_scrape] Driver module: {driver}")
 
         # find .c/.h files containing driver name
-        src_files = list(ksrc.rglob(f"{driver}*.c")) + list(ksrc.rglob(f"{driver}*.h"))
+        src_files = list(ksrc.rglob(f"{driver}*.c")) + \
+            list(ksrc.rglob(f"{driver}*.h"))
         if not src_files:
-            # heuristic: fallback to any file inside drivers/ with module name inside it
-            src_files = [
-                p for p in ksrc.rglob("*.c") if driver in p.read_text(errors="ignore")
-            ][:20]
+            # heuristic: fallback to any file inside drivers/ with module name
+            # inside it
+            src_files = [p for p in ksrc.rglob(
+                "*.c") if driver in p.read_text(errors="ignore")][:20]
 
         if not src_files:
             # Return empty data with state machine analysis
@@ -564,7 +579,8 @@ def main():
                 break
 
     # Analyze register sequences, state patterns, and timing
-    sequences, state_patterns = analyze_register_sequences(all_content, regs.keys())
+    sequences, state_patterns = analyze_register_sequences(
+        all_content, regs.keys())
     timing_info = extract_timing_constraints(all_content)
 
     # Extract state machines using the new state machine extractor
@@ -641,7 +657,8 @@ def main():
                     "complexity_indicators": pattern_info["complexity_indicators"],
                     "has_state_variable": pattern_info["has_state_variable"],
                     "has_conditional_logic": pattern_info["has_conditional_logic"],
-                    "transitions_count": len(pattern_info["state_transitions"]),
+                    "transitions_count": len(
+                        pattern_info["state_transitions"]),
                 }
 
         # Add state machine information
@@ -679,7 +696,8 @@ def main():
             "extracted_state_machines": len(extracted_state_machines),
             "optimized_state_machines": len(optimized_state_machines),
             "functions_with_state_patterns": len(state_patterns),
-            "state_machines": [sm.to_dict() for sm in optimized_state_machines],
+            "state_machines": [
+                sm.to_dict() for sm in optimized_state_machines],
             "analysis_report": state_machine_extractor.generate_analysis_report(),
         },
     }
@@ -703,7 +721,8 @@ def extract_registers_from_file(file_path):
             content = f.read()
 
         # Find register definitions (#define REG_XXX 0xYYYY)
-        reg_pattern = re.compile(r"#define\s+(REG_[A-Z0-9_]+)\s+0x([0-9A-Fa-f]+)")
+        reg_pattern = re.compile(
+            r"#define\s+(REG_[A-Z0-9_]+)\s+0x([0-9A-Fa-f]+)")
 
         for match in reg_pattern.finditer(content):
             reg_name = match.group(1)
@@ -793,7 +812,8 @@ def find_driver_sources(kernel_source_dir, driver_name):
         kernel_source_dir.rglob(f"{driver_name}*.h")
     )
 
-    # If no direct matches, try to find files containing the driver name in their content
+    # If no direct matches, try to find files containing the driver name in
+    # their content
     if not src_files:
         # Look in drivers directory first as it's most likely location
         drivers_dir = kernel_source_dir / "drivers"

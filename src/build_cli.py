@@ -14,7 +14,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Add site-packages directories to path to ensure modules can be found
-# This helps when running with sudo which might have a different Python environment
+# This helps when running with sudo which might have a different Python
+# environment
 for site_dir in site.getsitepackages():
     if site_dir not in sys.path:
         sys.path.insert(0, site_dir)
@@ -29,7 +30,8 @@ def main():
     """Main entry point for pcileech-build command"""
     try:
         # Import and run the build module
-        # Try different import strategies to handle various installation scenarios
+        # Try different import strategies to handle various installation
+        # scenarios
         try:
             # First try the standard import (works when installed as package)
             from src.build import main as build_main

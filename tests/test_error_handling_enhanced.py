@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import patch
 
 from src.build import PCILeechFirmwareBuilder
 from src.tui.models.error import ErrorSeverity, TUIError
@@ -91,9 +91,9 @@ class TestErrorHandling(unittest.TestCase):
                     # Should handle invalid BDF gracefully
                     try:
                         builder = PCILeechFirmwareBuilder(
-                            bdf=invalid_bdf, board="75t", output_dir=self.output_dir
-                        )
-                        # If no exception, BDF should be stored as-is for later validation
+                            bdf=invalid_bdf, board="75t", output_dir=self.output_dir)
+                        # If no exception, BDF should be stored as-is for later
+                        # validation
                         self.assertEqual(builder.bdf, invalid_bdf)
                     except (ValueError, TypeError):
                         # Acceptable to raise validation errors
@@ -132,7 +132,8 @@ class TestErrorHandling(unittest.TestCase):
             patch("src.build.MSIXCapabilityManager", None),
         ):
 
-            # Test with non-existent directory - use temp dir to avoid permission issues
+            # Test with non-existent directory - use temp dir to avoid
+            # permission issues
             non_existent_dir = Path(self.temp_dir) / "non_existent"
 
             builder = PCILeechFirmwareBuilder(
@@ -218,7 +219,8 @@ class TestErrorHandling(unittest.TestCase):
             for device_info in malformed_device_infos:
                 with self.subTest(device_info=device_info):
                     try:
-                        result = builder._generate_device_config_module(device_info)
+                        result = builder._generate_device_config_module(
+                            device_info)
                         # Should handle malformed data gracefully
                         self.assertIsInstance(result, str)
                     except (ValueError, TypeError, KeyError):
@@ -237,14 +239,16 @@ class TestErrorHandling(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     RepoManager.ensure_git_repo()
             except OSError:
-                # If OSError propagates instead of RuntimeError, that's also acceptable
+                # If OSError propagates instead of RuntimeError, that's also
+                # acceptable
                 pass
 
     def test_git_repository_corruption_handling(self):
         """Test handling of corrupted Git repositories."""
         with patch("src.repo_manager.subprocess.run") as mock_run:
             # Mock git status failure indicating corruption
-            mock_run.side_effect = subprocess.CalledProcessError(128, "git status")
+            mock_run.side_effect = subprocess.CalledProcessError(
+                128, "git status")
 
             from src.repo_manager import RepoManager
 
@@ -253,7 +257,8 @@ class TestErrorHandling(unittest.TestCase):
                     with self.assertRaises(RuntimeError) as context:
                         RepoManager.ensure_git_repo()
 
-                    # Check for either corruption message or git not found message
+                    # Check for either corruption message or git not found
+                    # message
                     error_msg = str(context.exception)
                     self.assertTrue(
                         "corrupted" in error_msg
@@ -261,7 +266,8 @@ class TestErrorHandling(unittest.TestCase):
                         or "Git is not available" in error_msg
                     )
                 except Exception:
-                    # If the test raises a different exception, that's also acceptable
+                    # If the test raises a different exception, that's also
+                    # acceptable
                     pass
 
     def test_vivado_not_found_handling(self):
@@ -315,7 +321,9 @@ class TestErrorHandling(unittest.TestCase):
             sv_content = builder._generate_device_config_module(device_info)
 
             # Basic syntax validation
-            self.assertEqual(sv_content.count("module"), sv_content.count("endmodule"))
+            self.assertEqual(
+                sv_content.count("module"),
+                sv_content.count("endmodule"))
             self.assertNotIn("syntax error", sv_content.lower())
 
     def test_tcl_syntax_error_detection(self):
@@ -428,7 +436,6 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_error_logging_integration(self):
         """Test integration with logging system."""
-        import logging
 
         with (
             patch("src.build.DonorDumpManager", None),
@@ -492,7 +499,9 @@ class TestErrorHandling(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             config = BuildConfiguration(profile_duration=-1.0)
 
-        self.assertIn("Profile duration must be positive", str(context.exception))
+        self.assertIn(
+            "Profile duration must be positive", str(
+                context.exception))
 
     def test_cleanup_on_error(self):
         """Test that resources are cleaned up on errors."""
@@ -552,7 +561,9 @@ class TestErrorRecovery(unittest.TestCase):
 
             # Should generate valid config space
             self.assertIsInstance(synthetic_config, bytes)
-            self.assertEqual(len(synthetic_config), 4096)  # Extended config space
+            self.assertEqual(
+                len(synthetic_config),
+                4096)  # Extended config space
 
             # Should have valid header
             self.assertNotEqual(synthetic_config[:4], b"\x00\x00\x00\x00")
@@ -560,12 +571,10 @@ class TestErrorRecovery(unittest.TestCase):
     def test_fallback_device_detection(self):
         """Test fallback device detection mechanisms."""
         # Test would require actual device detection logic
-        pass
 
     def test_graceful_degradation(self):
         """Test graceful degradation of features."""
         # Test would require feature flag management
-        pass
 
 
 if __name__ == "__main__":

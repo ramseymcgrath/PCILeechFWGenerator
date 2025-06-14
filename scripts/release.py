@@ -10,7 +10,6 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -67,8 +66,9 @@ def update_version_file(new_version: str) -> None:
 
     # Update version
     content = re.sub(
-        r'__version__ = ["\'][^"\']+["\']', f'__version__ = "{new_version}"', content
-    )
+        r'__version__ = ["\'][^"\']+["\']',
+        f'__version__ = "{new_version}"',
+        content)
 
     # Update version_info tuple
     major, minor, patch = map(int, new_version.split("."))
@@ -171,16 +171,22 @@ def upload_to_pypi(test: bool = False) -> None:
 
 def main():
     """Main release script."""
-    parser = argparse.ArgumentParser(description="Release PCILeech Firmware Generator")
+    parser = argparse.ArgumentParser(
+        description="Release PCILeech Firmware Generator")
     parser.add_argument(
-        "bump_type", choices=["major", "minor", "patch"], help="Type of version bump"
-    )
+        "bump_type",
+        choices=[
+            "major",
+            "minor",
+            "patch"],
+        help="Type of version bump")
     parser.add_argument(
         "--release-notes", required=True, help="Release notes for this version"
     )
     parser.add_argument(
-        "--test-pypi", action="store_true", help="Upload to Test PyPI instead of PyPI"
-    )
+        "--test-pypi",
+        action="store_true",
+        help="Upload to Test PyPI instead of PyPI")
     parser.add_argument(
         "--skip-upload", action="store_true", help="Skip uploading to PyPI"
     )
@@ -237,7 +243,7 @@ def main():
     print(f"- Changelog updated in {CHANGELOG_FILE}")
     if not args.skip_git:
         print(f"- Git tag v{new_version} created and pushed")
-    print(f"- Distributions built in dist/")
+    print("- Distributions built in dist/")
     if not args.skip_upload:
         pypi_name = "Test PyPI" if args.test_pypi else "PyPI"
         print(f"- Uploaded to {pypi_name}")

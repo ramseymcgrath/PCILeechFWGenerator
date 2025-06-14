@@ -9,17 +9,11 @@ This test suite focuses on:
 4. Testing edge cases and boundary conditions
 """
 
-import json
-import os
-import tempfile
 import unittest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from src.msix_capability import (
     find_cap,
     generate_msix_table_sv,
-    msix_size,
     parse_msix_capability,
 )
 
@@ -34,21 +28,26 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
 
         # Set capabilities pointer at offset 0x34
         self.config_space = (
-            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2 :]
+            self.config_space[: 0x34 * 2] + "40" + self.config_space[0x34 * 2 + 2:]
         )
 
         # Set capabilities bit in status register (offset 0x06, bit 4)
-        status_value = int(self.config_space[0x06 * 2 : 0x06 * 2 + 4], 16) | 0x10
+        status_value = int(
+            self.config_space[0x06 * 2: 0x06 * 2 + 4], 16) | 0x10
         status_hex = f"{status_value:04x}"
         self.config_space = (
             self.config_space[: 0x06 * 2]
             + status_hex
-            + self.config_space[0x06 * 2 + 4 :]
+            + self.config_space[0x06 * 2 + 4:]
         )
 
     def create_msix_capability(
-        self, offset, table_size, function_mask=False, msix_enable=False, next_ptr="00"
-    ):
+            self,
+            offset,
+            table_size,
+            function_mask=False,
+            msix_enable=False,
+            next_ptr="00"):
         """
         Create an MSI-X capability at the specified offset.
 
@@ -64,7 +63,8 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         """
         # Capability ID: 0x11 (MSI-X)
         # Next pointer: next_ptr
-        # Message Control: table_size (bits 0-10), function_mask (bit 14), msix_enable (bit 15)
+        # Message Control: table_size (bits 0-10), function_mask (bit 14),
+        # msix_enable (bit 15)
         message_control = table_size & 0x7FF  # 11 bits for table size
         if function_mask:
             message_control |= 0x4000  # Bit 14
@@ -85,7 +85,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             self.config_space[: offset * 2]
             + msix_cap
-            + self.config_space[offset * 2 + len(msix_cap) :]
+            + self.config_space[offset * 2 + len(msix_cap):]
         )
 
         return config_space
@@ -98,7 +98,8 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         self.assertEqual(msix_info["table_size"], 1)
 
         # Test with medium table size (64 entries)
-        config_space = self.create_msix_capability(0x40, 63)  # 63 means 64 entries
+        config_space = self.create_msix_capability(
+            0x40, 63)  # 63 means 64 entries
         msix_info = parse_msix_capability(config_space)
         self.assertEqual(msix_info["table_size"], 64)
 
@@ -154,7 +155,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             self.config_space[: offset * 2]
             + msix_cap
-            + self.config_space[offset * 2 + len(msix_cap) :]
+            + self.config_space[offset * 2 + len(msix_cap):]
         )
 
         # Parse the capability
@@ -185,7 +186,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             self.config_space[: offset * 2]
             + msix_cap
-            + self.config_space[offset * 2 + len(msix_cap) :]
+            + self.config_space[offset * 2 + len(msix_cap):]
         )
 
         # Parse the capability
@@ -208,7 +209,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             self.config_space[: 0x40 * 2]
             + pcie_cap
-            + self.config_space[0x40 * 2 + len(pcie_cap) :]
+            + self.config_space[0x40 * 2 + len(pcie_cap):]
         )
 
         # Second capability at 0x50 (MSI-X)
@@ -216,7 +217,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x50 * 2]
             + msix_cap
-            + config_space[0x50 * 2 + len(msix_cap) :]
+            + config_space[0x50 * 2 + len(msix_cap):]
         )
 
         # Third capability at 0x60 (Vendor-specific)
@@ -224,7 +225,7 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             config_space[: 0x60 * 2]
             + vendor_cap
-            + config_space[0x60 * 2 + len(vendor_cap) :]
+            + config_space[0x60 * 2 + len(vendor_cap):]
         )
 
         # Find MSI-X capability
@@ -315,13 +316,14 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
         config_space = (
             self.config_space[: offset * 2]
             + msix_cap
-            + self.config_space[offset * 2 + len(msix_cap) :]
+            + self.config_space[offset * 2 + len(msix_cap):]
         )
 
         # Parse the capability
         msix_info = parse_msix_capability(config_space)
 
-        # Verify the offset value (should be as specified, alignment is enforced in hardware)
+        # Verify the offset value (should be as specified, alignment is
+        # enforced in hardware)
         self.assertEqual(msix_info["table_offset"], 0x2004)
 
         # Generate SystemVerilog code
@@ -329,8 +331,8 @@ class TestMSIXCapabilityEnhanced(unittest.TestCase):
 
         # Code should include a warning about alignment
         self.assertIn(
-            "// Warning: MSI-X table offset 0x2004 is not 8-byte aligned", sv_code
-        )
+            "// Warning: MSI-X table offset 0x2004 is not 8-byte aligned",
+            sv_code)
 
 
 if __name__ == "__main__":

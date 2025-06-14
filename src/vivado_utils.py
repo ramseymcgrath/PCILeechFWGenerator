@@ -9,8 +9,7 @@ import os
 import platform
 import shutil
 import subprocess
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional
 
 
 def find_vivado_installation() -> Optional[Dict[str, str]]:
@@ -54,7 +53,8 @@ def find_vivado_installation() -> Optional[Dict[str, str]]:
                 # Look for version directories in /tools/Xilinx/
                 for item in os.listdir(tools_xilinx_base):
                     item_path = os.path.join(tools_xilinx_base, item)
-                    # Check if it's a version directory (starts with digit, contains dot)
+                    # Check if it's a version directory (starts with digit,
+                    # contains dot)
                     if (
                         os.path.isdir(item_path)
                         and item
@@ -83,7 +83,8 @@ def find_vivado_installation() -> Optional[Dict[str, str]]:
                 # Look for version directories in /tools/Xilinx/
                 for item in os.listdir(tools_xilinx_base):
                     item_path = os.path.join(tools_xilinx_base, item)
-                    # Check if it's a version directory (starts with digit, contains dot)
+                    # Check if it's a version directory (starts with digit,
+                    # contains dot)
                     if (
                         os.path.isdir(item_path)
                         and item
@@ -128,7 +129,8 @@ def find_vivado_installation() -> Optional[Dict[str, str]]:
                                         "executable": vivado_exe,
                                     }
 
-                        # Fallback: Check for [version]/bin/vivado structure (legacy)
+                        # Fallback: Check for [version]/bin/vivado structure
+                        # (legacy)
                         bin_dir = os.path.join(version_dir, "bin")
                         if os.path.exists(bin_dir):
                             vivado_exe = os.path.join(bin_dir, "vivado")
@@ -168,7 +170,8 @@ def find_vivado_installation() -> Optional[Dict[str, str]]:
                     "executable": vivado_exe,
                 }
 
-        # Check for [XILINX_VIVADO]/../bin/vivado structure (if XILINX_VIVADO points to Vivado subdir)
+        # Check for [XILINX_VIVADO]/../bin/vivado structure (if XILINX_VIVADO
+        # points to Vivado subdir)
         parent_bin_dir = os.path.join(os.path.dirname(xilinx_vivado), "bin")
         if os.path.exists(parent_bin_dir):
             vivado_exe = os.path.join(parent_bin_dir, "vivado")
@@ -225,7 +228,8 @@ def get_vivado_search_paths() -> List[str]:
                 # Look for version directories in /tools/Xilinx/
                 for item in os.listdir(tools_xilinx_base):
                     item_path = os.path.join(tools_xilinx_base, item)
-                    # Check if it's a version directory (starts with digit, contains dot)
+                    # Check if it's a version directory (starts with digit,
+                    # contains dot)
                     if (
                         os.path.isdir(item_path)
                         and item
@@ -251,7 +255,8 @@ def get_vivado_search_paths() -> List[str]:
                 # Look for version directories in /tools/Xilinx/
                 for item in os.listdir(tools_xilinx_base):
                     item_path = os.path.join(tools_xilinx_base, item)
-                    # Check if it's a version directory (starts with digit, contains dot)
+                    # Check if it's a version directory (starts with digit,
+                    # contains dot)
                     if (
                         os.path.isdir(item_path)
                         and item
@@ -301,7 +306,8 @@ def get_vivado_version(vivado_path: str) -> str:
                     # Extract version like "v2022.2"
                     parts = line.split()
                     for part in parts:
-                        if part.startswith("v") and "." in part and len(part) > 1:
+                        if part.startswith(
+                                "v") and "." in part and len(part) > 1:
                             return part[1:]  # Remove 'v' prefix
 
         # Try to extract version from path if command failed
@@ -358,8 +364,7 @@ def run_vivado_command(
                 "2. Set the XILINX_VIVADO environment variable, or\n"
                 "3. Install Vivado in a standard location:\n"
                 "   - Linux: /opt/Xilinx/Vivado, /tools/Xilinx/Vivado\n"
-                "   - macOS: /Applications/Xilinx/Vivado"
-            )
+                "   - macOS: /Applications/Xilinx/Vivado")
 
     cmd = [vivado_exe]
 
@@ -408,12 +413,12 @@ def debug_vivado_search() -> None:
 
     # Show search paths
     search_paths = get_vivado_search_paths()
-    print(f"\nSearch paths being checked:")
+    print("\nSearch paths being checked:")
     for i, path in enumerate(search_paths, 1):
         print(f"  {i}. {path}")
 
     # Check each search location
-    print(f"\nDetailed search results:")
+    print("\nDetailed search results:")
     system = platform.system().lower()
 
     if system == "linux":
@@ -434,7 +439,7 @@ def debug_vivado_search() -> None:
     for base_path in base_paths:
         print(f"  Checking: {base_path}")
         if os.path.exists(base_path):
-            print(f"    ✓ Directory exists")
+            print("    ✓ Directory exists")
             try:
                 contents = os.listdir(base_path)
                 version_dirs = [
@@ -446,75 +451,79 @@ def debug_vivado_search() -> None:
                 ]
                 if version_dirs:
                     print(
-                        f"    ✓ Found version directories: {', '.join(sorted(version_dirs))}"
-                    )
+                        f"    ✓ Found version directories: {
+                            ', '.join(
+                                sorted(version_dirs))}")
                     for version in sorted(version_dirs):
                         version_path = os.path.join(base_path, version)
                         print(f"      {version}:")
 
-                        # Check for [version]/Vivado/bin/vivado structure (correct structure)
+                        # Check for [version]/Vivado/bin/vivado structure
+                        # (correct structure)
                         vivado_subdir = os.path.join(version_path, "Vivado")
                         vivado_bin_path = os.path.join(vivado_subdir, "bin")
-                        vivado_exe_correct = os.path.join(vivado_bin_path, "vivado")
+                        vivado_exe_correct = os.path.join(
+                            vivado_bin_path, "vivado")
                         print(
-                            f"        Vivado subdirectory: {vivado_subdir} {'✓' if os.path.exists(vivado_subdir) else '✗'}"
-                        )
+                            f"        Vivado subdirectory: {vivado_subdir} {
+                                '✓' if os.path.exists(vivado_subdir) else '✗'}")
                         print(
-                            f"        Vivado/bin directory: {vivado_bin_path} {'✓' if os.path.exists(vivado_bin_path) else '✗'}"
-                        )
+                            f"        Vivado/bin directory: {vivado_bin_path} {
+                                '✓' if os.path.exists(vivado_bin_path) else '✗'}")
                         print(
-                            f"        Vivado/bin/vivado executable: {vivado_exe_correct} {'✓' if os.path.isfile(vivado_exe_correct) else '✗'}"
-                        )
+                            f"        Vivado/bin/vivado executable: {vivado_exe_correct} {
+                                '✓' if os.path.isfile(vivado_exe_correct) else '✗'}")
 
                         # Check for [version]/bin/vivado structure (legacy)
                         legacy_bin_path = os.path.join(version_path, "bin")
-                        legacy_vivado_exe = os.path.join(legacy_bin_path, "vivado")
+                        legacy_vivado_exe = os.path.join(
+                            legacy_bin_path, "vivado")
                         print(
-                            f"        Legacy bin directory: {legacy_bin_path} {'✓' if os.path.exists(legacy_bin_path) else '✗'}"
-                        )
+                            f"        Legacy bin directory: {legacy_bin_path} {
+                                '✓' if os.path.exists(legacy_bin_path) else '✗'}")
                         print(
-                            f"        Legacy vivado executable: {legacy_vivado_exe} {'✓' if os.path.isfile(legacy_vivado_exe) else '✗'}"
-                        )
+                            f"        Legacy vivado executable: {legacy_vivado_exe} {
+                                '✓' if os.path.isfile(legacy_vivado_exe) else '✗'}")
                 else:
-                    print(f"    ✗ No version directories found")
+                    print("    ✗ No version directories found")
                     print(
-                        f"    Contents: {', '.join(contents) if contents else 'empty'}"
-                    )
+                        f"    Contents: {
+                            ', '.join(contents) if contents else 'empty'}")
             except (PermissionError, FileNotFoundError) as e:
                 print(f"    ✗ Cannot access directory: {e}")
         else:
-            print(f"    ✗ Directory does not exist")
+            print("    ✗ Directory does not exist")
 
     # Check environment variables
     xilinx_vivado = os.environ.get("XILINX_VIVADO")
-    print(f"\nEnvironment variables:")
+    print("\nEnvironment variables:")
     print(f"  XILINX_VIVADO: {xilinx_vivado or 'Not set'}")
     if xilinx_vivado:
         # Check direct bin structure
         bin_dir = os.path.join(xilinx_vivado, "bin")
         vivado_exe = os.path.join(bin_dir, "vivado")
         print(
-            f"    Direct bin directory: {bin_dir} {'✓' if os.path.exists(bin_dir) else '✗'}"
-        )
+            f"    Direct bin directory: {bin_dir} {
+                '✓' if os.path.exists(bin_dir) else '✗'}")
         print(
-            f"    Direct vivado executable: {vivado_exe} {'✓' if os.path.isfile(vivado_exe) else '✗'}"
-        )
+            f"    Direct vivado executable: {vivado_exe} {
+                '✓' if os.path.isfile(vivado_exe) else '✗'}")
 
         # Check parent bin structure (if XILINX_VIVADO points to Vivado subdir)
         parent_bin_dir = os.path.join(os.path.dirname(xilinx_vivado), "bin")
         parent_vivado_exe = os.path.join(parent_bin_dir, "vivado")
         print(
-            f"    Parent bin directory: {parent_bin_dir} {'✓' if os.path.exists(parent_bin_dir) else '✗'}"
-        )
+            f"    Parent bin directory: {parent_bin_dir} {
+                '✓' if os.path.exists(parent_bin_dir) else '✗'}")
         print(
-            f"    Parent vivado executable: {parent_vivado_exe} {'✓' if os.path.isfile(parent_vivado_exe) else '✗'}"
-        )
+            f"    Parent vivado executable: {parent_vivado_exe} {
+                '✓' if os.path.isfile(parent_vivado_exe) else '✗'}")
 
     # Final detection result
-    print(f"\n=== Final Detection Result ===")
+    print("\n=== Final Detection Result ===")
     vivado_info = find_vivado_installation()
     if vivado_info:
-        print(f"✓ Vivado found:")
+        print("✓ Vivado found:")
         print(f"  Path: {vivado_info['path']}")
         print(f"  Version: {vivado_info['version']}")
         print(f"  Executable: {vivado_info['executable']}")

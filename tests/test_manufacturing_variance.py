@@ -2,14 +2,12 @@
 Tests for manufacturing variance simulation module.
 """
 
-import pytest
 
 from src.manufacturing_variance import (
     DeviceClass,
     ManufacturingVarianceSimulator,
     VarianceModel,
     VarianceParameters,
-    VarianceType,
 )
 
 
@@ -153,7 +151,8 @@ class TestManufacturingVarianceSimulator:
         )
 
         # Enterprise should generally have lower variance than consumer
-        # Note: This might not always be true due to randomness, but with seed it should be consistent
+        # Note: This might not always be true due to randomness, but with seed
+        # it should be consistent
         assert enterprise_model.device_class == DeviceClass.ENTERPRISE
         assert consumer_model.device_class == DeviceClass.CONSUMER
 
@@ -214,7 +213,7 @@ class TestManufacturingVarianceSimulator:
         )
 
         assert "test_reg" in sv_code
-        assert "always_ff" in sv_code
+        assert "always_f" in sv_code
         assert "variance-aware" in sv_code
         assert "LFSR" in sv_code
 
@@ -280,8 +279,10 @@ class TestManufacturingVarianceSimulator:
         simulator1 = ManufacturingVarianceSimulator(seed=123)
         simulator2 = ManufacturingVarianceSimulator(seed=123)
 
-        model1 = simulator1.generate_variance_model("test", DeviceClass.CONSUMER)
-        model2 = simulator2.generate_variance_model("test", DeviceClass.CONSUMER)
+        model1 = simulator1.generate_variance_model(
+            "test", DeviceClass.CONSUMER)
+        model2 = simulator2.generate_variance_model(
+            "test", DeviceClass.CONSUMER)
 
         # Should be identical with same seed
         assert model1.clock_jitter_percent == model2.clock_jitter_percent

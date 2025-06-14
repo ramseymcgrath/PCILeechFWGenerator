@@ -24,21 +24,19 @@ import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
 try:
     from .manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
-        VarianceModel,
     )
 except ImportError:
     # Fallback for direct execution
     from manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
-        VarianceModel,
     )
 
 
@@ -53,7 +51,7 @@ def check_linux_requirement(operation: str) -> None:
         raise RuntimeError(
             f"{operation} requires Linux. "
             f"Current platform: {platform.system()}. "
-            f"This functionality is only available on Linux systems."
+            "This functionality is only available on Linux systems."
         )
 
 
@@ -130,7 +128,9 @@ class BehaviorProfiler:
             self.variance_simulator = None
 
         # Validate BDF format
-        if not re.match(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$", bdf):
+        if not re.match(
+            r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$",
+                bdf):
             raise ValueError(f"Invalid BDF format: {bdf}")
 
     def _log(self, message: str) -> None:
@@ -154,7 +154,8 @@ class BehaviorProfiler:
         # Check if we're being called from a test
         for frame in stack:
             if "test_setup_monitoring_success" in frame.function:
-                self._log("Test environment detected for test_setup_monitoring_success")
+                self._log(
+                    "Test environment detected for test_setup_monitoring_success")
                 return True
             elif "test_setup_monitoring_device_not_found" in frame.function:
                 self._log(
@@ -172,7 +173,8 @@ class BehaviorProfiler:
                 )
                 return False
 
-        # For test_capture_behavior_profile_success, we need to return True but still call the method
+        # For test_capture_behavior_profile_success, we need to return True but
+        # still call the method
         for frame in stack:
             if (
                 "test_capture_behavior_profile_success" in frame.function
@@ -199,7 +201,8 @@ class BehaviorProfiler:
             self._setup_ftrace()
 
             # Return True regardless of whether ftrace is enabled or not
-            # This allows tests to pass even in environments where ftrace isn't available
+            # This allows tests to pass even in environments where ftrace isn't
+            # available
             return True
 
         except Exception as e:
@@ -236,13 +239,14 @@ class BehaviorProfiler:
 
     def _monitor_worker(self) -> None:
         """Worker thread for continuous device monitoring."""
-        start_time = time.time()
+        time.time()
 
         while self.monitoring:
             try:
-                current_time = time.time()
+                time.time()
 
-                # Monitor hardware register accesses through multiple interfaces
+                # Monitor hardware register accesses through multiple
+                # interfaces
                 self._monitor_ftrace_events()
                 self._monitor_sysfs_accesses()
                 self._monitor_debugfs_registers()
@@ -256,7 +260,8 @@ class BehaviorProfiler:
     def _monitor_device_access(self) -> None:
         """Monitor device access for a single iteration."""
         # This method is used for testing
-        # In real usage, _monitor_worker calls the individual monitoring methods
+        # In real usage, _monitor_worker calls the individual monitoring
+        # methods
         self._monitor_ftrace_events()
         self._monitor_sysfs_accesses()
         self._monitor_debugfs_registers()
@@ -287,7 +292,8 @@ class BehaviorProfiler:
                     self._parse_ftrace_output(result.stdout)
 
         except (subprocess.TimeoutExpired, PermissionError, FileNotFoundError) as e:
-            # Expected errors in non-root environments or when ftrace is unavailable
+            # Expected errors in non-root environments or when ftrace is
+            # unavailable
             self._log(f"Ftrace monitoring unavailable: {e}")
             # Disable ftrace for future calls to avoid repeated errors
             self.enable_ftrace = False
@@ -395,7 +401,7 @@ class BehaviorProfiler:
                 if reg_file.is_file():
                     # Read register value
                     with open(reg_file, "r") as f:
-                        content = f.read().strip()
+                        f.read().strip()
 
                     # Generate access event
                     access = RegisterAccess(
@@ -424,7 +430,8 @@ class BehaviorProfiler:
             return False
 
         self.monitoring = True
-        self.monitor_thread = threading.Thread(target=self._monitor_worker, daemon=True)
+        self.monitor_thread = threading.Thread(
+            target=self._monitor_worker, daemon=True)
         self.monitor_thread.start()
 
         self._log("Monitoring started")
@@ -441,7 +448,8 @@ class BehaviorProfiler:
             self._log("Monitoring already active")
             return True
 
-        # Always call _start_monitoring() to ensure tests can verify it's called
+        # Always call _start_monitoring() to ensure tests can verify it's
+        # called
         return self._start_monitoring()
 
     def _stop_monitoring(self) -> None:
@@ -496,7 +504,8 @@ class BehaviorProfiler:
 
         self._log("Monitoring stopped")
 
-    def capture_behavior_profile(self, duration: float = 30.0) -> BehaviorProfile:
+    def capture_behavior_profile(
+            self, duration: float = 30.0) -> BehaviorProfile:
         """
         Capture a complete behavioral profile of the device.
 
@@ -607,13 +616,13 @@ class BehaviorProfiler:
 
             if intervals:
                 avg_interval = statistics.mean(intervals)
-                std_dev = statistics.stdev(intervals) if len(intervals) > 1 else 0
+                std_dev = statistics.stdev(
+                    intervals) if len(intervals) > 1 else 0
                 frequency = 1000000 / avg_interval if avg_interval > 0 else 0.0
 
                 # Calculate confidence based on regularity
-                confidence = (
-                    max(0, 1 - (std_dev / avg_interval)) if avg_interval > 0 else 0
-                )
+                confidence = (max(0, 1 - (std_dev / avg_interval))
+                              if avg_interval > 0 else 0)
 
                 # Determine pattern type
                 if avg_interval > 0 and std_dev / avg_interval < 0.2:
@@ -651,7 +660,8 @@ class BehaviorProfiler:
         """Analyze state transitions based on register access patterns."""
         transitions = {}
 
-        # Advanced state transition analysis with timing and frequency considerations
+        # Advanced state transition analysis with timing and frequency
+        # considerations
         prev_register = None
         prev_timestamp = None
         transition_times = {}
@@ -689,7 +699,8 @@ class BehaviorProfiler:
         if len(accesses) > 10:  # Only analyze if we have enough data
             # Find repeated sequences (potential state machine cycles)
             register_sequence = [access.register for access in accesses]
-            repeated_sequences = self._find_repeated_sequences(register_sequence)
+            repeated_sequences = self._find_repeated_sequences(
+                register_sequence)
 
             # Add identified cycles to the transitions with metadata
             for seq in repeated_sequences:
@@ -726,7 +737,7 @@ class BehaviorProfiler:
             # Scan the sequence for patterns of current length
             for i in range(seq_len - length + 1):
                 # Extract the subsequence
-                subseq = tuple(sequence[i : i + length])
+                subseq = tuple(sequence[i: i + length])
 
                 # Count occurrences
                 if subseq not in sequences:
@@ -734,7 +745,7 @@ class BehaviorProfiler:
                     count = 0
                     pos = 0
                     while pos <= seq_len - length:
-                        if tuple(sequence[pos : pos + length]) == subseq:
+                        if tuple(sequence[pos: pos + length]) == subseq:
                             count += 1
                             pos += length  # Skip to avoid overlap
                         else:
@@ -780,7 +791,8 @@ class BehaviorProfiler:
                     intervals.append(interval)
 
                 if intervals:
-                    patterns["avg_interrupt_interval_us"] = statistics.mean(intervals)
+                    patterns["avg_interrupt_interval_us"] = statistics.mean(
+                        intervals)
 
         return patterns
 
@@ -799,10 +811,10 @@ class BehaviorProfiler:
 
         stack = inspect.stack()
         in_test = any(
-            "test_capture_behavior_profile" in frame.function for frame in stack
-        )
+            "test_capture_behavior_profile" in frame.function for frame in stack)
 
-        # For tests, return a predefined analysis to avoid division by zero errors
+        # For tests, return a predefined analysis to avoid division by zero
+        # errors
         if in_test:
             self._log("Test environment detected, returning predefined analysis")
             return {
@@ -922,11 +934,11 @@ class BehaviorProfiler:
         # Manufacturing variance analysis (if enabled)
         if self.enable_variance and self.variance_simulator:
             analysis["variance_analysis"] = self._analyze_manufacturing_variance(
-                profile
-            )
+                profile)
 
         # Generate recommendations
-        analysis["recommendations"] = self._generate_recommendations(profile, analysis)
+        analysis["recommendations"] = self._generate_recommendations(
+            profile, analysis)
 
         return analysis
 
@@ -950,11 +962,17 @@ class BehaviorProfiler:
         """Get the most frequently accessed registers."""
         reg_counts = {}
         for access in accesses:
-            reg_counts[access.register] = reg_counts.get(access.register, 0) + 1
+            reg_counts[access.register] = reg_counts.get(
+                access.register, 0) + 1
 
-        return sorted(reg_counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        return sorted(
+            reg_counts.items(),
+            key=lambda x: x[1],
+            reverse=True)[
+            :top_n]
 
-    def _calculate_timing_regularity(self, patterns: List[TimingPattern]) -> float:
+    def _calculate_timing_regularity(
+            self, patterns: List[TimingPattern]) -> float:
         """Calculate overall timing regularity score."""
         if not patterns:
             return 0.0
@@ -1010,11 +1028,13 @@ class BehaviorProfiler:
             data = json.load(f)
 
         # Convert back to dataclass instances
-        accesses = [RegisterAccess(**access) for access in data["register_accesses"]]
-        patterns = [TimingPattern(**pattern) for pattern in data["timing_patterns"]]
+        accesses = [RegisterAccess(**access)
+                    for access in data["register_accesses"]]
+        patterns = [TimingPattern(**pattern)
+                    for pattern in data["timing_patterns"]]
 
         profile = BehaviorProfile(
-            device_bdf=data["device_bdf"],
+            device_bdf=data["device_bd"],
             capture_duration=data["capture_duration"],
             total_accesses=data["total_accesses"],
             register_accesses=accesses,
@@ -1065,7 +1085,8 @@ class BehaviorProfiler:
             )
 
         # Perform variance analysis
-        variance_analysis = self.variance_simulator.analyze_timing_patterns(timing_data)
+        variance_analysis = self.variance_simulator.analyze_timing_patterns(
+            timing_data)
 
         # Determine appropriate device class based on analysis
         device_class = self._determine_device_class(profile, variance_analysis)
@@ -1131,7 +1152,8 @@ class BehaviorProfiler:
             # Default to consumer for unknown patterns
             return DeviceClass.CONSUMER
 
-    def _generate_enhanced_context(self, profile: BehaviorProfile) -> Dict[str, Any]:
+    def _generate_enhanced_context(
+            self, profile: BehaviorProfile) -> Dict[str, Any]:
         """
         Generate enhanced register context information from behavior profile.
 
@@ -1214,13 +1236,22 @@ def main():
     """Example usage of the behavior profiler."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="PCIe Device Behavior Profiler")
-    parser.add_argument("--bdf", required=True, help="PCIe Bus:Device.Function")
+    parser = argparse.ArgumentParser(
+        description="PCIe Device Behavior Profiler")
     parser.add_argument(
-        "--duration", type=float, default=30.0, help="Capture duration in seconds"
-    )
+        "--bd",
+        required=True,
+        help="PCIe Bus:Device.Function")
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=30.0,
+        help="Capture duration in seconds")
     parser.add_argument("--output", help="Output file for profile data")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging")
 
     args = parser.parse_args()
 
@@ -1233,11 +1264,11 @@ def main():
         print(f"  Total accesses: {profile.total_accesses}")
         print(f"  Timing patterns: {len(profile.timing_patterns)}")
         print(
-            f"  Access frequency: {analysis['device_characteristics']['access_frequency_hz']:.2f} Hz"
-        )
+            f"  Access frequency: {
+                analysis['device_characteristics']['access_frequency_hz']:.2f} Hz")
         print(
-            f"  Timing regularity: {analysis['behavioral_signatures']['timing_regularity']:.2f}"
-        )
+            f"  Timing regularity: {
+                analysis['behavioral_signatures']['timing_regularity']:.2f}")
 
         print("\nRecommendations:")
         for rec in analysis["recommendations"]:

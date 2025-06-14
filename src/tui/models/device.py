@@ -45,7 +45,8 @@ class PCIDevice:
     @property
     def is_suitable(self) -> bool:
         """Check if device is suitable for firmware generation."""
-        return self.suitability_score >= 0.7 and len(self.compatibility_issues) == 0
+        return self.suitability_score >= 0.7 and len(
+            self.compatibility_issues) == 0
 
     @property
     def status_indicator(self) -> str:
@@ -106,7 +107,7 @@ class PCIDevice:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "bdf": self.bdf,
+            "bd": self.bdf,
             "vendor_id": self.vendor_id,
             "device_id": self.device_id,
             "vendor_name": self.vendor_name,

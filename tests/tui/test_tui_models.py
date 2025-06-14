@@ -4,10 +4,8 @@ Test TUI Data Models
 Tests for the TUI data models (config, device, error, progress).
 """
 
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -192,7 +190,7 @@ class TestPCIDevice:
             device_name="82574L Gigabit Network Connection",
             device_class="0200",
             subsystem_vendor="8086",
-            subsystem_device="a01f",
+            subsystem_device="a01",
             driver="e1000e",
             iommu_group="13",
             power_state="D0",
@@ -227,9 +225,8 @@ class TestPCIDevice:
             compatibility_issues=[],
         )
 
-        assert (
-            device.display_name == "Intel Corporation 82574L Gigabit Network Connection"
-        )
+        assert (device.display_name ==
+                "Intel Corporation 82574L Gigabit Network Connection")
 
     @pytest.mark.unit
     def test_is_suitable(self):
@@ -317,7 +314,7 @@ class TestPCIDevice:
 
         # Test to_dict
         data = device.to_dict()
-        assert data["bdf"] == "0000:03:00.0"
+        assert data["bd"] == "0000:03:00.0"
         assert data["vendor_name"] == "Intel Corporation"
         assert data["driver"] == "e1000e"
 

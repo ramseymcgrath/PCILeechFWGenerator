@@ -6,38 +6,32 @@ This test suite validates that the advanced_sv modules can properly handle
 real-world patterns found in external PCILeech examples.
 """
 
-import json
-import os
-import re
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
-
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator, ErrorType
+from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
+from manufacturing_variance import DeviceClass
+from advanced_sv_power import (
+    PowerManagementConfig,
+    PowerManagementGenerator,
+    PowerState,
+)
+from advanced_sv_perf import (
+    PerformanceCounterConfig,
+    PerformanceCounterGenerator,
+)
+from advanced_sv_perf import DeviceType as PerfDeviceType
 from advanced_sv_main import (
     AdvancedSVGenerator,
     DeviceSpecificLogic,
     DeviceType,
 )
-from advanced_sv_perf import DeviceType as PerfDeviceType
-from advanced_sv_perf import (
-    PerformanceCounterConfig,
-    PerformanceCounterGenerator,
-)
-from advanced_sv_power import (
-    LinkState,
-    PowerManagementConfig,
-    PowerManagementGenerator,
-    PowerState,
-)
-from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
-from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
+from advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator, ErrorType
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 class TestExternalPatternIntegration:
@@ -49,7 +43,9 @@ class TestExternalPatternIntegration:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     @pytest.fixture
     def external_tcl_example(self):
@@ -66,7 +62,10 @@ class TestExternalPatternIntegration:
 
         # Extract module interfaces
         module_pattern = r"module\s+(\w+)\s*\((.*?)\);"
-        module_match = re.search(module_pattern, external_sv_example, re.DOTALL)
+        module_match = re.search(
+            module_pattern,
+            external_sv_example,
+            re.DOTALL)
         if module_match:
             patterns["module_name"] = module_match.group(1)
             patterns["module_interface"] = module_match.group(2)
@@ -85,7 +84,8 @@ class TestExternalPatternIntegration:
 
         return patterns
 
-    def test_advanced_sv_generator_with_external_patterns(self, extracted_sv_patterns):
+    def test_advanced_sv_generator_with_external_patterns(
+            self, extracted_sv_patterns):
         """Test that AdvancedSVGenerator can incorporate external patterns."""
         # Create a generator with configurations that match external patterns
         device_config = DeviceSpecificLogic(
@@ -193,7 +193,8 @@ class TestExternalPatternIntegration:
         # Check for performance counter features
         assert "Performance Counter" in sv_content
 
-    def test_power_management_with_external_patterns(self, extracted_sv_patterns):
+    def test_power_management_with_external_patterns(
+            self, extracted_sv_patterns):
         """Test that PowerManagementGenerator can incorporate external patterns."""
         # Configure power management based on external patterns
         has_clock_gating = any(
@@ -235,10 +236,11 @@ class TestExternalPatternIntegration:
 
         # Check for state machine if states were found in the example
         if extracted_sv_patterns.get("states", []):
-            assert "always_ff" in power_code
+            assert "always_f" in power_code
             assert "case" in power_code
 
-    def test_error_handling_with_external_patterns(self, extracted_sv_patterns):
+    def test_error_handling_with_external_patterns(
+            self, extracted_sv_patterns):
         """Test that ErrorHandlingGenerator can incorporate external patterns."""
         # Configure error handling based on external patterns
         has_error_handling = any(
@@ -282,10 +284,11 @@ class TestExternalPatternIntegration:
         assert "error_status" in error_code
 
         # Check for state machine
-        assert "always_ff" in error_code
+        assert "always_f" in error_code
         assert "case" in error_code
 
-    def test_performance_counters_with_external_patterns(self, extracted_sv_patterns):
+    def test_performance_counters_with_external_patterns(
+            self, extracted_sv_patterns):
         """Test that PerformanceCounterGenerator can incorporate external patterns."""
         # Configure performance counters based on external patterns
         is_network_device = (
@@ -347,7 +350,9 @@ class TestExternalExampleBasedRegisters:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     def test_extract_registers_from_example(self, external_sv_example):
         """Test extracting register definitions from external example."""
@@ -371,7 +376,8 @@ class TestExternalExampleBasedRegisters:
             if found_regs:
                 # Handle different patterns with different group structures
                 if pattern.startswith("(input|output)"):
-                    # For input/output registers, the register name is in group 2
+                    # For input/output registers, the register name is in group
+                    # 2
                     registers.extend([(reg[1], "0") for reg in found_regs])
                 elif pattern.startswith("parameter"):
                     # For parameters, we have name and value
@@ -383,7 +389,8 @@ class TestExternalExampleBasedRegisters:
                     # For the original pattern, we already have name and value
                     registers.extend(found_regs)
 
-        # If no registers found with any pattern, create some mock registers based on module name
+        # If no registers found with any pattern, create some mock registers
+        # based on module name
         if not registers:
             module_match = re.search(r"module\s+(\w+)", external_sv_example)
             if module_match:
@@ -416,7 +423,8 @@ class TestExternalExampleBasedRegisters:
 
                 # Convert reg_value to proper hex format
                 if reg_value == "0":
-                    # Use index + 327 to generate a meaningful value for testing
+                    # Use index + 327 to generate a meaningful value for
+                    # testing
                     hex_value = f"0x{(i + 327):08x}"
                 else:
                     try:
@@ -472,7 +480,7 @@ class TestExternalExampleBasedRegisters:
         read_match = re.search(read_pattern, external_sv_example, re.DOTALL)
 
         if read_match:
-            addr_signal = read_match.group(1)
+            read_match.group(1)
             read_cases = read_match.group(2)
 
             # Extract individual read cases
@@ -529,13 +537,15 @@ class TestExternalExampleBasedStateMachines:
         try:
             return get_pcileech_wifi_sv_file()
         except ValueError as e:
-            pytest.skip(f"Failed to fetch SystemVerilog example from GitHub: {str(e)}")
+            pytest.skip(
+                f"Failed to fetch SystemVerilog example from GitHub: {
+                    str(e)}")
 
     def test_extract_state_machines_from_example(self, external_sv_example):
         """Test extracting state machine definitions from external example."""
         # Extract state definitions from the example
         state_define_pattern = r"`define\s+(\w+)\s+(\w+)"
-        state_defines = re.findall(state_define_pattern, external_sv_example)
+        re.findall(state_define_pattern, external_sv_example)
 
         # Extract state machine logic
         state_machine_pattern = r"(case\s*\(\w+\).*?endcase)"

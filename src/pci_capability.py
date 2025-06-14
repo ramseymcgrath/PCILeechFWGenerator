@@ -10,7 +10,7 @@ capabilities that cannot be faithfully emulated.
 
 import logging
 from enum import Enum, auto
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Check if capabilities are supported (Status register bit 4)
     status_offset = 6  # Status register is at offset 0x06
     status_byte_offset = status_offset * 2  # Each byte is 2 hex chars
-    status_bytes = cfg[status_byte_offset : status_byte_offset + 4]
+    status_bytes = cfg[status_byte_offset: status_byte_offset + 4]
     if len(status_bytes) < 4:
         logger.warning("Status register not found in configuration space")
         return None
@@ -122,7 +122,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     # Get capabilities pointer (offset 0x34)
     cap_ptr_offset = 0x34
     cap_ptr_byte_offset = cap_ptr_offset * 2
-    cap_ptr_bytes = cfg[cap_ptr_byte_offset : cap_ptr_byte_offset + 2]
+    cap_ptr_bytes = cfg[cap_ptr_byte_offset: cap_ptr_byte_offset + 2]
     if len(cap_ptr_bytes) < 2:
         logger.warning("Capabilities pointer not found in configuration space")
         return None
@@ -146,13 +146,16 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
         # Ensure we have enough data
         if current_byte_offset + 4 > len(cfg):
-            logger.warning(f"Capability pointer {current_ptr:02x} is out of bounds")
+            logger.warning(
+                f"Capability pointer {
+                    current_ptr:02x} is out of bounds")
             return None
 
         # Read capability ID and next pointer
         try:
-            cap_id_bytes = cfg[current_byte_offset : current_byte_offset + 2]
-            next_ptr_bytes = cfg[current_byte_offset + 2 : current_byte_offset + 4]
+            cap_id_bytes = cfg[current_byte_offset: current_byte_offset + 2]
+            next_ptr_bytes = cfg[current_byte_offset +
+                                 2: current_byte_offset + 4]
 
             current_cap_id = int(cap_id_bytes, 16)
             next_ptr = int(next_ptr_bytes, 16)
@@ -162,7 +165,9 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
             current_ptr = next_ptr
         except ValueError:
-            logger.warning(f"Invalid capability data at offset {current_ptr:02x}")
+            logger.warning(
+                f"Invalid capability data at offset {
+                    current_ptr:02x}")
             return None
 
     logger.info(f"Capability ID 0x{cap_id:02x} not found")
@@ -184,12 +189,13 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
     # If we're looking for L1 PM Substates and the capability has been pruned,
     # we should return None even if the header is still present but zeroed
     if cap_id == PCIExtCapabilityID.L1_PM_SUBSTATES.value:
-        # Check if the L1 PM Substates capability at offset 0x100 has been zeroed out
+        # Check if the L1 PM Substates capability at offset 0x100 has been
+        # zeroed out
         l1pm_offset = 0x100
         l1pm_byte_offset = l1pm_offset * 2
 
         if len(cfg) >= l1pm_byte_offset + 8:
-            header_bytes = cfg[l1pm_byte_offset : l1pm_byte_offset + 8]
+            header_bytes = cfg[l1pm_byte_offset: l1pm_byte_offset + 8]
             if header_bytes == "00000000":
                 return None
 
@@ -198,7 +204,8 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
 
     # Check if configuration space is valid and large enough
     if not cfg or len(cfg) < ext_cap_start * 2:
-        logger.warning("Configuration space is too small for extended capabilities")
+        logger.warning(
+            "Configuration space is too small for extended capabilities")
         return None
 
     # Walk the extended capabilities list
@@ -212,8 +219,8 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
         # Ensure we have enough data (at least 4 bytes for header)
         if current_byte_offset + 8 > len(cfg):
             logger.warning(
-                f"Extended capability pointer {current_ptr:03x} is out of bounds"
-            )
+                f"Extended capability pointer {
+                    current_ptr:03x} is out of bounds")
             return None
 
         # Read extended capability ID and next pointer
@@ -222,7 +229,7 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
             # [31:16] = Capability ID
             # [15:4] = Capability Version
             # [3:0] = Next Capability Offset
-            header_bytes = cfg[current_byte_offset : current_byte_offset + 8]
+            header_bytes = cfg[current_byte_offset: current_byte_offset + 8]
 
             # Check if the header is all zeros (capability has been removed)
             if header_bytes == "00000000":
@@ -236,7 +243,8 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
             if current_cap_id == 0:
                 break
 
-            # Extract the next capability pointer (last 2 bytes, but only the lower 12 bits)
+            # Extract the next capability pointer (last 2 bytes, but only the
+            # lower 12 bits)
             next_ptr = int(header_bytes[4:8], 16) & 0xFFF
 
             if current_cap_id == cap_id:
@@ -277,7 +285,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
     # Check if capabilities are supported (Status register bit 4)
     status_offset = 6  # Status register is at offset 0x06
     status_byte_offset = status_offset * 2  # Each byte is 2 hex chars
-    status_bytes = cfg[status_byte_offset : status_byte_offset + 4]
+    status_bytes = cfg[status_byte_offset: status_byte_offset + 4]
     if len(status_bytes) < 4:
         logger.warning("Status register not found in configuration space")
         return capabilities
@@ -294,7 +302,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
     # Get capabilities pointer (offset 0x34)
     cap_ptr_offset = 0x34
     cap_ptr_byte_offset = cap_ptr_offset * 2
-    cap_ptr_bytes = cfg[cap_ptr_byte_offset : cap_ptr_byte_offset + 2]
+    cap_ptr_bytes = cfg[cap_ptr_byte_offset: cap_ptr_byte_offset + 2]
     if len(cap_ptr_bytes) < 2:
         logger.warning("Capabilities pointer not found in configuration space")
         return capabilities
@@ -318,13 +326,16 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
 
         # Ensure we have enough data
         if current_byte_offset + 4 > len(cfg):
-            logger.warning(f"Capability pointer {current_ptr:02x} is out of bounds")
+            logger.warning(
+                f"Capability pointer {
+                    current_ptr:02x} is out of bounds")
             break
 
         # Read capability ID and next pointer
         try:
-            cap_id_bytes = cfg[current_byte_offset : current_byte_offset + 2]
-            next_ptr_bytes = cfg[current_byte_offset + 2 : current_byte_offset + 4]
+            cap_id_bytes = cfg[current_byte_offset: current_byte_offset + 2]
+            next_ptr_bytes = cfg[current_byte_offset +
+                                 2: current_byte_offset + 4]
 
             cap_id = int(cap_id_bytes, 16)
             next_ptr = int(next_ptr_bytes, 16)
@@ -342,7 +353,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
                 # Power Management Capability
                 if current_byte_offset + 8 <= len(cfg):
                     pm_cap_bytes = cfg[
-                        current_byte_offset + 4 : current_byte_offset + 8
+                        current_byte_offset + 4: current_byte_offset + 8
                     ]
                     pm_cap = int(pm_cap_bytes, 16)
                     capabilities[current_ptr]["pm_cap"] = pm_cap
@@ -352,18 +363,19 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
                 # PCI Express Capability
                 if current_byte_offset + 8 <= len(cfg):
                     pcie_cap_bytes = cfg[
-                        current_byte_offset + 4 : current_byte_offset + 8
+                        current_byte_offset + 4: current_byte_offset + 8
                     ]
                     pcie_cap = int(pcie_cap_bytes, 16)
                     capabilities[current_ptr]["pcie_cap"] = pcie_cap
                     capabilities[current_ptr]["name"] = "PCI Express"
 
-                    # Read Device Capabilities 2 (offset 0x24 from capability start)
+                    # Read Device Capabilities 2 (offset 0x24 from capability
+                    # start)
                     dev_cap2_offset = current_ptr + 0x24
                     dev_cap2_byte_offset = dev_cap2_offset * 2
                     if dev_cap2_byte_offset + 8 <= len(cfg):
                         dev_cap2_bytes = cfg[
-                            dev_cap2_byte_offset : dev_cap2_byte_offset + 8
+                            dev_cap2_byte_offset: dev_cap2_byte_offset + 8
                         ]
                         dev_cap2 = int(dev_cap2_bytes, 16)
                         capabilities[current_ptr]["dev_cap2"] = dev_cap2
@@ -372,7 +384,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
                 # MSI-X Capability
                 if current_byte_offset + 8 <= len(cfg):
                     msix_control_bytes = cfg[
-                        current_byte_offset + 4 : current_byte_offset + 8
+                        current_byte_offset + 4: current_byte_offset + 8
                     ]
                     msix_control = int(msix_control_bytes, 16)
                     capabilities[current_ptr]["msix_control"] = msix_control
@@ -382,7 +394,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
                 # MSI Capability
                 if current_byte_offset + 8 <= len(cfg):
                     msi_control_bytes = cfg[
-                        current_byte_offset + 4 : current_byte_offset + 8
+                        current_byte_offset + 4: current_byte_offset + 8
                     ]
                     msi_control = int(msi_control_bytes, 16)
                     capabilities[current_ptr]["msi_control"] = msi_control
@@ -392,7 +404,7 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
                 # Vendor-Specific Capability
                 if current_byte_offset + 8 <= len(cfg):
                     vendor_bytes = cfg[
-                        current_byte_offset + 4 : current_byte_offset + 8
+                        current_byte_offset + 4: current_byte_offset + 8
                     ]
                     vendor_data = int(vendor_bytes, 16)
                     capabilities[current_ptr]["vendor_data"] = vendor_data
@@ -404,7 +416,9 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
 
             current_ptr = next_ptr
         except ValueError:
-            logger.warning(f"Invalid capability data at offset {current_ptr:02x}")
+            logger.warning(
+                f"Invalid capability data at offset {
+                    current_ptr:02x}")
             break
 
     return capabilities
@@ -427,7 +441,8 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
 
     # Check if configuration space is valid and large enough
     if not cfg or len(cfg) < ext_cap_start * 2:
-        logger.warning("Configuration space is too small for extended capabilities")
+        logger.warning(
+            "Configuration space is too small for extended capabilities")
         return ext_capabilities
 
     # Walk the extended capabilities list
@@ -441,8 +456,8 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
         # Ensure we have enough data (at least 4 bytes for header)
         if current_byte_offset + 8 > len(cfg):
             logger.warning(
-                f"Extended capability pointer {current_ptr:03x} is out of bounds"
-            )
+                f"Extended capability pointer {
+                    current_ptr:03x} is out of bounds")
             break
 
         # Read extended capability ID and next pointer
@@ -451,7 +466,7 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
             # [31:16] = Capability ID
             # [15:4] = Capability Version
             # [3:0] = Next Capability Offset
-            header_bytes = cfg[current_byte_offset : current_byte_offset + 8]
+            header_bytes = cfg[current_byte_offset: current_byte_offset + 8]
 
             # Extract the capability ID (first 2 bytes)
             try:
@@ -466,13 +481,14 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
                 # or at least have a reasonable value (not too large)
                 if cap_id > 0x1000 or (cap_id == 0 and next_ptr != 0):
                     logger.warning(
-                        f"Invalid extended capability ID: 0x{cap_id:04x} at offset 0x{current_ptr:03x}"
-                    )
+                        f"Invalid extended capability ID: 0x{
+                            cap_id:04x} at offset 0x{
+                            current_ptr:03x}")
                     break
             except ValueError:
                 logger.warning(
-                    f"Invalid extended capability data at offset {current_ptr:03x}"
-                )
+                    f"Invalid extended capability data at offset {
+                        current_ptr:03x}")
                 break
 
             # Store extended capability information
@@ -510,8 +526,9 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
             # and greater than the current pointer to avoid loops
             if next_ptr < 0x100 or next_ptr >= 0x1000 or next_ptr <= current_ptr:
                 logger.warning(
-                    f"Invalid next pointer: 0x{next_ptr:03x} at offset 0x{current_ptr:03x}"
-                )
+                    f"Invalid next pointer: 0x{
+                        next_ptr:03x} at offset 0x{
+                        current_ptr:03x}")
                 break
 
             current_ptr = next_ptr
@@ -610,8 +627,8 @@ def determine_pruning_actions(
 
     for offset, cap in capabilities.items():
         category = categories.get(offset, EmulationCategory.UNSUPPORTED)
-        cap_id = cap.get("id")
-        cap_type = cap.get("type")
+        cap.get("id")
+        cap.get("type")
 
         if category == EmulationCategory.FULLY_SUPPORTED:
             # Fully supported capabilities can be kept as-is
@@ -648,7 +665,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
     ext_caps = get_all_ext_capabilities(cfg)
 
     # Combine all capabilities
-    all_caps = {**std_caps, **ext_caps}
+    {**std_caps, **ext_caps}
 
     # Create a mutable list of characters from the configuration space
     cfg_chars = list(cfg)
@@ -660,7 +677,8 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
         cap = std_caps[offset]
 
         if action == PruningAction.REMOVE:
-            # Remove the capability by updating the previous capability's next pointer
+            # Remove the capability by updating the previous capability's next
+            # pointer
             if i > 0:
                 prev_offset = std_cap_offsets[i - 1]
                 next_ptr = cap["next_ptr"]
@@ -670,30 +688,32 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                     prev_offset + 1
                 ) * 2  # +1 for the next pointer byte
                 prev_next_ptr_hex = f"{next_ptr:02x}"
-                cfg_chars[prev_next_ptr_offset : prev_next_ptr_offset + 2] = (
+                cfg_chars[prev_next_ptr_offset: prev_next_ptr_offset + 2] = (
                     prev_next_ptr_hex
                 )
             else:
-                # This is the first capability, update the capabilities pointer at 0x34
+                # This is the first capability, update the capabilities pointer
+                # at 0x34
                 cap_ptr_offset = 0x34 * 2
                 next_ptr = cap["next_ptr"]
                 next_ptr_hex = f"{next_ptr:02x}"
-                cfg_chars[cap_ptr_offset : cap_ptr_offset + 2] = next_ptr_hex
+                cfg_chars[cap_ptr_offset: cap_ptr_offset + 2] = next_ptr_hex
 
         elif action == PruningAction.MODIFY:
             # Modify specific fields based on capability type
             if cap["id"] == PCICapabilityID.POWER_MANAGEMENT.value:
                 # Modify Power Management Capability
                 # Keep only D0 and D3hot support, clear PME support
-                pm_cap_offset = (offset + 2) * 2  # +2 for the PM capabilities register
-                pm_cap_bytes = cfg[pm_cap_offset : pm_cap_offset + 4]
+                # +2 for the PM capabilities register
+                pm_cap_offset = (offset + 2) * 2
+                pm_cap_bytes = cfg[pm_cap_offset: pm_cap_offset + 4]
                 pm_cap = int(pm_cap_bytes, 16)
 
                 # Clear all bits except D3hot
                 pm_cap = 0x0008  # Set only D3hot support (bit 3)
 
                 pm_cap_hex = f"{pm_cap:04x}"
-                cfg_chars[pm_cap_offset : pm_cap_offset + 4] = pm_cap_hex
+                cfg_chars[pm_cap_offset: pm_cap_offset + 4] = pm_cap_hex
 
             elif cap["id"] == PCICapabilityID.PCI_EXPRESS.value:
                 # Modify PCI Express Capability
@@ -703,7 +723,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                 ) * 2  # Link Control register offset
                 if link_control_offset + 4 <= len(cfg):
                     link_control_bytes = cfg[
-                        link_control_offset : link_control_offset + 4
+                        link_control_offset: link_control_offset + 4
                     ]
                     link_control = int(link_control_bytes, 16)
 
@@ -711,7 +731,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                     link_control &= ~0x0003
 
                     link_control_hex = f"{link_control:04x}"
-                    cfg_chars[link_control_offset : link_control_offset + 4] = (
+                    cfg_chars[link_control_offset: link_control_offset + 4] = (
                         link_control_hex
                     )
 
@@ -721,7 +741,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                 ) * 2  # Device Control 2 register offset
                 if dev_control2_offset + 4 <= len(cfg):
                     dev_control2_bytes = cfg[
-                        dev_control2_offset : dev_control2_offset + 4
+                        dev_control2_offset: dev_control2_offset + 4
                     ]
                     dev_control2 = int(dev_control2_bytes, 16)
 
@@ -729,7 +749,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                     dev_control2 &= ~0x6400
 
                     dev_control2_hex = f"{dev_control2:04x}"
-                    cfg_chars[dev_control2_offset : dev_control2_offset + 4] = (
+                    cfg_chars[dev_control2_offset: dev_control2_offset + 4] = (
                         dev_control2_hex
                     )
 
@@ -761,7 +781,7 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
             new_header = (cap_id << 16) | (cap_version << 4) | next_ptr
             new_header_hex = f"{new_header:08x}"
 
-            cfg_chars[header_offset : header_offset + 8] = new_header_hex
+            cfg_chars[header_offset: header_offset + 8] = new_header_hex
 
     # Third pass: Zero out removed capabilities
     for offset in ext_cap_offsets:
@@ -769,13 +789,15 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
         if action == PruningAction.REMOVE:
             # Zero out the entire capability
             header_offset = offset * 2
-            cfg_chars[header_offset : header_offset + 8] = "00000000"
+            cfg_chars[header_offset: header_offset + 8] = "00000000"
 
-            # Then zero out the rest of the capability (assume it's at least 4 DWORDs)
-            for j in range(4, 24, 4):  # Most capabilities are at least 4 DWORDs
+            # Then zero out the rest of the capability (assume it's at least 4
+            # DWORDs)
+            for j in range(
+                    4, 24, 4):  # Most capabilities are at least 4 DWORDs
                 field_offset = (offset + j // 2) * 2
                 if field_offset + 8 <= len(cfg):
-                    cfg_chars[field_offset : field_offset + 8] = "00000000"
+                    cfg_chars[field_offset: field_offset + 8] = "00000000"
 
         elif action == PruningAction.MODIFY:
             # Modify specific fields based on extended capability type
@@ -783,21 +805,24 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
                 # Zero out the entire L1 PM Substates capability
                 # Just keep the header with next pointer
                 header_offset = offset * 2
-                header_bytes = cfg[header_offset : header_offset + 8]
-                header = int(header_bytes, 16)
+                header_bytes = cfg[header_offset: header_offset + 8]
+                int(header_bytes, 16)
 
-                # If this is the last extended capability, set next pointer to 0
+                # If this is the last extended capability, set next pointer to
+                # 0
                 if cap["next_ptr"] == 0:
                     # Keep the ID and version, set next pointer to 0
                     new_header = (cap["id"] << 16) | (cap["version"] << 4) | 0
                     new_header_hex = f"{new_header:08x}"
-                    cfg_chars[header_offset : header_offset + 8] = new_header_hex
+                    cfg_chars[header_offset: header_offset +
+                              8] = new_header_hex
 
                 # Zero out all other fields
-                for i in range(4, 24, 4):  # L1 PM Substates is typically 6 DWORDs
+                for i in range(
+                        4, 24, 4):  # L1 PM Substates is typically 6 DWORDs
                     field_offset = (offset + i // 2) * 2
                     if field_offset + 8 <= len(cfg):
-                        cfg_chars[field_offset : field_offset + 8] = "00000000"
+                        cfg_chars[field_offset: field_offset + 8] = "00000000"
 
     # Reconstruct the configuration space
     return "".join(cfg_chars)

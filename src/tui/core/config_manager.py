@@ -9,7 +9,7 @@ import os
 import stat
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from ..models.config import BuildConfiguration
 from ..models.error import ErrorSeverity, TUIError
@@ -25,7 +25,8 @@ class ConfigManager:
             # Create directory with appropriate permissions if it doesn't exist
             self._ensure_config_directory()
         except Exception as e:
-            # Log the error but continue - we'll handle file operations gracefully later
+            # Log the error but continue - we'll handle file operations
+            # gracefully later
             print(f"Warning: Could not initialize config directory: {str(e)}")
 
     def get_current_config(self) -> BuildConfiguration:
@@ -60,8 +61,8 @@ class ConfigManager:
                 )
         except PermissionError as e:
             raise PermissionError(
-                f"Insufficient permissions to create or access config directory: {str(e)}"
-            )
+                f"Insufficient permissions to create or access config directory: {
+                    str(e)}")
         except Exception as e:
             raise Exception(f"Failed to create config directory: {str(e)}")
 
@@ -82,7 +83,8 @@ class ConfigManager:
             self._ensure_config_directory()
 
             # Save to file
-            profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
+            profile_path = self.config_dir / \
+                f"{self._sanitize_filename(name)}.json"
             config.save_to_file(profile_path)
             return True
         except PermissionError as e:
@@ -113,7 +115,8 @@ class ConfigManager:
             # Ensure directory exists
             self._ensure_config_directory()
 
-            profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
+            profile_path = self.config_dir / \
+                f"{self._sanitize_filename(name)}.json"
             if not profile_path.exists():
                 error = TUIError(
                     severity=ErrorSeverity.WARNING,
@@ -134,10 +137,10 @@ class ConfigManager:
             config.last_used = datetime.now().isoformat()
             success = self.save_profile(name, config)  # Save updated timestamp
             if not success:
-                # If we couldn't save the updated timestamp, just log and continue
+                # If we couldn't save the updated timestamp, just log and
+                # continue
                 print(
-                    f"Warning: Could not update last_used timestamp for profile '{name}'"
-                )
+                    f"Warning: Could not update last_used timestamp for profile '{name}'")
 
             return config
 
@@ -213,10 +216,12 @@ class ConfigManager:
                     invalid_files.append(profile_file.name)
                 except PermissionError:
                     # Track permission issues but don't stop processing
-                    invalid_files.append(f"{profile_file.name} (permission denied)")
+                    invalid_files.append(
+                        f"{profile_file.name} (permission denied)")
                 except Exception:
                     # Track other issues but don't stop processing
-                    invalid_files.append(f"{profile_file.name} (unknown error)")
+                    invalid_files.append(
+                        f"{profile_file.name} (unknown error)")
 
             # Sort by last used (most recent first)
             profiles.sort(key=lambda x: x.get("last_used", ""), reverse=True)
@@ -227,7 +232,8 @@ class ConfigManager:
                     severity=ErrorSeverity.WARNING,
                     category="config",
                     message="Some profile files could not be loaded",
-                    details=f"Skipped invalid files: {', '.join(invalid_files)}",
+                    details=f"Skipped invalid files: {
+                        ', '.join(invalid_files)}",
                     suggested_actions=[
                         "Check file permissions and format of the skipped files",
                         "Consider deleting corrupted profile files",
@@ -272,7 +278,8 @@ class ConfigManager:
             Boolean indicating success
         """
         try:
-            profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
+            profile_path = self.config_dir / \
+                f"{self._sanitize_filename(name)}.json"
             if profile_path.exists():
                 profile_path.unlink()
                 return True
@@ -307,7 +314,8 @@ class ConfigManager:
 
     def profile_exists(self, name: str) -> bool:
         """Check if a profile exists."""
-        profile_path = self.config_dir / f"{self._sanitize_filename(name)}.json"
+        profile_path = self.config_dir / \
+            f"{self._sanitize_filename(name)}.json"
         return profile_path.exists()
 
     def create_default_profiles(self) -> bool:
@@ -321,72 +329,63 @@ class ConfigManager:
             # Ensure directory exists with proper permissions
             self._ensure_config_directory()
 
-            default_profiles = [
-                {
-                    "name": "Network Device Standard",
-                    "description": "Standard configuration for network devices",
-                    "config": BuildConfiguration(
-                        board_type="75t",
-                        device_type="network",
-                        advanced_sv=True,
-                        enable_variance=True,
-                        behavior_profiling=False,
-                        profile_duration=30.0,
-                        power_management=True,
-                        error_handling=True,
-                        performance_counters=True,
-                        flash_after_build=False,
-                    ),
-                },
-                {
-                    "name": "Storage Device Optimized",
-                    "description": "Optimized configuration for storage devices",
-                    "config": BuildConfiguration(
-                        board_type="100t",
-                        device_type="storage",
-                        advanced_sv=True,
-                        enable_variance=True,
-                        behavior_profiling=True,
-                        profile_duration=45.0,
-                        power_management=True,
-                        error_handling=True,
-                        performance_counters=True,
-                        flash_after_build=False,
-                    ),
-                },
-                {
-                    "name": "Quick Development",
-                    "description": "Fast configuration for development and testing",
-                    "config": BuildConfiguration(
-                        board_type="35t",
-                        device_type="generic",
-                        advanced_sv=False,
-                        enable_variance=False,
-                        behavior_profiling=False,
-                        profile_duration=15.0,
-                        power_management=False,
-                        error_handling=False,
-                        performance_counters=False,
-                        flash_after_build=True,
-                    ),
-                },
-                {
-                    "name": "Full Featured",
-                    "description": "All features enabled for comprehensive analysis",
-                    "config": BuildConfiguration(
-                        board_type="100t",
-                        device_type="generic",
-                        advanced_sv=True,
-                        enable_variance=True,
-                        behavior_profiling=True,
-                        profile_duration=60.0,
-                        power_management=True,
-                        error_handling=True,
-                        performance_counters=True,
-                        flash_after_build=False,
-                    ),
-                },
-            ]
+            default_profiles = [{"name": "Network Device Standard",
+                                 "description": "Standard configuration for network devices",
+                                 "config": BuildConfiguration(board_type="75t",
+                                                              device_type="network",
+                                                              advanced_sv=True,
+                                                              enable_variance=True,
+                                                              behavior_profiling=False,
+                                                              profile_duration=30.0,
+                                                              power_management=True,
+                                                              error_handling=True,
+                                                              performance_counters=True,
+                                                              flash_after_build=False,
+                                                              ),
+                                 },
+                                {"name": "Storage Device Optimized",
+                                 "description": "Optimized configuration for storage devices",
+                                 "config": BuildConfiguration(board_type="100t",
+                                                              device_type="storage",
+                                                              advanced_sv=True,
+                                                              enable_variance=True,
+                                                              behavior_profiling=True,
+                                                              profile_duration=45.0,
+                                                              power_management=True,
+                                                              error_handling=True,
+                                                              performance_counters=True,
+                                                              flash_after_build=False,
+                                                              ),
+                                 },
+                                {"name": "Quick Development",
+                                 "description": "Fast configuration for development and testing",
+                                 "config": BuildConfiguration(board_type="35t",
+                                                              device_type="generic",
+                                                              advanced_sv=False,
+                                                              enable_variance=False,
+                                                              behavior_profiling=False,
+                                                              profile_duration=15.0,
+                                                              power_management=False,
+                                                              error_handling=False,
+                                                              performance_counters=False,
+                                                              flash_after_build=True,
+                                                              ),
+                                 },
+                                {"name": "Full Featured",
+                                 "description": "All features enabled for comprehensive analysis",
+                                 "config": BuildConfiguration(board_type="100t",
+                                                              device_type="generic",
+                                                              advanced_sv=True,
+                                                              enable_variance=True,
+                                                              behavior_profiling=True,
+                                                              profile_duration=60.0,
+                                                              power_management=True,
+                                                              error_handling=True,
+                                                              performance_counters=True,
+                                                              flash_after_build=False,
+                                                              ),
+                                 },
+                                ]
 
             created_count = 0
             errors = []
@@ -400,12 +399,14 @@ class ConfigManager:
                     if success:
                         created_count += 1
                     else:
-                        errors.append(f"Failed to create '{profile_data['name']}'")
+                        errors.append(
+                            f"Failed to create '{
+                                profile_data['name']}'")
 
             if errors:
                 print(
-                    f"Warning: Created {created_count} of {len(default_profiles)} default profiles"
-                )
+                    f"Warning: Created {created_count} of {
+                        len(default_profiles)} default profiles")
                 print("\n".join(errors))
                 return created_count > 0
 
@@ -436,8 +437,7 @@ class ConfigManager:
                     return True
                 except PermissionError as e:
                     print(
-                        f"Permission denied when exporting profile to {export_path}: {e}"
-                    )
+                        f"Permission denied when exporting profile to {export_path}: {e}")
                     return False
                 except Exception as e:
                     error = TUIError(
@@ -487,15 +487,20 @@ class ConfigManager:
                     severity=ErrorSeverity.ERROR,
                     category="config",
                     message="Invalid JSON in import file",
-                    details=f"Error at line {e.lineno}, column {e.colno}: {e.msg}",
+                    details=f"Error at line {
+                        e.lineno}, column {
+                        e.colno}: {
+                        e.msg}",
                     suggested_actions=[
                         "Check if the file contains valid JSON data",
                         "Verify that the file is a valid configuration profile",
                     ],
                 )
                 print(
-                    f"Invalid JSON in import file: Error at line {e.lineno}, column {e.colno}: {e.msg}"
-                )
+                    f"Invalid JSON in import file: Error at line {
+                        e.lineno}, column {
+                        e.colno}: {
+                        e.msg}")
                 return None
             except Exception as e:
                 error = TUIError(
@@ -567,7 +572,9 @@ class ConfigManager:
                     "advanced": "Yes" if config.is_advanced else "No",
                     "last_used": config.last_used or "Never",
                 }
-            return {"error": "Failed to load profile", "details": "Unknown error"}
+            return {
+                "error": "Failed to load profile",
+                "details": "Unknown error"}
         except Exception as e:
             return {"error": "Failed to load profile", "details": str(e)}
 
@@ -600,9 +607,11 @@ class ConfigManager:
 
         # Additional validation rules
         if config.behavior_profiling and config.profile_duration < 10:
-            issues.append("Behavior profiling duration should be at least 10 seconds")
+            issues.append(
+                "Behavior profiling duration should be at least 10 seconds")
 
         if config.board_type == "35t" and config.is_advanced:
-            issues.append("35t board may have limited resources for advanced features")
+            issues.append(
+                "35t board may have limited resources for advanced features")
 
         return issues

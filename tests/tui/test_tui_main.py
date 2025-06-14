@@ -4,8 +4,7 @@ Test TUI Main Module
 Tests for the main TUI entry point and core functionality from src/tui/main.py.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -25,10 +24,8 @@ except ImportError:
 
     pytest_asyncio = DummyModule()
     # Create a dummy asyncio marker that just returns the function
-    asyncio_mark = lambda f: f
+    def asyncio_mark(f): return f
 
-from textual.app import App
-from textual.widgets import Button, DataTable, ProgressBar, Static
 
 # Import TUI main modules
 from src.tui.main import ConfigurationDialog, PCILeechTUI
@@ -297,7 +294,8 @@ class TestPCILeechTUI:
             app._update_config_display()
 
             # Verify updates were called
-            mock_widgets["#board-type"].update.assert_called_with("Board Type: 100t")
+            mock_widgets["#board-type"].update.assert_called_with(
+                "Board Type: 100t")
             mock_widgets["#device-type"].update.assert_called_with(
                 "Device Type: network"
             )
@@ -355,7 +353,8 @@ class TestPCILeechTUI:
             completion_percent=75.0,
             current_operation="Running synthesis",
         )
-        app.build_progress.update_resource_usage(cpu=50.0, memory=8.0, disk_free=100.0)
+        app.build_progress.update_resource_usage(
+            cpu=50.0, memory=8.0, disk_free=100.0)
 
         # Mock widgets
         mock_widgets = {
@@ -555,7 +554,9 @@ class TestPCILeechTUI:
         )
 
         # Mock button widgets
-        mock_buttons = {"#start-build": MagicMock(), "#device-details": MagicMock()}
+        mock_buttons = {
+            "#start-build": MagicMock(),
+            "#device-details": MagicMock()}
 
         with patch.object(app, "query_one") as mock_query:
 
@@ -609,7 +610,10 @@ class TestPCILeechTUI:
         app = PCILeechTUI()
 
         # Mock status monitor
-        mock_status = {"podman": {"status": "ready"}, "vivado": {"status": "detected"}}
+        mock_status = {
+            "podman": {
+                "status": "ready"}, "vivado": {
+                "status": "detected"}}
 
         with patch.object(
             app.status_monitor, "get_system_status", return_value=mock_status

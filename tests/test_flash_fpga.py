@@ -2,18 +2,17 @@
 Comprehensive tests for src/flash_fpga.py - FPGA flashing functionality.
 """
 
+import flash_fpga
 import argparse
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-import flash_fpga
 
 
 class TestCommandExecution:
@@ -134,7 +133,8 @@ class TestFlashingProcess:
             mock_run(f"usbloader --vidpid 1d50:6130 -f {bit}")
 
         # Verify the flash command was called with the full path
-        mock_run.assert_called_once_with(f"usbloader --vidpid 1d50:6130 -f {bit}")
+        mock_run.assert_called_once_with(
+            f"usbloader --vidpid 1d50:6130 -f {bit}")
 
     @patch("shutil.which")
     def test_flash_process_no_usbloader(self, mock_which):
@@ -272,12 +272,14 @@ class TestIntegrationScenarios:
             print("[✓] Flash complete – power-cycle or warm-reset the card.")
 
         # Verify workflow
-        mock_run.assert_called_once_with(f"usbloader --vidpid 1d50:6130 -f {bit}")
+        mock_run.assert_called_once_with(
+            f"usbloader --vidpid 1d50:6130 -f {bit}")
 
     @patch("shutil.which")
     @patch("pathlib.Path.exists")
     @patch("flash_fpga.run")
-    def test_flash_with_different_boards(self, mock_run, mock_exists, mock_which):
+    def test_flash_with_different_boards(
+            self, mock_run, mock_exists, mock_which):
         """Test flashing with different board configurations."""
         mock_which.return_value = "/usr/bin/usbloader"
         mock_exists.return_value = True
@@ -324,7 +326,8 @@ class TestPerformanceAndReliability:
     @patch("shutil.which")
     @patch("pathlib.Path.exists")
     @patch("flash_fpga.run")
-    def test_concurrent_flash_attempts(self, mock_run, mock_exists, mock_which):
+    def test_concurrent_flash_attempts(
+            self, mock_run, mock_exists, mock_which):
         """Test handling of concurrent flash attempts."""
         mock_which.return_value = "/usr/bin/usbloader"
         mock_exists.return_value = True
@@ -376,7 +379,8 @@ class TestSecurityConsiderations:
 
             # Should not execute embedded commands
             assert isinstance(resolved, Path)
-            # The dangerous parts should be treated as literal filename components
+            # The dangerous parts should be treated as literal filename
+            # components
 
     @patch("subprocess.run")
     def test_safe_command_execution(self, mock_run):
@@ -385,8 +389,9 @@ class TestSecurityConsiderations:
         flash_fpga.run("usbloader --vidpid 1d50:6130 -f firmware.bin")
 
         mock_run.assert_called_once_with(
-            "usbloader --vidpid 1d50:6130 -f firmware.bin", shell=True, check=True
-        )
+            "usbloader --vidpid 1d50:6130 -f firmware.bin",
+            shell=True,
+            check=True)
 
     def test_file_permission_checks(self, temp_dir):
         """Test file permission handling."""
