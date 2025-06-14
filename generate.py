@@ -778,42 +778,6 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    try:
-        vfio_stat = os.stat(vfio_device)
-        mode  = vfio_stat.st_mode
-        group = vfio_stat.st_gid
-
-        # Group must be 'vfio' and mode must include group read/write
-        wants_mode = stat.S_IRGRP | stat.S_IWGRP
-        wants_group = grp.getgrnam("vfio").gr_gid
-
-        if (mode & wants_mode) != wants_mode or group != wants_group:
-            # Attempt to fix (only works if running as root)
-            try:
-                # Change mode to 0660
-                os.chmod(vfio_device, 0o660)
-                # Change group to vfio
-                os.chown(vfio_device, vfio_stat.st_uid, wants_group)
-            except PermissionError as pe:
-                raise RuntimeError(f"Insufficient rights to fix permissions on {vfio_device}: {pe}")
-
-            # Re-stat and verify
-            vfio_stat = os.stat(vfio_device)
-            mode  = vfio_stat.st_mode
-            group = vfio_stat.st_gid
-            if (mode & wants_mode) != wants_mode or group != wants_group:
-                raise RuntimeError(
-                    f"Auto-fix failed for {vfio_device}: now {stat.filemode(mode)}, "
-                    f"group {grp.getgrgid(group).gr_name}"
-                )
-        logger.info(
-            f"VFIO device {vfio_device} permissions are valid: {stat.filemode(mode)}, group: {grp.getgrgid(group).gr_name}"
-        )
-    except OSError as e:
-        error_msg = f"Failed to check VFIO device permissions: {e}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
-
     # Verify device is actually bound to vfio-pci
     current_driver = get_current_driver(bdf)
     if current_driver != "vfio-pci":
