@@ -82,6 +82,9 @@ wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/he
 # Install sudo wrapper scripts (recommended for TUI and build commands)
 ./install-sudo-wrapper.sh
 
+sudo modprobe vfio
+sudo modprobe vfio-pci
+
 ```
 
 If you have pip issues, it's usually easiest to just run from the repo. Make sure to install the python requirements.
@@ -104,9 +107,14 @@ pip install -r requirements.txt
 sudo python3 tui_generate.py
 
 ## CLI
-sudo python3 generate.py
+# Production mode with all advanced features enabled by default
+sudo python3 generate.py --board [your board type] --device-type [your device type] --behavior-profile-duration 5
 
+# Minimal build (disable advanced features)
+sudo python3 generate.py --board [your board type] --disable-advanced-sv --disable-variance
 ```
+
+Your board type is generally one of: `pcileech_35t325_x4` (35T) `pcileech_75t` (75T) or `pcileech_100t` (ZDMA 100T)
 
 If you run into issue with the donor dump process, follow the manual steps.
 
@@ -179,16 +187,16 @@ sudo pcileech-build --bdf 0000:03:00.0 --board 75t --donor-info-file /path/to/do
 # For manual donor dump generation, see the Manual Donor Dump Guide:
 # docs/MANUAL_DONOR_DUMP.md
 
-# Advanced generation with enhanced features
-sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv
+# Production build with all advanced features (default)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t
 
 # Device-specific generation with behavior profiling
-sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv \
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t \
   --device-type network --enable-behavior-profiling
 
-# Selective feature control
-sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv \
-  --disable-power-management --disable-performance-counters
+# Minimal build (disable advanced features)
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t \
+  --disable-advanced-sv --disable-variance
 ```
 
 **Note:** When using container builds, the system will automatically build the required container image (`dma-fw`) if it doesn't exist. This happens during the first run and requires an internet connection to download base images.
@@ -321,8 +329,8 @@ The deterministic variance seeding feature ensures that two builds of the same d
 
 **Usage:**
 ```bash
-# Automatically enabled when DSN is available in donor device
-sudo pcileech-build --bdf 0000:03:00.0 --board 75t --advanced-sv
+# Automatically enabled by default when DSN is available in donor device
+sudo pcileech-build --bdf 0000:03:00.0 --board 75t
 ```
 
 For more details, see [INTEGRATED_FEATURES.md](docs/INTEGRATED_FEATURES.md).
@@ -345,8 +353,8 @@ The Manufacturing Variance Simulation feature adds realistic hardware variations
 
 **Usage:**
 ```bash
-# Enable manufacturing variance (automatically applied with --advanced-sv)
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv
+# Manufacturing variance enabled by default in production mode
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t
 ```
 
 ### Advanced SystemVerilog Generation
@@ -385,18 +393,18 @@ The Advanced SystemVerilog Generation feature provides a comprehensive, modular 
 
 **Usage Examples:**
 ```bash
-# Enable all advanced features
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv
+# Production build with all advanced features (default)
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t
 
-# Network device with specific optimizations
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv --device-type network
+# Network device with specific optimizations (default device type)
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --device-type network
 
-# Disable specific features for minimal implementation
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
-  --disable-power-management --disable-error-handling
+# Minimal implementation (disable advanced features)
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t \
+  --disable-advanced-sv --disable-variance
 
 # Storage device with performance monitoring
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t \
   --device-type storage --enable-behavior-profiling
 ```
 
@@ -424,7 +432,7 @@ sudo pcileech-generate --bdf 0000:03:00.0 --board 75t \
   --enable-behavior-profiling --behavior-profile-duration 30.0
 
 # Enable profiling with device-specific optimizations
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
+sudo pcileech-generate --bdf 0000:03:00.0 --board 75t \
   --device-type network --enable-behavior-profiling
 ```
 
@@ -438,9 +446,10 @@ sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
 - `--use-donor-dump`: Use the donor_dump kernel module (opt-in, not default)
 - `--donor-info-file`: Path to a JSON file containing donor information from a previous run
 
-**Advanced Features:**
-- `--advanced-sv`: Enable advanced SystemVerilog generation
-- `--device-type`: Specify device type (generic, network, storage, graphics, audio)
+**Production Features (enabled by default):**
+- `--disable-advanced-sv`: Disable advanced SystemVerilog generation
+- `--device-type`: Specify device type (default: network, options: storage, graphics, audio, generic)
+- `--disable-variance`: Disable manufacturing variance simulation
 - `--enable-behavior-profiling`: Enable dynamic behavior profiling
 - `--profile-duration`: Profiling duration in seconds (default: 30.0)
 

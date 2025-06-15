@@ -7,4 +7,4 @@ This package contains tests for the TUI (Text User Interface) components:
 - Data models (src/tui/models/)
 """
 
-__version__ = "0.3.1"
+__version__ = "0.5.0"

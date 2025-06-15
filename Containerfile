@@ -32,11 +32,13 @@ WORKDIR /build
 # Runtime stage - minimal runtime environment
 FROM ubuntu:22.04 AS runtime
 
-# Set environment variables for reproducible builds
+# Set environment variables for reproducible builds and production mode
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
     LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    PCILEECH_PRODUCTION_MODE=true \
+    PCILEECH_ALLOW_MOCK_DATA=false
 
 # Install only runtime dependencies without version pins for compatibility
 RUN apt-get update && apt-get install -y \
@@ -75,6 +77,9 @@ COPY --from=builder --chown=appuser:appuser /build/src /app/src
 
 # Copy additional root-level files needed for enhanced functionality
 COPY --chown=appuser:appuser ./generate.py /app/
+
+# Set PYTHONPATH to include both app and src directories for proper module resolution
+ENV PYTHONPATH="/app:/app/src:${PYTHONPATH}"
 
 # Create output directory with proper permissions
 RUN mkdir -p /app/output && chown appuser:appuser /app/output

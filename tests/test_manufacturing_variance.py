@@ -1,6 +1,17 @@
+#!/usr/bin/env python3
 """
-Tests for manufacturing variance simulation module.
+Enhanced test suite for manufacturing variance simulation module.
+
+This test suite focuses on:
+1. Testing deterministic variance seeding with different DSN and revision combinations
+2. Verifying reproducibility across multiple runs
+3. Testing boundary conditions for seed generation
+4. Testing integration with SystemVerilog code generation
 """
+
+import hashlib
+import struct
+import unittest
 
 from src.manufacturing_variance import (
     DeviceClass,
@@ -10,8 +21,8 @@ from src.manufacturing_variance import (
 )
 
 
-class TestDeterministicVarianceSeeding:
-    """Test cases for deterministic variance seeding."""
+class TestDeterministicVarianceSeeding(unittest.TestCase):
+    """Enhanced test cases for deterministic variance seeding."""
 
     def test_deterministic_seed_generation(self):
         """Test that deterministic seed generation produces consistent results."""
@@ -26,21 +37,123 @@ class TestDeterministicVarianceSeeding:
         seed2 = simulator.deterministic_seed(dsn, revision)
 
         # Seeds should be identical
-        assert seed1 == seed2
+        self.assertEqual(seed1, seed2)
 
         # Test with different DSN
         different_dsn = 0x1234567890ABCDE0
         different_seed = simulator.deterministic_seed(different_dsn, revision)
 
         # Seeds should be different
-        assert seed1 != different_seed
+        self.assertNotEqual(seed1, different_seed)
 
         # Test with different revision
         different_revision = "abcdef1234567890abce"
         different_seed = simulator.deterministic_seed(dsn, different_revision)
 
         # Seeds should be different
-        assert seed1 != different_seed
+        self.assertNotEqual(seed1, different_seed)
+
+    def test_seed_with_different_dsn_revision_combinations(self):
+        """Test deterministic seeding with various DSN and revision combinations."""
+        simulator = ManufacturingVarianceSimulator()
+
+        # Test cases with different DSN and revision combinations
+        test_cases = [
+            # DSN, Revision
+            (
+                0x0000000000000000,
+                "0000000000000000000000000000000000000000",
+            ),  # All zeros
+            (
+                0xFFFFFFFFFFFFFFFF,
+                "fffffffffffffffffffffffffffffffffffffff",
+            ),  # All ones
+            (
+                0x1234567890ABCDEF,
+                "abcdef1234567890abcdef1234567890abcdef12",
+            ),  # Mixed values
+            (
+                0x0000000000000001,
+                "0000000000000000000000000000000000000001",
+            ),  # Minimal values
+            (
+                0xFFFFFFFFFFFFFFFE,
+                "fffffffffffffffffffffffffffffffffffffffe",
+            ),  # Near-maximum values
+        ]
+
+        # Generate seeds for each test case
+        seeds = {}
+        for dsn, revision in test_cases:
+            seed = simulator.deterministic_seed(dsn, revision)
+            seeds[(dsn, revision)] = seed
+
+            # Verify seed is reproducible
+            seed2 = simulator.deterministic_seed(dsn, revision)
+            self.assertEqual(
+                seed, seed2, f"Seed not reproducible for DSN={dsn}, revision={revision}"
+            )
+
+        # Verify all seeds are different
+        unique_seeds = set(seeds.values())
+        self.assertEqual(len(unique_seeds), len(test_cases), "Not all seeds are unique")
+
+    def test_seed_algorithm_correctness(self):
+        """Test that the seed algorithm matches the specified requirements."""
+        simulator = ManufacturingVarianceSimulator()
+
+        # Test case
+        dsn = 0x1234567890ABCDEF
+        revision = "abcdef1234567890abcd"
+
+        # Generate seed using the simulator
+        seed = simulator.deterministic_seed(dsn, revision)
+
+        # Manually implement the algorithm to verify correctness
+        # Pack the DSN as a 64-bit integer and the first 20 chars of revision
+        # as bytes
+        blob = struct.pack("<Q", dsn) + bytes.fromhex(revision[:20])
+        # Generate a SHA-256 hash and convert to integer (little-endian)
+        expected_seed = int.from_bytes(hashlib.sha256(blob).digest(), "little")
+
+        # Verify the seed matches the expected value
+        self.assertEqual(
+            seed, expected_seed, "Seed algorithm does not match specification"
+        )
+
+    def test_boundary_conditions_for_seed_generation(self):
+        """Test boundary conditions for seed generation."""
+        simulator = ManufacturingVarianceSimulator()
+
+        # Test with minimum DSN value
+        min_dsn = 0x0000000000000000
+        min_revision = "0000000000000000000000000000000000000000"
+        min_seed = simulator.deterministic_seed(min_dsn, min_revision)
+        self.assertIsInstance(min_seed, int)
+        self.assertGreaterEqual(min_seed, 0)
+
+        # Test with maximum DSN value
+        max_dsn = 0xFFFFFFFFFFFFFFFF
+        max_revision = "fffffffffffffffffffffffffffffffffffffff"
+        max_seed = simulator.deterministic_seed(max_dsn, max_revision)
+        self.assertIsInstance(max_seed, int)
+        self.assertGreaterEqual(max_seed, 0)
+
+        # Test with empty revision (should use first 20 chars, which is empty)
+        empty_revision = ""
+        empty_seed = simulator.deterministic_seed(0x1234567890ABCDEF, empty_revision)
+        self.assertIsInstance(empty_seed, int)
+        self.assertGreaterEqual(empty_seed, 0)
+
+        # Test with very long revision (should only use first 20 chars)
+        long_revision = "a" * 100
+        long_seed = simulator.deterministic_seed(0x1234567890ABCDEF, long_revision)
+
+        # Should be the same as using just the first 20 chars
+        short_revision = "a" * 20
+        short_seed = simulator.deterministic_seed(0x1234567890ABCDEF, short_revision)
+
+        self.assertEqual(long_seed, short_seed)
 
     def test_deterministic_rng_initialization(self):
         """Test that RNG initialization with deterministic seed produces consistent results."""

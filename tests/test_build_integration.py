@@ -14,12 +14,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from advanced_sv_main import (
+from src.manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+from src.systemverilog_generator import (
     AdvancedSVGenerator,
     DeviceSpecificLogic,
     DeviceType,
 )
-from manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
 from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
 
 # Add src to path for imports
@@ -33,7 +33,7 @@ try:
 except ImportError:
     MODULAR_BUILD_AVAILABLE = False
     try:
-        import build_compat as build
+        from src import build_compat as build
     except ImportError:
         try:
             import build

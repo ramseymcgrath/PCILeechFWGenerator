@@ -706,14 +706,12 @@ class BuildOrchestrator:
                 except FileNotFoundError:
                     if self._current_progress:
                         self._current_progress.add_error(
-                            f"Donor info file not found: {
-                                config.donor_info_file}"
+                            f"Donor info file not found: {config.donor_info_file}"
                         )
                 except json.JSONDecodeError:
                     if self._current_progress:
                         self._current_progress.add_error(
-                            f"Invalid JSON in donor info file: {
-                                config.donor_info_file}"
+                            f"Invalid JSON in donor info file: {config.donor_info_file}"
                         )
                 except Exception as e:
                     if self._current_progress:
@@ -787,8 +785,7 @@ class BuildOrchestrator:
 
         # Log the start of profiling
         if self._current_progress:
-            self._current_progress.current_operation = f"Profiling device {
-                device.bdf}"
+            self._current_progress.current_operation = f"Profiling device {device.bdf}"
             await self._notify_progress()
 
         # Run the profiling in a separate thread to avoid blocking the event
@@ -910,7 +907,7 @@ class BuildOrchestrator:
                 "-v",
                 f"{os.getcwd()}/output:/app/output",
                 "pcileech-fw-generator:latest",
-                f"sudo python3 /app/src/build.py --bdf {device.bdf} --board {config.board_type}",
+                f"python3 /app/src/build.py --bdf {device.bdf} --board {config.board_type}",
             ]
 
             # Add the same options to the container command
@@ -993,6 +990,5 @@ class BuildOrchestrator:
             if self._current_progress:
                 self._current_progress.add_error(f"Build command failed: {error_msg}")
             raise RuntimeError(
-                f"Build command failed with code {
-                    self._build_process.returncode}"
+                f"Build command failed with code {self._build_process.returncode}"
             )

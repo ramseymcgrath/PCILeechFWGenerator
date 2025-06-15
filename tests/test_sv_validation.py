@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from advanced_sv_error import ErrorHandlingConfig
-from advanced_sv_main import AdvancedSVGenerator as MainSVGenerator
-from advanced_sv_main import (
+from src.advanced_sv_error import ErrorHandlingConfig
+from src.systemverilog_generator import AdvancedSVGenerator as MainSVGenerator
+from src.systemverilog_generator import (
     DeviceSpecificLogic,
     DeviceType,
 )

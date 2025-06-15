@@ -14,12 +14,14 @@ Requires root privileges (sudo) for driver rebinding and VFIO operations.
 """
 
 import argparse
+import grp
 import logging
 import os
 import pathlib
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import textwrap
@@ -66,13 +68,43 @@ def clear_python_cache():
 # Clear Python cache at startup to ensure updated code is used
 clear_python_cache()
 
+
+class ColoredFormatter(logging.Formatter):
+    """A logging formatter that adds ANSI color codes to log messages."""
+
+    # ANSI color codes
+    COLORS = {"RED": "\033[91m", "YELLOW": "\033[93m", "RESET": "\033[0m"}
+
+    def __init__(self, fmt=None, datefmt=None):
+        super().__init__(fmt, datefmt)
+        # Only use colors for TTY outputs
+        self.use_colors = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+    def format(self, record):
+        formatted = super().format(record)
+        if self.use_colors:
+            if record.levelno >= logging.ERROR:
+                return f"{self.COLORS['RED']}{formatted}{self.COLORS['RESET']}"
+            elif record.levelno >= logging.WARNING:
+                return f"{self.COLORS['YELLOW']}{formatted}{self.COLORS['RESET']}"
+        return formatted
+
+
+# Create colored formatter
+colored_formatter = ColoredFormatter("%(asctime)s - %(levelname)s - %(message)s")
+
+# Set up handlers
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(colored_formatter)
+
+file_handler = logging.FileHandler("generate.log", mode="a")
+file_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("generate.log", mode="a"),
-    ],
+    handlers=[console_handler, file_handler],
 )
 logger = logging.getLogger(__name__)
 
@@ -776,20 +808,6 @@ def _validate_vfio_device_access(vfio_device: str, bdf: str) -> None:
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    # Check device permissions
-    try:
-        import stat
-
-        vfio_stat = os.stat(vfio_device)
-        if not (vfio_stat.st_mode & stat.S_IRGRP) or not (
-            vfio_stat.st_mode & stat.S_IWGRP
-        ):
-            logger.warning(
-                f"VFIO device {vfio_device} may not have proper group permissions"
-            )
-    except OSError as e:
-        logger.warning(f"Could not check VFIO device permissions: {e}")
-
     # Verify device is actually bound to vfio-pci
     current_driver = get_current_driver(bdf)
     if current_driver != "vfio-pci":
@@ -935,7 +953,7 @@ def run_build_container(
 
     # Build the build.py command with all arguments - use modular build system
     # if available
-    build_cmd_parts = [f"sudo python3 /app/src/build.py --bdf {bdf} --board {board}"]
+    build_cmd_parts = [f"python3 /app/src/build.py --bdf {bdf} --board {board}"]
 
     # Add advanced features arguments
     if args.advanced_sv:
@@ -961,11 +979,11 @@ def run_build_container(
             f"--behavior-profile-duration {args.behavior_profile_duration}"
         )
 
-    " ".join(build_cmd_parts)
+    build_cmd = " ".join(build_cmd_parts)
 
     # Construct Podman command
     container_cmd = textwrap.dedent(
-        """
+        f"""
         podman run --rm -it --privileged \
           --device={vfio_device} \
           --device=/dev/vfio/vfio \
@@ -1421,7 +1439,7 @@ def main() -> int:
             raise RuntimeError(error_msg)
 
         selected_device = choose_device(devices)
-        bdf = selected_device["bd"]
+        bdf = selected_device["bdf"]
         vendor = selected_device["ven"]
         device = selected_device["dev"]
 

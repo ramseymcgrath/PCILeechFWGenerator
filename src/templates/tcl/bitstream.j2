@@ -1,0 +1,48 @@
+{#
+Bitstream Template - Bitstream Generation and File Management
+
+This template handles bitstream generation and creates additional output files
+like MCS, debug probes, and checkpoints.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id)
+- board: Board information (name)
+- project: Project settings (name, dir)
+- header: TCL header comment
+#}
+{{ header }}
+
+puts "Generating bitstream..."
+launch_runs impl_1 -to_step write_bitstream -jobs 8
+wait_on_run impl_1
+
+# Check bitstream generation
+set bitstream_file "{{ project.dir }}/{{ project.name }}.runs/impl_1/[get_property top [current_fileset]].bit"
+if {[file exists $bitstream_file]} {
+    set output_bit "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.bit"
+    file copy -force $bitstream_file $output_bit
+    puts "SUCCESS: Bitstream generated successfully!"
+    puts "Output file: $output_bit"
+
+    # Generate additional files
+    write_cfgmem -format mcs -size 16 -interface SPIx4 \
+        -loadbit "up 0x0 $output_bit" \
+        -file "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.mcs"
+
+    if {[llength [get_debug_cores]] > 0} {
+        write_debug_probes -file "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.ltx"
+    }
+
+    write_checkpoint -force "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.dcp"
+
+    puts "Generated files:"
+    puts "  - Bitstream: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.bit"
+    puts "  - MCS file: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.mcs"
+    puts "  - Checkpoint: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.dcp"
+    puts "  - Reports: *.rpt"
+} else {
+    puts "ERROR: Bitstream generation failed!"
+    exit 1
+}
+
+puts "Bitstream generation completed successfully!"

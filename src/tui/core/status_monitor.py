@@ -379,10 +379,7 @@ class StatusMonitor:
         # USB devices
         usb = status.get("usb_devices", {})
         count = usb.get("count", 0)
-        summary["usb"] = (
-            f"🔌 {count} USB Device{
-            's' if count != 1 else ''} Found"
-        )
+        summary["usb"] = f"🔌 {count} USB Device{'s' if count != 1 else ''} Found"
 
         # Disk space
         disk = status.get("disk_space", {})

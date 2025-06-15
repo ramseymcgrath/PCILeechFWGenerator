@@ -63,6 +63,38 @@ def run_command(cmd: str) -> str:
         ) from e
 
 
+def setup_debugfs() -> None:
+    """
+    Set up debugfs mount for kernel debugging operations.
+
+    This function ensures that debugfs is properly mounted at /sys/kernel/debug,
+    which is required for kernel debugging and analysis operations.
+
+    Raises:
+        RuntimeError: If debugfs setup fails or not running on Linux
+    """
+    check_linux_requirement("Debugfs setup")
+
+    try:
+        # Create the debug directory if it doesn't exist
+        run_command("mkdir -p /sys/kernel/debug")
+
+        # Check if debugfs is already mounted
+        try:
+            mount_output = run_command("mount | grep debugfs")
+            if "/sys/kernel/debug" in mount_output:
+                return  # Already mounted
+        except RuntimeError:
+            # grep returns non-zero if no matches found, which is expected
+            pass
+
+        # Mount debugfs
+        run_command("mount -t debugfs debugfs /sys/kernel/debug")
+
+    except Exception as e:
+        raise RuntimeError(f"Failed to setup debugfs: {e}") from e
+
+
 def ensure_kernel_source() -> Optional[pathlib.Path]:
     """
     Extract /usr/src/linux-source-*.tar.* if not untarred yet.

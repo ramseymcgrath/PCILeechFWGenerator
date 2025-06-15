@@ -56,13 +56,23 @@ import re
 import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.scripts.kernel_utils import (
-    check_linux_requirement,
-    ensure_kernel_source,
-    find_driver_sources,
-    resolve_driver_module,
-)
-from src.scripts.state_machine_extractor import StateMachineExtractor
+try:
+    from scripts.kernel_utils import (
+        check_linux_requirement,
+        ensure_kernel_source,
+        find_driver_sources,
+        resolve_driver_module,
+    )
+    from scripts.state_machine_extractor import StateMachineExtractor
+except ImportError:
+    # Fallback for when running as script directly
+    from kernel_utils import (
+        check_linux_requirement,
+        ensure_kernel_source,
+        find_driver_sources,
+        resolve_driver_module,
+    )
+    from state_machine_extractor import StateMachineExtractor
 
 # Module-level regex patterns for register analysis
 REG_PATTERN = re.compile(r"#define\s+(REG_[A-Z0-9_]+)\s+0x([0-9A-Fa-f]+)")
