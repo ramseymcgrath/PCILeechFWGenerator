@@ -62,6 +62,11 @@ Generate spoofed PCIe DMA firmware from real donor hardware with a single comman
 - **🖥️ Interactive TUI**: Modern text-based interface with real-time monitoring and guided workflows
 - **📦 Professional Packaging**: Easy installation via pip with proper dependency management
 
+The TCL is mostly templated out using Jinja in the templates dir. Python does most of the template generation and runs in a container using podman by default. It usually autodiscovers Vivado for the final TCL compilation but you can also pass in the TCL yourself. The template generation is pretty quick but depending on your PC it might take a while to compile. 
+
+It'll best effort clone any pcie device you give it, but generally linux-compatible network/storage/media cards that work best. I don't recommend using the unit test default values outside of local testing. 
+
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -247,16 +252,11 @@ For more details, see [CONFIG_SPACE_SHADOW.md](docs/CONFIG_SPACE_SHADOW.md).
 
 ### MSI-X Table Replication
 
-The MSI-X table replication feature extends the PCILeech FPGA firmware generator to accurately replicate the MSI-X capability structure from donor devices. This enables the emulated device to support advanced interrupt handling capabilities, which is critical for high-performance device emulation.
+The donor's MSI-X table is cloned and automatically replicated in the generated firmware.
 
 **Key Capabilities:**
 - **Automatic Parsing**: Extract MSI-X capability structure from donor configuration space
-- **Parameterized Implementation**: SystemVerilog implementation of MSI-X table and PBA
-- **Byte-Enable Writes**: Support for granular writes to MSI-X table entries
-- **Interrupt Delivery**: Complete interrupt delivery logic with masking support
 - **BAR Integration**: Seamless integration with the BAR controller for memory-mapped access
-
-**Integration Benefits:**
 - **Enhanced Compatibility**: Support for devices that rely on MSI-X interrupts
 - **Improved Performance**: Efficient interrupt handling for high-performance devices
 - **Realistic Behavior**: Accurate emulation of MSI-X interrupt delivery and masking
@@ -280,13 +280,11 @@ The PCI capability pruning feature extends the PCILeech FPGA firmware generator 
 - **Chain Preservation**: Maintain capability chain integrity after modifications
 - **Comprehensive Coverage**: Support for both standard and extended capabilities
 
-**Pruning Rules:**
+**Pruning Info:**
 - **ASPM / L1SS**: Clear ASPM bits and remove L1 PM Substates capability
 - **OBFF / LTR**: Zero OBFF & LTR bits and remove LTR capability
 - **SR-IOV**: Remove SR-IOV capability entirely
 - **Advanced PM**: Keep only D0/D3hot power states and clear PME support bits
-
-**Integration Benefits:**
 - **Improved Stability**: Prevent issues with capabilities that can't be properly emulated
 - **Enhanced Compatibility**: Better compatibility with different host systems
 - **Reduced Detection Risk**: Remove capabilities that might reveal the emulation
@@ -303,17 +301,14 @@ sudo pcileech-build --bdf 0000:03:00.0 --board 75t --disable-capability-pruning
 
 For more details, see [CAPABILITY_PRUNING.md](docs/CAPABILITY_PRUNING.md).
 
-### Deterministic Variance Seeding
+### Variance Seeding
 
-The deterministic variance seeding feature ensures that two builds of the same donor device at the same commit fall in the same timing band. This provides consistent behavior across builds while still maintaining realistic hardware variance.
+The deterministic variance seeding feature ensures that two builds of the same donor device at the same commit fall in the same timing band. This *means it will have*  consistent behavior across builds using the same device. But firmware will be unique 
 
 **Key Capabilities:**
 - **Deterministic Seed Generation**: Generate consistent seeds based on device serial number (DSN) and build revision
 - **Consistent Variance**: Same donor device and build revision produce identical variance parameters
 - **Device-Specific Variance**: Different donor devices produce different variance parameters
-- **Build-Specific Variance**: Different build revisions produce different variance parameters
-
-**Integration Benefits:**
 - **Reproducible Builds**: Consistent behavior across builds of the same donor device
 - **Enhanced Realism**: Realistic hardware variance that's unique to each donor device
 - **Reduced Detection Risk**: Variance parameters that match the donor device's characteristics
@@ -400,34 +395,6 @@ sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
   --device-type storage --enable-behavior-profiling
 ```
 
-### Behavioral Profiling
-
-Dynamic behavior profiling captures real device operation patterns to enhance firmware realism by monitoring and analyzing how the donor device behaves during normal operation.
-
-**Capabilities:**
-- **Real-time Monitoring**: Captures live device register access patterns and timing
-- **Pattern Analysis**: Identifies behavioral signatures, timing characteristics, and state transitions
-- **Manufacturing Variance Integration**: Combines with variance simulation for enhanced realism
-- **SystemVerilog Enhancement**: Automatically integrates behavioral data into generated code
-- **Configurable Duration**: Adjustable profiling periods (default: 30 seconds)
-
-**Key Benefits:**
-- **Enhanced Realism**: Generated firmware mimics actual device behavior patterns
-- **Improved Timing Accuracy**: Precise register access timing based on real-world measurements
-- **Optimized Performance**: Device-specific optimizations based on observed behavior
-- **Reduced Detection Risk**: More authentic behavioral signatures
-
-**Usage:**
-```bash
-# Enable behavior profiling with custom duration
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t \
-  --enable-behavior-profiling --behavior-profile-duration 30.0
-
-# Enable profiling with device-specific optimizations
-sudo pcileech-generate --bdf 0000:03:00.0 --board 75t --advanced-sv \
-  --device-type network --enable-behavior-profiling
-```
-
 ### Command-Line Options
 
 **Core Options:**
@@ -499,13 +466,10 @@ twine upload dist/*
 ## 📚 Documentation
 
 - **[Build System Architecture](docs/BUILD_SYSTEM_ARCHITECTURE.md)**: Entry points, build flow, and troubleshooting guide
-- **[Integrated Features](docs/INTEGRATED_FEATURES.md)**: Comprehensive documentation of integrated features
 - **[TUI Documentation](docs/TUI_README.md)**: Detailed TUI interface guide
-- **[TUI Design Document](docs/TUI_Design_Document.md)**: Technical architecture
 - **[Manual Donor Dump Guide](docs/MANUAL_DONOR_DUMP.md)**: Step-by-step guide for manually generating donor dumps
 - **[Contributing Guide](CONTRIBUTING.md)**: Development and contribution guidelines
 - **[Changelog](CHANGELOG.md)**: Version history and release notes
-- **[API Reference](https://pcileechfwgenerator.readthedocs.io/)**: Complete API documentation
 
 ## 🔧 Troubleshooting
 
@@ -572,19 +536,18 @@ cat /proc/donor_dump > donor_info.txt
 ### Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/ramseymcgrath/PCILeechFWGenerator/issues)
-- **GitHub Discussions**: [Community support and questions](https://github.com/ramseymcgrath/PCILeechFWGenerator/discussions)
+- **GitHub Discussions**: [Community support 
 - **Documentation**: Check the docs/ directory for detailed guides
 
 ## 🏆 Acknowledgments
 
-- **λConcept**: For the excellent usbloader utility and Screamer hardware
 - **Xilinx/AMD**: For Vivado synthesis tools
 - **Textual**: For the modern TUI framework
 - **PCILeech Community**: For feedback and contributions
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
 
 ## ⚠️ Legal Notice
 
@@ -595,5 +558,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Use isolated build environments (Seperate dedicated hardware)
 - Keep generated firmware private and secure
 - Follow responsible disclosure practices for any security research
+- Use the SECUITY.md template to raise security concerns 
 
 ---
