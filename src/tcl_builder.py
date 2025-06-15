@@ -283,7 +283,11 @@ class TCLBuilder:
         if context.get("board") and context["board"].get("name"):
             board_name = context["board"]["name"]
             try:
-                from .repo_manager import RepoManager
+                try:
+                    from .repo_manager import RepoManager
+                except ImportError:
+                    # Fallback for when running as script (not package)
+                    from repo_manager import RepoManager
                 board_xdc_content = RepoManager.read_xdc_constraints(board_name)
                 logger.info(f"Loaded XDC constraints for board: {board_name}")
             except Exception as e:

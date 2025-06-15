@@ -146,7 +146,11 @@ class TemplateRenderer:
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
-        from .string_utils import generate_tcl_header_comment
+        try:
+            from .string_utils import generate_tcl_header_comment
+        except ImportError:
+            # Fallback for when running as script (not package)
+            from string_utils import generate_tcl_header_comment
         
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
