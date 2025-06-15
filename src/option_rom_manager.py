@@ -259,7 +259,7 @@ class OptionROMManager:
             logger.info(f"Enabling ROM access for {bdf}")
             try:
                 subprocess.run(
-                    ["sudo", "sh", "-c", f"echo 1 > {rom_sysfs_path}"],
+                    ["sh", "-c", f"echo 1 > {rom_sysfs_path}"],
                     check=True,
                     capture_output=True,
                     text=True,
@@ -271,7 +271,7 @@ class OptionROMManager:
             try:
                 logger.info(f"Extracting ROM from {bdf} to {rom_path}")
                 subprocess.run(
-                    ["sudo", "dd", f"if={rom_sysfs_path}", f"of={rom_path}", "bs=4K"],
+                    ["dd", f"if={rom_sysfs_path}", f"of={rom_path}", "bs=4K"],
                     check=True,
                     capture_output=True,
                     text=True,
@@ -282,7 +282,7 @@ class OptionROMManager:
                 # Disable ROM access
                 try:
                     subprocess.run(
-                        ["sudo", "sh", "-c", f"echo 0 > {rom_sysfs_path}"],
+                        ["sh", "-c", f"echo 0 > {rom_sysfs_path}"],
                         check=True,
                         capture_output=True,
                         text=True,

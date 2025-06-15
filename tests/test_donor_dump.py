@@ -1031,6 +1031,180 @@ class TestDonorDumpIntegration:
             pytest.skip("TUI modules not available")
 
 
+@pytest.mark.unit
+class TestHexFileGeneration:
+    """Test hex file generation functionality."""
+
+    def test_save_device_info_with_extended_config(self, tmp_path):
+        """Test saving device info with valid extended config generates hex file."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+
+        manager = DonorDumpManager()
+        output_path = tmp_path / "device_info.json"
+
+        # Device info with valid extended config
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "extended_config": "1234567890abcdef" * 1024,  # 8192 hex chars = 4KB
+        }
+
+        # Save device info
+        result = manager.save_donor_info(device_info, str(output_path))
+        assert result is True
+
+        # Check that hex file was created
+        hex_path = tmp_path / "config_space_init.hex"
+        assert hex_path.exists()
+
+        # Verify hex file content
+        with open(hex_path, "r") as f:
+            lines = f.readlines()
+
+        assert len(lines) == 1024  # Should have 1024 lines
+        # Each line should be 8 hex chars + newline
+        for line in lines:
+            assert len(line.strip()) == 8
+            assert all(c in "0123456789abcdef" for c in line.strip().lower())
+
+    def test_save_device_info_without_extended_config(self, tmp_path):
+        """Test saving device info without extended config generates blank hex file."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+
+        manager = DonorDumpManager()
+        output_path = tmp_path / "device_info.json"
+
+        # Device info without extended config
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            # No extended_config key
+        }
+
+        # Save device info
+        result = manager.save_donor_info(device_info, str(output_path))
+        assert result is True
+
+        # Check that blank hex file was created
+        hex_path = tmp_path / "config_space_init.hex"
+        assert hex_path.exists()
+
+        # Verify blank hex file content
+        with open(hex_path, "r") as f:
+            lines = f.readlines()
+
+        assert len(lines) == 1024  # Should have 1024 lines
+        # Each line should be all zeros
+        for line in lines:
+            assert line.strip() == "00000000"
+
+    def test_save_device_info_with_disabled_extended_config(self, tmp_path):
+        """Test saving device info with disabled extended config generates blank hex file."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+
+        manager = DonorDumpManager()
+        output_path = tmp_path / "device_info.json"
+
+        # Device info with disabled extended config
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "extended_config": "disabled",
+        }
+
+        # Save device info
+        result = manager.save_donor_info(device_info, str(output_path))
+        assert result is True
+
+        # Check that blank hex file was created
+        hex_path = tmp_path / "config_space_init.hex"
+        assert hex_path.exists()
+
+        # Verify blank hex file content
+        with open(hex_path, "r") as f:
+            lines = f.readlines()
+
+        assert len(lines) == 1024  # Should have 1024 lines
+        # Each line should be all zeros
+        for line in lines:
+            assert line.strip() == "00000000"
+
+    def test_generate_blank_config_hex_direct(self, tmp_path):
+        """Test direct generation of blank config hex file."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+
+        manager = DonorDumpManager()
+        hex_path = tmp_path / "test_blank.hex"
+
+        # Generate blank hex file
+        result = manager.generate_blank_config_hex(str(hex_path))
+        assert result is True
+
+        # Verify file was created
+        assert hex_path.exists()
+
+        # Verify content
+        with open(hex_path, "r") as f:
+            lines = f.readlines()
+
+        assert len(lines) == 1024  # Should have 1024 lines
+        # Each line should be all zeros
+        for line in lines:
+            assert line.strip() == "00000000"
+
+    def test_hex_file_always_created(self, tmp_path):
+        """Test that hex file is always created regardless of extended config status."""
+        if DonorDumpManager is None:
+            pytest.skip("DonorDumpManager not available")
+
+        manager = DonorDumpManager()
+
+        test_cases = [
+            {"vendor_id": "0x8086", "device_id": "0x1533"},  # No extended_config
+            {
+                "vendor_id": "0x8086",
+                "device_id": "0x1533",
+                "extended_config": "disabled",
+            },  # Disabled
+            {
+                "vendor_id": "0x8086",
+                "device_id": "0x1533",
+                "extended_config": "invalid_value",
+            },  # Invalid value
+            {
+                "vendor_id": "0x8086",
+                "device_id": "0x1533",
+                "extended_config": "1234567890abcdef" * 1024,
+            },  # Valid
+        ]
+
+        for i, device_info in enumerate(test_cases):
+            output_path = tmp_path / f"device_info_{i}.json"
+            hex_path = tmp_path / f"config_space_init.hex"
+
+            # Remove hex file if it exists from previous test
+            if hex_path.exists():
+                hex_path.unlink()
+
+            # Save device info
+            result = manager.save_donor_info(device_info, str(output_path))
+            assert result is True
+
+            # Verify hex file was always created
+            assert (
+                hex_path.exists()
+            ), f"Hex file not created for test case {i}: {device_info}"
+
+            # Verify it has correct format
+            with open(hex_path, "r") as f:
+                lines = f.readlines()
+            assert len(lines) == 1024, f"Incorrect line count for test case {i}"
+
+
 # Helper function for mock_open
 def mock_open(*args, **kwargs):
     """Helper to create mock_open for file operations."""

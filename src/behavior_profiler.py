@@ -28,16 +28,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
 try:
-    from .manufacturing_variance import (
+    from manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
     )
+    from scripts.kernel_utils import setup_debugfs
 except ImportError:
     # Fallback for direct execution
     from manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
     )
+    from scripts.kernel_utils import setup_debugfs
 
 
 def is_linux() -> bool:
@@ -217,6 +219,14 @@ class BehaviorProfiler:
             self._log("Ftrace setup disabled in CI environment")
             return
 
+        # Ensure debugfs is mounted before accessing ftrace
+        try:
+            setup_debugfs()
+            self._log("Debugfs setup completed")
+        except Exception as e:
+            self._log(f"Failed to setup debugfs: {e}")
+            return
+
         try:
             # Enable function tracing for PCI config space accesses
             ftrace_cmds = [
@@ -331,6 +341,14 @@ class BehaviorProfiler:
         # Check if running in CI environment
         if os.environ.get("CI") == "true":
             self._log("Debugfs monitoring disabled in CI environment")
+            return
+
+        # Ensure debugfs is mounted before accessing device-specific entries
+        try:
+            setup_debugfs()
+            self._log("Debugfs setup completed for register monitoring")
+        except Exception as e:
+            self._log(f"Failed to setup debugfs for register monitoring: {e}")
             return
 
         try:
@@ -1242,8 +1260,7 @@ def main():
             f"  Access frequency: {analysis['device_characteristics']['access_frequency_hz']:.2f} Hz"
         )
         print(
-            f"  Timing regularity: {
-                analysis['behavioral_signatures']['timing_regularity']:.2f}"
+            f"  Timing regularity: {analysis['behavioral_signatures']['timing_regularity']:.2f}"
         )
 
         print("\nRecommendations:")

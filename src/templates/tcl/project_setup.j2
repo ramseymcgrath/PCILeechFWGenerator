@@ -1,0 +1,34 @@
+{#
+Project Setup TCL Template for PCILeech Firmware Generation
+
+This template generates the Vivado project setup script with device-specific
+configuration using Jinja2 templating.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id, class_code, revision_id)
+- board: Board information (name, fpga_part, fpga_family)
+- project: Project settings (name, dir, output_dir)
+- meta: Metadata (generated_time, etc.)
+#}
+{{ header }}
+
+# Set up build environment
+set project_name "{{ project.name }}"
+set project_dir "{{ project.dir }}"
+set output_dir "{{ project.output_dir }}"
+
+# Create project directory
+file mkdir $project_dir
+
+puts "Creating Vivado project for {{ board.name }}..."
+puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
+
+# Create project with correct FPGA part
+create_project $project_name $project_dir -part {{ board.fpga_part }} -force
+
+# Set project properties
+set_property target_language Verilog [current_project]
+set_property simulator_language Mixed [current_project]
+set_property default_lib xil_defaultlib [current_project]
+
+puts "Project setup completed successfully"

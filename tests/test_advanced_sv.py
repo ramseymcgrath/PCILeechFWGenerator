@@ -12,7 +12,6 @@ import tempfile
 import pytest
 
 from src.advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator, ErrorType
-from src.advanced_sv_main import AdvancedSVGenerator, DeviceSpecificLogic
 from src.advanced_sv_perf import (
     DeviceType,
     PerformanceCounterConfig,
@@ -26,6 +25,7 @@ from src.advanced_sv_power import (
     PowerState,
 )
 from src.manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+from src.systemverilog_generator import AdvancedSVGenerator, DeviceSpecificLogic
 
 
 class TestPowerManagementGenerator:
@@ -458,7 +458,7 @@ class TestAdvancedSVGenerator:
 
         # Check for key components in the integration code
         assert "def build_advanced_sv" in integration_code
-        assert "from .advanced_sv_main import" in integration_code
+        assert "from .systemverilog_generator import" in integration_code
         assert "AdvancedSVGenerator" in integration_code
         assert "PowerManagementConfig" in integration_code
         assert "ErrorHandlingConfig" in integration_code

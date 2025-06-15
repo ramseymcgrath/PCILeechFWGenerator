@@ -1,0 +1,40 @@
+{#
+PCIe 7-series IP Configuration Template
+
+This template generates PCIe 7-series IP core configuration for Kintex-7 
+and larger Artix-7 parts.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id, revision_id)
+- board: Board information (name, fpga_part)
+- pcie: PCIe configuration settings
+#}
+{{ header }}
+
+puts "Creating PCIe IP core for device {{ device.vendor_id }}:{{ device.device_id }}..."
+puts "FPGA Part: {{ board.fpga_part }}"
+puts "Board: {{ board.name }}"
+
+# Create PCIe 7-series IP core
+create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_0
+
+# Configure PCIe IP core with device-specific settings
+set_property -dict [list \
+    CONFIG.Bar0_Scale {Kilobytes} \
+    CONFIG.Bar0_Size {128_KB} \
+    CONFIG.Device_ID {0x{{ device.device_id }}} \
+    CONFIG.Vendor_ID {0x{{ device.vendor_id }}} \
+    CONFIG.Subsystem_Vendor_ID {0x{{ device.vendor_id }}} \
+    CONFIG.Subsystem_ID {0x0000} \
+    CONFIG.Revision_ID {0x{{ device.revision_id }}} \
+    CONFIG.Link_Speed {2.5_GT/s} \
+    CONFIG.Max_Link_Width {X1} \
+    CONFIG.Maximum_Link_Width {X1} \
+    CONFIG.Enable_Slot_Clock_Configuration {false} \
+    CONFIG.Legacy_Interrupt {NONE} \
+    CONFIG.MSI_Enabled {false} \
+    CONFIG.MSI_64b_Address_Capable {false} \
+    CONFIG.MSIX_Enabled {true} \
+] [get_ips pcie_7x_0]
+
+puts "PCIe IP core configuration completed"

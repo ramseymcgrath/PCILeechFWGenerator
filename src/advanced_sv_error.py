@@ -257,16 +257,14 @@ class ErrorHandlingGenerator:
         state_machine.append("            ")
         state_machine.append("            ERR_ANALYZING: begin")
         state_machine.append(
-            f"                if (error_recovery_timer >= {
-                self.config.error_recovery_cycles}) begin"
+            f"                if (error_recovery_timer >= {self.config.error_recovery_cycles}) begin"
         )
         state_machine.append("                    if (timeout_error) begin")
         state_machine.append(
             "                        error_next_state = ERR_FATAL;  // Timeout is fatal"
         )
         state_machine.append(
-            f"                    end else if (retry_count < {
-                self.config.max_retry_count}) begin"
+            f"                    end else if (retry_count < {self.config.max_retry_count}) begin"
         )
         state_machine.append("                        error_next_state = ERR_RETRY;")
         state_machine.append("                    end else begin")

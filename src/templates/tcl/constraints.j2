@@ -1,0 +1,60 @@
+{#
+Constraints Template - Timing and Physical Constraints Management
+
+This template generates timing constraints and pin assignments based on the
+current tcl_generator.py implementation.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id)
+- board: Board information (name)
+- header: TCL header comment
+#}
+{{ header }}
+
+puts "Adding constraint files..."
+
+# Add all constraint files
+set xdc_files [glob -nocomplain *.xdc]
+if {[llength $xdc_files] > 0} {
+    puts "Found [llength $xdc_files] constraint files"
+    add_files -fileset constrs_1 -norecurse $xdc_files
+    foreach xdc_file $xdc_files {
+        puts "  - $xdc_file"
+    }
+}
+
+# Generate device-specific timing constraints
+puts "Adding device-specific timing constraints..."
+set timing_constraints {
+    # Clock constraints
+    create_clock -period 10.000 -name sys_clk [get_ports clk]
+    
+    # Input delay constraints for actual input ports
+    set_input_delay -clock sys_clk 2.000 [get_ports reset_n]
+    
+    # Output delay constraints - only apply to ports that exist
+    # Use catch to handle missing ports gracefully
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports bar_rd_data]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_data]}
+    catch {set_output_delay -clock sys_clk 1.000 [get_ports cfg_ext_read_data_valid]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_interrupt]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_vector]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports debug_status]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports device_ready]}
+
+    # Device-specific constraints for {{ device.vendor_id }}:{{ device.device_id }}
+    # Board-specific pin assignments for {{ board.name }}
+    set_property PACKAGE_PIN E3 [get_ports clk]
+    set_property IOSTANDARD LVCMOS33 [get_ports clk]
+    set_property PACKAGE_PIN C12 [get_ports reset_n]
+    set_property IOSTANDARD LVCMOS33 [get_ports reset_n]
+}
+
+# Write timing constraints to file
+set constraints_file "./device_constraints.xdc"
+set fp [open $constraints_file w]
+puts $fp $timing_constraints
+close $fp
+add_files -fileset constrs_1 -norecurse $constraints_file
+
+puts "Constraints setup completed"

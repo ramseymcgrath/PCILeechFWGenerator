@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.build import PCILeechFirmwareBuilder
+from src.tcl_generator import TCLGenerator
 
 
 class TestTCLGeneration(unittest.TestCase):
@@ -22,16 +22,8 @@ class TestTCLGeneration(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.output_dir = Path(self.temp_dir)
 
-        # Mock dependencies to avoid import issues
-        with (
-            patch("src.build.DonorDumpManager", None),
-            patch("src.build.ManufacturingVarianceSimulator", None),
-            patch("src.build.OptionROMManager", None),
-            patch("src.build.MSIXCapabilityManager", None),
-        ):
-            self.builder = PCILeechFirmwareBuilder(
-                bdf="0000:03:00.0", board="75t", output_dir=self.output_dir
-            )
+        # Initialize TCL generator directly
+        self.tcl_generator = TCLGenerator(board="75t", output_dir=self.output_dir)
 
     def tearDown(self):
         """Clean up test environment."""
@@ -52,7 +44,7 @@ class TestTCLGeneration(unittest.TestCase):
             "bar_sizes": ["0x20000", "0x0", "0x0", "0x0", "0x0", "0x0"],
         }
 
-        tcl_content = self.builder._generate_device_tcl_script(device_info)
+        tcl_content = self.tcl_generator.generate_device_tcl_script(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("set_property", tcl_content)
@@ -69,10 +61,12 @@ class TestTCLGeneration(unittest.TestCase):
                 device_info = {
                     "vendor_id": "0x8086",
                     "device_id": "0x1533",
+                    "class_code": "0x020000",
+                    "revision_id": "0x03",
                     "board_type": board_type,
                 }
 
-                tcl_content = self.builder._generate_device_tcl_script(device_info)
+                tcl_content = self.tcl_generator.generate_device_tcl_script(device_info)
 
                 self.assertIn("set_property", tcl_content)
                 # Should include board-specific configurations
@@ -83,10 +77,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "project_name": "pcileech_test",
         }
 
-        tcl_content = self.builder._generate_project_setup_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_project_setup_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("create_project", tcl_content)
@@ -98,10 +94,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "board_type": "75t",
         }
 
-        tcl_content = self.builder._generate_ip_config_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_ip_config_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("create_ip", tcl_content)
@@ -113,15 +111,17 @@ class TestTCLGeneration(unittest.TestCase):
         device_id = "0x1533"
         revision_id = "0x03"
 
-        tcl_content = self.builder._generate_axi_pcie_config(
+        tcl_content = self.tcl_generator.generate_axi_pcie_config(
             vendor_id, device_id, revision_id
         )
 
         self.assertIsInstance(tcl_content, str)
-        self.assertIn("axi_pcie", tcl_content.lower())
+        # AXI PCIe for Artix-7 35T uses custom implementation
+        self.assertIn("custom", tcl_content.lower())
         self.assertIn(vendor_id, tcl_content)
         self.assertIn(device_id, tcl_content)
-        self.assertIn("set_property", tcl_content)
+        # Custom implementation uses variable assignment, not set_property
+        self.assertIn("set", tcl_content)
 
     def test_generate_pcie_7x_config(self):
         """Test PCIe 7-series IP configuration."""
@@ -129,7 +129,7 @@ class TestTCLGeneration(unittest.TestCase):
         device_id = "0x1533"
         revision_id = "0x03"
 
-        tcl_content = self.builder._generate_pcie_7x_config(
+        tcl_content = self.tcl_generator.generate_pcie_7x_config(
             vendor_id, device_id, revision_id
         )
 
@@ -144,7 +144,7 @@ class TestTCLGeneration(unittest.TestCase):
         device_id = "0x1533"
         revision_id = "0x03"
 
-        tcl_content = self.builder._generate_pcie_ultrascale_config(
+        tcl_content = self.tcl_generator.generate_pcie_ultrascale_config(
             vendor_id, device_id, revision_id
         )
 
@@ -158,10 +158,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "source_files": ["device_config.sv", "pcileech_tlps128_bar_controller.sv"],
         }
 
-        tcl_content = self.builder._generate_sources_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_sources_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("add_files", tcl_content)
@@ -172,10 +174,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "board_type": "75t",
         }
 
-        tcl_content = self.builder._generate_constraints_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_constraints_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("add_files", tcl_content)
@@ -183,9 +187,14 @@ class TestTCLGeneration(unittest.TestCase):
 
     def test_generate_synthesis_tcl(self):
         """Test synthesis TCL generation."""
-        device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
+        }
 
-        tcl_content = self.builder._generate_synthesis_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_synthesis_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("synth_design", tcl_content)
@@ -193,9 +202,14 @@ class TestTCLGeneration(unittest.TestCase):
 
     def test_generate_implementation_tcl(self):
         """Test implementation TCL generation."""
-        device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
+        }
 
-        tcl_content = self.builder._generate_implementation_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_implementation_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("opt_design", tcl_content)
@@ -204,9 +218,14 @@ class TestTCLGeneration(unittest.TestCase):
 
     def test_generate_bitstream_tcl(self):
         """Test bitstream generation TCL."""
-        device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
+        device_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
+        }
 
-        tcl_content = self.builder._generate_bitstream_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_bitstream_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("write_bitstream", tcl_content)
@@ -217,10 +236,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "board_type": "75t",
         }
 
-        tcl_content = self.builder._generate_master_build_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_master_build_tcl(device_info)
 
         self.assertIsInstance(tcl_content, str)
         self.assertIn("source", tcl_content)
@@ -234,10 +255,12 @@ class TestTCLGeneration(unittest.TestCase):
         device_info = {
             "vendor_id": "0x8086",
             "device_id": "0x1533",
+            "class_code": "0x020000",
+            "revision_id": "0x03",
             "board_type": "75t",
         }
 
-        tcl_files = self.builder._generate_separate_tcl_files(device_info)
+        tcl_files = self.tcl_generator.generate_separate_tcl_files(device_info)
 
         self.assertIsInstance(tcl_files, list)
         self.assertTrue(len(tcl_files) > 0)
@@ -267,7 +290,7 @@ class TestTCLGeneration(unittest.TestCase):
             "board_type": "75t",
         }
 
-        tcl_content = self.builder._generate_device_tcl_script(device_info)
+        tcl_content = self.tcl_generator.generate_device_tcl_script(device_info)
 
         # Basic TCL syntax checks
         self.assertNotIn("syntax error", tcl_content.lower())
@@ -290,7 +313,7 @@ class TestTCLGeneration(unittest.TestCase):
             "board_type": "75t",
         }
 
-        tcl_content = self.builder._generate_project_setup_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_project_setup_tcl(device_info)
 
         # Should include variable definitions
         self.assertIn("set", tcl_content)
@@ -305,7 +328,9 @@ class TestTCLGeneration(unittest.TestCase):
         minimal_device_info = {"vendor_id": "0x8086", "device_id": "0x1533"}
 
         try:
-            tcl_content = self.builder._generate_device_tcl_script(minimal_device_info)
+            tcl_content = self.tcl_generator.generate_device_tcl_script(
+                minimal_device_info
+            )
             self.assertIsInstance(tcl_content, str)
             self.assertTrue(len(tcl_content) > 0)
         except Exception as e:
@@ -328,7 +353,7 @@ class TestTCLGeneration(unittest.TestCase):
                     "board_type": config["board_type"],
                 }
 
-                tcl_content = self.builder._generate_constraints_tcl(device_info)
+                tcl_content = self.tcl_generator.generate_constraints_tcl(device_info)
 
                 # Should include board-specific settings
                 self.assertIsInstance(tcl_content, str)
@@ -345,7 +370,7 @@ class TestTCLGeneration(unittest.TestCase):
             },
         }
 
-        tcl_content = self.builder._generate_constraints_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_constraints_tcl(device_info)
 
         # Should include timing-related TCL commands
         self.assertIsInstance(tcl_content, str)
@@ -358,7 +383,7 @@ class TestTCLGeneration(unittest.TestCase):
             "ip_config": {"pcie_lanes": 4, "max_payload": 256, "max_read_request": 512},
         }
 
-        tcl_content = self.builder._generate_ip_config_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_ip_config_tcl(device_info)
 
         # Should include IP customization commands
         self.assertIn("set_property", tcl_content)
@@ -374,7 +399,7 @@ class TestTCLGeneration(unittest.TestCase):
             },
         }
 
-        tcl_content = self.builder._generate_synthesis_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_synthesis_tcl(device_info)
 
         # Should include optimization settings
         self.assertIsInstance(tcl_content, str)
@@ -387,7 +412,7 @@ class TestTCLGeneration(unittest.TestCase):
             "debug": {"ila": True, "vio": False, "chipscope": False},
         }
 
-        tcl_content = self.builder._generate_device_tcl_script(device_info)
+        tcl_content = self.tcl_generator.generate_device_tcl_script(device_info)
 
         # Should handle debug features
         self.assertIsInstance(tcl_content, str)
@@ -400,7 +425,7 @@ class TestTCLGeneration(unittest.TestCase):
             "memory": {"type": "DDR3", "size": "1GB", "speed": "800MHz"},
         }
 
-        tcl_content = self.builder._generate_ip_config_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_ip_config_tcl(device_info)
 
         # Should include memory controller configuration
         self.assertIsInstance(tcl_content, str)
@@ -417,7 +442,7 @@ class TestTCLGeneration(unittest.TestCase):
             },
         }
 
-        tcl_content = self.builder._generate_ip_config_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_ip_config_tcl(device_info)
 
         # Should include clock configuration
         self.assertIsInstance(tcl_content, str)
@@ -430,7 +455,7 @@ class TestTCLGeneration(unittest.TestCase):
             "power_analysis": True,
         }
 
-        tcl_content = self.builder._generate_implementation_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_implementation_tcl(device_info)
 
         # Should include power analysis commands
         self.assertIsInstance(tcl_content, str)
@@ -443,7 +468,7 @@ class TestTCLGeneration(unittest.TestCase):
             "board_type": "75t",
         }
 
-        tcl_files = self.builder._generate_separate_tcl_files(device_info)
+        tcl_files = self.tcl_generator.generate_separate_tcl_files(device_info)
 
         # Should generate organized set of TCL files
         self.assertIsInstance(tcl_files, list)
@@ -466,7 +491,7 @@ class TestTCLGeneration(unittest.TestCase):
             },
         }
 
-        tcl_content = self.builder._generate_sources_tcl(device_info)
+        tcl_content = self.tcl_generator.generate_sources_tcl(device_info)
 
         # Should handle paths appropriately
         self.assertIsInstance(tcl_content, str)
@@ -479,7 +504,7 @@ class TestTCLGeneration(unittest.TestCase):
             "vivado_version": "2023.1",
         }
 
-        tcl_content = self.builder._generate_device_tcl_script(device_info)
+        tcl_content = self.tcl_generator.generate_device_tcl_script(device_info)
 
         # Should generate compatible TCL
         self.assertIsInstance(tcl_content, str)
@@ -511,14 +536,11 @@ class TestTCLScriptIntegration(unittest.TestCase):
         """Test complete TCL generation workflow."""
         with (
             patch("src.build.DonorDumpManager", None),
-            patch("src.build.ManufacturingVarianceSimulator", None),
             patch("src.build.OptionROMManager", None),
             patch("src.build.MSIXCapabilityManager", None),
         ):
 
-            builder = PCILeechFirmwareBuilder(
-                bdf="0000:03:00.0", board="75t", output_dir=self.output_dir
-            )
+            builder = TCLGenerator(board="75t", output_dir=self.output_dir)
 
             device_info = {
                 "vendor_id": "0x8086",
@@ -529,7 +551,7 @@ class TestTCLScriptIntegration(unittest.TestCase):
             }
 
             # Generate all TCL files
-            tcl_files = builder._generate_separate_tcl_files(device_info)
+            tcl_files = builder.generate_separate_tcl_files(device_info)
 
             # Should generate multiple TCL files
             self.assertIsInstance(tcl_files, list)

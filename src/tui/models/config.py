@@ -10,21 +10,36 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Import production defaults
+try:
+    from ...constants import PRODUCTION_DEFAULTS
+except ImportError:
+    # Fallback defaults if constants not available
+    PRODUCTION_DEFAULTS = {
+        "ADVANCED_SV": True,
+        "MANUFACTURING_VARIANCE": True,
+        "BEHAVIOR_PROFILING": True,
+        "POWER_MANAGEMENT": True,
+        "ERROR_HANDLING": True,
+        "PERFORMANCE_COUNTERS": True,
+        "DEFAULT_DEVICE_TYPE": "network",
+    }
+
 
 @dataclass
 class BuildConfiguration:
-    """Comprehensive build configuration"""
+    """Comprehensive build configuration with production defaults"""
 
     board_type: str = "75t"
-    device_type: str = "generic"
-    advanced_sv: bool = True
-    enable_variance: bool = True
-    behavior_profiling: bool = False
+    device_type: str = PRODUCTION_DEFAULTS["DEFAULT_DEVICE_TYPE"]
+    advanced_sv: bool = PRODUCTION_DEFAULTS["ADVANCED_SV"]
+    enable_variance: bool = PRODUCTION_DEFAULTS["MANUFACTURING_VARIANCE"]
+    behavior_profiling: bool = PRODUCTION_DEFAULTS["BEHAVIOR_PROFILING"]
     profile_duration: float = 30.0
     disable_ftrace: bool = False
-    power_management: bool = True
-    error_handling: bool = True
-    performance_counters: bool = True
+    power_management: bool = PRODUCTION_DEFAULTS["POWER_MANAGEMENT"]
+    error_handling: bool = PRODUCTION_DEFAULTS["ERROR_HANDLING"]
+    performance_counters: bool = PRODUCTION_DEFAULTS["PERFORMANCE_COUNTERS"]
     flash_after_build: bool = False
 
     # Donor dump configuration
@@ -35,8 +50,10 @@ class BuildConfiguration:
     local_build: bool = False  # Default to standard builds with donor dump
 
     # Profile metadata
-    name: str = "Default Configuration"
-    description: str = "Standard configuration for PCIe devices"
+    name: str = "Production Configuration"
+    description: str = (
+        "Production-ready configuration with all advanced features enabled"
+    )
     created_at: Optional[str] = None
     last_used: Optional[str] = None
 
@@ -201,8 +218,7 @@ class BuildConfiguration:
             )
         except Exception as e:
             raise Exception(
-                f"Unexpected error when saving configuration to {filepath}: {
-                    str(e)}"
+                f"Unexpected error when saving configuration to {filepath}: {str(e)}"
             )
 
     @classmethod
@@ -236,20 +252,15 @@ class BuildConfiguration:
             )
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
-                f"Invalid JSON in configuration file {filepath}: {
-                    e.msg}",
+                f"Invalid JSON in configuration file {filepath}: {e.msg}",
                 e.doc,
                 e.pos,
             )
         except ValueError as e:
-            raise ValueError(
-                f"Invalid configuration data in {filepath}: {
-                    str(e)}"
-            )
+            raise ValueError(f"Invalid configuration data in {filepath}: {str(e)}")
         except Exception as e:
             raise Exception(
-                f"Unexpected error when loading configuration from {filepath}: {
-                    str(e)}"
+                f"Unexpected error when loading configuration from {filepath}: {str(e)}"
             )
 
     def copy(self) -> "BuildConfiguration":

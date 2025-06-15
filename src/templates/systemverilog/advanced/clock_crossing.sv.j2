@@ -1,0 +1,142 @@
+{#- Advanced Clock Domain Crossing SystemVerilog Template -#}
+{{ header | safe }}
+
+module {{ module_name | default('advanced_clock_crossing') }} #(
+    parameter DATA_WIDTH = {{ data_width | default(32) }},
+    parameter SYNC_STAGES = {{ sync_stages | default(2) }}
+) (
+    // Source domain
+    input  logic                    src_clk,
+    input  logic                    src_reset_n,
+    input  logic [DATA_WIDTH-1:0]   src_data,
+    input  logic                    src_valid,
+    output logic                    src_ready,
+    
+    // Destination domain
+    input  logic                    dst_clk,
+    input  logic                    dst_reset_n,
+    output logic [DATA_WIDTH-1:0]   dst_data,
+    output logic                    dst_valid,
+    input  logic                    dst_ready
+);
+
+{%- if device_config %}
+    // Device-specific configuration
+    // Device Type: {{ device_config.device_type.value if device_config.device_type else 'generic' }}
+    // Device Class: {{ device_config.device_class.value if device_config.device_class else 'consumer' }}
+    // Vendor ID: {{ device_config.vendor_id if device_config.vendor_id else '0x1234' }}
+    // Device ID: {{ device_config.device_id if device_config.device_id else '0x5678' }}
+{%- endif %}
+
+{%- if variance_model %}
+    // Manufacturing variance compensation
+    // Process variation: {{ "%.3f" | format(variance_model.process_variation) if variance_model.process_variation else '0.000' }}
+    // Temperature coefficient: {{ "%.3f" | format(variance_model.temperature_coefficient) if variance_model.temperature_coefficient else '0.000' }}
+    // Voltage variation: {{ "%.3f" | format(variance_model.voltage_variation) if variance_model.voltage_variation else '0.000' }}
+{%- endif %}
+
+    logic [SYNC_STAGES-1:0] sync_reg;
+    logic [DATA_WIDTH-1:0] data_reg;
+    logic valid_reg;
+
+{%- if variance_model and variance_model.process_variation and variance_model.process_variation != 0.0 %}
+    // Process variation compensation
+    logic [DATA_WIDTH-1:0] compensated_data;
+    
+    always_comb begin
+        // Apply process variation compensation
+        compensated_data = src_data;
+        // Compensation logic would be implemented here based on variance model
+    end
+{%- endif %}
+
+    // Source domain logic
+    always_ff @(posedge src_clk or negedge src_reset_n) begin
+        if (!src_reset_n) begin
+            data_reg <= '0;
+            valid_reg <= 1'b0;
+        end else if (src_valid && src_ready) begin
+{%- if variance_model and variance_model.process_variation and variance_model.process_variation != 0.0 %}
+            data_reg <= compensated_data;
+{%- else %}
+            data_reg <= src_data;
+{%- endif %}
+            valid_reg <= 1'b1;
+        end else if (sync_reg[SYNC_STAGES-1]) begin
+            valid_reg <= 1'b0;
+        end
+    end
+
+    // Destination domain synchronizer
+    always_ff @(posedge dst_clk or negedge dst_reset_n) begin
+        if (!dst_reset_n) begin
+            sync_reg <= '0;
+        end else begin
+            sync_reg <= {sync_reg[SYNC_STAGES-2:0], valid_reg};
+        end
+    end
+
+{%- if power_management and power_management.enable_clock_gating %}
+    // Power management - clock gating support
+    logic src_clk_gated, dst_clk_gated;
+    logic clock_enable;
+    
+    assign clock_enable = src_valid || valid_reg || (|sync_reg);
+    assign src_clk_gated = src_clk && clock_enable;
+    assign dst_clk_gated = dst_clk && clock_enable;
+{%- endif %}
+
+{%- if performance_counters and performance_counters.enable_bandwidth %}
+    // Performance monitoring
+    logic [{{ performance_counters.counter_width | default(32) }}-1:0] transfer_count;
+    logic [{{ performance_counters.counter_width | default(32) }}-1:0] cycle_count;
+    
+    always_ff @(posedge dst_clk or negedge dst_reset_n) begin
+        if (!dst_reset_n) begin
+            transfer_count <= '0;
+            cycle_count <= '0;
+        end else begin
+            cycle_count <= cycle_count + 1;
+            if (dst_valid && dst_ready) begin
+                transfer_count <= transfer_count + 1;
+            end
+        end
+    end
+{%- endif %}
+
+{%- if error_handling and error_handling.correctable_errors %}
+    // Error detection and handling
+    logic sync_error;
+    logic [3:0] error_count;
+    
+    always_ff @(posedge dst_clk or negedge dst_reset_n) begin
+        if (!dst_reset_n) begin
+            sync_error <= 1'b0;
+            error_count <= 4'h0;
+        end else begin
+            // Detect synchronization errors (simplified)
+            sync_error <= valid_reg && !sync_reg[0] && (sync_reg != '0);
+            if (sync_error && error_count < 4'hF) begin
+                error_count <= error_count + 1;
+            end
+        end
+    end
+{%- endif %}
+
+    assign src_ready = !valid_reg || sync_reg[SYNC_STAGES-1];
+    assign dst_data = data_reg;
+    assign dst_valid = sync_reg[SYNC_STAGES-1] && dst_ready;
+
+{%- if debug_enable %}
+    // Debug and status outputs
+    assign debug_status = {
+        {(32-DATA_WIDTH){1'b0}},
+        data_reg[DATA_WIDTH-1:0]
+    };
+    assign sync_status = {
+        {(32-SYNC_STAGES){1'b0}},
+        sync_reg
+    };
+{%- endif %}
+
+endmodule

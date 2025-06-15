@@ -190,9 +190,7 @@ class DonorDumpPermissionError(DonorDumpError):
     def __str__(self) -> str:
         base_msg = super().__str__()
         if self.required_permission and self.file_path:
-            return f"{base_msg} (requires: {
-                self.required_permission}, path: {
-                self.file_path})"
+            return f"{base_msg} (requires: {self.required_permission}, path: {self.file_path})"
         elif self.required_permission:
             return f"{base_msg} (requires: {self.required_permission})"
         elif self.file_path:
@@ -305,7 +303,7 @@ class DonorDumpManager:
                 try:
                     # Update package list first
                     subprocess.run(
-                        ["sudo", "apt-get", "update"],
+                        ["apt-get", "update"],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -314,7 +312,6 @@ class DonorDumpManager:
                     # Install specific kernel headers
                     subprocess.run(
                         [
-                            "sudo",
                             "apt-get",
                             "install",
                             "-y",
@@ -338,7 +335,6 @@ class DonorDumpManager:
                 try:
                     subprocess.run(
                         [
-                            "sudo",
                             "dn",
                             "install",
                             "-y",
@@ -356,7 +352,7 @@ class DonorDumpManager:
                 # Arch Linux approach
                 try:
                     subprocess.run(
-                        ["sudo", "pacman", "-S", "--noconfirm", "linux-headers"],
+                        ["pacman", "-S", "--noconfirm", "linux-headers"],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -370,7 +366,6 @@ class DonorDumpManager:
                 try:
                     subprocess.run(
                         [
-                            "sudo",
                             "zypper",
                             "install",
                             "-y",
@@ -478,10 +473,7 @@ class DonorDumpManager:
         """
         # First check if the source directory exists
         if not self.module_source_dir.exists():
-            logger.error(
-                f"Module source directory not found: {
-                    self.module_source_dir}"
-            )
+            logger.error(f"Module source directory not found: {self.module_source_dir}")
             raise ModuleBuildError(
                 f"Module source directory not found: {self.module_source_dir}"
             )
@@ -575,13 +567,13 @@ class DonorDumpManager:
             Command string to install headers
         """
         if distro == "debian" or distro == "ubuntu":
-            return f"sudo apt-get install linux-headers-{kernel_version}"
+            return f"apt-get install linux-headers-{kernel_version}"
         elif distro == "fedora" or distro == "centos" or distro == "rhel":
-            return f"sudo dnf install kernel-devel-{kernel_version}"
+            return f"dnf install kernel-devel-{kernel_version}"
         elif distro == "arch" or distro == "manjaro":
-            return "sudo pacman -S linux-headers"
+            return "pacman -S linux-headers"
         elif distro == "opensuse":
-            return f"sudo zypper install kernel-devel-{kernel_version}"
+            return f"zypper install kernel-devel-{kernel_version}"
         else:
             return "Please install kernel headers for your distribution"
 
@@ -639,7 +631,7 @@ class DonorDumpManager:
         try:
             logger.info(f"Loading donor_dump module with BDF {bdf}")
             subprocess.run(
-                ["sudo", "insmod", str(module_ko), f"bdf={bdf}"],
+                ["insmod", str(module_ko), f"bdf={bdf}"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -652,10 +644,7 @@ class DonorDumpManager:
                 )
 
             if not os.path.exists(self.proc_path):
-                raise ModuleLoadError(
-                    f"Module loaded but {
-                        self.proc_path} not created"
-                )
+                raise ModuleLoadError(f"Module loaded but {self.proc_path} not created")
 
             logger.info("Module loaded successfully")
             return True
@@ -680,7 +669,7 @@ class DonorDumpManager:
         try:
             logger.info("Unloading donor_dump module")
             subprocess.run(
-                ["sudo", "rmmod", self.module_name],
+                ["rmmod", self.module_name],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -769,19 +758,49 @@ class DonorDumpManager:
                 json.dump(device_info, f, indent=2)
             logger.info(f"Saved donor information to {output_path}")
 
-            # If extended configuration space is available, save it in a format
-            # suitable for $readmemh
+            # Generate configuration space hex file for SystemVerilog $readmemh
+            config_hex_path = os.path.join(
+                os.path.dirname(os.path.abspath(output_path)),
+                "config_space_init.hex",
+            )
+
+            # Check if extended configuration space is available
             if (
                 "extended_config" in device_info
                 and device_info["extended_config"] != "disabled"
             ):
-                config_hex_path = os.path.join(
-                    os.path.dirname(os.path.abspath(output_path)),
-                    "config_space_init.hex",
+                logger.info(
+                    "Extended configuration space found - generating hex file from device data"
                 )
                 self.save_config_space_hex(
                     device_info["extended_config"], config_hex_path
                 )
+            else:
+                # Log the specific reason why extended config is not available
+                if "extended_config" not in device_info:
+                    logger.warning(
+                        "Extended configuration space not found in device_info - generating blank hex file fallback"
+                    )
+                    logger.warning(
+                        "This may indicate the device doesn't support extended config space or the donor dump failed to capture it"
+                    )
+                elif device_info["extended_config"] == "disabled":
+                    logger.warning(
+                        "Extended configuration space is disabled - generating blank hex file fallback"
+                    )
+                    logger.warning(
+                        "Extended config space may have been explicitly disabled during device enumeration"
+                    )
+                else:
+                    logger.warning(
+                        f"Extended configuration space has unexpected value '{device_info['extended_config']}' - generating blank hex file fallback"
+                    )
+
+                # Generate blank hex file as fallback
+                logger.info(
+                    f"Generating blank 4KB configuration space hex file at {config_hex_path}"
+                )
+                self.generate_blank_config_hex(config_hex_path)
 
             return True
         except IOError as e:
@@ -839,6 +858,40 @@ class DonorDumpManager:
             logger.error(f"Failed to save configuration space hex data: {e}")
             return False
 
+    def generate_blank_config_hex(self, output_path: str) -> bool:
+        """
+        Generate a blank configuration space hex file for SystemVerilog $readmemh
+
+        Creates a 4KB (1024 lines) hex file with all zeros, suitable for use when
+        no extended configuration space data is available from the donor device.
+
+        Args:
+            output_path: Path to save the blank hex file
+
+        Returns:
+            True if file was created successfully
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+            # Generate 1024 lines of 32-bit words (all zeros)
+            # Each line represents a 32-bit word (8 hex characters)
+            with open(output_path, "w") as f:
+                for _ in range(1024):  # 4KB = 1024 * 4 bytes = 1024 * 32-bit words
+                    f.write("00000000\n")
+
+            logger.info(
+                f"Generated blank configuration space hex file at {output_path}"
+            )
+            logger.info(
+                "Blank hex file contains 1024 lines of zeros (4KB total) for SystemVerilog $readmemh compatibility"
+            )
+            return True
+        except IOError as e:
+            logger.error(f"Failed to generate blank configuration space hex file: {e}")
+            return False
+
     def read_device_info(self) -> Dict[str, str]:
         """
         Read device information from /proc/donor_dump
@@ -847,10 +900,7 @@ class DonorDumpManager:
             Dictionary of device parameters
         """
         if not os.path.exists(self.proc_path):
-            raise DonorDumpError(
-                f"Module not loaded or {
-                    self.proc_path} not available"
-            )
+            raise DonorDumpError(f"Module not loaded or {self.proc_path} not available")
 
         try:
             device_info = {}
@@ -944,10 +994,7 @@ class DonorDumpManager:
             result["details"] = "Module is built but not currently loaded"
             result["issues"].append("Module is not loaded into the kernel")
             result["fixes"].append(
-                f"Load the module with: sudo insmod {
-                    status_info.get(
-                        'module_path',
-                        'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
+                f"Load the module with: sudo insmod {status_info.get('module_path', 'donor_dump.ko')} bdf=YOUR_DEVICE_BDF"
             )
             result["fixes"].append(
                 "Or use the DonorDumpManager.load_module() function with your device BDF"
@@ -962,12 +1009,10 @@ class DonorDumpManager:
             # Check if headers are available
             if not status_info["headers_available"]:
                 result["issues"].append(
-                    f"Kernel headers not found for kernel {
-                        status_info['kernel_version']}"
+                    f"Kernel headers not found for kernel {status_info['kernel_version']}"
                 )
                 result["fixes"].append(
-                    f"Install kernel headers: sudo apt-get install linux-headers-{
-                        status_info['kernel_version']}"
+                    f"Install kernel headers: sudo apt-get install linux-headers-{status_info['kernel_version']}"
                 )
             else:
                 result["issues"].append("Module has not been built yet")

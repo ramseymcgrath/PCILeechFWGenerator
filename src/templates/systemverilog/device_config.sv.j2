@@ -1,0 +1,31 @@
+{#- Device Configuration Module Template -#}
+{{ header | safe }}
+
+module device_config #(
+    parameter VENDOR_ID = {{ vendor_id | sv_hex(16) }},
+    parameter DEVICE_ID = {{ device_id | sv_hex(16) }},
+    parameter CLASS_CODE = {{ class_code | sv_hex(24) }},
+    parameter SUBSYSTEM_VENDOR_ID = {{ vendor_id | sv_hex(16) }},
+    parameter SUBSYSTEM_DEVICE_ID = {{ device_id | sv_hex(16) }},
+{%- for i in range(6) %}
+    parameter BAR{{ i }}_APERTURE = {{ bars[i] | sv_hex(32) }}{{ "," if not loop.last else "" }}
+{%- endfor %}
+) (
+    // Configuration space interface
+    output logic [31:0] cfg_device_id,
+    output logic [31:0] cfg_class_code,
+    output logic [31:0] cfg_subsystem_id,
+    output logic [31:0] cfg_bar [0:5]
+);
+
+    // Device identification
+    assign cfg_device_id = {DEVICE_ID, VENDOR_ID};
+    assign cfg_class_code = {8'h00, CLASS_CODE};
+    assign cfg_subsystem_id = {SUBSYSTEM_DEVICE_ID, SUBSYSTEM_VENDOR_ID};
+
+    // BAR configuration
+{%- for i in range(6) %}
+    assign cfg_bar[{{ i }}] = BAR{{ i }}_APERTURE;
+{%- endfor %}
+
+endmodule

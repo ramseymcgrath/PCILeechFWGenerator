@@ -107,10 +107,7 @@ class RepoManager:
                         # Change back to original directory
                         os.chdir(current_dir)
             except Exception as e:
-                print(
-                    f"[!] Warning: Error checking repository update status: {
-                        str(e)}"
-                )
+                print(f"[!] Warning: Error checking repository update status: {str(e)}")
         else:
             # Clone repository
             print(f"[*] Cloning PCILeech FPGA repository to {repo_dir}")

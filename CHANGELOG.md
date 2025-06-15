@@ -7,21 +7,21 @@
 All notable changes to the PCILeech Firmware Generator will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0.html).
 
 ---
 
 ## 📑 Table of Contents
 
-- [Version 0.3.1 (2025-06-09)](#020---2025-06-09)
-- [Version 0.3.1 (2025-01-02)](#0110---2025-01-02)
+- [Version 0.5.0 (2025-06-09)](#020---2025-06-09)
+- [Version 0.5.0 (2025-01-02)](#0110---2025-01-02)
 - [Release Notes](#release-notes)
 - [Backward Compatibility](#backward-compatibility)
 - [Future Roadmap](#future-roadmap)
 
 ---
 
-## [0.3.1] - 2025-06-10
+## [0.5.0] - 2025-06-10
 
 ### ✨ Added
 - **🧩 Feature Integration**: Comprehensive integration of all major features
@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
   - Fixed timing parameter calculation and application
   - Improved error handling for variance parameter generation
 
-## [0.3.1] - 2025-06-09
+## [0.5.0] - 2025-06-09
 
 ### ✨ Added
 - **💾 Option-ROM Passthrough**: Complete Option-ROM replication from donor devices
@@ -100,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.1.2
   - Validation of ROM signature and content
 
 ### 🔄 Changed
-- **🔢 Version Bump**: Incremented to v0.3.1 to reflect significant Option-ROM feature addition
+- **🔢 Version Bump**: Incremented to v0.5.0 to reflect significant Option-ROM feature addition
 - **🏗️ Build Process**: Updated to support Option-ROM integration
 - **📋 Enhanced Logging**: Improved logging for Option-ROM extraction and processing
 
@@ -211,7 +211,7 @@ pcileech-build --bdf 0000:03:00.0 --board 75t
 
 ## 📋 Release Notes
 
-### 🚀 v0.3.1 Highlights
+### 🚀 v0.5.0 Highlights
 
 This release integrates all major features of the PCILeech FPGA firmware generator, providing a comprehensive solution for PCIe device emulation. The integration ensures that all features work together seamlessly, providing a more realistic and functional emulation experience.
 
@@ -221,7 +221,7 @@ Key improvements include:
 - **✂️ Capability Pruning**: Selective modification of capabilities that can't be faithfully emulated
 - **🎲 Deterministic Variance Seeding**: Consistent hardware variance based on device serial number and build revision
 
-### 🚀 v0.3.1 Highlights
+### 🚀 v0.5.0 Highlights
 
 This release introduces the Option-ROM passthrough feature, allowing the PCILeech FPGA firmware to faithfully replicate the Option-ROM of donor PCI devices. This enables advanced functionality such as UEFI boot support and device-specific initialization.
 
@@ -231,7 +231,7 @@ Key improvements include:
 - **🔌 Legacy ROM Support**: Proper handling of legacy 16-bit config cycles for ROM access
 - **🛠️ Flexible Configuration**: Command-line options for ROM source, size, and implementation mode
 
-### 🚀 v0.3.1 Highlights
+### 🚀 v0.5.0 Highlights
 
 This major release introduces a modern, interactive TUI that transforms the user experience while maintaining full backward compatibility with the original command-line interface. The TUI provides guided workflows, real-time monitoring, and intelligent error handling that makes firmware generation more accessible and reliable.
 
@@ -259,4 +259,4 @@ This tool is intended for educational research and legitimate PCIe development p
 
 ---
 
-**Version 0.3.1** - Major release with integrated features for comprehensive PCIe device emulation
+**Version 0.5.0** - Major release with integrated features for comprehensive PCIe device emulation

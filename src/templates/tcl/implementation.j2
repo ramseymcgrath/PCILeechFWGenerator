@@ -1,0 +1,32 @@
+{#
+Implementation Template - Implementation Configuration and Execution
+
+This template configures and runs implementation with appropriate settings
+and generates reports.
+
+Context variables expected:
+- header: TCL header comment
+#}
+{{ header }}
+
+puts "Configuring implementation settings..."
+set_property strategy "Performance_Explore" [get_runs impl_1]
+
+puts "Starting implementation..."
+launch_runs impl_1 -jobs 8
+wait_on_run impl_1
+
+if {[get_property PROGRESS [get_runs impl_1]] != "100%"} {
+    puts "ERROR: Implementation failed!"
+    exit 1
+}
+
+puts "Implementation completed successfully"
+
+# Generate implementation reports
+puts "Generating reports..."
+open_run impl_1
+report_timing_summary -file timing_summary.rpt
+report_utilization -file utilization_impl.rpt
+report_power -file power_analysis.rpt
+report_drc -file drc_report.rpt

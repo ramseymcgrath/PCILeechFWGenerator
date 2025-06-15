@@ -23,11 +23,11 @@ except ImportError:
 
 # Import compatibility module for legacy build functions
 try:
-    import build_compat as build
+    from src import build_compat as build
 except ImportError:
     # Fallback to legacy build if available
     try:
-        import build
+        from src import build
     except ImportError:
         # Create minimal mock for tests
         build = type(
@@ -747,3 +747,302 @@ class TestRegressionPrevention:
 
         # Large delay should be handled without overflow
         assert "large_delay_reg_delay_counter" in sv_content
+
+
+class TestRefactoredBuildSystem:
+    """Test integration with the refactored build system components."""
+
+    @patch("build.TemplateRenderer")
+    @patch("build.TCLBuilder")
+    def test_template_based_tcl_generation(
+        self, mock_tcl_builder_class, mock_template_renderer_class
+    ):
+        """Test that refactored build.py uses template-based TCL generation."""
+        # Mock the template renderer and TCL builder
+        mock_renderer = Mock()
+        mock_builder = Mock()
+        mock_template_renderer_class.return_value = mock_renderer
+        mock_tcl_builder_class.return_value = mock_builder
+
+        # Mock successful TCL generation
+        mock_builder.build_all_tcl_scripts.return_value = {
+            "01_project_setup.tcl": True,
+            "02_ip_config.tcl": True,
+            "build_all.tcl": True,
+        }
+
+        # Test data
+        donor_info = {
+            "vendor_id": "0x8086",
+            "device_id": "0x1533",
+            "bar_size": "0x20000",
+            "mpc": "0x02",
+            "mpr": "0x02",
+            "subvendor_id": "0x8086",
+            "subsystem_id": "0x0000",
+            "revision_id": "0x03",
+        }
+
+        # This would be called by the refactored build.py
+        if hasattr(build, "build_tcl_with_templates"):
+            tcl_content, tcl_file = build.build_tcl_with_templates(
+                donor_info, "test.tcl"
+            )
+
+            # Verify template-based generation was used
+            mock_tcl_builder_class.assert_called_once()
+            mock_builder.build_all_tcl_scripts.assert_called_once()
+
+    def test_backward_compatibility_api(self):
+        """Test that refactored build.py maintains backward compatibility."""
+        # Test that original API functions still exist and work
+        assert hasattr(build, "build_tcl")
+        assert hasattr(build, "build_sv")
+        assert hasattr(build, "get_donor_info")
+        assert hasattr(build, "scrape_driver_regs")
+
+        # Test that they're callable
+        assert callable(build.build_tcl)
+        assert callable(build.build_sv)
+        assert callable(build.get_donor_info)
+        assert callable(build.scrape_driver_regs)
+
+    @patch("build.safe_import_with_fallback")
+    def test_safe_import_integration(self, mock_safe_import):
+        """Test integration with safe import helper."""
+        # Mock successful import
+        mock_safe_import.return_value = {
+            "TemplateRenderer": Mock(),
+            "TCLBuilder": Mock(),
+            "ConfigSpaceManager": Mock(),
+        }
+
+        # This would be used in refactored build.py initialization
+        if hasattr(build, "initialize_refactored_components"):
+            components = build.initialize_refactored_components()
+
+            mock_safe_import.assert_called_once()
+            assert "TemplateRenderer" in components
+            assert "TCLBuilder" in components
+
+    def test_template_vs_legacy_output_equivalence(self, temp_dir, mock_donor_info):
+        """Test that template-based and legacy TCL generation produce equivalent output."""
+        # Generate TCL using legacy method
+        legacy_content, legacy_file = build.build_tcl(mock_donor_info, "legacy.tcl")
+
+        # If template-based method exists, compare outputs
+        if hasattr(build, "build_tcl_with_templates"):
+            template_content, template_file = build.build_tcl_with_templates(
+                mock_donor_info, "template.tcl"
+            )
+
+            # Key elements should be present in both
+            key_elements = [
+                mock_donor_info["vendor_id"],
+                mock_donor_info["device_id"],
+                "set_property",
+                "create_project",
+            ]
+
+            for element in key_elements:
+                assert element in legacy_content
+                if template_content:  # Only check if template method returned content
+                    assert element in template_content
+
+    @patch("build.validate_fpga_part")
+    @patch("build.select_pcie_ip_core")
+    def test_fpga_strategy_integration(self, mock_select_ip, mock_validate):
+        """Test integration with FPGA strategy helpers."""
+        mock_validate.return_value = True
+        mock_select_ip.return_value = "axi_pcie"
+
+        # Test FPGA part validation in build process
+        fpga_part = "xc7a35tcsg324-2"
+
+        if hasattr(build, "validate_build_configuration"):
+            is_valid = build.validate_build_configuration(fpga_part)
+            mock_validate.assert_called_with(fpga_part)
+
+        # Test PCIe IP core selection
+        if hasattr(build, "get_pcie_ip_configuration"):
+            ip_config = build.get_pcie_ip_configuration(fpga_part)
+            mock_select_ip.assert_called_with(fpga_part)
+
+    def test_constants_integration(self):
+        """Test integration with constants module."""
+        # Test that build.py uses constants from the constants module
+        if hasattr(build, "BOARD_PARTS"):
+            # Should use constants from constants.py
+            from constants import BOARD_PARTS as CONST_BOARD_PARTS
+
+            # At minimum, should have some overlap or be identical
+            build_boards = set(build.BOARD_PARTS.keys()) if build.BOARD_PARTS else set()
+            const_boards = set(CONST_BOARD_PARTS.keys())
+
+            # Should have significant overlap (allowing for gradual migration)
+            overlap = len(build_boards.intersection(const_boards))
+            total_unique = len(build_boards.union(const_boards))
+
+            if total_unique > 0:
+                overlap_ratio = overlap / total_unique
+                assert (
+                    overlap_ratio > 0.5
+                ), "Insufficient overlap between build.py and constants.py board definitions"
+
+    @patch("build.write_tcl_file_with_logging")
+    def test_helper_function_integration(self, mock_write_helper):
+        """Test integration with build helper functions."""
+        mock_write_helper.return_value = True
+
+        # Test that build.py uses helper functions for file operations
+        if hasattr(build, "write_tcl_with_helpers"):
+            content = "# Test TCL content"
+            file_path = "test.tcl"
+            tcl_files = []
+
+            result = build.write_tcl_with_helpers(content, file_path, tcl_files, "test")
+
+            mock_write_helper.assert_called_once_with(
+                content, file_path, tcl_files, "test", None
+            )
+
+    def test_error_handling_with_refactored_components(self):
+        """Test error handling when refactored components are unavailable."""
+        # Test graceful fallback when new components can't be imported
+        with patch("build.safe_import_with_fallback") as mock_import:
+            mock_import.return_value = {
+                "TemplateRenderer": None,
+                "TCLBuilder": None,
+                "ConfigSpaceManager": None,
+            }
+
+            # Build should still work with legacy methods
+            if hasattr(build, "build_with_fallback"):
+                # Should not raise exception
+                try:
+                    build.build_with_fallback()
+                except Exception as e:
+                    pytest.fail(f"Build failed to fallback gracefully: {e}")
+
+
+class TestPerformanceComparison:
+    """Test performance comparison between legacy and refactored systems."""
+
+    def test_tcl_generation_performance(self, mock_donor_info):
+        """Compare performance of legacy vs template-based TCL generation."""
+        import time
+
+        # Measure legacy performance
+        start_time = time.time()
+        for _ in range(10):  # Multiple iterations for better measurement
+            legacy_content, legacy_file = build.build_tcl(
+                mock_donor_info, "perf_test.tcl"
+            )
+        legacy_time = time.time() - start_time
+
+        # Measure template-based performance if available
+        if hasattr(build, "build_tcl_with_templates"):
+            start_time = time.time()
+            for _ in range(10):
+                template_content, template_file = build.build_tcl_with_templates(
+                    mock_donor_info, "perf_test.tcl"
+                )
+            template_time = time.time() - start_time
+
+            # Template-based should not be significantly slower
+            # Allow up to 2x slower for template overhead
+            assert (
+                template_time < legacy_time * 2
+            ), f"Template generation too slow: {template_time}s vs {legacy_time}s"
+
+    def test_memory_usage_comparison(self, mock_donor_info):
+        """Compare memory usage of legacy vs refactored systems."""
+        import gc
+        import os
+
+        import psutil
+
+        process = psutil.Process(os.getpid())
+
+        # Measure legacy memory usage
+        gc.collect()
+        initial_memory = process.memory_info().rss
+
+        for _ in range(100):  # Generate multiple times
+            legacy_content, legacy_file = build.build_tcl(
+                mock_donor_info, "memory_test.tcl"
+            )
+
+        gc.collect()
+        legacy_memory = process.memory_info().rss - initial_memory
+
+        # Measure template-based memory usage if available
+        if hasattr(build, "build_tcl_with_templates"):
+            gc.collect()
+            initial_memory = process.memory_info().rss
+
+            for _ in range(100):
+                template_content, template_file = build.build_tcl_with_templates(
+                    mock_donor_info, "memory_test.tcl"
+                )
+
+            gc.collect()
+            template_memory = process.memory_info().rss - initial_memory
+
+            # Template-based should not use significantly more memory
+            # Allow up to 50% more memory for template caching
+            assert (
+                template_memory < legacy_memory * 1.5
+            ), f"Template generation uses too much memory: {template_memory} vs {legacy_memory}"
+
+
+class TestMigrationCompatibility:
+    """Test compatibility during migration from legacy to refactored system."""
+
+    def test_gradual_migration_support(self):
+        """Test that both legacy and refactored systems can coexist."""
+        # Test that legacy functions still work
+        assert hasattr(build, "build_tcl")
+        assert hasattr(build, "build_sv")
+
+        # Test that new functions are available (if implemented)
+        new_functions = [
+            "build_tcl_with_templates",
+            "build_with_helpers",
+            "validate_build_configuration",
+        ]
+
+        for func_name in new_functions:
+            if hasattr(build, func_name):
+                assert callable(getattr(build, func_name))
+
+    def test_configuration_migration(self):
+        """Test migration of configuration from legacy to constants."""
+        # Test that legacy constants are still available
+        legacy_constants = ["BOARD_INFO", "APERTURE"]
+
+        for const_name in legacy_constants:
+            if hasattr(build, const_name):
+                legacy_const = getattr(build, const_name)
+                assert isinstance(legacy_const, dict)
+                assert len(legacy_const) > 0
+
+    def test_api_consistency(self, mock_donor_info):
+        """Test that API remains consistent during migration."""
+        # Test that function signatures haven't changed
+        import inspect
+
+        # Check build_tcl signature
+        sig = inspect.signature(build.build_tcl)
+        params = list(sig.parameters.keys())
+
+        # Should still accept donor_info and gen_tcl parameters
+        assert "donor_info" in params or len(params) >= 1
+        assert "gen_tcl" in params or len(params) >= 2
+
+        # Test that return format is consistent
+        result = build.build_tcl(mock_donor_info, "test.tcl")
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], str)  # TCL content
+        assert isinstance(result[1], str)  # TCL file path

@@ -1,0 +1,94 @@
+{#- PMCSR Stub Module Template -#}
+{#- Minimal PCIe D-state handshake & PME generator -#}
+{#- Generates just enough logic for a cloned device to satisfy OS power-management probes -#}
+{#- Resource cost: <40 LUT, <50 FF on most FPGAs -#}
+
+// pmcsr_stub.sv — Minimal PCIe D‑state handshake & PME generator
+// Generates just enough logic for a cloned device to satisfy OS power‑management
+// probes.  Resource cost: <40 LUT, <50 FF on most FPGAs.
+//
+//  * Exposes 16‑bit PMCSR at config‑space offset 0x44 (DW 0)
+//  * Implements D0 ↔ D3hot transitions with a {{ timeout_ms }} ms timeout
+//  * Supports PME_En / PME_Status and pulses PME# when a wake event arrives
+//  * No D1/D2, no ASPM state machine, no real gating — everything else handled
+//    by the PCIe hard‑macro or left unimplemented.
+
+module pmcsr_stub #(
+    // Fabric clock frequency (Hz). Used only for the fake transition timer.
+    parameter int CLK_HZ = {{ clk_hz }},
+    // Maximum transition time per PCIe spec ≤ 10 ms; choose a safe sub‑spec.
+    parameter int TR_NS  = {{ tr_ns }}           // {{ timeout_ms }} ms
+) (
+    input  logic        clk,
+    input  logic        reset_n,
+
+    // ── Config‑space CSR handshake (boilerplate wrapper drives these) ────────
+    input  logic        pmcsr_wr,              // write strobe (one clk pulse)
+    input  logic [15:0] pmcsr_wdata,           // PMCSR bits [15:0]
+    output logic [15:0] pmcsr_rdata,           // read‑back value
+
+    // ── Optional external wake event input ──────────────────────────────────
+    input  logic        wake_evt,              // pulse => wake request
+    output logic        pme_req               // to PCIe hard‑macro PME# pin
+);
+
+    // ───────────────────────── Internal registers ───────────────────────────
+    logic [1:0] pwr_state;        // 00=D0, 11=D3hot
+    logic       pme_en;
+    logic       pme_stat;
+
+    // Fake transition timer — counts TR_CLKS cycles after state change.
+    localparam int TR_CLKS = TR_NS * CLK_HZ / 1_000_000_000; // integer division
+    typedef logic [$clog2(TR_CLKS)-1:0] t_tr_cnt;
+    t_tr_cnt tr_cnt;
+
+    // ────────────────────────── State machine ───────────────────────────────
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            pwr_state <= 2'b00;   // D0 on reset
+            pme_en    <= 1'b0;
+            pme_stat  <= 1'b0;
+            tr_cnt    <= '0;
+        end else begin
+            // Handle config‑space writes
+            if (pmcsr_wr) begin
+                // Power state request & PME enable latch
+                pme_en    <= pmcsr_wdata[15];
+                // Clear PME_Status when driver writes a 1 to bit 14 per spec
+                pme_stat  <= pmcsr_wdata[14] ? 1'b0 : pme_stat;
+                // If state request changed, start countdown
+                if (pmcsr_wdata[1:0] != pwr_state) begin
+                    pwr_state <= pmcsr_wdata[1:0];
+                    tr_cnt    <= TR_CLKS[$bits(tr_cnt)-1:0];
+                end
+            end
+
+            // Transition countdown logic
+            if (tr_cnt != 0) begin
+                tr_cnt <= tr_cnt - 1;
+            end
+
+{%- if enable_wake_events %}
+            // External wake event sets PME_Status if enabled
+            if (wake_evt && pme_en) begin
+                pme_stat <= 1'b1;
+            end
+{%- endif %}
+        end
+    end
+
+    // ───────────────────────── Outputs ──────────────────────────────────────
+    assign pmcsr_rdata = { pme_en,         // bit 15
+                           pme_stat,       // bit 14
+                           13'd0,          // bits 13:2 reserved/RO
+                           pwr_state };    // bits 1:0
+
+{%- if enable_pme %}
+    // Pulse PME# (active‑low in PCIe) for one cycle when PME_Status is set.
+    assign pme_req = pme_stat;
+{%- else %}
+    // PME disabled
+    assign pme_req = 1'b0;
+{%- endif %}
+
+endmodule

@@ -1,0 +1,43 @@
+{#
+Master Build Template - Complete Build Script Orchestration
+
+This template creates a master script that sources all individual build stages
+in the correct order.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id, class_code)
+- board: Board information (name)
+- header: TCL header comment
+#}
+{{ header }}
+
+puts "Starting PCILeech firmware build process..."
+puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
+puts "Board: {{ board.name }}"
+puts ""
+
+# Source all build scripts in order
+set build_scripts [list \
+    "01_project_setup.tcl" \
+    "02_ip_config.tcl" \
+    "03_add_sources.tcl" \
+    "04_constraints.tcl" \
+    "05_synthesis.tcl" \
+    "06_implementation.tcl" \
+    "07_bitstream.tcl" \
+]
+
+foreach script $build_scripts {
+    if {[file exists $script]} {
+        puts "Executing: $script"
+        source $script
+        puts "Completed: $script"
+        puts ""
+    } else {
+        puts "ERROR: Required script not found: $script"
+        exit 1
+    }
+}
+
+puts "Build process completed successfully!"
+close_project

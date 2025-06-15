@@ -240,3 +240,16 @@ def fetch_file_from_github_repo(
     if use_cache:
         _cache_save(key, text)
     return text
+
+
+# ─────────────────────── Function aliases for backward compatibility ─────────────────────
+
+
+def get_pcileech_wifi_sv_file(*, use_cache: bool = True) -> str:
+    """Alias for get_pcileech_sv_file for backward compatibility."""
+    return get_pcileech_sv_file(use_cache=use_cache)
+
+
+def get_pcileech_wifi_tcl_file(*, use_cache: bool = True) -> str:
+    """Alias for get_pcileech_tcl_file for backward compatibility."""
+    return get_pcileech_tcl_file(use_cache=use_cache)
