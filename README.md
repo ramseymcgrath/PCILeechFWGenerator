@@ -558,6 +558,6 @@ This project is licensed under the Apache License - see the [LICENSE](LICENSE) f
 - Use isolated build environments (Seperate dedicated hardware)
 - Keep generated firmware private and secure
 - Follow responsible disclosure practices for any security research
-- Use the SECUITY.md template to raise security concerns 
+- Use the SECURITY.md template to raise security concerns 
 
 ---
