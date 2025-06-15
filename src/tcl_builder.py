@@ -280,21 +280,30 @@ class TCLBuilder:
 
         # Try to load board-specific XDC content from PCILeech repository
         board_xdc_content = None
-        if context.get("board") and context["board"].get("name"):
-            board_name = context["board"]["name"]
-            try:
+        board_info = context.get("board")
+        if board_info:
+            # Handle both string and dict board specifications
+            if isinstance(board_info, str):
+                board_name = board_info
+            elif isinstance(board_info, dict) and board_info.get("name"):
+                board_name = board_info["name"]
+            else:
+                board_name = None
+
+            if board_name:
                 try:
-                    from .repo_manager import RepoManager
-                except ImportError:
-                    # Fallback for when running as script (not package)
-                    from repo_manager import RepoManager
-                board_xdc_content = RepoManager.read_xdc_constraints(board_name)
-                logger.info(f"Loaded XDC constraints for board: {board_name}")
-            except Exception as e:
-                logger.warning(
-                    f"Could not load XDC constraints for board {board_name}: {e}"
-                )
-                board_xdc_content = None
+                    try:
+                        from .repo_manager import RepoManager
+                    except ImportError:
+                        # Fallback for when running as script (not package)
+                        from repo_manager import RepoManager
+                    board_xdc_content = RepoManager.read_xdc_constraints(board_name)
+                    logger.info(f"Loaded XDC constraints for board: {board_name}")
+                except Exception as e:
+                    logger.warning(
+                        f"Could not load XDC constraints for board {board_name}: {e}"
+                    )
+                    board_xdc_content = None
 
         context["board_xdc_content"] = board_xdc_content
 
