@@ -52,7 +52,7 @@ class TemplateRenderer:
 
         # Add custom filters if needed
         self._setup_custom_filters()
-        
+
         # Add global functions
         self._setup_global_functions()
 
@@ -151,7 +151,7 @@ class TemplateRenderer:
         except ImportError:
             # Fallback for when running as script (not package)
             from string_utils import generate_tcl_header_comment
-        
+
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
 

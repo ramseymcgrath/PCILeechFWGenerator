@@ -291,7 +291,9 @@ class TCLBuilder:
                 board_xdc_content = RepoManager.read_xdc_constraints(board_name)
                 logger.info(f"Loaded XDC constraints for board: {board_name}")
             except Exception as e:
-                logger.warning(f"Could not load XDC constraints for board {board_name}: {e}")
+                logger.warning(
+                    f"Could not load XDC constraints for board {board_name}: {e}"
+                )
                 board_xdc_content = None
 
         context["board_xdc_content"] = board_xdc_content
