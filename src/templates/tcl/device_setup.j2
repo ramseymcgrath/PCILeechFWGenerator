@@ -104,23 +104,45 @@ set timing_constraints {
     
     # Input delay constraints for actual input ports
     set_input_delay -clock sys_clk 2.000 [get_ports reset_n]
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports pcie_rx_data*]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports pcie_rx_valid]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_received]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_received]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_register_number*]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_function_number*]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_data*]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_byte_enable*]}
+    catch {set_input_delay -clock sys_clk 2.000 [get_ports msix_interrupt_ack]}
     
     # Output delay constraints - only apply to ports that exist
     # Use catch to handle missing ports gracefully
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports bar_rd_data]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_data]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports pcie_tx_data*]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports pcie_tx_valid]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_data*]}
     catch {set_output_delay -clock sys_clk 1.000 [get_ports cfg_ext_read_data_valid]}
     catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_interrupt]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_vector]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports debug_status]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_vector*]}
+    catch {set_output_delay -clock sys_clk 2.000 [get_ports debug_status*]}
     catch {set_output_delay -clock sys_clk 2.000 [get_ports device_ready]}
 
     # Device-specific constraints for {{ vendor_id }}:{{ device_id }}
     # Board-specific pin assignments for {{ board }}
+    # WARNING: These pin assignments are examples and MUST be updated for your specific FPGA/package
+    
+    # Clock and Reset pins
     set_property PACKAGE_PIN E3 [get_ports clk]
     set_property IOSTANDARD LVCMOS33 [get_ports clk]
     set_property PACKAGE_PIN C12 [get_ports reset_n]
     set_property IOSTANDARD LVCMOS33 [get_ports reset_n]
+    
+    # Note: Additional pin assignments for all other ports should be added here
+    # based on your specific FPGA part and package. See constraints.j2 template
+    # for a complete example of all port assignments.
+    #
+    # For production use, you MUST:
+    # 1. Update all PACKAGE_PIN assignments for your target FPGA
+    # 2. Verify IOSTANDARD values match your board design
+    # 3. Add any additional timing constraints required by your design
 }
 
 # Write timing constraints to file

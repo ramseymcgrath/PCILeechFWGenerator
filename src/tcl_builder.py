@@ -278,6 +278,20 @@ class TCLBuilder:
         context = context.copy()
         context["constraint_files"] = constraint_files or []
 
+        # Try to load board-specific XDC content from PCILeech repository
+        board_xdc_content = None
+        if context.get("board") and context["board"].get("name"):
+            board_name = context["board"]["name"]
+            try:
+                from .repo_manager import RepoManager
+                board_xdc_content = RepoManager.read_xdc_constraints(board_name)
+                logger.info(f"Loaded XDC constraints for board: {board_name}")
+            except Exception as e:
+                logger.warning(f"Could not load XDC constraints for board {board_name}: {e}")
+                board_xdc_content = None
+
+        context["board_xdc_content"] = board_xdc_content
+
         try:
             return self.template_renderer.render_template("tcl/constraints.j2", context)
         except TemplateRenderError:

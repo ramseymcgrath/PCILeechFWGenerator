@@ -172,6 +172,90 @@ class RepoManager:
 
         return board_path
 
+    @classmethod
+    def get_board_xdc_files(cls, board_type: str) -> list[Path]:
+        """
+        Get XDC constraint files for a specific board type.
+
+        Args:
+            board_type: The board type identifier (e.g., 'pcileech_75t484_x1')
+
+        Returns:
+            List of Path objects pointing to XDC files for the board
+
+        Raises:
+            RuntimeError: If the board directory doesn't exist or no XDC files found.
+        """
+        board_path = cls.get_board_path(board_type)
+        
+        # Search for XDC files in the board directory and subdirectories
+        xdc_files = []
+        
+        # Common locations for XDC files in PCILeech FPGA repo
+        search_paths = [
+            board_path,
+            board_path / "src",
+            board_path / "constraints",
+            board_path / "xdc"
+        ]
+        
+        for search_path in search_paths:
+            if search_path.exists():
+                xdc_files.extend(search_path.glob("*.xdc"))
+                # Also search recursively in subdirectories
+                xdc_files.extend(search_path.rglob("*.xdc"))
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_xdc_files = []
+        for xdc_file in xdc_files:
+            if xdc_file not in seen:
+                seen.add(xdc_file)
+                unique_xdc_files.append(xdc_file)
+        
+        if not unique_xdc_files:
+            raise RuntimeError(
+                f"No XDC files found for board type: {board_type}\n"
+                f"Searched in: {board_path}"
+            )
+        
+        return unique_xdc_files
+
+    @classmethod
+    def read_xdc_constraints(cls, board_type: str) -> str:
+        """
+        Read and combine XDC constraint files for a specific board type.
+
+        Args:
+            board_type: The board type identifier (e.g., 'pcileech_75t484_x1')
+
+        Returns:
+            Combined content of all XDC files for the board
+
+        Raises:
+            RuntimeError: If XDC files cannot be read.
+        """
+        xdc_files = cls.get_board_xdc_files(board_type)
+        
+        combined_content = []
+        combined_content.append(f"# XDC constraints for board: {board_type}")
+        combined_content.append(f"# Source files: {[str(f.name) for f in xdc_files]}")
+        combined_content.append("")
+        
+        for xdc_file in xdc_files:
+            try:
+                with open(xdc_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                combined_content.append(f"# === From {xdc_file.name} ===")
+                combined_content.append(content)
+                combined_content.append("")
+                
+            except Exception as e:
+                raise RuntimeError(f"Failed to read XDC file {xdc_file}: {e}")
+        
+        return "\n".join(combined_content)
+
 
 if __name__ == "__main__":
     # If run directly, ensure the repository is available

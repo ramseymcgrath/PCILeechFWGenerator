@@ -52,6 +52,9 @@ class TemplateRenderer:
 
         # Add custom filters if needed
         self._setup_custom_filters()
+        
+        # Add global functions
+        self._setup_global_functions()
 
         logger.debug(
             f"Template renderer initialized with directory: {self.template_dir}"
@@ -140,6 +143,13 @@ class TemplateRenderer:
         self.env.filters["sv_signal"] = sv_signal
         self.env.filters["sv_identifier"] = sv_identifier
         self.env.filters["sv_comment"] = sv_comment
+
+    def _setup_global_functions(self):
+        """Setup global functions available in templates."""
+        from .string_utils import generate_tcl_header_comment
+        
+        # Add global functions to template environment
+        self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """

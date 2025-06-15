@@ -163,6 +163,17 @@ This is primarily tested in Linux, with some fiddling you could probably get it 
 | Donor PCIe card | Any inexpensive NIC, sound, or capture card works. One donor → one firmware. Destroy or quarantine the donor after extraction. |
 | DMA board | Supported Artix‑7 DMA boards (35T, 75T, 100T). Must expose the Screamer USB‑JTAG port. |
 
+> ⚠️ **CRITICAL: Pin Assignment Configuration Required**
+>
+> The generated constraint files contain **example pin assignments that MUST be updated** for your specific FPGA part and package before building. Using incorrect pin assignments can cause build failures or hardware damage.
+>
+> **Before building firmware:**
+> 1. Review [`docs/PIN_ASSIGNMENT_GUIDE.md`](docs/PIN_ASSIGNMENT_GUIDE.md) for detailed instructions
+> 2. Update pin assignments in the generated `.xdc` files for your board
+> 3. Validate constraints using: `python scripts/validate_constraints.py`
+>
+> The default constraints are placeholders and will not work on real hardware without modification.
+
 **TUI Features:**
 - 🖥️ **Visual device browser** with enhanced PCIe device information
 - ⚙️ **Guided configuration** with validation and profile management
