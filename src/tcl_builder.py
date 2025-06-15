@@ -282,7 +282,7 @@ class TCLBuilder:
         board_info = context.get("board")
         board_xdc_content = None
         generated_xdc_path = None
-        
+
         if board_info:
             # Handle both string and dict board specifications
             if isinstance(board_info, str):
@@ -300,29 +300,35 @@ class TCLBuilder:
                     except ImportError:
                         # Fallback for when running as script (not package)
                         from constraint_writer import ConstraintWriter
-                    
+
                     # Create constraint writer and generate XDC
                     constraint_writer = ConstraintWriter(str(self.output_dir))
-                    
+
                     # Get source files from context or constraint_files parameter
                     source_files = constraint_files or []
                     # Add any SystemVerilog files from the output directory
                     if self.output_dir.exists():
                         sv_files = list(self.output_dir.glob("*.sv"))
                         source_files.extend([str(f) for f in sv_files])
-                    
+
                     # Generate comprehensive constraints
-                    generated_xdc_path = constraint_writer.generate_constraints_for_build(
-                        board_name, source_files
+                    generated_xdc_path = (
+                        constraint_writer.generate_constraints_for_build(
+                            board_name, source_files
+                        )
                     )
-                    logger.info(f"Generated comprehensive XDC constraints: {generated_xdc_path}")
-                    
+                    logger.info(
+                        f"Generated comprehensive XDC constraints: {generated_xdc_path}"
+                    )
+
                     # Read the generated content for template context
-                    with open(generated_xdc_path, 'r') as f:
+                    with open(generated_xdc_path, "r") as f:
                         board_xdc_content = f.read()
-                        
+
                 except Exception as e:
-                    logger.warning(f"Could not generate XDC constraints for board {board_name}: {e}")
+                    logger.warning(
+                        f"Could not generate XDC constraints for board {board_name}: {e}"
+                    )
                     # Fallback to original method
                     try:
                         try:
@@ -330,7 +336,9 @@ class TCLBuilder:
                         except ImportError:
                             from repo_manager import RepoManager
                         board_xdc_content = RepoManager.read_xdc_constraints(board_name)
-                        logger.info(f"Loaded fallback XDC constraints for board: {board_name}")
+                        logger.info(
+                            f"Loaded fallback XDC constraints for board: {board_name}"
+                        )
                     except Exception as e2:
                         logger.warning(f"Fallback XDC loading also failed: {e2}")
                         board_xdc_content = None

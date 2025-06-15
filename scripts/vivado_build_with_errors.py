@@ -15,7 +15,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from vivado_error_reporter import VivadoErrorReporter, run_vivado_with_error_reporting
+    from vivado_error_reporter import (
+        VivadoErrorReporter,
+        run_vivado_with_error_reporting,
+    )
     from vivado_utils import find_vivado_installation
 except ImportError as e:
     print(f"Error importing modules: {e}")
@@ -28,8 +31,8 @@ def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler()]
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()],
     )
 
 
@@ -38,76 +41,70 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run Vivado build with enhanced error reporting"
     )
+    parser.add_argument("tcl_script", type=Path, help="TCL script to execute")
     parser.add_argument(
-        "tcl_script", 
-        type=Path,
-        help="TCL script to execute"
-    )
-    parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=Path,
         default=Path("."),
-        help="Output directory (default: current directory)"
+        help="Output directory (default: current directory)",
     )
     parser.add_argument(
-        "--vivado-exe",
-        help="Path to Vivado executable (auto-detected if not provided)"
+        "--vivado-exe", help="Path to Vivado executable (auto-detected if not provided)"
     )
     parser.add_argument(
-        "--no-colors",
-        action="store_true",
-        help="Disable colored output"
+        "--no-colors", action="store_true", help="Disable colored output"
     )
     parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
     parser.add_argument(
         "--analyze-log",
         type=Path,
-        help="Analyze existing Vivado log file instead of running build"
+        help="Analyze existing Vivado log file instead of running build",
     )
-    
+
     args = parser.parse_args()
-    
+
     setup_logging(args.verbose)
     logger = logging.getLogger(__name__)
-    
+
     # Create output directory if it doesn't exist
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if args.analyze_log:
         # Analyze existing log file
         logger.info(f"Analyzing log file: {args.analyze_log}")
-        
+
         if not args.analyze_log.exists():
             logger.error(f"Log file not found: {args.analyze_log}")
             return 1
-        
+
         reporter = VivadoErrorReporter(use_colors=not args.no_colors)
         errors, warnings = reporter.parser.parse_log_file(args.analyze_log)
-        
+
         # Generate report
         report = reporter.generate_error_report(
-            errors, warnings, "Log Analysis",
-            args.output_dir / "error_analysis_report.txt"
+            errors,
+            warnings,
+            "Log Analysis",
+            args.output_dir / "error_analysis_report.txt",
         )
-        
+
         print(report)
         reporter.print_summary(errors, warnings)
-        
+
         return 1 if errors else 0
-    
+
     else:
         # Run Vivado build
         if not args.tcl_script.exists():
             logger.error(f"TCL script not found: {args.tcl_script}")
             return 1
-        
+
         logger.info(f"Running Vivado build: {args.tcl_script}")
         logger.info(f"Output directory: {args.output_dir}")
-        
+
         # Check Vivado installation
         if not args.vivado_exe:
             vivado_info = find_vivado_installation()
@@ -117,19 +114,17 @@ def main():
                 return 1
             args.vivado_exe = vivado_info["executable"]
             logger.info(f"Found Vivado: {args.vivado_exe}")
-        
+
         # Run build with error reporting
         try:
             return_code, report = run_vivado_with_error_reporting(
-                args.tcl_script,
-                args.output_dir,
-                args.vivado_exe
+                args.tcl_script, args.output_dir, args.vivado_exe
             )
-            
+
             logger.info(f"Build completed with return code: {return_code}")
-            
+
             return return_code
-            
+
         except Exception as e:
             logger.error(f"Build failed with exception: {e}")
             return 1

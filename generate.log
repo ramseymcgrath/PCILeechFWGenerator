@@ -1,0 +1,3 @@
+2025-06-15 16:57:04,014 - INFO - Starting PCILeech firmware generation process
+2025-06-15 16:57:04,014 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-15 16:57:04,014 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
