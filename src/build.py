@@ -971,7 +971,7 @@ def main():
                 print("Now run vivado with the following command:")
                 print(
                     safe_format(
-                        "cd {output_dir} && vivado -mode batch -source build.tcl -lic_retry 30 -lic_retry_int 60",
+                        "cd output/ && vivado -mode batch -source build.tcl -lic_retry 30 -lic_retry_int 60",
                     )
                 )
                 print("Or do whatever you want with the tcl pz")

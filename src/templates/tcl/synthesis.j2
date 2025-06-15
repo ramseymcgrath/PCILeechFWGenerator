@@ -44,7 +44,7 @@ set partkey [expr {[string match -nocase *35t* $part] ? "35t" : \
 set u_str [report_utilization -return_string -quiet]
 
 proc parse_synth_field {field txt} {
-    regexp "\\Q$field\\E\\s+\\|\\s+(\\d+)" $txt -> val
+    regexp [format {%s\s+\|\s+(\d+)} [string map {[ \\[ ] \\]} $field]] $txt -> val
     return $val
 }
 
