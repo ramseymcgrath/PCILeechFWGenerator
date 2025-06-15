@@ -24,10 +24,19 @@ Context variables expected:
 
 puts "Adding constraint files..."
 
-# Add all constraint files
+# Add generated board-specific XDC file if available
+{% if generated_xdc_path %}
+set generated_xdc "{{ generated_xdc_path }}"
+if {[file exists $generated_xdc]} {
+    puts "Adding generated XDC constraints: $generated_xdc"
+    add_files -fileset constrs_1 -norecurse $generated_xdc
+}
+{% endif %}
+
+# Add all other constraint files
 set xdc_files [glob -nocomplain *.xdc]
 if {[llength $xdc_files] > 0} {
-    puts "Found [llength $xdc_files] constraint files"
+    puts "Found [llength $xdc_files] additional constraint files"
     add_files -fileset constrs_1 -norecurse $xdc_files
     foreach xdc_file $xdc_files {
         puts "  - $xdc_file"

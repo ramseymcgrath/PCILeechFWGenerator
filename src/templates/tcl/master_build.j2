@@ -1,8 +1,8 @@
 {#
-Master Build Template - Complete Build Script Orchestration
+Master Build Template - Complete Build Script with Error Reporting
 
 This template creates a master script that sources all individual build stages
-in the correct order.
+with comprehensive error detection and reporting.
 
 Context variables expected:
 - device: Device information (vendor_id, device_id, class_code)
@@ -11,10 +11,174 @@ Context variables expected:
 #}
 {{ header }}
 
-puts "Starting PCILeech firmware build process..."
+# Enhanced Vivado Build Script with Error Reporting
+puts "=========================================="
+puts "PCILeech Firmware Build Process"
+puts "=========================================="
 puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
-puts "Board: {{ board.name }}"
+puts "Board: {{ board.name if board.name else board }}"
+puts "Build started: [clock format [clock seconds]]"
 puts ""
+
+# Error tracking variables
+set build_errors 0
+set build_warnings 0
+set failed_scripts [list]
+set error_details [list]
+set warning_details [list]
+set error_report_file "vivado_error_report.txt"
+
+# Color codes for terminal output (if supported)
+set color_red "\033\[91m"
+set color_yellow "\033\[93m"
+set color_green "\033\[92m"
+set color_blue "\033\[94m"
+set color_reset "\033\[0m"
+
+# Check if terminal supports colors
+set use_colors 1
+if {[catch {exec tput colors} result]} {
+    set use_colors 0
+}
+
+# Enhanced error reporting procedure
+proc report_error {script_name error_msg {severity "ERROR"}} {
+    global build_errors build_warnings error_details warning_details
+    global color_red color_yellow color_reset use_colors
+    
+    set timestamp [clock format [clock seconds] -format "%H:%M:%S"]
+    set formatted_msg "\[$timestamp\] $severity in $script_name: $error_msg"
+    
+    if {$severity == "ERROR" || $severity == "CRITICAL"} {
+        incr build_errors
+        lappend error_details $formatted_msg
+        if {$use_colors} {
+            puts "${color_red}❌ $formatted_msg${color_reset}"
+        } else {
+            puts "ERROR: $formatted_msg"
+        }
+    } elseif {$severity == "WARNING"} {
+        incr build_warnings
+        lappend warning_details $formatted_msg
+        if {$use_colors} {
+            puts "${color_yellow}⚠️  $formatted_msg${color_reset}"
+        } else {
+            puts "WARNING: $formatted_msg"
+        }
+    } else {
+        puts "INFO: $formatted_msg"
+    }
+}
+
+# Enhanced script execution with error handling
+proc execute_script {script_name} {
+    global build_errors failed_scripts color_blue color_reset use_colors
+    
+    if {![file exists $script_name]} {
+        report_error $script_name "Script file not found" "CRITICAL"
+        lappend failed_scripts $script_name
+        return 0
+    }
+    
+    if {$use_colors} {
+        puts "${color_blue}🔄 Executing: $script_name${color_reset}"
+    } else {
+        puts "Executing: $script_name"
+    }
+    
+    set script_start [clock seconds]
+    
+    # Execute script with comprehensive error handling
+    if {[catch {source $script_name} error]} {
+        report_error $script_name $error "ERROR"
+        lappend failed_scripts $script_name
+        
+        # Try to extract more specific error information
+        if {[string match "*ERROR*" $error]} {
+            # Parse Vivado-specific errors
+            if {[regexp {ERROR: \[(\w+) (\d+-\d+)\] (.*)} $error match tool code msg]} {
+                report_error $script_name "Vivado $tool error $code: $msg" "ERROR"
+            }
+        }
+        return 0
+    }
+    
+    set script_end [clock seconds]
+    set script_duration [expr $script_end - $script_start]
+    
+    if {$use_colors} {
+        puts "${color_blue}✅ Completed: $script_name (${script_duration}s)${color_reset}"
+    } else {
+        puts "Completed: $script_name (${script_duration}s)"
+    }
+    puts ""
+    return 1
+}
+
+# Write error report to file
+proc write_error_report {} {
+    global error_report_file build_errors build_warnings error_details warning_details failed_scripts
+    
+    set report_file [open $error_report_file w]
+    
+    puts $report_file "=========================================="
+    puts $report_file "VIVADO BUILD ERROR REPORT"
+    puts $report_file "=========================================="
+    puts $report_file "Generated: [clock format [clock seconds]]"
+    puts $report_file "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
+    puts $report_file "Board: {{ board.name if board.name else board }}"
+    puts $report_file ""
+    
+    puts $report_file "SUMMARY:"
+    puts $report_file "  Errors: $build_errors"
+    puts $report_file "  Warnings: $build_warnings"
+    puts $report_file "  Failed Scripts: [llength $failed_scripts]"
+    puts $report_file ""
+    
+    if {$build_errors > 0} {
+        puts $report_file "ERRORS:"
+        puts $report_file "----------------------------------------"
+        foreach error $error_details {
+            puts $report_file "  $error"
+        }
+        puts $report_file ""
+    }
+    
+    if {$build_warnings > 0} {
+        puts $report_file "WARNINGS:"
+        puts $report_file "----------------------------------------"
+        foreach warning $warning_details {
+            puts $report_file "  $warning"
+        }
+        puts $report_file ""
+    }
+    
+    if {[llength $failed_scripts] > 0} {
+        puts $report_file "FAILED SCRIPTS:"
+        puts $report_file "----------------------------------------"
+        foreach script $failed_scripts {
+            puts $report_file "  $script"
+        }
+        puts $report_file ""
+    }
+    
+    puts $report_file "RECOMMENDATIONS:"
+    puts $report_file "----------------------------------------"
+    if {$build_errors > 0} {
+        puts $report_file "  • Check Vivado log files for detailed error messages"
+        puts $report_file "  • Verify all source files are present and syntactically correct"
+        puts $report_file "  • Check constraint files for timing and placement issues"
+        puts $report_file "  • Ensure sufficient FPGA resources for the design"
+    }
+    if {$build_warnings > 0} {
+        puts $report_file "  • Review warnings for potential design issues"
+        puts $report_file "  • Consider adding missing constraints"
+    }
+    puts $report_file "=========================================="
+    
+    close $report_file
+    puts "Error report written to: $error_report_file"
+}
 
 # Source all build scripts in order
 set build_scripts [list \
@@ -27,17 +191,92 @@ set build_scripts [list \
     "07_bitstream.tcl" \
 ]
 
+set start_time [clock seconds]
+set successful_scripts 0
+
 foreach script $build_scripts {
-    if {[file exists $script]} {
-        puts "Executing: $script"
-        source $script
-        puts "Completed: $script"
-        puts ""
+    if {[execute_script $script]} {
+        incr successful_scripts
     } else {
-        puts "ERROR: Required script not found: $script"
-        exit 1
+        # Script failed - decide whether to continue or abort
+        if {$script == "01_project_setup.tcl" || $script == "05_synthesis.tcl"} {
+            # Critical scripts - abort build
+            report_error "BUILD" "Critical script $script failed - aborting build" "CRITICAL"
+            break
+        } else {
+            # Non-critical scripts - continue with warning
+            report_error "BUILD" "Non-critical script $script failed - continuing" "WARNING"
+        }
     }
 }
 
-puts "Build process completed successfully!"
-close_project
+set end_time [clock seconds]
+set total_duration [expr $end_time - $start_time]
+set duration_min [expr $total_duration / 60]
+set duration_sec [expr $total_duration % 60]
+
+# Generate comprehensive build summary
+puts ""
+puts "=========================================="
+puts "BUILD SUMMARY"
+puts "=========================================="
+puts "Total build time: ${duration_min}m ${duration_sec}s"
+puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
+puts "Board: {{ board.name if board.name else board }}"
+puts "Successful scripts: $successful_scripts/[llength $build_scripts]"
+
+if {$build_errors > 0} {
+    if {$use_colors} {
+        puts "${color_red}❌ Build FAILED with $build_errors error(s)${color_reset}"
+    } else {
+        puts "BUILD FAILED with $build_errors error(s)"
+    }
+} elseif {$build_warnings > 0} {
+    if {$use_colors} {
+        puts "${color_yellow}⚠️  Build completed with $build_warnings warning(s)${color_reset}"
+    } else {
+        puts "Build completed with $build_warnings warning(s)"
+    }
+} else {
+    if {$use_colors} {
+        puts "${color_green}✅ Build completed successfully!${color_reset}"
+    } else {
+        puts "Build completed successfully!"
+    }
+}
+
+# Final output file check with detailed analysis
+if {[file exists "pcileech_top.bit"]} {
+    set bitfile_size [file size "pcileech_top.bit"]
+    set bitfile_size_kb [expr $bitfile_size / 1024]
+    if {$use_colors} {
+        puts "${color_green}📁 Bitstream: pcileech_top.bit (${bitfile_size_kb} KB)${color_reset}"
+    } else {
+        puts "Bitstream: pcileech_top.bit (${bitfile_size_kb} KB)"
+    }
+    
+    # Check if bitstream size is reasonable
+    if {$bitfile_size < 100000} {
+        report_error "BITSTREAM" "Bitstream file unusually small - may be incomplete" "WARNING"
+    }
+} else {
+    report_error "BITSTREAM" "pcileech_top.bit not found - build may have failed" "ERROR"
+}
+
+# Write error report if there were any issues
+if {$build_errors > 0 || $build_warnings > 0} {
+    write_error_report
+}
+
+puts "=========================================="
+
+# Exit with appropriate code
+if {$build_errors > 0} {
+    puts "Exiting with error code due to build failures"
+    close_project
+    exit 1
+} else {
+    puts "Build process completed"
+    close_project
+    exit 0
+}

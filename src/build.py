@@ -80,7 +80,7 @@ try:
     from tcl_generator import TCLGenerator
     from template_renderer import TemplateRenderer
     from variance_manager import VarianceManager
-    from vivado_utils import find_vivado_installation
+    from vivado_utils import find_vivado_installation, run_vivado_command
 
 except ImportError as import_error:
     if PRODUCTION_MODE:

@@ -91,7 +91,7 @@ TOOLS_ROOT = Path("/tools/Xilinx")  # pattern: /tools/Xilinx/<version>/Vivado
 # ───────────────────────── Internals ──────────────────────────
 
 
-def _iter_candidate_dirs() -> List[Path]:
+def _iter_candidate_dirs():
     """Yield all plausible Vivado install roots.*Not* the *bin* dir."""
     # 1) PATH — fast path
     if vivado := shutil.which("vivado"):
@@ -185,8 +185,9 @@ def run_vivado_command(
     cwd: Optional[str | Path] = None,
     timeout: Optional[int] = None,
     use_discovered: bool = True,
+    enable_error_reporting: bool = True,
 ) -> subprocess.CompletedProcess:
-    """Invoke Vivado with *args* (string or list). Raises on failure."""
+    """Invoke Vivado with *args* (string or list). Enhanced with error reporting."""
     exe: Optional[str] = None
     if use_discovered:
         info = find_vivado_installation()
@@ -204,6 +205,48 @@ def run_vivado_command(
         cmd.extend(["-source", str(tcl_file)])
 
     LOG.info("Running: %s", " ".join(cmd))
+    
+    if enable_error_reporting:
+        try:
+            # Try to import and use the error reporter
+            from .vivado_error_reporter import VivadoErrorReporter
+            
+            # Run with enhanced error reporting
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=cwd
+            )
+            
+            reporter = VivadoErrorReporter(use_colors=True)
+            return_code, errors, warnings = reporter.monitor_vivado_process(process)
+            
+            # Generate report if there were issues
+            if errors or warnings:
+                output_dir = Path(cwd) if cwd else Path(".")
+                report = reporter.generate_error_report(
+                    errors, warnings, "Vivado Command",
+                    output_dir / "vivado_error_report.txt"
+                )
+                reporter.print_summary(errors, warnings)
+            
+            # Create a CompletedProcess-like object
+            result = subprocess.CompletedProcess(
+                cmd, return_code,
+                stdout="", stderr=""  # Output was already printed by monitor
+            )
+            
+            if return_code != 0:
+                result.check_returncode()
+            
+            return result
+            
+        except ImportError:
+            LOG.warning("Error reporter not available, falling back to standard execution")
+    
+    # Fallback to standard execution
     return subprocess.run(
         cmd,
         stdout=subprocess.PIPE,

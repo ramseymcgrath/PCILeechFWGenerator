@@ -18,6 +18,9 @@ wait_on_run impl_1
 
 if {[get_property PROGRESS [get_runs impl_1]] != "100%"} {
     puts "ERROR: Implementation failed!"
+    # Try to get more details about the failure
+    set status [get_property STATUS [get_runs impl_1]]
+    puts "Implementation status: $status"
     exit 1
 }
 
@@ -30,3 +33,25 @@ report_timing_summary -file timing_summary.rpt
 report_utilization -file utilization_impl.rpt
 report_power -file power_analysis.rpt
 report_drc -file drc_report.rpt
+
+# Quick implementation health check
+puts "Performing implementation health check..."
+
+# Check for critical warnings that might indicate problems
+set drc_str [report_drc -return_string -quiet]
+set crit_warn_cnt [regexp -all -inline -nocase {CRITICAL WARNING:} $drc_str]
+if {[llength $crit_warn_cnt] > 0} {
+    puts "WARNING: [llength $crit_warn_cnt] critical warnings found in DRC"
+}
+
+# Check timing slack
+set timing_str [report_timing_summary -return_string -quiet]
+if {[regexp {WNS\(ns\):\s+([-\d\.]+)} $timing_str -> wns]} {
+    if {$wns < 0} {
+        puts "WARNING: Negative worst negative slack: $wns ns"
+    } else {
+        puts "TIMING: WNS = $wns ns (positive slack)"
+    }
+}
+
+puts "Implementation health check completed"
