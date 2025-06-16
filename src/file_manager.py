@@ -182,6 +182,13 @@ class FileManager:
                     content = f.read()
                     file_hash = hashlib.sha256(content.encode()).hexdigest()
 
+                # Check if TCL script contains hex generation commands
+                has_hex_generation = (
+                    "write_cfgmem" in content and
+                    "format hex" in content and
+                    ".hex" in content
+                )
+                
                 validation_results["tcl_file_info"] = {
                     "filename": tcl_file.name,
                     "size_bytes": file_size,
@@ -190,9 +197,12 @@ class FileManager:
                     "has_device_config": "CONFIG.Device_ID" in content,
                     "has_synthesis": "launch_runs synth_1" in content,
                     "has_implementation": "launch_runs impl_1" in content,
+                    "has_hex_generation": has_hex_generation,
                 }
                 validation_results["file_sizes"][tcl_file.name] = file_size
                 validation_results["checksums"][tcl_file.name] = file_hash
+                
+                # Check for actual hex files (only if Vivado was run)
                 hex_files = list(self.output_dir.glob("*.hex"))
                 if hex_files:
                     hex_file = hex_files[0]
@@ -204,7 +214,8 @@ class FileManager:
                     }
                     validation_results["file_sizes"][hex_file.name] = hex_size
                 else:
-                    validation_results["tcl_file_info"]["hex_file"] = None
+                    # For TCL-only builds, check if hex generation commands are present
+                    validation_results["tcl_file_info"]["hex_file"] = has_hex_generation
 
             # Check for bitstream file (only if Vivado was run)
             bitstream_files = list(self.output_dir.glob("*.bit"))
@@ -298,7 +309,8 @@ class FileManager:
                         validation_results["validation_status"] = (
                             "warning_incomplete_tcl"
                         )
-                    if not tcl_info["hex_file"]:
+                    # Check if hex generation commands are present in TCL script
+                    if not tcl_info.get("has_hex_generation", False):
                         validation_results["validation_status"] = "warning_missing_hex"
             else:
                 validation_results["validation_status"] = "failed_no_tcl"
@@ -452,6 +464,11 @@ class FileManager:
                 features.append("✅ Implementation commands")
             else:
                 features.append("⚠️  No implementation commands")
+
+            if info.get("has_hex_generation", False):
+                features.append("✅ Hex file generation commands")
+            else:
+                features.append("⚠️  No hex file generation commands")
 
             print("   Features:")
             for feature in features:
