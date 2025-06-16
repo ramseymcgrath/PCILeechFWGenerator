@@ -138,11 +138,24 @@ if {[regexp {CLB LUTs\s+\|\s+(\d+)\s+\|\s+(\d+)} $u_str -> u used avail] && $use
 
 write_bitstream -force pcileech_top.bit
 
+# Generate hex file for programming
+write_cfgmem -format mcs -size 16 -interface SPIx4 -loadbit "up 0x0 pcileech_top.bit" -force pcileech_top.mcs
+write_cfgmem -format hex -size 16 -interface SPIx4 -loadbit "up 0x0 pcileech_top.bit" -force pcileech_top.hex
+
 # Validate bitstream file was created
 if {![file exists "pcileech_top.bit"]} {
     puts "Fatal: pcileech_top.bit was not generated"
     exit 1
 }
 
+# Validate hex file was created
+if {![file exists "pcileech_top.hex"]} {
+    puts "Fatal: pcileech_top.hex was not generated"
+    exit 1
+}
+
 puts "Bitstream generation completed successfully!"
-puts "Output file: pcileech_top.bit"
+puts "Output files:"
+puts "  - pcileech_top.bit (bitstream)"
+puts "  - pcileech_top.hex (hex format)"
+puts "  - pcileech_top.mcs (MCS format)"
