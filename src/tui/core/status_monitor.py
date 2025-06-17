@@ -200,11 +200,7 @@ class StatusMonitor:
     async def _get_usb_device_count(self) -> Dict[str, Any]:
         """Get USB device count"""
         try:
-            # Import existing function
-            import sys
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import list_usb_devices
+            from src.cli.flash import list_usb_devices
 
             devices = await asyncio.get_event_loop().run_in_executor(
                 None, list_usb_devices
