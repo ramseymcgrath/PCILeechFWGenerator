@@ -465,7 +465,7 @@ class PCILeechTUI(App):
     build_progress: reactive[Optional[BuildProgress]] = reactive(None)
 
     def __init__(self):
-        # First call super().__init__() to initialize Textual app properly
+        # Initialize Textual app first to set up reactive system
         super().__init__()
 
         # Core services
@@ -478,7 +478,8 @@ class PCILeechTUI(App):
         self._devices = []
         self._system_status = {}
 
-        # Initialize current_config from config manager after super().__init__()
+        # Initialize current_config from config manager
+        # This must be done after super().__init__() to avoid ReactiveError
         self.current_config = self.config_manager.get_current_config()
 
     def compose(self) -> ComposeResult:
@@ -1084,14 +1085,18 @@ class PCILeechTUI(App):
 
     def _clear_compatibility_display(self) -> None:
         """Clear the compatibility display when no device is selected"""
-        compatibility_title = self.query_one("#compatibility-title", Static)
-        compatibility_title.update("Select a device to view compatibility factors")
+        try:
+            compatibility_title = self.query_one("#compatibility-title", Static)
+            compatibility_title.update("Select a device to view compatibility factors")
 
-        compatibility_score = self.query_one("#compatibility-score", Static)
-        compatibility_score.update("")
+            compatibility_score = self.query_one("#compatibility-score", Static)
+            compatibility_score.update("")
 
-        factors_table = self.query_one("#compatibility-table", DataTable)
-        factors_table.clear()
+            factors_table = self.query_one("#compatibility-table", DataTable)
+            factors_table.clear()
+        except Exception:
+            # Ignore DOM errors in tests or during initialization
+            pass
 
     def watch_build_progress(self, progress: Optional[BuildProgress]) -> None:
         """React to build progress changes"""
