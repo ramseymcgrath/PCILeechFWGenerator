@@ -164,6 +164,10 @@ cython_debug/
 # Prerequisites
 *.d
 
+# Log files
+generate.log
+vivado.log
+
 # Object files
 *.o
 *.ko
