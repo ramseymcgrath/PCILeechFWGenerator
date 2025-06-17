@@ -14,7 +14,6 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
 
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -274,8 +273,6 @@ def main() -> int:
     except Exception as e:
         print(f"\n[✗] Fatal error: {e}")
         return 1
-
-
 
 
 if __name__ == "__main__":
