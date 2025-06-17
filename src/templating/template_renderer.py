@@ -131,6 +131,13 @@ class TemplateRenderer:
             else:
                 return f"// {text}"
 
+        def log2(value: int) -> int:
+            """Calculate log2 (ceiling) of a value for SystemVerilog bit width calculations."""
+            import math
+            if value <= 0:
+                return 0
+            return int(math.ceil(math.log2(value)))
+
         # Register filters
         self.env.filters["hex"] = hex_format
         self.env.filters["tcl_escape"] = tcl_string_escape
@@ -143,6 +150,7 @@ class TemplateRenderer:
         self.env.filters["sv_signal"] = sv_signal
         self.env.filters["sv_identifier"] = sv_identifier
         self.env.filters["sv_comment"] = sv_comment
+        self.env.filters["log2"] = log2
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""

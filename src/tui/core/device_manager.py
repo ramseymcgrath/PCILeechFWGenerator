@@ -204,34 +204,33 @@ class DeviceManager:
         """Get device BAR information."""
         bars = []
         try:
-            # Read BAR information from sysfs
-            for i in range(6):  # PCIe devices can have up to 6 BARs
-                bar_path = f"/sys/bus/pci/devices/{bdf}/resource{i}"
-                if os.path.exists(bar_path):
-                    with open(bar_path, "r") as f:
-                        line = f.read().strip()
-                        if (
-                            line
-                            and line
-                            != "0x0000000000000000 0x0000000000000000 0x0000000000000000"
-                        ):
-                            parts = line.split()
-                            if len(parts) >= 3:
-                                start = int(parts[0], 16)
-                                end = int(parts[1], 16)
-                                flags = int(parts[2], 16)
+            # Read BAR information from main resource file
+            resource_path = f"/sys/bus/pci/devices/{bdf}/resource"
+            if os.path.exists(resource_path):
+                with open(resource_path, "r") as f:
+                    lines = f.readlines()
+                    
+                for i, line in enumerate(lines[:6]):  # Only first 6 BARs
+                    line = line.strip()
+                    if (line and 
+                        line != "0x0000000000000000 0x0000000000000000 0x0000000000000000"):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            start = int(parts[0], 16)
+                            end = int(parts[1], 16)
+                            flags = int(parts[2], 16)
+                            
+                            # Skip empty/unused BARs
+                            if start != 0 or end != 0:
                                 size = end - start + 1 if end > start else 0
-
-                                bars.append(
-                                    {
-                                        "index": i,
-                                        "start": start,
-                                        "end": end,
-                                        "size": size,
-                                        "flags": flags,
-                                        "type": "memory" if flags & 0x1 == 0 else "io",
-                                    }
-                                )
+                                bars.append({
+                                    "index": i,
+                                    "start": start,
+                                    "end": end,
+                                    "size": size,
+                                    "flags": flags,
+                                    "type": "memory" if flags & 0x1 == 0 else "io",
+                                })
         except Exception:
             pass
         return bars
