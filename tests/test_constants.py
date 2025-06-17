@@ -15,7 +15,7 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from constants import (
+from src.device_clone.constants import (
     BOARD_PARTS,
     DEFAULT_FPGA_PART,
     FPGA_FAMILIES,
@@ -536,7 +536,7 @@ class TestConstantsCompleteness:
         ]
 
         # Import the module to check what's available
-        import constants
+        import src.device_clone.constants as constants
 
         for constant_name in expected_constants:
             assert hasattr(
@@ -545,7 +545,7 @@ class TestConstantsCompleteness:
 
     def test_no_unexpected_none_values(self):
         """Test that no constants have None values unexpectedly."""
-        import constants
+        import src.device_clone.constants as constants
 
         # Get all module attributes that look like constants (uppercase)
         constant_attrs = [

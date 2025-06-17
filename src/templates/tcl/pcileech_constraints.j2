@@ -1,0 +1,109 @@
+{#- PCILeech Constraints Template -#}
+{#- This template generates PCILeech-specific timing constraints and pin assignments -#}
+{{ header_comment if header_comment else "# PCILeech Constraints Script" }}
+#
+# PCILeech FPGA Firmware Constraints
+# Generated for: {{ device.vendor_id if device.vendor_id else "Unknown" }}:{{ device.device_id if device.device_id else "Unknown" }}
+# Board: {{ board.name if board.name else "Unknown" }}
+# FPGA Part: {{ board.fpga_part if board.fpga_part else "Unknown" }}
+#
+
+puts "Applying PCILeech constraints..."
+
+# Add board-specific constraint files
+{% if board.name %}
+set board_name "{{ board.name }}"
+set constraint_file "${board_name}.xdc"
+
+if {[file exists $constraint_file]} {
+    add_files -fileset constrs_1 -norecurse $constraint_file
+    puts "Added board constraint file: $constraint_file"
+} else {
+    puts "WARNING: Board constraint file not found: $constraint_file"
+}
+{% endif %}
+
+# PCILeech-specific timing constraints
+create_clock -period 10.000 -name pcie_clk [get_ports pcie_clk_p]
+
+# PCIe clock constraints
+{% if board.pcie_ip_type == "pcie7x" %}
+# PCIe 7-series specific constraints
+set_property PACKAGE_PIN {{ pcie_clk_p_pin if pcie_clk_p_pin else "F6" }} [get_ports pcie_clk_p]
+set_property PACKAGE_PIN {{ pcie_clk_n_pin if pcie_clk_n_pin else "E6" }} [get_ports pcie_clk_n]
+set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_p]
+set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_n]
+{% elif board.pcie_ip_type == "ultrascale" %}
+# UltraScale+ specific constraints
+set_property PACKAGE_PIN {{ pcie_clk_p_pin if pcie_clk_p_pin else "AB7" }} [get_ports pcie_clk_p]
+set_property PACKAGE_PIN {{ pcie_clk_n_pin if pcie_clk_n_pin else "AB6" }} [get_ports pcie_clk_n]
+set_property IOSTANDARD DIFF_SSTL12 [get_ports pcie_clk_p]
+set_property IOSTANDARD DIFF_SSTL12 [get_ports pcie_clk_n]
+{% endif %}
+
+# PCIe reset constraints
+set_property PACKAGE_PIN {{ pcie_rst_pin if pcie_rst_pin else "G1" }} [get_ports pcie_rst_n]
+set_property IOSTANDARD LVCMOS33 [get_ports pcie_rst_n]
+set_property PULLUP true [get_ports pcie_rst_n]
+
+# PCILeech-specific timing constraints
+set_clock_groups -asynchronous -group [get_clocks pcie_clk] -group [get_clocks -include_generated_clocks clk_out1_clk_wiz_0]
+
+# PCIe lane constraints
+{% for lane in range(max_lanes if max_lanes else 4) %}
+# Lane {{ lane }}
+set_property PACKAGE_PIN {{ "A4" if lane == 0 else ("A2" if lane == 1 else ("C4" if lane == 2 else "C2")) }} [get_ports {pcie_tx_p[{{ lane }}]}]
+set_property PACKAGE_PIN {{ "A3" if lane == 0 else ("A1" if lane == 1 else ("C3" if lane == 2 else "C1")) }} [get_ports {pcie_tx_n[{{ lane }}]}]
+set_property PACKAGE_PIN {{ "B6" if lane == 0 else ("B4" if lane == 1 else ("D6" if lane == 2 else "D4")) }} [get_ports {pcie_rx_p[{{ lane }}]}]
+set_property PACKAGE_PIN {{ "B5" if lane == 0 else ("B3" if lane == 1 else ("D5" if lane == 2 else "D3")) }} [get_ports {pcie_rx_n[{{ lane }}]}]
+{% endfor %}
+
+# PCILeech BAR controller constraints
+set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *bar_controller*/reg*/D]
+set_false_path -from [get_pins -hierarchical *bar_controller*/reg*/C] -to [get_clocks pcie_clk]
+
+# MSI-X table constraints
+{% if supports_msix %}
+set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *msix_table*/reg*/D]
+set_false_path -from [get_pins -hierarchical *msix_table*/reg*/C] -to [get_clocks pcie_clk]
+{% endif %}
+
+# Configuration space shadow constraints
+set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *cfg_shadow*/reg*/D]
+set_false_path -from [get_pins -hierarchical *cfg_shadow*/reg*/C] -to [get_clocks pcie_clk]
+
+# PCILeech FIFO constraints
+set_max_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] 5.000
+set_min_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] 1.000
+
+# Option ROM constraints
+{% if device.has_option_rom %}
+set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *option_rom*/reg*/D]
+set_false_path -from [get_pins -hierarchical *option_rom*/reg*/C] -to [get_clocks pcie_clk]
+{% endif %}
+
+# Device-specific constraints
+{% if device.vendor_id and device.device_id %}
+# Device {{ device.vendor_id }}:{{ device.device_id }} specific constraints
+{% if device.class_code == "0x020000" %}
+# Network controller specific constraints
+set_max_delay -from [get_pins -hierarchical *network*/reg*/C] -to [get_pins -hierarchical *network*/reg*/D] 8.000
+{% elif device.class_code == "0x040300" %}
+# Audio controller specific constraints  
+set_max_delay -from [get_pins -hierarchical *audio*/reg*/C] -to [get_pins -hierarchical *audio*/reg*/D] 6.000
+{% endif %}
+{% endif %}
+
+# Implementation constraints
+set_property CFGBVS VCCO [current_design]
+set_property CONFIG_VOLTAGE 3.3 [current_design]
+
+# Bitstream generation constraints
+set_property BITSTREAM.CONFIG.UNUSEDPIN PULLUP [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
+set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
+
+# PCILeech-specific bitstream settings
+set_property BITSTREAM.CONFIG.USERID "0x{{ device.vendor_id if device.vendor_id else '1234' }}{{ device.device_id if device.device_id else '5678' }}" [current_design]
+
+puts "PCILeech constraints applied successfully"

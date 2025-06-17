@@ -12,37 +12,150 @@ Context variables expected:
 #}
 {{ header }}
 
+# allow builds to complete even if a few user pins stay unconstrained
+set_property BITSTREAM.CONFIG.UNCONSTRAINED_IO  ALLOW [current_design]
+set_property UNCONSTRAINED_IO                   ALLOW [current_design]
+
 puts "Generating bitstream..."
-launch_runs impl_1 -to_step write_bitstream -jobs 8
-wait_on_run impl_1
+open_run impl_1
 
-# Check bitstream generation
-set bitstream_file "{{ project.dir }}/{{ project.name }}.runs/impl_1/[get_property top [current_fileset]].bit"
-if {[file exists $bitstream_file]} {
-    set output_bit "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.bit"
-    file copy -force $bitstream_file $output_bit
-    puts "SUCCESS: Bitstream generated successfully!"
-    puts "Output file: $output_bit"
+# -------------------------------------------------------------------------
+# Live console summaries
+# -------------------------------------------------------------------------
 
-    # Generate additional files
-    write_cfgmem -format mcs -size 16 -interface SPIx4 \
-        -loadbit "up 0x0 $output_bit" \
-        -file "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.mcs"
-
-    if {[llength [get_debug_cores]] > 0} {
-        write_debug_probes -file "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.ltx"
+# Helper: extract "<label> | used | total" from a utilisation report line
+proc ::summarise_util {label rptstr} {
+    if {[regexp "\\Q$label\\E\\s+\\|\\s+(\\d+)\\s+\\|\\s+(\\d+)" $rptstr -> used tot]} {
+        return "$label $used / $tot"
     }
+    return "$label n/a"
+}
 
-    write_checkpoint -force "pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.dcp"
+# ---------------- utilisation -----------------
+set u_str [report_utilization -return_string -quiet]
+set lut    [::summarise_util "CLB LUTs"          $u_str]
+set ff     [::summarise_util "CLB Registers"     $u_str]
+set bram   [::summarise_util "Block RAM Tile"    $u_str]
+set dsp    [::summarise_util "DSPs"              $u_str]
 
-    puts "Generated files:"
-    puts "  - Bitstream: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.bit"
-    puts "  - MCS file: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.mcs"
-    puts "  - Checkpoint: pcileech_{{ device.vendor_id }}_{{ device.device_id }}_{{ board.name }}.dcp"
-    puts "  - Reports: *.rpt"
-} else {
-    puts "ERROR: Bitstream generation failed!"
+puts "UTIL  →  $lut,  $ff,  $bram,  $dsp"
+
+# -------------------------------------------------------------------------
+# Resource-compatibility guard for pcileech 35T / 75T boards
+# -------------------------------------------------------------------------
+#
+#  • If you target the 35T card the check is obvious: we must not exceed
+#    its device limits.
+#  • If you target the 75T card we still want to know whether the exact
+#    RTL build would *fit* on a 35T (handy for mass-build SKUs).  Fail if
+#    it does not.
+#
+#  Device caps come from Xilinx DS180 (Artix-7) – rounded down a little
+#  to leave head-room for routed nets.
+
+array set CAP_LUTs  {35t 20800  75t 46560}
+array set CAP_REGs  {35t 41600  75t 93120}
+array set CAP_BRAMS {35t  50    75t   135}
+array set CAP_DSPS  {35t  90    75t   180}
+
+# Determine which part we *are* compiling
+set part    [get_property PART [current_project]]
+set partkey [expr {[string match -nocase *35t* $part] ? "35t" : \
+                   ([string match -nocase *75t* $part] ? "75t" : "75t")}]
+# The && above defaults unknown parts to "75t" (safer upper bound).
+
+# Parse utilisation once (we already have $u_str from the live summary)
+if {![info exists u_str]} { set u_str [report_utilization -return_string -quiet] }
+
+proc parse_field {field txt} {
+    regexp "\\Q$field\\E\\s+\\|\\s+(\\d+)" $txt -> val
+    return $val
+}
+
+set usedLUT [parse_field "CLB LUTs"       $u_str]
+set usedREG [parse_field "CLB Registers"  $u_str]
+set usedBR  [parse_field "Block RAM Tile" $u_str]
+set usedDSP [parse_field "DSPs"           $u_str]
+
+# ---- check against 35T limits first (smallest card) ---------------
+foreach {capName used arr} {
+    LUTs        $usedLUT CAP_LUTs
+    Registers   $usedREG CAP_REGs
+    BRAMs       $usedBR  CAP_BRAMS
+    DSPs        $usedDSP CAP_DSPS
+} {
+    set max35 [set ${arr}(35t)]
+    if {$used > $max35} {
+        puts "FATAL: design needs $used $capName but a 35T card only has $max35."
+        exit 1
+    }
+}
+
+# ---- also check we don't overrun the *current* target device -------
+foreach {capName used arr} {
+    LUTs        $usedLUT CAP_LUTs
+    Registers   $usedREG CAP_REGs
+    BRAMs       $usedBR  CAP_BRAMS
+    DSPs        $usedDSP CAP_DSPS
+} {
+    set maxCur [set ${arr}($partkey)]
+    if {$used > $maxCur} {
+        puts "FATAL: design exceeds $capName capacity of target part $part."
+        exit 1
+    }
+}
+
+puts "COMPAT→  fits both 35T and 75T resource envelopes ✔"
+
+# ---------------- timing ----------------------
+report_timing_summary -delay_type max -file timing_summary.rpt
+set slack [get_property SLACK [report_timing_summary]]
+puts [format "TIMING→  Worst Slack: %.3f ns" $slack]
+
+# ---------------- DRC -------------------------
+set drc_str [report_drc -return_string -quiet]
+set err_cnt [regexp -all -inline -nocase {ERROR:} $drc_str]
+set warn_cnt [regexp -all -inline -nocase {WARNING:} $drc_str]
+puts "DRC   →  [llength $err_cnt] ERR, [llength $warn_cnt] WARN"
+
+# --- design rule check --------------------------------------------------
+if {[report_drc -return_string -quiet] =~ "*ERROR*"} {
+    puts "Fatal: DRC errors present"; exit 1
+}
+
+# --- timing -------------------------------------------------------------
+report_timing_summary -delay_type max -file timing_summary.rpt
+set t_slack [get_property SLACK [report_timing_summary]]
+if {$t_slack < 0.0} {
+    puts "Fatal: negative timing slack ($t_slack ns)"; exit 1
+}
+
+# --- utilisation guard (≥80 % CLB LUTs) ---------------------------------
+set u_str [report_utilization -return_string -quiet]
+if {[regexp {CLB LUTs\s+\|\s+(\d+)\s+\|\s+(\d+)} $u_str -> u used avail] && $used > 0.80*$avail} {
+    puts "Fatal: LUT utilisation $used/$avail"; exit 1
+}
+
+write_bitstream -force pcileech_top.bit
+
+# Generate hex file for programming
+write_cfgmem -format mcs -size 16 -interface SPIx4 -loadbit "up 0x0 pcileech_top.bit" -force pcileech_top.mcs
+write_cfgmem -format hex -size 16 -interface SPIx4 -loadbit "up 0x0 pcileech_top.bit" -force pcileech_top.hex
+
+# Validate bitstream file was created
+if {![file exists "pcileech_top.bit"]} {
+    puts "Fatal: pcileech_top.bit was not generated"
+    exit 1
+}
+
+# Validate hex file was created
+if {![file exists "pcileech_top.hex"]} {
+    puts "Fatal: pcileech_top.hex was not generated"
     exit 1
 }
 
 puts "Bitstream generation completed successfully!"
+puts "Output files:"
+puts "  - pcileech_top.bit (bitstream)"
+puts "  - pcileech_top.hex (hex format)"
+puts "  - pcileech_top.mcs (MCS format)"

@@ -76,7 +76,7 @@ class StatusMonitor:
                 sys.path.insert(0, str(current_dir))
 
             try:
-                from vivado_utils import find_vivado_installation
+                from vivado_handling import find_vivado_installation
 
                 # Use the utility function to find Vivado
                 vivado_info = find_vivado_installation()
@@ -372,7 +372,7 @@ class StatusMonitor:
         # Vivado status
         vivado = status.get("vivado", {})
         if vivado.get("status") == "detected":
-            summary["vivado"] = f"⚡ {vivado.get('version', 'Unknown')} Detected"
+            summary["vivado"] = f"⚡ {vivado['version']} Detected"
         else:
             summary["vivado"] = "❌ Not Detected"
 

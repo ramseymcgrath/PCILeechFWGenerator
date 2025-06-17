@@ -25,6 +25,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+try:
+    from git import GitCommandError, InvalidGitRepositoryError, Repo
+
+    GIT_AVAILABLE = True
+except ModuleNotFoundError:
+    GIT_AVAILABLE = False
+    Repo = None
+    GitCommandError = InvalidGitRepositoryError = Exception
+
 
 # ANSI color codes for output formatting
 class Colors:
@@ -228,8 +237,13 @@ class VersionManager:
                 content = f.read()
 
             # Get git commit hash
-            result = CommandRunner.run("git rev-parse --short HEAD", check=False)
-            commit_hash = result.stdout.strip() if result.returncode == 0 else "unknown"
+            commit_hash = "unknown"
+            if GIT_AVAILABLE and Repo is not None:
+                try:
+                    repo = Repo(".")
+                    commit_hash = repo.head.commit.hexsha[:7]
+                except Exception:
+                    commit_hash = "unknown"
 
             # Update build metadata
             build_date = datetime.now().isoformat()

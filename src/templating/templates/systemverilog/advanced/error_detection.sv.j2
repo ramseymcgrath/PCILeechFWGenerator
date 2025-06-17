@@ -1,0 +1,64 @@
+{#- Error Detection Logic Template -#}
+    // Error Detection Logic
+
+{%- if config.enable_timeout_detection %}
+    // Timeout detection
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            timeout_counter <= 32'h0;
+            timeout_error <= 1'b0;
+        end else if (bar_wr_en || bar_rd_en) begin
+            timeout_counter <= 32'h0;
+            timeout_error <= 1'b0;
+        end else begin
+            timeout_counter <= timeout_counter + 1;
+            timeout_error <= (timeout_counter > {{ config.timeout_cycles | sv_hex(32) }});
+        end
+    end
+{%- endif %}
+
+{%- if config.enable_parity_check %}
+    // Parity error detection
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            parity_error <= 1'b0;
+        end else if (bar_wr_en) begin
+            parity_error <= (^bar_wr_data != ^bar_addr[7:0]);
+        end else begin
+            parity_error <= 1'b0;
+        end
+    end
+{%- endif %}
+
+{%- if config.enable_crc_check %}
+    // CRC error detection
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            calculated_crc <= 8'h0;
+            crc_error <= 1'b0;
+        end else if (bar_wr_en || bar_rd_en) begin
+            calculated_crc <= bar_addr[7:0] ^ bar_wr_data[7:0];
+            expected_crc <= bar_wr_data[15:8];
+            crc_error <= (calculated_crc != expected_crc) && bar_wr_en;
+        end else begin
+            crc_error <= 1'b0;
+        end
+    end
+{%- endif %}
+
+{%- if config.enable_ecc %}
+    // ECC error detection (simplified)
+    logic [6:0] ecc_syndrome;
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            ecc_syndrome <= 7'h0;
+            ecc_error <= 1'b0;
+        end else if (bar_wr_en || bar_rd_en) begin
+            // Simplified ECC calculation
+            ecc_syndrome <= ^{bar_wr_data[31:0], bar_addr[6:0]};
+            ecc_error <= |ecc_syndrome;
+        end else begin
+            ecc_error <= 1'b0;
+        end
+    end
+{%- endif %}

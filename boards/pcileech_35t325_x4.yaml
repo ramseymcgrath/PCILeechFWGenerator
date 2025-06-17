@@ -1,0 +1,16 @@
+# Board configuration for pcileech_35t325_x4 - PCIe x4 board
+name: pcileech_35t325_x4
+description: PCIe x4 FPGA board with Artix-7 35T
+part: xc7a35tcsg324-2
+family: artix7
+
+features:
+  pcie_x4: true
+
+# Pin constraints and other board-specific settings
+constraints:
+  xdc_file: pcileech_35t325_x4.xdc
+  
+notes: |
+  This board supports PCIe x4 operations.
+  Standard PCIe-only functionality without USB features.

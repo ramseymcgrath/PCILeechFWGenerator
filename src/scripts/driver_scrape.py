@@ -512,7 +512,7 @@ def extract_registers_with_analysis(
                     "states_count": len(sm.states),
                     "transitions_count": len(sm.transitions),
                     "complexity_score": sm.complexity_score,
-                    "type": sm.context.get("type", "unknown"),
+                    "type": sm.context["type"],
                     "initial_state": sm.initial_state,
                     "final_states": list(sm.final_states),
                 }

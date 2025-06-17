@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y \
     sudo \
     kmod \
     ca-certificates \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* \
@@ -77,6 +78,7 @@ COPY --from=builder --chown=appuser:appuser /build/src /app/src
 
 # Copy additional root-level files needed for enhanced functionality
 COPY --chown=appuser:appuser ./generate.py /app/
+COPY --chown=appuser:appuser ./src/cli/build_wrapper.py /app/
 
 # Set PYTHONPATH to include both app and src directories for proper module resolution
 ENV PYTHONPATH="/app:/app/src:${PYTHONPATH}"
@@ -92,7 +94,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 LABEL maintainer="Ramsey McGrath <ramsey@voltcyclone.info>" \
       description="PCILeech DMA firmware generator container with advanced SystemVerilog features (multi-stage optimized)" \
       version="2.0" \
-      usage="podman run --rm -it --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN --device=/dev/vfio/X --device=/dev/vfio/vfio -v ./output:/app/output dma-fw sudo python3 /app/src/build.py --bdf XXXX:XX:XX.X --board XXt [--advanced-sv] [--device-type TYPE] [--enable-variance]" \
+      usage="podman run --rm -it --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN --device=/dev/vfio/X --device=/dev/vfio/vfio -v ./output:/app/output dma-fw sudo python3 /app/build_wrapper.py --bdf XXXX:XX:XX.X --board XXt [--advanced-sv] [--device-type TYPE] [--enable-variance]" \
       security.notes="Requires privileged mode for PCI device access via VFIO" \
       features="Basic firmware generation, Advanced SystemVerilog features, Manufacturing variance simulation, Device-specific optimizations"
 

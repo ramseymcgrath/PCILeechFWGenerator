@@ -1,0 +1,200 @@
+{#- PCILeech Top-Level Wrapper Template -#}
+{{ header | safe }}
+
+module pcileech_top (
+    // Clock and reset
+    input  logic        clk,
+    input  logic        reset_n,
+
+    // PCIe interface (connect to PCIe hard IP)
+    input  logic [31:0] pcie_rx_data,
+    input  logic        pcie_rx_valid,
+    output logic [31:0] pcie_tx_data,
+    output logic        pcie_tx_valid,
+
+    // Configuration space interface
+    input  logic        cfg_ext_read_received,
+    input  logic        cfg_ext_write_received,
+    input  logic [9:0]  cfg_ext_register_number,
+    input  logic [3:0]  cfg_ext_function_number,
+    input  logic [31:0] cfg_ext_write_data,
+    input  logic [3:0]  cfg_ext_write_byte_enable,
+    output logic [31:0] cfg_ext_read_data,
+    output logic        cfg_ext_read_data_valid,
+
+    // MSI-X interrupt interface
+    output logic        msix_interrupt,
+    output logic [10:0] msix_vector,
+    input  logic        msix_interrupt_ack,
+
+    // Debug/status outputs
+    output logic [31:0] debug_status,
+    output logic        device_ready
+);
+
+    // Internal signals
+    logic [31:0] bar_addr;
+    logic [31:0] bar_wr_data;
+    logic        bar_wr_en;
+    logic        bar_rd_en;
+    logic [31:0] bar_rd_data;
+
+    // Device configuration signals
+    logic [31:0] cfg_device_id;
+    logic [31:0] cfg_class_code;
+    logic [31:0] cfg_subsystem_id;
+    logic [31:0] cfg_bar [0:5];
+
+    // Instantiate device configuration
+    device_config device_cfg (
+        .cfg_device_id(cfg_device_id),
+        .cfg_class_code(cfg_class_code),
+        .cfg_subsystem_id(cfg_subsystem_id),
+        .cfg_bar(cfg_bar)
+    );
+
+    // Additional BAR controller signals
+    logic [2:0]  bar_index;
+    logic [3:0]  bar_wr_be;
+    logic        custom_win_sel;
+    logic [11:0] custom_win_addr;
+    logic [31:0] custom_win_wdata;
+    logic [3:0]  custom_win_be;
+    logic        custom_win_we;
+    logic        custom_win_re;
+    logic [31:0] custom_win_rdata;
+
+    // Set BAR index to 0 for simplicity
+    assign bar_index = 3'b000;
+    assign bar_wr_be = 4'hF;  // Full word writes
+    assign custom_win_rdata = 32'h0;  // No custom window implementation
+
+    // Instantiate BAR controller
+    pcileech_tlps128_bar_controller #(
+        .BAR_APERTURE_SIZE(131072),  // 128KB
+        .NUM_MSIX(1),
+        .MSIX_TABLE_BIR(0),
+        .MSIX_TABLE_OFFSET(0),
+        .MSIX_PBA_BIR(0),
+        .MSIX_PBA_OFFSET(0),
+        .CONFIG_SHDW_HI(20'hFFFFF),
+        .CUSTOM_WIN_BASE(20'hFFFFE)
+    ) bar_controller (
+        .clk(clk),
+        .reset_n(reset_n),
+        .bar_index(bar_index),
+        .bar_addr(bar_addr),
+        .bar_wr_data(bar_wr_data),
+        .bar_wr_be(bar_wr_be),
+        .bar_wr_en(bar_wr_en),
+        .bar_rd_en(bar_rd_en),
+        .bar_rd_data(bar_rd_data),
+        .cfg_ext_read_received(cfg_ext_read_received),
+        .cfg_ext_write_received(cfg_ext_write_received),
+        .cfg_ext_register_number(cfg_ext_register_number),
+        .cfg_ext_function_number(cfg_ext_function_number),
+        .cfg_ext_write_data(cfg_ext_write_data),
+        .cfg_ext_write_byte_enable(cfg_ext_write_byte_enable),
+        .cfg_ext_read_data(cfg_ext_read_data),
+        .cfg_ext_read_data_valid(cfg_ext_read_data_valid),
+        .msix_interrupt(msix_interrupt),
+        .msix_vector(msix_vector),
+        .msix_interrupt_ack(msix_interrupt_ack),
+        .custom_win_sel(custom_win_sel),
+        .custom_win_addr(custom_win_addr),
+        .custom_win_wdata(custom_win_wdata),
+        .custom_win_be(custom_win_be),
+        .custom_win_we(custom_win_we),
+        .custom_win_re(custom_win_re),
+        .custom_win_rdata(custom_win_rdata)
+    );
+
+    // Basic PCIe TLP processing for protocol compliance
+    typedef enum logic [1:0] {
+        TLP_IDLE,
+        TLP_HEADER,
+        TLP_PROCESSING
+    } tlp_state_t;
+
+    tlp_state_t tlp_state;
+    logic [31:0] tlp_header [0:3];
+    logic [7:0]  tlp_header_count;
+    logic [10:0] tlp_length;
+    logic [6:0]  tlp_type;
+    logic [31:0] tlp_address;
+
+    // Simplified PCIe TLP processing for basic protocol compliance
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            pcie_tx_data <= 32'h0;
+            pcie_tx_valid <= 1'b0;
+            debug_status <= 32'h0;
+            device_ready <= 1'b0;
+            tlp_state <= TLP_IDLE;
+            tlp_header_count <= 8'h0;
+            bar_addr <= 32'h0;
+            bar_wr_data <= 32'h0;
+            bar_wr_en <= 1'b0;
+            bar_rd_en <= 1'b0;
+        end else begin
+            // Default assignments
+            pcie_tx_valid <= 1'b0;
+
+            case (tlp_state)
+                TLP_IDLE: begin
+                    if (pcie_rx_valid) begin
+                        tlp_header[0] <= pcie_rx_data;
+                        tlp_header_count <= 8'h1;
+                        tlp_state <= TLP_HEADER;
+
+                        // Extract TLP type and length from first header
+                        tlp_type <= pcie_rx_data[30:24];
+                        tlp_length <= pcie_rx_data[9:0];
+                    end
+                    device_ready <= 1'b1;
+                end
+
+                TLP_HEADER: begin
+                    if (pcie_rx_valid) begin
+                        tlp_header[tlp_header_count] <= pcie_rx_data;
+                        tlp_header_count <= tlp_header_count + 1;
+
+                        // For memory requests, capture address from header[1]
+                        if (tlp_header_count == 8'h1) begin
+                            tlp_address <= pcie_rx_data;
+                            // Connect to BAR interface
+                            bar_addr <= pcie_rx_data;
+                        end
+
+                        // Basic TLP acknowledgment
+                        if (tlp_header_count >= 8'h2) begin
+                            tlp_state <= TLP_PROCESSING;
+                            // Trigger BAR read for memory read requests
+                            if (tlp_type[6:5] == 2'b00) begin  // Memory read
+                                bar_rd_en <= 1'b1;
+                            end
+                        end
+                    end
+                end
+
+                TLP_PROCESSING: begin
+                    // Clear BAR enables
+                    bar_rd_en <= 1'b0;
+                    bar_wr_en <= 1'b0;
+                    
+                    // Send response if it was a read
+                    if (tlp_type[6:5] == 2'b00) begin  // Memory read
+                        pcie_tx_data <= bar_rd_data;
+                        pcie_tx_valid <= 1'b1;
+                    end
+                    
+                    tlp_state <= TLP_IDLE;
+                end
+            endcase
+
+            // Update debug status with device ID and current state
+            debug_status <= {16'h{{ vendor_id[2:] }}, 8'h{{ device_id[2:4] }}, 5'h0, tlp_state};
+        end
+    end
+
+endmodule

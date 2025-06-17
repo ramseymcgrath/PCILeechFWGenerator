@@ -64,8 +64,9 @@ check_container_engine() {
 build_container() {
     print_status "Building container image: $CONTAINER_TAG"
     
-    # Build the container
+    # Build the container with --no-cache to always rebuild
     $CONTAINER_ENGINE build \
+        --no-cache \
         -t "$CONTAINER_TAG" \
         -f Containerfile \
         .
@@ -105,9 +106,25 @@ try:
     from advanced_sv_main import AdvancedSVGenerator
     from manufacturing_variance import ManufacturingVarianceSimulator
     from behavior_profiler import BehaviorProfiler
+    from device_config import get_device_config
     print('All imports successful')
 except ImportError as e:
     print(f'Import error: {e}')
+    sys.exit(1)
+"
+    
+    # Test 4.5: Device config with YAML support
+    print_status "Testing device config with YAML support..."
+    $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" python3 -c "
+import sys
+sys.path.append('/app/src')
+try:
+    from device_config import DeviceConfigManager
+    manager = DeviceConfigManager()
+    config = manager.get_profile('audio_controller')
+    print(f'Successfully loaded device config: {config.name}')
+except Exception as e:
+    print(f'Device config error: {e}')
     sys.exit(1)
 "
     

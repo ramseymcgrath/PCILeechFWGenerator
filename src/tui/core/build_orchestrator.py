@@ -6,6 +6,7 @@ Orchestrates the build process with real-time monitoring and progress tracking.
 
 import asyncio
 import datetime
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -13,13 +14,41 @@ from typing import Callable, Optional
 
 import psutil
 
+try:
+    from git import GitCommandError, InvalidGitRepositoryError, Repo
+
+    GIT_AVAILABLE = True
+except ModuleNotFoundError:
+    GIT_AVAILABLE = False
+    Repo = None
+    GitCommandError = InvalidGitRepositoryError = Exception
+
 from ..models.config import BuildConfiguration
 from ..models.device import PCIDevice
 from ..models.progress import BuildProgress, BuildStage, ValidationResult
 
+# TODO: Import repo manager - may need to be moved to proper package location
+try:
+    from ...file_management.repo_manager import RepoManager
+except ImportError:
+    RepoManager = None
+
 # Git repository information
 PCILEECH_FPGA_REPO = "https://github.com/ufrisk/pcileech-fpga.git"
 REPO_CACHE_DIR = Path(os.path.expanduser("~/.cache/pcileech-fw-generator/repos"))
+
+# Progress parsing tokens for easier maintenance
+LOG_PROGRESS_TOKENS = {
+    "Running synthesis": (BuildStage.VIVADO_SYNTHESIS, 25, "Running synthesis"),
+    "Running implementation": (
+        BuildStage.VIVADO_SYNTHESIS,
+        50,
+        "Running implementation",
+    ),
+    "Generating bitstream": (BuildStage.VIVADO_SYNTHESIS, 75, "Generating bitstream"),
+}
+
+logger = logging.getLogger(__name__)
 
 
 class BuildOrchestrator:
@@ -54,122 +83,89 @@ class BuildOrchestrator:
         )
 
         try:
-            # Stage 1: Environment Validation
-            await self._update_progress(
-                BuildStage.ENVIRONMENT_VALIDATION, 0, "Validating environment"
-            )
-            await self._validate_environment()
-
-            # Stage 1.5: PCI Configuration Validation
-            await self._update_progress(
-                BuildStage.ENVIRONMENT_VALIDATION,
-                60,
-                "Validating PCI configuration values",
-            )
-            await self._validate_pci_config(device, config)
-
-            # Check donor_dump module status if needed
-            if config.donor_dump and not config.local_build:
-                await self._update_progress(
+            # Define build stages as ordered list of (stage, coro, start_msg, end_msg) tuples
+            build_stages = [
+                (
                     BuildStage.ENVIRONMENT_VALIDATION,
-                    50,
-                    "Checking donor_dump module status",
+                    lambda: self._validate_environment(),
+                    "Validating environment",
+                    "Environment validation complete",
+                ),
+                (
+                    BuildStage.ENVIRONMENT_VALIDATION,
+                    lambda: self._validate_pci_config(device, config),
+                    "Validating PCI configuration values",
+                    "PCI configuration validation complete",
+                ),
+            ]
+
+            # Add donor module check if needed
+            if config.donor_dump and not config.local_build:
+                build_stages.append(
+                    (
+                        BuildStage.ENVIRONMENT_VALIDATION,
+                        lambda: self._check_donor_module(config),
+                        "Checking donor_dump module status",
+                        "Donor module check complete",
+                    )
                 )
-                await self._check_donor_module(config)
 
-            await self._update_progress(
-                BuildStage.ENVIRONMENT_VALIDATION,
-                100,
-                "Environment validation complete",
+            # Add remaining stages
+            build_stages.extend(
+                [
+                    (
+                        BuildStage.DEVICE_ANALYSIS,
+                        lambda: self._analyze_device(device),
+                        "Analyzing device configuration",
+                        "Device analysis complete",
+                    ),
+                    (
+                        BuildStage.REGISTER_EXTRACTION,
+                        lambda: self._extract_registers(device),
+                        "Extracting device registers",
+                        "Register extraction complete",
+                    ),
+                ]
             )
-            self._current_progress.mark_stage_complete(
-                BuildStage.ENVIRONMENT_VALIDATION
-            )
 
-            if self._should_cancel:
-                return False
-
-            # Stage 2: Device Analysis
-            await self._update_progress(
-                BuildStage.DEVICE_ANALYSIS, 0, "Analyzing device configuration"
-            )
-            await self._analyze_device(device)
-            await self._update_progress(
-                BuildStage.DEVICE_ANALYSIS, 100, "Device analysis complete"
-            )
-            self._current_progress.mark_stage_complete(BuildStage.DEVICE_ANALYSIS)
-
-            if self._should_cancel:
-                return False
-
-            # Stage 3: Register Extraction
-            await self._update_progress(
-                BuildStage.REGISTER_EXTRACTION, 0, "Extracting device registers"
-            )
-            await self._extract_registers(device)
-            await self._update_progress(
-                BuildStage.REGISTER_EXTRACTION, 100, "Register extraction complete"
-            )
-            self._current_progress.mark_stage_complete(BuildStage.REGISTER_EXTRACTION)
-
-            if self._should_cancel:
-                return False
-
-            # Stage 4: Behavior Profiling (if enabled)
+            # Add behavior profiling if enabled
             if config.behavior_profiling:
-                await self._update_progress(
-                    BuildStage.REGISTER_EXTRACTION, 0, "Starting behavior profiling"
-                )
-                await self._run_behavior_profiling(device, config)
-                await self._update_progress(
-                    BuildStage.REGISTER_EXTRACTION, 100, "Behavior profiling complete"
-                )
-                self._current_progress.mark_stage_complete(
-                    BuildStage.REGISTER_EXTRACTION
+                build_stages.append(
+                    (
+                        BuildStage.REGISTER_EXTRACTION,
+                        lambda: self._run_behavior_profiling(device, config),
+                        "Starting behavior profiling",
+                        "Behavior profiling complete",
+                    )
                 )
 
-                if self._should_cancel:
-                    return False
+            # Add final stages
+            build_stages.extend(
+                [
+                    (
+                        BuildStage.SYSTEMVERILOG_GENERATION,
+                        lambda: self._generate_systemverilog(device, config),
+                        "Generating SystemVerilog",
+                        "SystemVerilog generation complete",
+                    ),
+                    (
+                        BuildStage.VIVADO_SYNTHESIS,
+                        lambda: self._run_vivado_synthesis(device, config),
+                        "Starting Vivado synthesis",
+                        "Vivado synthesis complete",
+                    ),
+                    (
+                        BuildStage.BITSTREAM_GENERATION,
+                        lambda: self._generate_bitstream(config),
+                        "Generating bitstream",
+                        "Bitstream generation complete",
+                    ),
+                ]
+            )
 
-            # Stage 5: SystemVerilog Generation
-            await self._update_progress(
-                BuildStage.SYSTEMVERILOG_GENERATION, 0, "Generating SystemVerilog"
-            )
-            await self._generate_systemverilog(device, config)
-            await self._update_progress(
-                BuildStage.SYSTEMVERILOG_GENERATION,
-                100,
-                "SystemVerilog generation complete",
-            )
-            self._current_progress.mark_stage_complete(
-                BuildStage.SYSTEMVERILOG_GENERATION
-            )
-
-            if self._should_cancel:
-                return False
-
-            # Stage 5: Vivado Synthesis
-            await self._update_progress(
-                BuildStage.VIVADO_SYNTHESIS, 0, "Starting Vivado synthesis"
-            )
-            await self._run_vivado_synthesis(device, config)
-            await self._update_progress(
-                BuildStage.VIVADO_SYNTHESIS, 100, "Vivado synthesis complete"
-            )
-            self._current_progress.mark_stage_complete(BuildStage.VIVADO_SYNTHESIS)
-
-            if self._should_cancel:
-                return False
-
-            # Stage 6: Bitstream Generation
-            await self._update_progress(
-                BuildStage.BITSTREAM_GENERATION, 0, "Generating bitstream"
-            )
-            await self._generate_bitstream(config)
-            await self._update_progress(
-                BuildStage.BITSTREAM_GENERATION, 100, "Bitstream generation complete"
-            )
-            self._current_progress.mark_stage_complete(BuildStage.BITSTREAM_GENERATION)
+            # Execute all stages using the helper
+            for stage, coro, start_msg, end_msg in build_stages:
+                await self._run_stage(stage, coro, start_msg, end_msg)
 
             # Build complete
             self._current_progress.completion_percent = 100.0
@@ -186,6 +182,18 @@ class BuildOrchestrator:
         finally:
             self._is_building = False
 
+    async def _run_stage(
+        self, stage: BuildStage, coro: Callable, start_msg: str, end_msg: str
+    ) -> None:
+        """Helper to run a stage with progress tracking"""
+        if self._should_cancel:
+            raise asyncio.CancelledError("Build cancelled")
+
+        await self._update_progress(stage, 0, start_msg)
+        await coro()
+        await self._update_progress(stage, 100, end_msg)
+        self._current_progress.mark_stage_complete(stage)
+
     async def cancel_build(self) -> None:
         """Cancel the current build"""
         self._should_cancel = True
@@ -196,8 +204,8 @@ class BuildOrchestrator:
                 await asyncio.sleep(2)
                 if self._build_process.returncode is None:
                     self._build_process.kill()
-            except Exception:
-                pass
+            except (psutil.Error, asyncio.CancelledError) as e:
+                logger.exception(f"Error during build cancellation: {e}")
 
     def get_current_progress(self) -> Optional[BuildProgress]:
         """Get current build progress"""
@@ -226,8 +234,8 @@ class BuildOrchestrator:
         if self._progress_callback and self._current_progress:
             try:
                 self._progress_callback(self._current_progress)
-            except Exception:
-                pass  # Don't let callback errors break the build
+            except Exception as e:
+                logger.exception(f"Progress callback error: {e}")
 
     async def _update_resource_usage(self) -> None:
         """Update system resource usage"""
@@ -242,8 +250,8 @@ class BuildOrchestrator:
                     memory=memory.used / (1024**3),  # GB
                     disk_free=disk.free / (1024**3),  # GB
                 )
-        except Exception:
-            pass  # Resource monitoring is optional
+        except (psutil.Error, OSError) as e:
+            logger.warning(f"Resource monitoring failed: {e}")
 
     async def _validate_environment(self) -> None:
         """Validate build environment"""
@@ -260,15 +268,16 @@ class BuildOrchestrator:
 
             # Check if Podman is available (only needed for non-local builds)
             try:
-                result = await self._run_command("podman --version")
+                result = await self._run_shell("podman --version", monitor=False)
                 if result.returncode != 0:
                     raise RuntimeError("Podman not available")
             except FileNotFoundError:
                 raise RuntimeError("Podman not found in PATH")
 
             # Check if container image exists
-            result = await self._run_command(
-                "podman images pcileech-fw-generator --format '{{.Repository}}'"
+            result = await self._run_shell(
+                "podman images pcileech-fw-generator --format '{{.Repository}}'",
+                monitor=False,
             )
             if "pcileech-fw-generator" not in result.stdout:
                 # Container image not found, try to build it
@@ -279,17 +288,17 @@ class BuildOrchestrator:
                     await self._notify_progress()
 
                 try:
-                    print(
-                        "[*] Container image 'pcileech-fw-generator' not found. Building it now..."
+                    logger.info(
+                        "Container image 'pcileech-fw-generator' not found. Building it now..."
                     )
-                    build_result = await self._run_command(
-                        "podman build -t pcileech-fw-generator:latest ."
+                    build_result = await self._run_shell(
+                        "podman build -t pcileech-fw-generator:latest .", monitor=False
                     )
                     if build_result.returncode != 0:
                         raise RuntimeError(
                             f"Failed to build container image: {build_result.stderr}"
                         )
-                    print("[✓] Container image built successfully")
+                    logger.info("Container image built successfully")
                 except Exception as e:
                     raise RuntimeError(
                         f"Container image 'pcileech-fw-generator' not found and build failed: {str(e)}"
@@ -329,20 +338,33 @@ class BuildOrchestrator:
         repo_dir = REPO_CACHE_DIR / "pcileech-fpga"
         os.makedirs(REPO_CACHE_DIR, exist_ok=True)
 
-        # Check if git is available
-        try:
-            result = await self._run_command("git --version")
-            if result.returncode != 0:
-                if self._current_progress:
-                    self._current_progress.add_error("Git not available")
-                raise RuntimeError("Git not available")
-        except FileNotFoundError:
+        # Use RepoManager if available, otherwise fallback
+        if RepoManager is not None:
+            repo_path = RepoManager.ensure_repo(repo_url=PCILEECH_FPGA_REPO)
             if self._current_progress:
-                self._current_progress.add_error("Git not found in PATH")
-            raise RuntimeError("Git not found in PATH")
+                self._current_progress.current_operation = (
+                    f"PCILeech FPGA repository ensured at {repo_path}"
+                )
+                await self._notify_progress()
+            return
+
+        # Fallback: Check if GitPython is available
+        if not GIT_AVAILABLE or Repo is None:
+            # Create directory as fallback
+            os.makedirs(repo_dir, exist_ok=True)
+            if self._current_progress:
+                self._current_progress.add_warning(
+                    "GitPython not available. Using fallback directory."
+                )
+                self._current_progress.current_operation = (
+                    f"Using fallback directory at {repo_dir}"
+                )
+                await self._notify_progress()
+            return
 
         # Check if repository already exists
-        if os.path.exists(os.path.join(repo_dir, ".git")):
+        try:
+            repo = Repo(repo_dir)
             # Ensure directory exists (for test compatibility)
             os.makedirs(repo_dir, exist_ok=True)
             if self._current_progress:
@@ -376,15 +398,10 @@ class BuildOrchestrator:
                         )
                         await self._notify_progress()
 
-                    # Get current directory
-                    current_dir = os.getcwd()
-
-                    # Change to repository directory
-                    os.chdir(repo_dir)
-
                     try:
                         # Pull latest changes
-                        result = await self._run_command("git pull")
+                        origin = repo.remotes.origin
+                        origin.pull()
 
                         # Update last update timestamp
                         with open(last_update_file, "w") as f:
@@ -395,21 +412,19 @@ class BuildOrchestrator:
                                 "PCILeech FPGA repository updated successfully"
                             )
                             await self._notify_progress()
-                    except Exception as e:
+                    except GitCommandError as e:
                         if self._current_progress:
                             self._current_progress.add_warning(
                                 f"Failed to update repository: {str(e)}"
                             )
-                    finally:
-                        # Change back to original directory
-                        os.chdir(current_dir)
-            except Exception as e:
+            except (OSError, IOError) as e:
                 if self._current_progress:
                     self._current_progress.add_warning(
                         f"Error checking repository update status: {str(e)}"
                     )
-        else:
-            # Clone repository
+
+        except (InvalidGitRepositoryError, GitCommandError):
+            # Repository doesn't exist or is corrupted, clone it
             if self._current_progress:
                 self._current_progress.current_operation = (
                     f"Cloning PCILeech FPGA repository to {repo_dir}"
@@ -417,9 +432,14 @@ class BuildOrchestrator:
                 await self._notify_progress()
 
             try:
-                result = await self._run_command(
-                    f"git clone {PCILEECH_FPGA_REPO} {repo_dir}"
-                )
+                # Remove existing directory if it exists but is not a valid git repo
+                if os.path.exists(repo_dir):
+                    import shutil
+
+                    shutil.rmtree(repo_dir)
+
+                # Clone repository
+                repo = Repo.clone_from(PCILEECH_FPGA_REPO, repo_dir)
 
                 # Create last update timestamp
                 with open(repo_dir / ".last_update", "w") as f:
@@ -430,7 +450,7 @@ class BuildOrchestrator:
                         "PCILeech FPGA repository cloned successfully"
                     )
                     await self._notify_progress()
-            except Exception as e:
+            except (GitCommandError, OSError) as e:
                 if self._current_progress:
                     self._current_progress.add_error(
                         f"Failed to clone repository: {str(e)}"
@@ -451,12 +471,12 @@ class BuildOrchestrator:
             return
 
         try:
-            # Import donor_dump_manager
+            # TODO: Import donor_dump_manager - may need proper package structure
             import sys
             from pathlib import Path
 
             sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from donor_dump_manager import DonorDumpManager
+            from file_management.donor_dump_manager import DonorDumpManager
 
             # Create manager and check status
             manager = DonorDumpManager()
@@ -464,8 +484,8 @@ class BuildOrchestrator:
 
             # Update progress with module status
             if self._current_progress:
-                status = module_status.get("status", "unknown")
-                details = module_status.get("details", "")
+                status = module_status["status"]
+                details = module_status["details"]
 
                 if status != "installed":
                     # Add warning about module status
@@ -482,8 +502,7 @@ class BuildOrchestrator:
                     if fixes:
                         self._current_progress.add_warning(f"Suggested fix: {fixes[0]}")
 
-                    # If auto_install_headers is enabled, try to fix common
-                    # issues
+                    # If auto_install_headers is enabled, try to fix common issues
                     if (
                         config.auto_install_headers
                         and status == "not_built"
@@ -567,8 +586,15 @@ class BuildOrchestrator:
                     )
                     await self._notify_progress()
 
+        except ImportError as e:
+            logger.exception(f"Failed to import donor_dump_manager: {e}")
+            if self._current_progress:
+                self._current_progress.add_error(
+                    f"Failed to check donor module status: {str(e)}"
+                )
+                await self._notify_progress()
         except Exception as e:
-            # Log error but continue with build
+            logger.exception(f"Error checking donor module: {e}")
             if self._current_progress:
                 self._current_progress.add_error(
                     f"Failed to check donor module status: {str(e)}"
@@ -594,7 +620,7 @@ class BuildOrchestrator:
                     )
                 return
 
-            # Import build module for validation
+            # TODO: Import build module - may need proper package structure
             import sys
             from pathlib import Path
 
@@ -714,6 +740,7 @@ class BuildOrchestrator:
                             f"Invalid JSON in donor info file: {config.donor_info_file}"
                         )
                 except Exception as e:
+                    logger.exception(f"Error validating PCI configuration: {e}")
                     if self._current_progress:
                         self._current_progress.add_error(
                             f"Error validating PCI configuration: {str(e)}"
@@ -728,8 +755,15 @@ class BuildOrchestrator:
                     )
                     await self._notify_progress()
 
+        except ImportError as e:
+            logger.exception(f"Failed to import build module: {e}")
+            if self._current_progress:
+                self._current_progress.add_error(
+                    f"Failed to validate PCI configuration: {str(e)}"
+                )
+                await self._notify_progress()
         except Exception as e:
-            # Log error but continue with build
+            logger.exception(f"Error validating PCI configuration: {e}")
             if self._current_progress:
                 self._current_progress.add_error(
                     f"Failed to validate PCI configuration: {str(e)}"
@@ -747,7 +781,7 @@ class BuildOrchestrator:
 
     async def _analyze_device(self, device: PCIDevice) -> None:
         """Analyze device configuration"""
-        # Import existing functions
+        # TODO: Import existing functions - may need proper package structure
         import sys
 
         sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -776,26 +810,22 @@ class BuildOrchestrator:
         self, device: PCIDevice, config: BuildConfiguration
     ) -> None:
         """Run behavior profiling on the device"""
-        # Import behavior profiler
+        # TODO: Import behavior profiler - may need proper package structure
         import sys
         from pathlib import Path
 
         sys.path.append(str(Path(__file__).parent.parent.parent))
-        from behavior_profiler import BehaviorProfiler
+        from device_clone.behavior_profiler import BehaviorProfiler
 
         # Log the start of profiling
         if self._current_progress:
             self._current_progress.current_operation = f"Profiling device {device.bdf}"
             await self._notify_progress()
 
-        # Run the profiling in a separate thread to avoid blocking the event
-        # loop
+        # Run the profiling in a separate thread to avoid blocking the event loop
         def run_profiling():
             try:
-                # Use enable_ftrace=True for real hardware, but it requires
-                # root privileges
-                import os
-
+                # Use enable_ftrace=True for real hardware, but it requires root privileges
                 enable_ftrace = not config.disable_ftrace and os.geteuid() == 0
                 profiler = BehaviorProfiler(
                     bdf=device.bdf, debug=True, enable_ftrace=enable_ftrace
@@ -872,6 +902,9 @@ class BuildOrchestrator:
         if cli_args.get("skip_board_check"):
             build_cmd_parts.append("--skip-board-check")
 
+        # Add Vivado execution flag to actually run Vivado
+        build_cmd_parts.append("--run-vivado")
+
         build_cmd = " ".join(build_cmd_parts)
 
         if config.local_build:
@@ -881,7 +914,7 @@ class BuildOrchestrator:
                 await self._notify_progress()
 
             # Run the build command directly
-            await self._run_monitored_command(build_cmd.split())
+            await self._run_shell(build_cmd.split())
         else:
             # Run in container
             # Get IOMMU group for VFIO device
@@ -917,35 +950,39 @@ class BuildOrchestrator:
                 container_cmd.append(option)
 
             # Run container with progress monitoring
-            await self._run_monitored_command(container_cmd)
+            await self._run_shell(container_cmd)
 
     async def _generate_bitstream(self, config: BuildConfiguration) -> None:
         """Generate final bitstream"""
         # This would be part of the Vivado synthesis step
         await asyncio.sleep(1)  # Simulate bitstream generation
 
-    async def _run_command(self, cmd: str) -> subprocess.CompletedProcess:
-        """Run a shell command and return the result"""
-        process = await asyncio.create_subprocess_shell(
-            cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
+    async def _run_shell(self, cmd, monitor=True) -> subprocess.CompletedProcess:
+        """Combined shell command runner with optional monitoring"""
+        if isinstance(cmd, list):
+            cmd_str = " ".join(cmd)
+        else:
+            cmd_str = cmd
 
-        return subprocess.CompletedProcess(
-            args=cmd,
-            returncode=process.returncode if process.returncode is not None else 0,
-            stdout=stdout.decode("utf-8"),
-            stderr=stderr.decode("utf-8"),
-        )
+        if not monitor:
+            # Simple command execution without monitoring
+            process = await asyncio.create_subprocess_shell(
+                cmd_str,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
 
-    async def _run_monitored_command(self, cmd_parts: list) -> None:
-        """Run a command with progress monitoring"""
-        cmd = " ".join(cmd_parts) if isinstance(cmd_parts, list) else cmd_parts
+            return subprocess.CompletedProcess(
+                args=cmd_str,
+                returncode=process.returncode if process.returncode is not None else 0,
+                stdout=stdout.decode("utf-8"),
+                stderr=stderr.decode("utf-8"),
+            )
 
+        # Monitored command execution
         self._build_process = await asyncio.create_subprocess_shell(
-            cmd,
+            cmd_str,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -959,19 +996,11 @@ class BuildOrchestrator:
 
                 line_str = line.decode("utf-8").strip()
                 if line_str:
-                    # Update progress based on output
-                    if "Running synthesis" in line_str:
-                        await self._update_progress(
-                            BuildStage.VIVADO_SYNTHESIS, 25, "Running synthesis"
-                        )
-                    elif "Running implementation" in line_str:
-                        await self._update_progress(
-                            BuildStage.VIVADO_SYNTHESIS, 50, "Running implementation"
-                        )
-                    elif "Generating bitstream" in line_str:
-                        await self._update_progress(
-                            BuildStage.VIVADO_SYNTHESIS, 75, "Generating bitstream"
-                        )
+                    # Update progress based on output using LOG_PROGRESS_TOKENS
+                    for pattern, (stage, percent, msg) in LOG_PROGRESS_TOKENS.items():
+                        if pattern in line_str:
+                            await self._update_progress(stage, percent, msg)
+                            break
 
             # Check if process has completed
             if self._build_process.returncode is not None:
@@ -992,3 +1021,11 @@ class BuildOrchestrator:
             raise RuntimeError(
                 f"Build command failed with code {self._build_process.returncode}"
             )
+
+        # Return a CompletedProcess-like object for compatibility
+        return subprocess.CompletedProcess(
+            args=cmd_str,
+            returncode=self._build_process.returncode,
+            stdout="",  # stdout was consumed during monitoring
+            stderr="",  # stderr will be read if there's an error
+        )

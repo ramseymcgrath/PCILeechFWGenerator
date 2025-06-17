@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.repo_manager import RepoManager
 
@@ -31,314 +31,324 @@ class TestRepoManager(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    @patch("subprocess.run")
-    def test_run_command_success(self, mock_run):
-        """Test successful command execution."""
+    @patch("src.repo_manager._run")
+    def test_git_available_success(self, mock_run):
+        """Test git availability check when git is available."""
         mock_run.return_value = subprocess.CompletedProcess(
-            args=["test"], returncode=0, stdout="success", stderr=""
+            args=["git", "--version"],
+            returncode=0,
+            stdout="git version 2.45.0",
+            stderr="",
         )
 
-        result = RepoManager.run_command("test command")
+        from src.repo_manager import _git_available
 
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout, "success")
-        mock_run.assert_called_once_with(
-            "test command", shell=True, check=True, capture_output=True, text=True
-        )
+        result = _git_available()
 
-    @patch("subprocess.run")
-    def test_run_command_failure(self, mock_run):
-        """Test command execution failure."""
-        mock_run.side_effect = subprocess.CalledProcessError(1, "test command")
+        self.assertTrue(result)
+        mock_run.assert_called_once()
 
-        with self.assertRaises(subprocess.CalledProcessError):
-            RepoManager.run_command("failing command")
+    @patch("src.repo_manager._run")
+    def test_git_available_failure(self, mock_run):
+        """Test git availability check when git is not available."""
+        mock_run.side_effect = Exception("git not found")
 
-    @patch("subprocess.run")
-    def test_run_command_with_kwargs(self, mock_run):
-        """Test command execution with additional kwargs."""
+        from src.repo_manager import _git_available
+
+        result = _git_available()
+
+        self.assertFalse(result)
+
+    @patch("src.repo_manager.RepoManager._is_valid_repo")
+    @patch("src.repo_manager.RepoManager._maybe_update")
+    def test_ensure_repo_existing_repo(self, mock_update, mock_is_valid):
+        """Test ensuring repo when repository already exists."""
+        mock_is_valid.return_value = True
+
+        with patch("pathlib.Path.mkdir"):
+            result = RepoManager.ensure_repo(cache_dir=Path(self.temp_dir))
+
+        self.assertEqual(result, Path(self.temp_dir) / "pcileech-fpga")
+        mock_is_valid.assert_called_once()
+        mock_update.assert_called_once()
+
+    @patch("src.repo_manager.RepoManager._is_valid_repo")
+    @patch("src.repo_manager.RepoManager._clone")
+    @patch("shutil.rmtree")
+    def test_ensure_repo_clone_new(self, mock_rmtree, mock_clone, mock_is_valid):
+        """Test ensuring repo when repository needs to be cloned."""
+        mock_is_valid.return_value = False
+
+        with patch("pathlib.Path.mkdir"):
+            with patch("pathlib.Path.exists", return_value=True):
+                result = RepoManager.ensure_repo(cache_dir=Path(self.temp_dir))
+
+        self.assertEqual(result, Path(self.temp_dir) / "pcileech-fpga")
+        mock_is_valid.assert_called_once()
+        mock_rmtree.assert_called_once()
+        mock_clone.assert_called_once()
+
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    def test_is_valid_repo_with_git(self, mock_run, mock_git_available):
+        """Test repository validation when git is available."""
+        mock_git_available.return_value = True
         mock_run.return_value = subprocess.CompletedProcess(
-            args=["test"], returncode=0, stdout="success", stderr=""
+            args=["git", "rev-parse"], returncode=0, stdout="", stderr=""
         )
 
-        RepoManager.run_command("test command", cwd="/tmp")
+        with patch("pathlib.Path.exists", return_value=True):
+            result = RepoManager._is_valid_repo(Path(self.temp_dir))
 
-        mock_run.assert_called_once_with(
-            "test command",
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd="/tmp",
-        )
+        self.assertTrue(result)
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_existing_repo(self, mock_run, mock_exists, mock_repo_dir):
-        """Test ensuring Git repo when repository already exists."""
-        mock_exists.side_effect = lambda path: str(path).endswith("test-repo")
+    @patch("src.repo_manager._git_available")
+    def test_is_valid_repo_without_git(self, mock_git_available):
+        """Test repository validation when git is not available."""
+        mock_git_available.return_value = False
 
-        # Mock successful git status check
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git", "status"], returncode=0, stdout="", stderr=""
-        )
+        with patch("pathlib.Path.exists", return_value=True):
+            result = RepoManager._is_valid_repo(Path(self.temp_dir))
 
-        RepoManager.ensure_git_repo()
+        self.assertTrue(result)  # Should assume valid when .git exists but no git
 
-        # Should check git status but not clone
-        self.assertTrue(
-            any("git status" in str(call) for call in mock_run.call_args_list)
-        )
+    def test_is_valid_repo_no_git_dir(self):
+        """Test repository validation when .git directory doesn't exist."""
+        with patch("pathlib.Path.exists", return_value=False):
+            result = RepoManager._is_valid_repo(Path(self.temp_dir))
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("src.repo_manager.REPO_CACHE_DIR", new_callable=lambda: Path("/tmp"))
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_clone_new(
-        self, mock_run, mock_exists, mock_cache_dir, mock_repo_dir
-    ):
-        """Test cloning new repository."""
-        mock_exists.return_value = False
+        self.assertFalse(result)
 
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    def test_maybe_update_fresh_repo(self, mock_run, mock_git_available):
+        """Test update check for fresh repository."""
+        mock_git_available.return_value = True
+
+        # Mock fresh timestamp
+        import datetime
+
+        fresh_time = datetime.datetime.now().isoformat()
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.read_text", return_value=fresh_time):
+                RepoManager._maybe_update(Path(self.temp_dir))
+
+        # Should not call git pull for fresh repo
+        mock_run.assert_not_called()
+
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    def test_maybe_update_old_repo(self, mock_run, mock_git_available):
+        """Test update for old repository."""
+        mock_git_available.return_value = True
+
+        # Mock old timestamp
+        import datetime
+
+        old_time = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat()
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.read_text", return_value=old_time):
+                with patch("pathlib.Path.write_text"):
+                    RepoManager._maybe_update(Path(self.temp_dir))
+
+        # Should call git pull for old repo
+        mock_run.assert_called_once()
+
+    @patch("src.repo_manager._git_available")
+    def test_maybe_update_no_git(self, mock_git_available):
+        """Test update when git is not available."""
+        mock_git_available.return_value = False
+
+        # Mock old timestamp
+        import datetime
+
+        old_time = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat()
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.read_text", return_value=old_time):
+                RepoManager._maybe_update(Path(self.temp_dir))
+
+        # Should not attempt update without git
+
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    def test_clone_success(self, mock_run, mock_git_available):
+        """Test successful repository cloning."""
+        mock_git_available.return_value = True
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git", "clone"], returncode=0, stdout="", stderr=""
         )
 
-        RepoManager.ensure_git_repo()
+        with patch("pathlib.Path.write_text"):
+            RepoManager._clone("https://github.com/test/repo.git", Path(self.temp_dir))
 
-        # Should create directory and clone
-        self.assertTrue(
-            any("git clone" in str(call) for call in mock_run.call_args_list)
-        )
+        mock_run.assert_called_once()
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_update_existing(
-        self, mock_run, mock_exists, mock_repo_dir
+    @patch("src.repo_manager._git_available")
+    def test_clone_no_git(self, mock_git_available):
+        """Test cloning when git is not available."""
+        mock_git_available.return_value = False
+
+        with self.assertRaises(RuntimeError) as context:
+            RepoManager._clone("https://github.com/test/repo.git", Path(self.temp_dir))
+
+        self.assertIn("git executable not available", str(context.exception))
+
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    @patch("shutil.rmtree")
+    @patch("time.sleep")
+    def test_clone_retry_logic(
+        self, mock_sleep, mock_rmtree, mock_run, mock_git_available
     ):
-        """Test updating existing repository."""
-        mock_exists.side_effect = lambda path: str(path).endswith("test-repo")
+        """Test clone retry logic on failure."""
+        mock_git_available.return_value = True
+        mock_run.side_effect = [
+            Exception("Network error"),
+            Exception("Network error"),
+            subprocess.CompletedProcess(
+                args=["git", "clone"], returncode=0, stdout="", stderr=""
+            ),
+        ]
 
-        # Mock git status success and update file check
-        def run_side_effect(*args, **kwargs):
-            cmd = args[0] if args else kwargs.get("cmd", "")
-            if "git status" in cmd:
-                return subprocess.CompletedProcess(
-                    args=["git"], returncode=0, stdout="", stderr=""
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.write_text"):
+                RepoManager._clone(
+                    "https://github.com/test/repo.git", Path(self.temp_dir)
                 )
-            elif "git pull" in cmd:
-                return subprocess.CompletedProcess(
-                    args=["git"], returncode=0, stdout="", stderr=""
-                )
-            return subprocess.CompletedProcess(
-                args=["test"], returncode=0, stdout="", stderr=""
-            )
 
-        mock_run.side_effect = run_side_effect
+        # Should have tried 3 times
+        self.assertEqual(mock_run.call_count, 3)
+        # Should have slept twice (between retries)
+        self.assertEqual(mock_sleep.call_count, 2)
 
-        # Mock last update file to trigger update
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = (
-                "2020-01-01"
-            )
-
-            RepoManager.ensure_git_repo()
-
-            # Should pull updates
-            self.assertTrue(
-                any("git pull" in str(call) for call in mock_run.call_args_list)
-            )
-
-    @patch("subprocess.run")
-    def test_ensure_git_repo_git_not_available(self, mock_run):
-        """Test behavior when Git is not available."""
-        mock_run.side_effect = FileNotFoundError("git command not found")
-
-        with self.assertRaises(RuntimeError) as context:
-            RepoManager.ensure_git_repo()
-
-        self.assertIn("Git is not available", str(context.exception))
-
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("subprocess.run")
-    def test_ensure_git_repo_clone_failure(self, mock_run, mock_repo_dir):
-        """Test handling of clone failure."""
-        mock_run.side_effect = subprocess.CalledProcessError(1, "git clone")
-
-        with self.assertRaises(RuntimeError) as context:
-            RepoManager.ensure_git_repo()
-
-        self.assertIn("Failed to clone", str(context.exception))
-
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    def test_get_board_path_valid_board(self, mock_repo_dir):
+    def test_get_board_path_valid_board(self):
         """Test getting board path for valid board type."""
-        with patch("os.path.exists", return_value=True):
-            board_path = RepoManager.get_board_path("75t")
-            expected_path = Path("/tmp/test-repo") / "PCIeSquirrel" / "src" / "75t"
-            self.assertEqual(board_path, expected_path)
+        mock_repo_root = Path(self.temp_dir)
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    def test_get_board_path_invalid_board(self, mock_repo_dir):
+        with patch("pathlib.Path.exists", return_value=True):
+            result = RepoManager.get_board_path("35t", repo_root=mock_repo_root)
+
+        expected = mock_repo_root / "PCIeSquirrel"
+        self.assertEqual(result, expected)
+
+    def test_get_board_path_invalid_board(self):
         """Test getting board path for invalid board type."""
-        with patch("os.path.exists", return_value=False):
-            with self.assertRaises(ValueError) as context:
-                RepoManager.get_board_path("invalid_board")
-
-            self.assertIn(
-                "Board type 'invalid_board' not found", str(context.exception)
-            )
-
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    def test_get_board_path_multiple_locations(self, mock_exists, mock_repo_dir):
-        """Test board path resolution with multiple possible locations."""
-
-        # Mock exists to return True for the second location
-        def exists_side_effect(path):
-            return "AC701" in str(path)
-
-        mock_exists.side_effect = exists_side_effect
-
-        board_path = RepoManager.get_board_path("75t")
-        expected_path = Path("/tmp/test-repo") / "AC701" / "src" / "75t"
-        self.assertEqual(board_path, expected_path)
-
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_permission_error(
-        self, mock_run, mock_exists, mock_repo_dir
-    ):
-        """Test handling of permission errors during repository operations."""
-        mock_exists.return_value = False
-        mock_run.side_effect = PermissionError("Permission denied")
+        mock_repo_root = Path(self.temp_dir)
 
         with self.assertRaises(RuntimeError) as context:
-            RepoManager.ensure_git_repo()
+            RepoManager.get_board_path("invalid_board", repo_root=mock_repo_root)
 
-        self.assertIn("Permission denied", str(context.exception))
+        self.assertIn("Unknown board type", str(context.exception))
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_network_error(self, mock_run, mock_exists, mock_repo_dir):
-        """Test handling of network errors during clone."""
-        mock_exists.return_value = False
-        mock_run.side_effect = subprocess.CalledProcessError(
-            128,
-            "git clone",
-            stderr="fatal: unable to access 'https://github.com/': Could not resolve host",
-        )
+    def test_get_board_path_missing_directory(self):
+        """Test getting board path when directory doesn't exist."""
+        mock_repo_root = Path(self.temp_dir)
 
-        with self.assertRaises(RuntimeError) as context:
-            RepoManager.ensure_git_repo()
+        with patch("pathlib.Path.exists", return_value=False):
+            with self.assertRaises(RuntimeError) as context:
+                RepoManager.get_board_path("35t", repo_root=mock_repo_root)
 
-        self.assertIn("Failed to clone", str(context.exception))
+        self.assertIn("does not exist", str(context.exception))
 
-    @patch(
-        "src.repo_manager.PCILEECH_FPGA_DIR",
-        new_callable=lambda: Path("/tmp/test-repo"),
-    )
-    @patch("os.path.exists")
-    @patch("subprocess.run")
-    def test_ensure_git_repo_corrupted_repo(self, mock_run, mock_exists, mock_repo_dir):
-        """Test handling of corrupted repository."""
-        mock_exists.side_effect = lambda path: str(path).endswith("test-repo")
+    def test_get_xdc_files_found(self):
+        """Test getting XDC files when files exist."""
+        mock_repo_root = Path(self.temp_dir)
+        mock_board_dir = mock_repo_root / "PCIeSquirrel"
 
-        # Mock git status failure (corrupted repo)
-        mock_run.side_effect = subprocess.CalledProcessError(128, "git status")
+        with patch.object(RepoManager, "get_board_path", return_value=mock_board_dir):
+            with patch("pathlib.Path.exists", return_value=True):
+                with patch("pathlib.Path.glob", return_value=[Path("test.xdc")]):
+                    result = RepoManager.get_xdc_files("35t", repo_root=mock_repo_root)
 
-        with self.assertRaises(RuntimeError) as context:
-            RepoManager.ensure_git_repo()
+        self.assertEqual(result, [Path("test.xdc")])
 
-        self.assertIn("Repository appears to be corrupted", str(context.exception))
+    def test_get_xdc_files_not_found(self):
+        """Test getting XDC files when no files exist."""
+        mock_repo_root = Path(self.temp_dir)
+        mock_board_dir = mock_repo_root / "PCIeSquirrel"
+
+        with patch.object(RepoManager, "get_board_path", return_value=mock_board_dir):
+            with patch("pathlib.Path.exists", return_value=True):
+                with patch("pathlib.Path.glob", return_value=[]):
+                    with self.assertRaises(RuntimeError) as context:
+                        RepoManager.get_xdc_files("35t", repo_root=mock_repo_root)
+
+        self.assertIn("No .xdc files found", str(context.exception))
+
+    def test_read_combined_xdc(self):
+        """Test reading combined XDC content."""
+        mock_repo_root = Path(self.temp_dir)
+        mock_files = [Path("test1.xdc"), Path("test2.xdc")]
+
+        with patch.object(RepoManager, "get_xdc_files", return_value=mock_files):
+            with patch("pathlib.Path.read_text", return_value="# XDC content"):
+                result = RepoManager.read_combined_xdc("35t", repo_root=mock_repo_root)
+
+        self.assertIn("XDC constraints for 35t", result)
+        self.assertIn("# XDC content", result)
 
     def test_repo_constants(self):
         """Test that repository constants are properly defined."""
         from src.repo_manager import (
-            PCILEECH_FPGA_DIR,
-            PCILEECH_FPGA_REPO,
-            REPO_CACHE_DIR,
+            CACHE_DIR,
+            DEFAULT_REPO_URL,
+            REPO_DIR,
+            UPDATE_INTERVAL_DAYS,
         )
 
-        self.assertIsInstance(PCILEECH_FPGA_REPO, str)
-        self.assertTrue(PCILEECH_FPGA_REPO.startswith("https://"))
-        self.assertIsInstance(REPO_CACHE_DIR, Path)
-        self.assertIsInstance(PCILEECH_FPGA_DIR, Path)
+        self.assertIsInstance(DEFAULT_REPO_URL, str)
+        self.assertTrue(DEFAULT_REPO_URL.startswith("https://"))
+        self.assertIsInstance(CACHE_DIR, Path)
+        self.assertIsInstance(REPO_DIR, Path)
+        self.assertIsInstance(UPDATE_INTERVAL_DAYS, int)
 
 
 class TestRepoManagerIntegration(unittest.TestCase):
     """Integration tests for RepoManager."""
 
-    @patch("src.repo_manager.PCILEECH_FPGA_DIR")
-    @patch("subprocess.run")
-    def test_full_workflow_new_repo(self, mock_run, mock_repo_dir):
-        """Test complete workflow for new repository setup."""
-        mock_repo_dir.return_value = Path("/tmp/test-repo")
+    def setUp(self):
+        """Set up test environment."""
+        self.temp_dir = tempfile.mkdtemp()
 
-        # Mock successful operations
+    def tearDown(self):
+        """Clean up test environment."""
+        import shutil
+
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch("src.repo_manager._git_available")
+    @patch("src.repo_manager._run")
+    def test_full_workflow_new_repo(self, mock_run, mock_git_available):
+        """Test complete workflow for new repository setup."""
+        mock_git_available.return_value = True
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git"], returncode=0, stdout="", stderr=""
         )
 
-        with patch("os.path.exists", return_value=False):
-            with patch("os.makedirs"):
-                RepoManager.ensure_git_repo()
+        with patch("pathlib.Path.exists", return_value=False):
+            with patch("pathlib.Path.write_text"):
+                result = RepoManager.ensure_repo(cache_dir=Path(self.temp_dir))
 
         # Verify git clone was called
-        self.assertTrue(
-            any("git clone" in str(call) for call in mock_run.call_args_list)
-        )
+        self.assertTrue(any("clone" in str(call) for call in mock_run.call_args_list))
+        self.assertEqual(result, Path(self.temp_dir) / "pcileech-fpga")
 
-    @patch("src.repo_manager.PCILEECH_FPGA_DIR")
-    @patch("subprocess.run")
-    def test_full_workflow_existing_repo(self, mock_run, mock_repo_dir):
+    @patch("src.repo_manager.RepoManager._is_valid_repo")
+    @patch("src.repo_manager.RepoManager._maybe_update")
+    def test_full_workflow_existing_repo(self, mock_update, mock_is_valid):
         """Test complete workflow for existing repository."""
-        mock_repo_dir.return_value = Path("/tmp/test-repo")
+        mock_is_valid.return_value = True
 
-        # Mock successful git status
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git"], returncode=0, stdout="", stderr=""
-        )
+        with patch("pathlib.Path.mkdir"):
+            result = RepoManager.ensure_repo(cache_dir=Path(self.temp_dir))
 
-        with patch("os.path.exists", return_value=True):
-            try:
-                RepoManager.ensure_git_repo()
-                # If no exception, the test passes
-                self.assertTrue(True)
-            except Exception:
-                # If there's an exception, that's also acceptable for this test
-                self.assertTrue(True)
+        mock_is_valid.assert_called_once()
+        mock_update.assert_called_once()
+        self.assertEqual(result, Path(self.temp_dir) / "pcileech-fpga")
 
 
 if __name__ == "__main__":

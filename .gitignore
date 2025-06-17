@@ -298,6 +298,8 @@ $RECYCLE.BIN/
 
 # Build output and generated files
 output/
+test_output/
+generate.log
 *.bin
 *.bit
 
@@ -384,5 +386,6 @@ junit-unit.xml
 test.tcl
 junit-unit.xml
 generate.log
+junit-unit.xml
 junit-unit.xml
 junit-unit.xml

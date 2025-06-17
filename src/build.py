@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# USB-required commit 2025-06-16
 """
 PCILeech FPGA Firmware Builder - Production System
 
@@ -52,14 +53,24 @@ parent_dir = script_dir.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+# For container compatibility, also try adding common container paths
+container_paths = ["/app", "/app/src"]
+for path in container_paths:
+    if Path(path).exists() and str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
 # Import project modules with new helper functions
 try:
-    from behavior_profiler import BehaviorProfiler
+    from device_clone.behavior_profiler import BehaviorProfiler
     from build_helpers import safe_import_with_fallback, write_tcl_file_with_logging
-    from config_space_manager import ConfigSpaceManager
-    from constants import BOARD_PARTS, LEGACY_TCL_FILES, PRODUCTION_DEFAULTS
-    from donor_dump_manager import DonorDumpManager
-    from file_manager import FileManager
+    from device_clone.config_space_manager import ConfigSpaceManager
+    from device_clone.constants import (
+        BOARD_PARTS,
+        LEGACY_TCL_FILES,
+        PRODUCTION_DEFAULTS,
+    )
+    from file_management.donor_dump_manager import DonorDumpManager
+    from file_management.file_manager import FileManager
     from scripts.driver_scrape import extract_registers_with_analysis, validate_hex_id
     from scripts.kernel_utils import (
         ensure_kernel_source,
@@ -70,17 +81,16 @@ try:
         build_device_info_string,
         build_file_size_string,
         generate_tcl_header_comment,
+        log_debug_safe,
         log_error_safe,
         log_info_safe,
         log_warning_safe,
         safe_format,
     )
-    from systemverilog_generator import SystemVerilogGenerator
-    from tcl_builder import TCLBuilder
-    from tcl_generator import TCLGenerator
-    from template_renderer import TemplateRenderer
-    from variance_manager import VarianceManager
-    from vivado_utils import find_vivado_installation
+    from templating.tcl_builder import TCLBuilder
+    from templating.template_renderer import TemplateRenderer
+    from device_clone.variance_manager import VarianceManager
+    from vivado_handling import find_vivado_installation, run_vivado_command
 
 except ImportError as import_error:
     if PRODUCTION_MODE:
@@ -108,38 +118,28 @@ except ImportError as import_error:
     print("Falling back to basic functionality...")
     # Manual fallback imports since safe_import_with_fallback is not available
     try:
-        from config_space_manager import ConfigSpaceManager
+        from device_clone.config_space_manager import ConfigSpaceManager
     except ImportError:
         ConfigSpaceManager = None
 
     try:
-        from systemverilog_generator import SystemVerilogGenerator
-    except ImportError:
-        SystemVerilogGenerator = None
-
-    try:
-        from tcl_generator import TCLGenerator
-    except ImportError:
-        TCLGenerator = None
-
-    try:
-        from file_manager import FileManager
+        from file_management.file_manager import FileManager
     except ImportError:
         print("Warning: FileManager could not be imported")
         FileManager = None
 
         try:
-            from variance_manager import VarianceManager
+            from device_clone.variance_manager import VarianceManager
         except ImportError:
             VarianceManager = None
 
         try:
-            from donor_dump_manager import DonorDumpManager
+            from file_management.donor_dump_manager import DonorDumpManager
         except ImportError:
             DonorDumpManager = None
 
         try:
-            from vivado_utils import find_vivado_installation
+            from vivado_handling import find_vivado_installation
         except ImportError:
             find_vivado_installation = None
 
@@ -149,6 +149,7 @@ except ImportError as import_error:
             build_device_info_string,
             build_file_size_string,
             generate_tcl_header_comment,
+            log_debug_safe,
             log_error_safe,
             log_info_safe,
             log_warning_safe,
@@ -157,42 +158,84 @@ except ImportError as import_error:
     except ImportError:
         print("Warning: string_utils could not be imported")
 
-        # Define minimal fallback functions
-        def log_error_safe(msg):
-            print(f"ERROR: {msg}")
+        # Define minimal fallback functions with proper signatures
+        def log_error_safe(logger, template, **kwargs):
+            """Fallback error logging function."""
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                print(f"ERROR: {message}")
+            except Exception:
+                print(f"ERROR: {template}")
 
-        def log_info_safe(msg):
-            print(f"INFO: {msg}")
+        def log_info_safe(logger, template, **kwargs):
+            """Fallback info logging function."""
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                print(f"INFO: {message}")
+            except Exception:
+                print(f"INFO: {template}")
 
-        def log_warning_safe(msg):
-            print(f"WARNING: {msg}")
+        def log_warning_safe(logger, template, **kwargs):
+            """Fallback warning logging function."""
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                print(f"WARNING: {message}")
+            except Exception:
+                print(f"WARNING: {template}")
+
+        def log_debug_safe(logger, template, **kwargs):
+            """Fallback debug logging function."""
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                print(f"DEBUG: {message}")
+            except Exception:
+                print(f"DEBUG: {template}")
 
         def safe_format(template, **kwargs):
-            return template.format(**kwargs)
+            """Fallback safe formatting function."""
+            try:
+                return template.format(**kwargs)
+            except Exception:
+                return template
 
-        def build_device_info_string(*args):
+        def build_device_info_string(device_info):
+            """Fallback device info string builder."""
+            if isinstance(device_info, dict):
+                vid = device_info["vendor_id"]
+                did = device_info["device_id"]
+                return f"VID:{vid}, DID:{did}"
             return "Device info unavailable"
 
-        def build_file_size_string(*args):
+        def build_file_size_string(size_bytes):
+            """Fallback file size string builder."""
+            if isinstance(size_bytes, int):
+                if size_bytes < 1024:
+                    return f"{size_bytes} bytes"
+                elif size_bytes < 1024 * 1024:
+                    return f"{size_bytes / 1024:.1f} KB"
+                else:
+                    return f"{size_bytes / (1024 * 1024):.1f} MB"
             return "Size unavailable"
 
-        def generate_tcl_header_comment(*args):
-            return "# Generated TCL"
+        def generate_tcl_header_comment(title, **kwargs):
+            """Fallback TCL header comment generator."""
+            lines = ["#" + "=" * 78, f"# {title}"]
+            for key, value in kwargs.items():
+                if value is not None:
+                    display_key = key.replace("_", " ").title()
+                    lines.append(f"# {display_key}: {value}")
+            lines.append("#" + "=" * 78)
+            return "\n".join(lines)
 
-    # Fallback constants
-    BOARD_PARTS = {}
-    LEGACY_TCL_FILES = []
-    TCLBuilder = None
-    TemplateRenderer = None
 
 # Try to import advanced modules (optional)
 try:
-    from advanced_sv_generator import AdvancedSVGenerator
+    from templating.advanced_sv_generator import AdvancedSVGenerator
 except ImportError:
     AdvancedSVGenerator = None
 
 try:
-    from option_rom_manager import OptionROMManager
+    from file_management.option_rom_manager import OptionROMManager
 except ImportError:
     OptionROMManager = None
 
@@ -283,7 +326,7 @@ logger = logging.getLogger(__name__)
 
 
 class PCILeechFirmwareBuilder:
-    """Main firmware builder class."""
+    """Main firmware builder class with PCILeech as primary build pattern."""
 
     def __init__(self, bdf: str, board: str, output_dir: Optional[Path] = None):
         self.bdf = bdf
@@ -302,87 +345,73 @@ class PCILeechFirmwareBuilder:
         # Reconfigure logging with proper output directory
         setup_logging(self.output_dir)
 
-        # Initialize components using new modular architecture
+        # Initialize PCILeech generator as primary build component
+        try:
+            from device_clone.pcileech_generator import (
+                PCILeechGenerator,
+                PCILeechGenerationConfig,
+            )
+
+            # Create PCILeech configuration
+            pcileech_config = PCILeechGenerationConfig(
+                device_bdf=bdf,
+                device_profile="generic",
+                enable_behavior_profiling=True,
+                enable_manufacturing_variance=True,
+                enable_advanced_features=True,
+                template_dir=None,
+                output_dir=self.output_dir,
+                strict_validation=PRODUCTION_MODE,
+                fail_on_missing_data=PRODUCTION_MODE,
+            )
+
+            # Initialize PCILeech generator as primary component
+            self.pcileech_generator = PCILeechGenerator(pcileech_config)
+            self.use_pcileech_primary = True
+
+            logger.info(
+                f"Initialized PCILeech generator as primary build pattern for {bdf}"
+            )
+
+        except ImportError as e:
+            logger.warning(
+                f"PCILeech generator not available, falling back to legacy build: {e}"
+            )
+            self.pcileech_generator = None
+            self.use_pcileech_primary = False
+
+        # Initialize legacy components for backward compatibility
         self.config_manager = ConfigSpaceManager(bdf) if ConfigSpaceManager else None
-        self.sv_generator = (
-            SystemVerilogGenerator(self.output_dir) if SystemVerilogGenerator else None
-        )
-        self.tcl_generator = (
-            TCLGenerator(board, self.output_dir) if TCLGenerator else None
-        )
+
         # Initialize file manager with better error handling
         if FileManager:
-            try:
-                self.file_manager = FileManager(self.output_dir)
-                logger.info("File manager initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize file manager: {e}")
-                self.file_manager = None
+            self.file_manager = FileManager(self.output_dir)
         else:
-            logger.warning("FileManager class not available")
             self.file_manager = None
+            logger.warning(
+                "FileManager not available - some functionality will be limited"
+            )
+
         self.variance_manager = (
             VarianceManager(bdf, self.output_dir) if VarianceManager else None
         )
         self.donor_manager = DonorDumpManager() if DonorDumpManager else None
         self.option_rom_manager = OptionROMManager() if OptionROMManager else None
 
-        # Initialize new template-based TCL builder
-        self.tcl_builder = (
-            TCLBuilder(output_dir=self.output_dir) if TCLBuilder else None
-        )
+        # Initialize template-based TCL builder with PCILeech support
+        self.tcl_builder = TCLBuilder(output_dir=self.output_dir)
 
-        logger.info(f"Initialized PCILeech firmware builder for {bdf} on {board}")
+        logger.info(
+            f"Initialized PCILeech firmware builder for {bdf} on {board} (PCILeech primary: {self.use_pcileech_primary})"
+        )
 
     def read_vfio_config_space(self) -> bytes:
         """Read PCI configuration space via VFIO."""
-        if self.config_manager:
-            return self.config_manager.read_vfio_config_space()
-        else:
-            if PRODUCTION_MODE:
-                # In production mode, we must not fall back to synthetic config space
-                logger.error(
-                    "PRODUCTION ERROR: Configuration space manager not available"
-                )
-
-                # Clean up output folder if it exists
-                output_dir = Path("output")
-                if output_dir.exists():
-                    try:
-                        import shutil
-
-                        shutil.rmtree(output_dir)
-                        logger.info(f"Cleaned up output directory: {output_dir}")
-                    except Exception as cleanup_error:
-                        logger.error(
-                            f"Failed to clean up output directory: {cleanup_error}"
-                        )
-
-                raise RuntimeError(
-                    "Production mode requires configuration space manager to be available"
-                )
-
-            logger.error("Configuration space manager not available")
-            return self._generate_synthetic_config_space()
-
-    def _generate_synthetic_config_space(self) -> bytes:
-        """Fallback synthetic config space generation."""
-        if self.config_manager:
-            return self.config_manager.generate_synthetic_config_space()
-        else:
-            # Basic fallback - minimal valid PCI config space
-            config_space = bytearray(256)
-            # Set vendor/device ID to Intel defaults
-            config_space[0:2] = (0x8086).to_bytes(2, "little")  # Intel vendor ID
-            config_space[2:4] = (0x125C).to_bytes(2, "little")  # Device ID
-            config_space[4:6] = (0x0006).to_bytes(2, "little")  # Command register
-            config_space[6:8] = (0x0210).to_bytes(2, "little")  # Status register
-            config_space[8] = 0x04  # Revision ID
-            config_space[9:12] = (0x020000).to_bytes(
-                3, "little"
-            )  # Class code (Ethernet)
-            logger.warning("Using minimal fallback configuration space")
-            return bytes(config_space)
+        if not self.config_manager:
+            raise RuntimeError(
+                "Configuration space manager not available - cannot read VFIO config space"
+            )
+        return self.config_manager.read_vfio_config_space()
 
     def extract_device_info(self, config_space: bytes) -> Dict[str, Any]:
         """Extract device information from configuration space."""
@@ -408,20 +437,85 @@ class PCILeechFirmwareBuilder:
         generated_files = []
 
         try:
-            # Initialize advanced SystemVerilog generator if available and requested
-            if advanced_sv and AdvancedSVGenerator:
-                logger.info("Generating advanced SystemVerilog modules")
-                # Note: Advanced SV generator would be integrated here
-                logger.info("Advanced SystemVerilog generator initialized")
-
-            # Discover and copy all relevant project files
-            if self.sv_generator:
-                project_files = self.sv_generator.discover_and_copy_all_files(
-                    device_info
-                )
-                generated_files.extend(project_files)
+            # Initialize and use templated SystemVerilog generation
+            logger.info("Generating templated SystemVerilog modules")
+            # Generate core SystemVerilog modules using templates
+            if TemplateRenderer:
+                template_renderer = TemplateRenderer()
             else:
-                logger.warning("SystemVerilog generator not available")
+                logger.error("TemplateRenderer not available")
+                return generated_files
+
+            # Generate basic SystemVerilog modules from templates
+            basic_modules = [
+                "bar_controller.sv.j2",
+                "cfg_shadow.sv.j2",
+                "device_config.sv.j2",
+                "msix_capability_registers.sv.j2",
+                "msix_implementation.sv.j2",
+                "msix_table.sv.j2",
+                "option_rom_bar_window.sv.j2",
+                "option_rom_spi_flash.sv.j2",
+                "top_level_wrapper.sv.j2",
+            ]
+
+            # Prepare template context from device_info
+            template_context = {
+                "device_info": device_info,
+                "vendor_id": device_info.get("vendor_id", 0x1234),
+                "device_id": device_info.get("device_id", 0x5678),
+                "subsystem_vendor_id": device_info.get("subsystem_vendor_id", 0x1234),
+                "subsystem_device_id": device_info.get("subsystem_device_id", 0x5678),
+                "class_code": device_info.get("class_code", 0x020000),
+                "revision_id": device_info.get("revision_id", 0x00),
+                "capabilities": device_info.get("capabilities", []),
+                "bars": device_info.get("bars", []),
+                "registers": device_info.get("registers", []),
+            }
+
+            # Generate each SystemVerilog module from templates
+            for module_template in basic_modules:
+                try:
+                    module_content = template_renderer.render_template(
+                        f"systemverilog/{module_template}", template_context
+                    )
+
+                    # Write generated module to output directory
+                    module_name = module_template.replace(".j2", "")
+                    output_path = self.output_dir / "src" / module_name
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with open(output_path, "w") as f:
+                        f.write(module_content)
+
+                    generated_files.append(str(output_path))
+                    logger.info(
+                        f"Generated templated SystemVerilog module: {module_name}"
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Failed to generate {module_template}: {e}")
+
+            # Generate advanced SystemVerilog modules if requested
+            if advanced_sv:
+                logger.info("Generating advanced SystemVerilog modules")
+                try:
+                    # Generate advanced controller using template renderer directly
+                    advanced_content = template_renderer.render_template(
+                        "systemverilog/advanced/advanced_controller.sv.j2",
+                        template_context,
+                    )
+
+                    # Write advanced controller
+                    advanced_path = self.output_dir / "src" / "advanced_controller.sv"
+                    with open(advanced_path, "w") as f:
+                        f.write(advanced_content)
+
+                    generated_files.append(str(advanced_path))
+                    logger.info("Generated advanced SystemVerilog controller")
+
+                except Exception as e:
+                    logger.warning(f"Failed to generate advanced SystemVerilog: {e}")
 
             # Generate manufacturing variance if enabled
             if (
@@ -441,18 +535,35 @@ class PCILeechFirmwareBuilder:
 
         return generated_files
 
-    def _generate_separate_tcl_files(self, device_info: Dict[str, Any]) -> List[str]:
-        """Generate separate TCL files using the new template-based system."""
+    def _generate_separate_tcl_files(
+        self, device_info: Dict[str, Any], enable_custom_config: bool = True
+    ) -> List[str]:
+        """Generate TCL files using PCILeech's 2-script approach with custom configuration space support."""
         tcl_files = []
 
         if self.tcl_builder:
-            # Use new template-based TCL builder
-            logger.info("Using template-based TCL generation")
+            # Use PCILeech 2-script approach
+            logger.info(
+                "Using PCILeech 2-script TCL generation with custom configuration space support"
+            )
 
-            # Extract device information for context
-            vendor_id = device_info.get("vendor_id", 0x1234)
-            device_id = device_info.get("device_id", 0x5678)
-            revision_id = device_info.get("revision_id", 0x01)
+            # Extract device information for context - require all values
+            if "vendor_id" not in device_info:
+                raise ValueError(
+                    "vendor_id is required in device_info for device cloning"
+                )
+            if "device_id" not in device_info:
+                raise ValueError(
+                    "device_id is required in device_info for device cloning"
+                )
+            if "revision_id" not in device_info:
+                raise ValueError(
+                    "revision_id is required in device_info for device cloning"
+                )
+
+            vendor_id = device_info["vendor_id"]
+            device_id = device_info["device_id"]
+            revision_id = device_info["revision_id"]
 
             # Convert hex strings to integers if needed
             if isinstance(vendor_id, str):
@@ -474,162 +585,237 @@ class PCILeechFirmwareBuilder:
                     else int(revision_id, 16)
                 )
 
-            # Generate all TCL scripts using the new builder
-            results = self.tcl_builder.build_all_tcl_scripts(
+            # Get PCILeech board configuration for file lists
+            try:
+                from device_clone.board_config import get_pcileech_board_config
+
+                pcileech_config = get_pcileech_board_config(self.board)
+                source_files = pcileech_config.get("src_files", [])
+                ip_files = pcileech_config.get("ip_files", [])
+                coefficient_files = pcileech_config.get("coefficient_files", [])
+            except (ImportError, KeyError) as e:
+                logger.warning(f"Could not get PCILeech board config: {e}")
+                source_files = []
+                ip_files = []
+                coefficient_files = []
+
+            # Generate custom configuration space files if enabled
+            if enable_custom_config:
+                logger.info(
+                    "Generating custom configuration space and BAR controller files"
+                )
+                custom_files = self._generate_custom_config_files(device_info)
+                source_files.extend(custom_files)
+
+            # Generate PCILeech scripts using the new 2-script approach
+            results = self.tcl_builder.build_pcileech_scripts_only(
                 board=self.board,
                 vendor_id=vendor_id,
                 device_id=device_id,
                 revision_id=revision_id,
+                source_files=source_files,
+                constraint_files=None,  # Will be auto-discovered
+                source_file_list=source_files,
+                ip_file_list=ip_files,
+                coefficient_file_list=coefficient_files,
+                enable_custom_config=enable_custom_config,
             )
 
-            # Get list of generated files
-            tcl_files = self.tcl_builder.get_generated_files()
+            # Get list of generated files - extract from results dictionary keys
+            tcl_files = list(results.keys())
 
             # Log results
             successful = sum(1 for success in results.values() if success)
             total = len(results)
             logger.info(
-                f"Template-based TCL generation: {successful}/{total} files successful"
+                f"PCILeech TCL generation: {successful}/{total} files successful"
             )
-
-        else:
-            # Fallback to legacy TCL generator if template system not available
-            logger.warning(
-                "Template-based TCL builder not available, using legacy generator"
-            )
-            if self.tcl_generator:
-                tcl_files = self.tcl_generator.generate_separate_tcl_files(device_info)
-            else:
-                if PRODUCTION_MODE:
-                    # In production mode, we must not fall back to basic TCL generation
-                    logger.error("PRODUCTION ERROR: No TCL generator available")
-
-                    # Clean up output folder if it exists
-                    output_dir = Path("output")
-                    if output_dir.exists():
-                        try:
-                            import shutil
-
-                            shutil.rmtree(output_dir)
-                            logger.info(f"Cleaned up output directory: {output_dir}")
-                        except Exception as cleanup_error:
-                            logger.error(
-                                f"Failed to clean up output directory: {cleanup_error}"
-                            )
-
-                    raise RuntimeError(
-                        "Production mode requires TCL generator to be available"
-                    )
-
-                logger.error("No TCL generator available")
-                # Add basic fallback TCL generation
-                tcl_files = self._generate_fallback_tcl_files(device_info)
-
+            logger.info(f"Generated PCILeech scripts: {tcl_files}")
         return tcl_files
 
-    def _generate_fallback_tcl_files(self, device_info: Dict[str, Any]) -> List[str]:
-        """
-        Generate basic TCL files when no TCL generator is available.
-        This is a fallback method for container environments where imports fail.
-        """
-        tcl_files = []
+    def _generate_custom_config_files(self, device_info: Dict[str, Any]) -> List[str]:
+        """Generate custom configuration space and BAR controller files."""
+        generated_files = []
+
+        try:
+            # Generate pcileech_fifo.sv with custom configuration space enabled
+            fifo_content = self._generate_pcileech_fifo_sv(device_info)
+            fifo_path = self.output_dir / "src" / "pcileech_fifo.sv"
+            fifo_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(fifo_path, "w") as f:
+                f.write(fifo_content)
+            generated_files.append(str(fifo_path))
+            logger.info(
+                "Generated pcileech_fifo.sv with custom configuration space enabled"
+            )
+
+            # Generate pcileech_cfgspace.coe file
+            coe_content = self._generate_config_space_coe(device_info)
+            coe_path = self.output_dir / "ip" / "pcileech_cfgspace.coe"
+            coe_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(coe_path, "w") as f:
+                f.write(coe_content)
+            generated_files.append(str(coe_path))
+            logger.info(
+                "Generated pcileech_cfgspace.coe with device-specific configuration"
+            )
+
+            # Generate enhanced BAR controller with custom PIO regions
+            bar_controller_content = self._generate_enhanced_bar_controller(device_info)
+            bar_path = self.output_dir / "src" / "pcileech_tlps128_bar_controller.sv"
+            bar_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(bar_path, "w") as f:
+                f.write(bar_controller_content)
+            generated_files.append(str(bar_path))
+            logger.info(
+                "Generated enhanced BAR controller with custom PIO memory regions"
+            )
+
+        except Exception as e:
+            logger.error(f"Error generating custom configuration files: {e}")
+            raise
+
+        return generated_files
+
+    def _generate_pcileech_fifo_sv(self, device_info: Dict[str, Any]) -> str:
+        """Generate pcileech_fifo.sv with custom configuration space enabled."""
+        from templating.template_renderer import TemplateRenderer
+
+        renderer = TemplateRenderer()
 
         # Extract device information
-        vendor_id = device_info.get("vendor_id", 0x1234)
-        device_id = device_info.get("device_id", 0x5678)
-        revision_id = device_info.get("revision_id", 0x01)
+        vendor_id = device_info.get("vendor_id", 0x10EE)
+        device_id = device_info.get("device_id", 0x0666)
 
-        # Convert to hex strings if they're integers
-        if isinstance(vendor_id, int):
-            vendor_id_hex = f"{vendor_id:04x}"
-        else:
-            vendor_id_hex = str(vendor_id).replace("0x", "")
+        # Convert to hex strings for template
+        vendor_id_hex = (
+            f"{vendor_id:04x}"
+            if isinstance(vendor_id, int)
+            else vendor_id.replace("0x", "")
+        )
+        device_id_hex = (
+            f"{device_id:04x}"
+            if isinstance(device_id, int)
+            else device_id.replace("0x", "")
+        )
 
-        if isinstance(device_id, int):
-            device_id_hex = f"{device_id:04x}"
-        else:
-            device_id_hex = str(device_id).replace("0x", "")
-
-        if isinstance(revision_id, int):
-            revision_id_hex = f"{revision_id:02x}"
-        else:
-            revision_id_hex = str(revision_id).replace("0x", "")
-
-        # Determine FPGA part based on board
-        fpga_parts = {
-            "pcileech_35t325_x4": "xc7a35tcsg324-2",
-            "pcileech_75t": "xc7a75tfgg484-2",
-            "pcileech_100t": "xczu3eg-sbva484-1-e",
+        # Create template context
+        context = {
+            "vendor_id": f"0x{vendor_id_hex}",
+            "device_id": f"0x{device_id_hex}",
+            "vendor_id_hex": vendor_id_hex,
+            "device_id_hex": device_id_hex,
+            "enable_custom_config": True,  # Always enable custom config space
+            "fifo_depth": 512,
+            "data_width": 128,
+            "fifo_type": "block_ram",  # Use block RAM for better performance
+            "fpga_family": "artix7",
+            "enable_clock_crossing": True,
+            "enable_scatter_gather": True,
+            "enable_interrupt": True,
+            "enable_performance_counters": True,
+            "enable_error_detection": True,
+            "device_specific_config": {
+                # PCILeech specific configuration bits
+                "4": "1",  # Enable memory access
+                "5": "1",  # Enable I/O access
+                "6": "1",  # Enable bus master
+                "7": "0",  # Disable special cycles
+                "8": "1",  # Enable memory write and invalidate
+                "9": "0",  # Disable VGA palette snoop
+                "10": "0",  # Disable parity error response
+                "11": "0",  # Disable address/data stepping
+                "12": "0",  # Disable SERR
+                "13": "1",  # Enable fast back-to-back
+                "14": "0",  # Disable interrupt
+            },
         }
-        fpga_part = fpga_parts.get(self.board, "xc7a35tcsg324-2")
 
-        # Generate master build script
-        master_tcl_content = f"""# PCILeech Firmware Build Script - Generated for {self.board}
-# Device: {vendor_id_hex}:{device_id_hex} (Rev {revision_id_hex})
-# FPGA Part: {fpga_part}
-# Generated by PCILeech Firmware Generator
+        return renderer.render_template("systemverilog/pcileech_fifo.sv.j2", context)
 
-puts "Starting PCILeech firmware build for {self.board}"
-puts "Device: {vendor_id_hex}:{device_id_hex}"
-puts "FPGA Part: {fpga_part}"
+    def _generate_config_space_coe(self, device_info: Dict[str, Any]) -> str:
+        """Generate pcileech_cfgspace.coe file with device-specific configuration."""
+        vendor_id = device_info.get("vendor_id", 0x10EE)
+        device_id = device_info.get("device_id", 0x0666)
+        revision_id = device_info.get("revision_id", 0x00)
+        class_code = device_info.get("class_code", 0x020000)
 
-# Create project
-create_project pcileech_firmware ./vivado_project -part {fpga_part} -force
-set_property target_language Verilog [current_project]
-set_property default_lib xil_defaultlib [current_project]
-
-# Add source files
-puts "Adding source files..."
-set sv_files [glob -nocomplain *.sv]
-if {{[llength $sv_files] > 0}} {{
-    add_files $sv_files
-    puts "Added [llength $sv_files] SystemVerilog files"
-}}
-
-# Add constraint files
-puts "Adding constraint files..."
-set xdc_files [glob -nocomplain *.xdc]
-if {{[llength $xdc_files] > 0}} {{
-    add_files -fileset constrs_1 $xdc_files
-    puts "Added [llength $xdc_files] constraint files"
-}}
-
-# Configure PCIe IP (basic configuration)
-puts "Configuring PCIe IP core..."
-# Note: Detailed IP configuration would be added here based on FPGA part
-
-# Run synthesis
-puts "Starting synthesis..."
-launch_runs synth_1 -jobs 8
-wait_on_run synth_1
-puts "Synthesis completed"
-
-# Run implementation
-puts "Starting implementation..."
-launch_runs impl_1 -jobs 8
-wait_on_run impl_1
-puts "Implementation completed"
-
-# Generate bitstream
-puts "Generating bitstream..."
-launch_runs impl_1 -to_step write_bitstream -jobs 8
-wait_on_run impl_1
-puts "Bitstream generation completed"
-
-puts "Build completed successfully"
+        coe_content = f"""memory_initialization_radix=16;
+memory_initialization_vector=
+{device_id:04x}{vendor_id:04x},
+0000{class_code:06x},
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000;
 """
+        return coe_content
 
-        # Write master build script
-        master_tcl_file = self.output_dir / "build_all.tcl"
-        try:
-            with open(master_tcl_file, "w", encoding="utf-8") as f:
-                f.write(master_tcl_content)
-            tcl_files.append(str(master_tcl_file))
-            logger.info("Generated fallback master build TCL script")
-        except Exception as e:
-            logger.error(f"Failed to write fallback TCL script: {e}")
+    def _generate_enhanced_bar_controller(self, device_info: Dict[str, Any]) -> str:
+        """Generate enhanced BAR controller with custom PIO memory regions."""
+        if TemplateRenderer:
+            template_renderer = TemplateRenderer()
 
-        return tcl_files
+            # Enhanced template context with custom PIO support
+            template_context = {
+                "device_info": device_info,
+                "vendor_id": device_info.get("vendor_id", 0x10EE),
+                "device_id": device_info.get("device_id", 0x0666),
+                "BAR_APERTURE_SIZE": 131072,  # 128KB
+                "NUM_MSIX": 32,
+                "MSIX_TABLE_BIR": 0,
+                "MSIX_TABLE_OFFSET": 0x1000,
+                "MSIX_PBA_BIR": 0,
+                "MSIX_PBA_OFFSET": 0x2000,
+                "CONFIG_SHDW_HI": "20'hFFFFE",
+                "CUSTOM_WIN_BASE": "20'hFFFFC",
+                "USE_BYTE_ENABLES": True,
+                "ENABLE_CUSTOM_PIO": True,
+                "CUSTOM_PIO_REGIONS": [
+                    {"name": "device_control", "offset": 0x0000, "size": 0x100},
+                    {"name": "status_regs", "offset": 0x0100, "size": 0x100},
+                    {"name": "data_buffer", "offset": 0x0200, "size": 0x200},
+                ],
+            }
+
+            try:
+                return template_renderer.render_template(
+                    "systemverilog/bar_controller.sv.j2", template_context
+                )
+            except Exception as e:
+                logger.warning(f"Failed to use template renderer: {e}")
+                # Fall back to basic implementation
+                pass
+
+        # Fallback implementation if template renderer fails
+        return self._generate_basic_bar_controller(device_info)
+
+    def _generate_basic_bar_controller(self, device_info: Dict[str, Any]) -> str:
+        """Generate basic BAR controller using template."""
+        if TemplateRenderer:
+            template_renderer = TemplateRenderer()
+            template_context = {
+                "device_info": device_info,
+            }
+
+            try:
+                return template_renderer.render_template(
+                    "systemverilog/basic_bar_controller.sv.j2", template_context
+                )
+            except Exception as e:
+                logger.warning(f"Failed to use basic template renderer: {e}")
+                # Fall back to hardcoded implementation if template fails
+                pass
 
     def run_behavior_profiling(
         self, device_info: Dict[str, Any], duration: int = 30
@@ -641,8 +827,10 @@ puts "Build completed successfully"
             logger.warning("Behavior profiler not available")
             return None
 
-    def generate_build_files(self, device_info: Dict[str, Any]) -> List[str]:
-        """Generate separate build files (TCL scripts, makefiles, etc.)."""
+    def generate_build_files(
+        self, device_info: Dict[str, Any], enable_custom_config: bool = True
+    ) -> List[str]:
+        """Generate separate build files (TCL scripts, makefiles, etc.) with custom configuration space support."""
         build_files = []
 
         # Clean up any old unified TCL files first
@@ -654,8 +842,8 @@ puts "Build completed successfully"
                 old_file.unlink()
                 logger.info(f"Removed old unified file: {old_file.name}")
 
-        # Generate separate TCL files using new template system
-        tcl_files = self._generate_separate_tcl_files(device_info)
+        # Generate separate TCL files using enhanced template system with custom config support
+        tcl_files = self._generate_separate_tcl_files(device_info, enable_custom_config)
         build_files.extend(tcl_files)
 
         # Generate project file
@@ -664,7 +852,7 @@ puts "Build completed successfully"
                 device_info, self.board
             )
             # Update features based on available components
-            project_file["features"]["advanced_sv"] = self.sv_generator is not None
+            project_file["features"]["advanced_sv"] = AdvancedSVGenerator is not None
             project_file["features"]["manufacturing_variance"] = (
                 self.variance_manager is not None
                 and self.variance_manager.is_variance_available()
@@ -697,47 +885,99 @@ puts "Build completed successfully"
         device_type: Optional[str] = None,
         enable_variance: bool = False,
         behavior_profile_duration: int = 30,
+        enable_ft601: bool = False,
+        enable_custom_config: bool = True,
     ) -> Dict[str, Any]:
-        """Main firmware build process."""
-        logger.info("Starting firmware build process")
+        """Main firmware build process with PCILeech as primary generation path."""
+        logger.info("Starting PCILeech-first firmware build process")
         build_results = {
             "success": False,
             "files_generated": [],
             "errors": [],
             "build_time": 0,
+            "custom_config_enabled": enable_custom_config,
+            "pcileech_primary": self.use_pcileech_primary,
         }
 
         start_time = time.time()
 
         try:
-            # Step 1: Read configuration space
-            logger.info("Step 1: Reading device configuration space")
-            config_space = self.read_vfio_config_space()
+            # Use PCILeech generator as primary build path
+            if self.use_pcileech_primary and self.pcileech_generator:
+                logger.info("Using PCILeech generator as primary build path")
 
-            # Step 2: Extract device information
-            logger.info("Step 2: Extracting device information")
-            device_info = self.extract_device_info(config_space)
+                # Generate complete PCILeech firmware
+                pcileech_result = self.pcileech_generator.generate_pcileech_firmware()
 
-            # Step 3: Generate SystemVerilog files
-            logger.info("Step 3: Generating SystemVerilog files")
-            sv_files = self.generate_systemverilog_files(
-                device_info, advanced_sv, device_type, enable_variance
-            )
-            build_results["files_generated"].extend(sv_files)
+                # Extract generated files from PCILeech result
+                if "systemverilog_modules" in pcileech_result:
+                    sv_modules = pcileech_result["systemverilog_modules"]
+                    for module_name, module_content in sv_modules.items():
+                        output_path = self.output_dir / "src" / f"{module_name}.sv"
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Step 4: Run behavior profiling if requested
-            if behavior_profile_duration > 0:
-                logger.info("Step 4: Running behavior profiling")
-                profile_file = self.run_behavior_profiling(
-                    device_info, behavior_profile_duration
+                        with open(output_path, "w") as f:
+                            f.write(module_content)
+
+                        build_results["files_generated"].append(str(output_path))
+                        logger.info(
+                            f"Generated PCILeech SystemVerilog module: {module_name}"
+                        )
+
+                # Generate PCILeech-specific TCL scripts
+                if "firmware_components" in pcileech_result:
+                    template_context = pcileech_result.get("template_context", {})
+                    pcileech_tcl_files = self._generate_pcileech_tcl_scripts(
+                        template_context
+                    )
+                    build_results["files_generated"].extend(pcileech_tcl_files)
+
+                # Save PCILeech generation result
+                self.pcileech_generator.save_generated_firmware(
+                    pcileech_result, self.output_dir
                 )
-                if profile_file:
-                    build_results["files_generated"].append(profile_file)
 
-            # Step 5: Generate build files
-            logger.info("Step 5: Generating build files")
-            build_files = self.generate_build_files(device_info)
-            build_results["files_generated"].extend(build_files)
+                # Extract device info from PCILeech result for compatibility
+                device_info = pcileech_result.get("config_space_data", {}).get(
+                    "device_info", {}
+                )
+
+            else:
+                # Fallback to legacy build system for backward compatibility
+                logger.info("Using legacy build system (PCILeech not available)")
+
+                # Step 1: Read configuration space
+                logger.info("Step 1: Reading device configuration space")
+                config_space = self.read_vfio_config_space()
+
+                # Step 2: Extract device information
+                logger.info("Step 2: Extracting device information")
+                device_info = self.extract_device_info(config_space)
+
+                # Step 3: Generate SystemVerilog files
+                logger.info("Step 3: Generating SystemVerilog files")
+                sv_files = self.generate_systemverilog_files(
+                    device_info, advanced_sv, device_type, enable_variance
+                )
+                build_results["files_generated"].extend(sv_files)
+
+                # Step 4: Run behavior profiling if requested
+                if behavior_profile_duration > 0:
+                    logger.info("Step 4: Running behavior profiling")
+                    profile_file = self.run_behavior_profiling(
+                        device_info, behavior_profile_duration
+                    )
+                    if profile_file:
+                        build_results["files_generated"].append(profile_file)
+
+                # Step 5: Generate build files with custom configuration space support
+                logger.info(
+                    "Step 5: Generating build files with custom configuration space support"
+                )
+                build_files = self.generate_build_files(
+                    device_info, enable_custom_config
+                )
+                build_results["files_generated"].extend(build_files)
 
             # Step 6: Save device info
             device_info_file = self.output_dir / "device_info.json"
@@ -769,11 +1009,8 @@ puts "Build completed successfully"
             build_results["preserved_files"] = preserved_files
             build_results["validation"] = validation_results
 
-            log_info_safe(
-                logger,
-                "Firmware build completed successfully in {build_time:.2f} seconds",
-                build_time=build_results["build_time"],
-            )
+            logger.info("Build completed successfully")
+            logger.info(f"Build time: {build_results['build_time']:.2f} seconds")
             logger.info(f"Generated {len(build_results['files_generated'])} files")
             logger.info(f"Preserved {len(preserved_files)} final output files")
 
@@ -791,6 +1028,68 @@ puts "Build completed successfully"
 
         return build_results
 
+    def _generate_pcileech_tcl_scripts(
+        self, template_context: Dict[str, Any]
+    ) -> List[str]:
+        """Generate PCILeech-specific TCL scripts using the template context."""
+        tcl_files = []
+
+        try:
+            # Generate PCILeech project setup script
+            project_script_content = self.tcl_builder.build_pcileech_project_script(
+                self._build_context_from_template_context(template_context)
+            )
+            project_script_path = self.output_dir / "vivado_generate_project.tcl"
+            with open(project_script_path, "w") as f:
+                f.write(project_script_content)
+            tcl_files.append(str(project_script_path))
+            logger.info("Generated PCILeech project setup script")
+
+            # Generate PCILeech build script
+            build_script_content = self.tcl_builder.build_pcileech_build_script(
+                self._build_context_from_template_context(template_context)
+            )
+            build_script_path = self.output_dir / "vivado_build.tcl"
+            with open(build_script_path, "w") as f:
+                f.write(build_script_content)
+            tcl_files.append(str(build_script_path))
+            logger.info("Generated PCILeech build script")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate PCILeech TCL scripts: {e}")
+            # Fallback to legacy TCL generation
+            try:
+                device_info = template_context.get("device_info", {})
+                legacy_tcl_files = self.generate_build_files(device_info)
+                tcl_files.extend(legacy_tcl_files)
+            except Exception as fallback_error:
+                logger.error(f"Legacy TCL generation also failed: {fallback_error}")
+
+        return tcl_files
+
+    def _build_context_from_template_context(self, template_context: Dict[str, Any]):
+        """Build TCL builder context from PCILeech template context."""
+        from templating.tcl_builder import BuildContext
+
+        device_info = template_context.get("device_info", {})
+
+        return BuildContext(
+            board_name=self.board,
+            fpga_part=template_context.get("fpga_part", "xc7a35tcsg324-2"),
+            fpga_family=template_context.get("fpga_family", "Artix-7"),
+            pcie_ip_type=template_context.get("pcie_ip_type", "pcie7x"),
+            max_lanes=template_context.get("max_lanes", 4),
+            supports_msi=template_context.get("supports_msi", True),
+            supports_msix=template_context.get("supports_msix", True),
+            vendor_id=device_info.get("vendor_id"),
+            device_id=device_info.get("device_id"),
+            revision_id=device_info.get("revision_id"),
+            class_code=device_info.get("class_code"),
+            project_name="pcileech_firmware",
+            project_dir="./vivado_project",
+            output_dir=str(self.output_dir),
+        )
+
 
 def validate_production_mode() -> None:
     """Validate production mode configuration and prevent mock data usage."""
@@ -804,6 +1103,92 @@ def validate_production_mode() -> None:
         logger.info("Production mode enabled - mock implementations disabled")
     else:
         logger.warning("Development mode - mock implementations may be used")
+
+
+def _execute_vivado_build(preserved_files: List[str]) -> bool:
+    """
+    Execute Vivado build using the generated TCL scripts.
+
+    Args:
+        preserved_files: List of preserved files from the build
+
+    Returns:
+        True if Vivado build succeeded, False otherwise
+    """
+    try:
+        from vivado_handling import (
+            find_vivado_installation,
+            run_vivado_with_error_reporting,
+        )
+        from pathlib import Path
+
+        # Find Vivado installation
+        vivado_info = find_vivado_installation()
+        if not vivado_info:
+            print("[✗] Vivado installation not found")
+            print("    Please ensure Vivado is installed and in PATH")
+            return False
+
+        print(f"[*] Found Vivado: {vivado_info['version']} at {vivado_info['path']}")
+
+        # Look for TCL build script in preserved files
+        build_script = None
+        output_dir = Path("output")
+
+        # Check for PCILeech build script first
+        pcileech_build_script = output_dir / "vivado_build.tcl"
+        if pcileech_build_script.exists():
+            build_script = pcileech_build_script
+        else:
+            # Look for any TCL build script
+            for file_path in preserved_files:
+                if file_path.endswith(".tcl") and (
+                    "build" in file_path.lower() or "impl" in file_path.lower()
+                ):
+                    build_script = Path(file_path)
+                    break
+
+        if not build_script or not build_script.exists():
+            print("[✗] No Vivado build script found")
+            print("    Expected: vivado_build.tcl or similar build script")
+            return False
+
+        print(f"[*] Using build script: {build_script}")
+
+        # Run Vivado with error reporting
+        try:
+            return_code, report = run_vivado_with_error_reporting(
+                build_script, output_dir, vivado_info["executable"]
+            )
+
+            if return_code == 0:
+                print("[✓] Vivado synthesis and implementation completed successfully")
+
+                # Check for generated bitstream
+                bitstream_files = list(output_dir.glob("*.bit"))
+                if bitstream_files:
+                    print(f"[✓] Generated bitstream: {bitstream_files[0]}")
+                else:
+                    print("[!] Warning: No bitstream file found")
+
+                return True
+            else:
+                print(f"[✗] Vivado build failed with return code: {return_code}")
+                if report:
+                    print(f"[!] Error report saved to: {report}")
+                return False
+
+        except Exception as vivado_error:
+            print(f"[✗] Vivado execution failed: {vivado_error}")
+            return False
+
+    except ImportError as e:
+        print(f"[✗] Failed to import Vivado handling modules: {e}")
+        print("    Please ensure vivado_handling module is available")
+        return False
+    except Exception as e:
+        print(f"[✗] Unexpected error during Vivado execution: {e}")
+        return False
 
 
 def main():
@@ -849,6 +1234,27 @@ def main():
         help="Duration for behavior profiling in seconds (0 to disable)",
     )
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--enable-ft601",
+        action="store_true",
+        help="Enable FT601 USB-3 capture functionality",
+    )
+    parser.add_argument(
+        "--enable-custom-config",
+        action="store_true",
+        default=True,
+        help="Enable custom configuration space and BAR PIO memory regions (default: enabled)",
+    )
+    parser.add_argument(
+        "--disable-custom-config",
+        action="store_true",
+        help="Disable custom configuration space functionality",
+    )
+    parser.add_argument(
+        "--run-vivado",
+        action="store_true",
+        help="Automatically run Vivado synthesis and implementation after generating TCL scripts",
+    )
 
     args = parser.parse_args()
 
@@ -860,6 +1266,8 @@ def main():
         args.advanced_sv = False
     if hasattr(args, "disable_variance") and args.disable_variance:
         args.enable_variance = False
+    if hasattr(args, "disable_custom_config") and args.disable_custom_config:
+        args.enable_custom_config = False
 
     # Validate production mode configuration before proceeding
     validate_production_mode()
@@ -868,12 +1276,14 @@ def main():
         # Initialize builder
         builder = PCILeechFirmwareBuilder(args.bdf, args.board)
 
-        # Run build process
+        # Run enhanced build process with custom configuration space support
         results = builder.build_firmware(
             advanced_sv=args.advanced_sv,
             device_type=args.device_type,
             enable_variance=args.enable_variance,
             behavior_profile_duration=args.behavior_profile_duration,
+            enable_ft601=args.enable_ft601,
+            enable_custom_config=args.enable_custom_config,
         )
 
         # Print results
@@ -894,13 +1304,24 @@ def main():
             # Validation results are already printed by
             # _print_final_output_info
             if "preserved_files" in results:
-                print("Now run vivado with the following command:")
-                print(
-                    safe_format(
-                        "cd {output_dir} && vivado -mode batch -source build.tcl -lic_retry 30 -lic_retry_int 60",
+                # Check if we should run Vivado automatically
+                if hasattr(args, "run_vivado") and args.run_vivado:
+                    print("[*] Running Vivado synthesis and implementation...")
+                    vivado_success = _execute_vivado_build(results["preserved_files"])
+                    if vivado_success:
+                        print("[✓] Vivado build completed successfully")
+                        return 0
+                    else:
+                        print("[✗] Vivado build failed")
+                        return 1
+                else:
+                    print("Now run vivado with the following command:")
+                    print(
+                        safe_format(
+                            "cd output/ && vivado -mode batch -source build.tcl -lic_retry 30 -lic_retry_int 60",
+                        )
                     )
-                )
-                print("Or do whatever you want with the tcl pz")
+                    print("Or do whatever you want with the tcl pz")
 
             return 0
         else:
@@ -982,373 +1403,124 @@ def build_tcl(donor_info: Dict[str, Any], output_file: str) -> Tuple[str, str]:
                 content = tcl_file_path.read_text()
                 return content, str(tcl_file_path)
 
-        # Fallback: generate basic TCL content
-        vendor_id = donor_info.get("vendor_id", "0x1234")
-        device_id = donor_info.get("device_id", "0x5678")
-
-        tcl_content = f"""# Generated TCL for {vendor_id}:{device_id}
-set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
-set_property CFGBVS VCCO [current_design]
-set_property CONFIG_VOLTAGE 3.3 [current_design]
-"""
-
-        # Write to output file
-        output_path = Path(output_file)
-        output_path.write_text(tcl_content)
-
-        return tcl_content, str(output_path)
+        # If no TCL files were generated, raise an error
+        raise RuntimeError("No TCL files were generated")
 
     except Exception as e:
-        logger.error(f"Error in build_tcl: {e}")
-        # Return minimal valid TCL
-        minimal_tcl = "# Minimal TCL fallback\nset_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]\n"
-        return minimal_tcl, output_file
-
-
-def build_sv(registers: List[Dict[str, Any]], target_file: Union[str, Path]) -> None:
-    """Generate SystemVerilog files using the refactored system."""
-    try:
-        # Create a temporary builder instance
-        builder = PCILeechFirmwareBuilder(
-            bdf="0000:03:00.0", board="pcileech_35t325_x4"
-        )
-
-        # Convert registers to device_info format
-        device_info = {
-            "vendor_id": "0x1234",
-            "device_id": "0x5678",
-            "registers": registers,
-        }
-
-        # Generate SystemVerilog files
-        generated_files = builder.generate_systemverilog_files(device_info)
-
-        # Copy the main generated file to target location if needed
-        target_path = Path(target_file)
-        if generated_files and not target_path.exists():
-            # Create a basic SystemVerilog file
-            sv_content = f"""// Generated SystemVerilog for {len(registers)} registers
-module pcileech_controller (
-    input wire clk,
-    input wire rst,
-    // Register interface
-    input wire [31:0] reg_addr,
-    input wire [31:0] reg_wdata,
-    output reg [31:0] reg_rdata,
-    input wire reg_we
-);
-
-// Register implementation
-always @(posedge clk) begin
-    if (rst) begin
-        reg_rdata <= 32'h0;
-    end else begin
-        case (reg_addr)
-"""
-
-            # Add register cases
-            for i, reg in enumerate(registers[:10]):  # Limit to first 10 for brevity
-                offset = reg.get("offset", i * 4)
-                sv_content += f"            32'h{offset:08x}: reg_rdata <= 32'h{reg.get('value', 0):08x};\n"
-
-            sv_content += """            default: reg_rdata <= 32'h0;
-        endcase
-    end
-end
-
-endmodule
-"""
-
-            target_path.write_text(sv_content)
-
-    except Exception as e:
-        if PRODUCTION_MODE:
-            # In production mode, we must not fall back to minimal SystemVerilog
-            logger.error(f"PRODUCTION ERROR: Failed to generate SystemVerilog: {e}")
-
-            # Clean up output folder if it exists
-            output_dir = Path("output")
-            if output_dir.exists():
-                try:
-                    import shutil
-
-                    shutil.rmtree(output_dir)
-                    logger.info(f"Cleaned up output directory: {output_dir}")
-                except Exception as cleanup_error:
-                    logger.error(
-                        f"Failed to clean up output directory: {cleanup_error}"
-                    )
-
-            raise RuntimeError(
-                f"Production mode requires proper SystemVerilog generation: {e}"
-            )
-
-        logger.error(f"Error in build_sv: {e}")
-        # Create minimal SystemVerilog file
-        target_path = Path(target_file)
-        minimal_sv = """// Minimal SystemVerilog fallback
-module pcileech_controller (
-    input wire clk,
-    input wire rst
-);
-endmodule
-"""
-        target_path.write_text(minimal_sv)
+        raise RuntimeError(f"Failed to generate TCL content: {e}") from e
 
 
 def scrape_driver_regs(
     vendor_id: str, device_id: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Scrape driver registers using real implementation or controlled fallback."""
-    try:
-        # Validate production mode requirements
-        if PRODUCTION_MODE and not ALLOW_MOCK_DATA:
-            logger.info(
-                f"Production mode: Real driver scraping for {vendor_id}:{device_id}"
-            )
+    """Scrape driver registers using real implementation only."""
+    logger.info(f"Real driver scraping for {vendor_id}:{device_id}")
 
-            # Validate hex IDs
-            validated_vendor = validate_hex_id(vendor_id, "Vendor ID")
-            validated_device = validate_hex_id(device_id, "Device ID")
+    # Validate hex IDs
+    validated_vendor = validate_hex_id(vendor_id, "Vendor ID")
+    validated_device = validate_hex_id(device_id, "Device ID")
 
-            # Resolve driver module
-            driver_name = resolve_driver_module(validated_vendor, validated_device)
-            if not driver_name:
-                raise RuntimeError(f"No driver found for {vendor_id}:{device_id}")
+    # Resolve driver module
+    driver_name = resolve_driver_module(validated_vendor, validated_device)
+    if not driver_name:
+        raise RuntimeError(f"No driver found for {vendor_id}:{device_id}")
 
-            # Ensure kernel source is available
-            kernel_source_dir = ensure_kernel_source()
-            if not kernel_source_dir:
-                raise RuntimeError("Kernel source not available for driver analysis")
+    # Ensure kernel source is available
+    kernel_source_dir = ensure_kernel_source()
+    if not kernel_source_dir:
+        raise RuntimeError("Kernel source not available for driver analysis")
 
-            # Find driver sources
-            source_files = find_driver_sources(kernel_source_dir, driver_name)
-            if not source_files:
-                raise RuntimeError(f"No source files found for driver {driver_name}")
+    # Find driver sources
+    source_files = find_driver_sources(kernel_source_dir, driver_name)
+    if not source_files:
+        raise RuntimeError(f"No source files found for driver {driver_name}")
 
-            # Extract registers with analysis
-            analysis_result = extract_registers_with_analysis(source_files, driver_name)
+    # Extract registers with analysis
+    analysis_result = extract_registers_with_analysis(source_files, driver_name)
 
-            # Convert to expected format
-            registers = []
-            for reg_data in analysis_result.get("registers", []):
-                registers.append(
-                    {
-                        "name": reg_data.get("name", "UNKNOWN"),
-                        "offset": reg_data.get("offset", 0),
-                        "value": reg_data.get("value", 0),
-                        "access": reg_data.get("rw", "RO").upper(),
-                    }
-                )
-
-            # Extract state machine information
-            state_machine = {
-                "states": ["IDLE", "ACTIVE", "RESET"],  # Default states
-                "transitions": [],
+    # Convert to expected format
+    registers = []
+    for reg_data in analysis_result.get("registers", []):
+        registers.append(
+            {
+                "name": reg_data["name"],
+                "offset": reg_data["offset"],
+                "value": reg_data["value"],
+                "access": reg_data["rw"].upper(),
             }
+        )
 
-            # Add state machine data if available
-            if "state_machines" in analysis_result:
-                sm_data = analysis_result["state_machines"]
-                if sm_data:
-                    state_machine.update(sm_data[0])  # Use first state machine
+    # Extract state machine information
+    state_machine = {
+        "states": ["IDLE", "ACTIVE", "RESET"],  # Default states
+        "transitions": [],
+    }
 
-            logger.info(
-                f"Successfully scraped {len(registers)} registers from driver {driver_name}"
-            )
-            return registers, state_machine
+    # Add state machine data if available
+    if "state_machines" in analysis_result:
+        sm_data = analysis_result["state_machines"]
+        if sm_data:
+            state_machine.update(sm_data[0])  # Use first state machine
 
-        elif ALLOW_MOCK_DATA:
-            # Development/testing mode with mock data
-            logger.warning(
-                f"DEVELOPMENT MODE: Using mock data for {vendor_id}:{device_id}"
-            )
-
-            mock_registers = [
-                {"name": "CTRL", "offset": 0x0000, "value": 0x12345678, "access": "RW"},
-                {
-                    "name": "STATUS",
-                    "offset": 0x0004,
-                    "value": 0x87654321,
-                    "access": "RO",
-                },
-                {
-                    "name": "CONFIG",
-                    "offset": 0x0008,
-                    "value": 0xABCDEF00,
-                    "access": "RW",
-                },
-            ]
-
-            mock_state_machine = {
-                "states": ["IDLE", "ACTIVE", "RESET"],
-                "transitions": [
-                    {"from": "IDLE", "to": "ACTIVE", "condition": "enable"},
-                    {"from": "ACTIVE", "to": "IDLE", "condition": "disable"},
-                    {"from": "*", "to": "RESET", "condition": "reset"},
-                ],
-            }
-
-            return mock_registers, mock_state_machine
-        else:
-            raise RuntimeError(
-                "Production mode enabled but real driver scraping failed. "
-                "Cannot proceed without valid register data."
-            )
-
-    except Exception as e:
-        if PRODUCTION_MODE:
-            logger.error(f"PRODUCTION ERROR in scrape_driver_regs: {e}")
-            raise RuntimeError(f"Production build failed: {e}")
-        else:
-            logger.error(f"Error in scrape_driver_regs: {e}")
-            return [], {}
+    logger.info(
+        f"Successfully scraped {len(registers)} registers from driver {driver_name}"
+    )
+    return registers, state_machine
 
 
 def integrate_behavior_profile(
     bdf: str, registers: List[Dict[str, Any]], duration: float = 30.0
 ) -> List[Dict[str, Any]]:
-    """Integrate behavior profiling data with registers using real implementation or controlled fallback."""
-    try:
-        # Validate production mode requirements
-        if PRODUCTION_MODE and not ALLOW_MOCK_DATA:
-            logger.info(
-                f"Production mode: Real behavior profiling for {bdf} over {duration}s"
-            )
+    """Integrate behavior profiling data with registers using real implementation only."""
+    logger.info(f"Real behavior profiling for {bdf} over {duration}s")
 
-            # Use real behavior profiler
-            profiler = BehaviorProfiler(bdf=bdf)
-            behavior_profile = profiler.capture_behavior_profile(duration=duration)
+    # Use real behavior profiler
+    profiler = BehaviorProfiler(bdf=bdf)
+    behavior_profile = profiler.capture_behavior_profile(duration=duration)
 
-            # Integrate real profiling data with registers
-            enhanced_registers = []
-            for reg in registers:
-                enhanced_reg = reg.copy()
+    # Integrate real profiling data with registers
+    enhanced_registers = []
+    for reg in registers:
+        enhanced_reg = reg.copy()
 
-                # Find matching register access data
-                reg_name = reg.get("name", "")
-                reg_offset = reg.get("offset", 0)
+        # Find matching register access data
+        reg_name = reg["name"]
+        reg_offset = reg["offset"]
 
-                # Extract timing data from behavior profile
-                timing_data = {
-                    "read_latency": 100,  # Default fallback
-                    "write_latency": 150,
-                    "access_frequency": 1000,
-                }
-
-                # Look for register-specific timing in captured accesses
-                for access in behavior_profile.register_accesses:
-                    if access.register == reg_name or access.offset == reg_offset:
-                        if access.duration_us:
-                            if access.operation == "read":
-                                timing_data["read_latency"] = int(
-                                    access.duration_us * 1000
-                                )  # Convert to ns
-                            elif access.operation == "write":
-                                timing_data["write_latency"] = int(
-                                    access.duration_us * 1000
-                                )
-
-                # Calculate access frequency from timing patterns
-                for pattern in behavior_profile.timing_patterns:
-                    if reg_name in pattern.registers:
-                        timing_data["access_frequency"] = int(pattern.frequency_hz)
-                        break
-
-                enhanced_reg["timing"] = timing_data
-                enhanced_reg["behavior_confidence"] = getattr(
-                    behavior_profile, "confidence", 0.8
-                )
-                enhanced_registers.append(enhanced_reg)
-
-            logger.info(
-                f"Successfully integrated behavior profile with {len(enhanced_registers)} registers"
-            )
-            return enhanced_registers
-
-        elif ALLOW_MOCK_DATA:
-            # Development/testing mode with mock data
-            logger.warning(f"DEVELOPMENT MODE: Using mock behavior data for {bdf}")
-
-            enhanced_registers = []
-            for reg in registers:
-                enhanced_reg = reg.copy()
-                enhanced_reg["timing"] = {
-                    "read_latency": 100,  # nanoseconds
-                    "write_latency": 150,
-                    "access_frequency": 1000,  # Hz
-                }
-                enhanced_reg["behavior_confidence"] = (
-                    0.5  # Lower confidence for mock data
-                )
-                enhanced_registers.append(enhanced_reg)
-
-            return enhanced_registers
-        else:
-            raise RuntimeError(
-                "Production mode enabled but real behavior profiling failed. "
-                "Cannot proceed without valid timing data."
-            )
-
-    except Exception as e:
-        if PRODUCTION_MODE:
-            logger.error(f"PRODUCTION ERROR in integrate_behavior_profile: {e}")
-            raise RuntimeError(f"Production build failed: {e}")
-        else:
-            logger.error(f"Error in integrate_behavior_profile: {e}")
-            return registers
-
-
-def generate_register_state_machine(
-    reg_name: str, sequences: List[Dict[str, Any]], base_offset: int
-) -> Dict[str, Any]:
-    """Generate state machine for register sequences."""
-    try:
-        if len(sequences) < 2:
-            raise ValueError("Insufficient sequences for state machine generation")
-
-        # Mock state machine generation
-        state_machine = {
-            "register": reg_name,
-            "base_offset": base_offset,
-            "states": [f"STATE_{i}" for i in range(len(sequences))],
-            "sequences": sequences,
-            "initial_state": "STATE_0",
+        # Extract timing data from behavior profile
+        timing_data = {
+            "read_latency": 100,  # Default fallback
+            "write_latency": 150,
+            "access_frequency": 1000,
         }
 
-        return state_machine
+        # Look for register-specific timing in captured accesses
+        for access in behavior_profile.register_accesses:
+            if access.register == reg_name or access.offset == reg_offset:
+                if access.duration_us:
+                    if access.operation == "read":
+                        timing_data["read_latency"] = int(
+                            access.duration_us * 1000
+                        )  # Convert to ns
+                    elif access.operation == "write":
+                        timing_data["write_latency"] = int(access.duration_us * 1000)
 
-    except Exception as e:
-        logger.error(f"Error in generate_register_state_machine: {e}")
-        return {}
+        # Calculate access frequency from timing patterns
+        for pattern in behavior_profile.timing_patterns:
+            if reg_name in pattern.registers:
+                timing_data["access_frequency"] = int(pattern.frequency_hz)
+                break
 
+        enhanced_reg["timing"] = timing_data
+        enhanced_reg["behavior_confidence"] = getattr(
+            behavior_profile, "confidence", 0.8
+        )
+        enhanced_registers.append(enhanced_reg)
 
-def generate_device_state_machine(registers: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Generate device-level state machine."""
-    try:
-        if not registers:
-            return {"states": ["IDLE"], "registers": []}
-
-        # Mock device state machine
-        device_state_machine = {
-            "device_states": ["INIT", "READY", "ACTIVE", "ERROR"],
-            "register_count": len(registers),
-            "state_transitions": [
-                {"from": "INIT", "to": "READY", "trigger": "initialization_complete"},
-                {"from": "READY", "to": "ACTIVE", "trigger": "operation_start"},
-                {"from": "ACTIVE", "to": "READY", "trigger": "operation_complete"},
-                {"from": "*", "to": "ERROR", "trigger": "error_condition"},
-            ],
-            "registers": [
-                reg.get("name", f"REG_{i}") for i, reg in enumerate(registers)
-            ],
-        }
-
-        return device_state_machine
-
-    except Exception as e:
-        logger.error(f"Error in generate_device_state_machine: {e}")
-        return {}
+    logger.info(
+        f"Successfully integrated behavior profile with {len(enhanced_registers)} registers"
+    )
+    return enhanced_registers
 
 
 def run(command: str) -> None:

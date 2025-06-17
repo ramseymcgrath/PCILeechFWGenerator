@@ -64,13 +64,13 @@ class TestProductionModeFallback:
                         # Verify sys.exit was called
                         mock_exit.assert_called_with(1)
 
-    def test_tcl_generator_fallback_production_mode(self):
-        """Test that TCL generator fallback errors in production mode."""
+    def test_tcl_builder_fallback_production_mode(self):
+        """Test that TCL builder fallback errors in production mode."""
         from src.build import PCILeechFirmwareBuilder
 
-        # Create a builder with no TCL generator
+        # Create a builder with no TCL builder
         builder = PCILeechFirmwareBuilder("0000:00:1f.3", "pcileech_35t325_x4")
-        builder.tcl_generator = None
+        builder.tcl_builder = None
 
         device_info = {"vendor_id": 0x8086, "device_id": 0x54C8, "revision_id": 0x01}
 
@@ -83,7 +83,8 @@ class TestProductionModeFallback:
                 mock_path.return_value.exists.return_value = True
 
                 with pytest.raises(
-                    RuntimeError, match="Production mode requires TCL generator"
+                    RuntimeError,
+                    match="Production mode requires template-based TCL builder",
                 ):
                     builder.generate_tcl_files(device_info)
 

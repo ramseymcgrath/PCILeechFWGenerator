@@ -1,4 +1,5 @@
 {#
+# USB-required commit 2025-06-16
 Synthesis Template - Synthesis Configuration and Execution
 
 This template configures and runs synthesis with appropriate settings.
@@ -22,5 +23,60 @@ if {[get_property PROGRESS [get_runs synth_1]] != "100%"} {
     exit 1
 }
 
-puts "Synthesis completed successfully"
+open_run synth_1
 report_utilization -file utilization_synth.rpt
+
+# -------------------------------------------------------------------------
+# Early resource-compatibility check after synthesis
+# -------------------------------------------------------------------------
+# Check if synthesis results would fit on target devices before implementation
+
+array set CAP_LUTs  {35t 20800  75t 46560}
+array set CAP_REGs  {35t 41600  75t 93120}
+array set CAP_BRAMS {35t  50    75t   135}
+array set CAP_DSPS  {35t  90    75t   180}
+
+# Determine target part
+set part    [get_property PART [current_project]]
+set partkey [expr {[string match -nocase *35t* $part] ? "35t" : \
+                   ([string match -nocase *75t* $part] ? "75t" : "75t")}]
+
+# Get synthesis utilization
+set u_str [report_utilization -return_string -quiet]
+
+{% raw %}proc parse_synth_field {field txt} {
+    regexp [format {%s\s+\|\s+(\d+)} [string map {[ \\[ ] \\]} $field]] $txt -> val
+    return $val
+}
+
+set usedLUT [parse_synth_field "CLB LUTs"       $u_str]
+set usedREG [parse_synth_field "CLB Registers"  $u_str]
+set usedBR  [parse_synth_field "Block RAM Tile" $u_str]
+set usedDSP [parse_synth_field "DSPs"           $u_str]{% endraw %}
+
+# Check against 35T limits (early warning)
+{% raw %}foreach {capName used arr} {
+    LUTs        $usedLUT CAP_LUTs
+    Registers   $usedREG CAP_REGs
+    BRAMs       $usedBR  CAP_BRAMS
+    DSPs        $usedDSP CAP_DSPS
+} {
+    set max35 [set ${arr}(35t)]
+    if {$used > $max35} {
+        puts "WARNING: Post-synthesis design uses $used $capName but 35T card only has $max35"
+        puts "         Implementation may increase usage further - build may fail"
+    }
+}{% endraw %}
+
+# -------------------------------------------------------------------------
+# Sanity guard before opt_design - Check for FT601 ports if required
+# -------------------------------------------------------------------------
+{% if board and board.name == "pcileech_75t484_x1" %}
+if {[llength [get_ports -quiet ft601_clk]] == 0} {
+    puts "CRITICAL: FT601 ports missing – USB path not instantiated"
+    exit 1
+}
+puts "FT601 sanity check passed - USB3 path properly instantiated"
+{% endif %}
+
+puts "Synthesis completed successfully"

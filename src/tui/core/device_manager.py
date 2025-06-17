@@ -52,9 +52,7 @@ class DeviceManager:
                     enhanced_devices.append(enhanced)
                 except Exception as e:
                     # Log error but continue with other devices
-                    print(
-                        f"Warning: Failed to enhance device {raw_device.get('bd', 'unknown')}: {e}"
-                    )
+                    print(f"Warning: Failed to enhance device {raw_device['bd']}: {e}")
                     continue
 
             self._device_cache = enhanced_devices

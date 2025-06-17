@@ -1,0 +1,17 @@
+# Board configuration for pcileech_100t484_x1 - CaptainDMA 100T board
+name: pcileech_100t484_x1
+description: CaptainDMA 100T FPGA board with UltraScale+ support
+part: xczu3eg-sbva484-1-e
+family: ultrascale
+
+features:
+  msix: true
+  high_performance: true
+
+# Pin constraints and other board-specific settings
+constraints:
+  xdc_file: pcileech_100t484_x1_captaindma_100t.xdc
+  
+notes: |
+  This board supports high-performance PCIe operations.
+  UltraScale+ architecture provides enhanced capabilities.

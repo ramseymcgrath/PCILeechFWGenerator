@@ -1,0 +1,23 @@
+# USB-required commit 2025-06-16
+# Board configuration for pcileech_75t484_x1 - CaptainDMA 75T board
+name: pcileech_75t484_x1
+description: CaptainDMA 75T FPGA board with mandatory USB-3/FT601 support
+part: xc7a75tfgg484-2
+family: artix7
+
+features:
+  ft601: true
+
+# Pin constraints and other board-specific settings
+constraints:
+  xdc_file: pcileech_75t484_x1_captaindma_75t.xdc
+  
+# USB-3 capture via FT601 is mandatory for this board
+# PCIe-only builds are not supported
+mandatory_features:
+  - ft601
+
+notes: |
+  This board requires USB-3/FT601 functionality.
+  PCIe-only builds are not supported.
+  The FT601 RTL and full CaptainDMA XDC constraints are always included.

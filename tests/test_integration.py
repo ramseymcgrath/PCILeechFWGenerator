@@ -872,7 +872,7 @@ class TestEnhancedFeatureIntegration:
 
         # Test 2: Invalid BDF format
         try:
-            from behavior_profiler import BehaviorProfiler
+            from src.device_clone.behavior_profiler import BehaviorProfiler
 
             with pytest.raises(ValueError):
                 BehaviorProfiler("invalid-bdf")

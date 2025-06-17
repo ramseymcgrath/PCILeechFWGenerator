@@ -1,4 +1,5 @@
 {#
+# USB-required commit 2025-06-16
 Constraints Template - Timing and Physical Constraints Management
 
 This template generates timing constraints and pin assignments based on the
@@ -24,12 +25,38 @@ Context variables expected:
 
 puts "Adding constraint files..."
 
-# Add all constraint files
-set xdc_files [glob -nocomplain *.xdc]
-if {[llength $xdc_files] > 0} {
-    puts "Found [llength $xdc_files] constraint files"
-    add_files -fileset constrs_1 -norecurse $xdc_files
-    foreach xdc_file $xdc_files {
+# Get script directory for reliable path resolution
+set script_dir [file dirname [info script]]
+
+# Add generated board-specific XDC file if available
+{% if generated_xdc_path %}
+set generated_xdc "{{ generated_xdc_path }}"
+if {[file exists $generated_xdc]} {
+    puts "Adding generated XDC constraints: $generated_xdc"
+    add_files -fileset constrs_1 -norecurse $generated_xdc
+}
+{% endif %}
+
+# Add all other constraint files (excluding already added board-specific files)
+# Use explicit directory to avoid pulling stale XDC from sibling directories
+set xdc_files [glob -nocomplain -directory $script_dir *.xdc]
+set already_added_files [list]
+{% if board.constraints and board.constraints.xdc_file %}
+lappend already_added_files "{{ board.constraints.xdc_file }}"
+{% endif %}
+
+# Filter out already added files
+set filtered_xdc_files [list]
+foreach xdc_file $xdc_files {
+    if {[lsearch -exact $already_added_files $xdc_file] == -1} {
+        lappend filtered_xdc_files $xdc_file
+    }
+}
+
+if {[llength $filtered_xdc_files] > 0} {
+    puts "Found [llength $filtered_xdc_files] additional constraint files"
+    add_files -fileset constrs_1 -norecurse $filtered_xdc_files
+    foreach xdc_file $filtered_xdc_files {
         puts "  - $xdc_file"
     }
 }
@@ -40,74 +67,71 @@ puts "Adding device-specific timing constraints..."
 {% if board and board.name %}
 puts "Attempting to load board-specific XDC constraints for: {{ board.name }}"
 
-# Try to read XDC constraints from PCILeech repository
-catch {
-    # This will be populated by the constraint generation system
-    # with actual XDC content from the PCILeech FPGA repository
-    {% if board_xdc_content %}
-{{ board_xdc_content | indent(4, True) }}
-    {% else %}
-    puts "Warning: No board-specific XDC content available, using fallback constraints"
+{% if board.constraints and board.constraints.xdc_file %}
+# Load board-specific XDC file
+{% if board.features and board.features.ft601 %}
+puts "Loading mandatory FT601 constraints for {{ board.name }}"
+{% else %}
+puts "Loading board-specific constraints for {{ board.name }}"
+{% endif %}
+set board_xdc_file "{{ board.constraints.xdc_file }}"
+if {[file exists $board_xdc_file]} {
+    add_files -fileset constrs_1 -norecurse $board_xdc_file
+    lappend already_added_files $board_xdc_file
+    puts "Added board-specific XDC constraints: $board_xdc_file"
+    {% if board.features and board.features.ft601 %}
+    puts "FT601 present – USB3 path enabled"
     {% endif %}
+} else {
+    error "Missing required XDC for board {{ board.name }} – aborting build."
 }
+{% elif board_xdc_content %}
+# Load XDC constraints from PCILeech repository
+# This will be populated by the constraint generation system
+# with actual XDC content from the PCILeech FPGA repository
+# Write board XDC content to temporary file to avoid brace/semicolon issues
+set board_auto_xdc_file [file join $script_dir "{{ board.name }}_auto.xdc"]
+set fp [open $board_auto_xdc_file w]
+puts $fp {{{ board_xdc_content }}}
+close $fp
+add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
+read_xdc $board_auto_xdc_file
+puts "Added auto-generated board XDC: $board_auto_xdc_file"
+{% else %}
+error "Missing required XDC for board {{ board.name }} – aborting build."
+{% endif %}
 {% endif %}
 
-# Fallback timing constraints for basic functionality
-set timing_constraints {
-    # Clock constraints
-    create_clock -period 10.000 -name sys_clk [get_ports clk]
-    
-    # Input delay constraints for actual input ports
-    set_input_delay -clock sys_clk 2.000 [get_ports reset_n]
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports pcie_rx_data*]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports pcie_rx_valid]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_received]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_received]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_register_number*]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_function_number*]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_data*]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports cfg_ext_write_byte_enable*]}
-    catch {set_input_delay -clock sys_clk 2.000 [get_ports msix_interrupt_ack]}
-    
-    # Output delay constraints - only apply to ports that exist
-    # Use catch to handle missing ports gracefully
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports pcie_tx_data*]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports pcie_tx_valid]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports cfg_ext_read_data*]}
-    catch {set_output_delay -clock sys_clk 1.000 [get_ports cfg_ext_read_data_valid]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_interrupt]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports msix_vector*]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports debug_status*]}
-    catch {set_output_delay -clock sys_clk 2.000 [get_ports device_ready]}
+# Generate device-specific timing constraints file
+{% set sys_clk_period = (1000.0 / (sys_clk_freq_mhz | default(100))) | round(3) %}
+set timing_constraints_content {
+# Clock constraints - {{ sys_clk_freq_mhz | default(100) }} MHz system clock
+create_clock -period {{ sys_clk_period }} -name sys_clk [get_ports clk]
 
-    # Device-specific constraints for {{ device.vendor_id }}:{{ device.device_id }}
-    # Board-specific pin assignments for {{ board.name }}
-    
-    # NOTE: Pin assignments should be loaded from board-specific XDC files above.
-    # The following are fallback constraints that may not be valid for your board.
-    # Please ensure board-specific XDC files are available in the PCILeech repository.
-    
-    {% if not board_xdc_content %}
-    # Fallback pin assignments (THESE ARE EXAMPLES - UPDATE FOR YOUR BOARD)
-    # Clock and Reset pins - adjust for your specific FPGA package
-    catch {
-        set_property PACKAGE_PIN E3 [get_ports clk]
-        set_property IOSTANDARD LVCMOS33 [get_ports clk]
-        set_property PACKAGE_PIN C12 [get_ports reset_n]
-        set_property IOSTANDARD LVCMOS33 [get_ports reset_n]
-    }
-    
-    # Additional pin assignments would go here...
-    # For production use, ensure you have proper board-specific XDC files
-    puts "WARNING: Using fallback pin assignments - update for your specific board!"
-    {% endif %}
+# Input delay constraints for actual input ports
+set_input_delay -clock sys_clk 2.000 [get_ports reset_n]
+
+# Device-specific constraints for {{ device.vendor_id }}:{{ device.device_id }}
+# Board-specific pin assignments for {{ board.name }}
+
+# NOTE: Pin assignments MUST be loaded from board-specific XDC files from the PCILeech repository.
+# We NEVER generate fallback XDC content as it contains critical pin assignments.
 }
 
 # Write timing constraints to file
-set constraints_file "./device_constraints.xdc"
+set constraints_file [file join $script_dir "device_constraints.xdc"]
 set fp [open $constraints_file w]
-puts $fp $timing_constraints
+puts $fp $timing_constraints_content
 close $fp
 add_files -fileset constrs_1 -norecurse $constraints_file
+read_xdc $constraints_file
+set_property PROCESSING_ORDER LATE [get_files $constraints_file]
+puts "Generated device constraints file: $constraints_file"
+
+# Quality-of-life tweaks for USB-heavy designs
+{% if board.features and board.features.ft601 %}
+set_param xicom.use_bs_reader 1
+puts "Enabled fast bitstream reader for FT601 board"
+{% endif %}
 
 puts "Constraints setup completed"

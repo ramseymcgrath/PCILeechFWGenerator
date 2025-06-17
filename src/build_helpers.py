@@ -18,6 +18,33 @@ logger = logging.getLogger(__name__)
 PRODUCTION_MODE = os.getenv("PCILEECH_PRODUCTION_MODE", "true").lower() == "true"
 
 
+def add_src_to_path():
+    """
+    Add the 'src' directory to the Python path to ensure consistent imports.
+
+    This function navigates up from the current file's location to find the
+    project root and then appends the 'src' directory to sys.path.
+    """
+    try:
+        # Get the absolute path of the current file
+        current_file_path = Path(__file__).resolve()
+        # Navigate up to the project root (assuming this file is in src/)
+        project_root = current_file_path.parent.parent
+        # Define the src path
+        src_path = project_root / "src"
+
+        if src_path.exists() and str(src_path) not in sys.path:
+            logger.debug(f"Adding {src_path} to sys.path")
+            sys.path.insert(0, str(src_path))
+        else:
+            logger.debug(
+                f"src path '{src_path}' already in sys.path or does not exist."
+            )
+
+    except Exception as e:
+        logger.warning(f"Could not add src to sys.path: {e}")
+
+
 def safe_import_with_fallback(
     primary_imports: Dict[str, str],
     fallback_imports: Optional[Dict[str, str]] = None,
@@ -41,11 +68,11 @@ def safe_import_with_fallback(
         >>> imports = safe_import_with_fallback(
         ...     primary_imports={
         ...         'ConfigSpaceManager': 'config_space_manager.ConfigSpaceManager',
-        ...         'TCLGenerator': 'tcl_generator.TCLGenerator'
+        ...         'TCLBuilder': 'tcl_builder.TCLBuilder'
         ...     },
         ...     fallback_imports={
         ...         'ConfigSpaceManager': '.config_space_manager.ConfigSpaceManager',
-        ...         'TCLGenerator': '.tcl_generator.TCLGenerator'
+        ...         'TCLBuilder': '.tcl_builder.TCLBuilder'
         ...     }
         ... )
     """
@@ -366,7 +393,7 @@ def validate_fpga_part(fpga_part: str, known_parts: Optional[set] = None) -> boo
     if known_parts is None:
         # Import here to avoid circular imports
         try:
-            from constants import BOARD_PARTS
+            from device_clone.constants import BOARD_PARTS
 
             known_parts = set(BOARD_PARTS.values())
         except ImportError:

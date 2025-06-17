@@ -185,8 +185,6 @@ set_property IOSTANDARD LVCMOS33 [get_ports clk]
     )
     def test_supported_board_types(self, board_type):
         """Test that supported board types are recognized."""
-        # This test verifies the board mapping exists
-        # In a real test, we'd mock the repository access
         with patch("src.repo_manager.RepoManager.ensure_git_repo"):
             with patch("src.repo_manager.Path.exists", return_value=True):
                 try:

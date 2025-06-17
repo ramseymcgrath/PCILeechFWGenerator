@@ -76,8 +76,32 @@ def setup_debugfs() -> None:
     check_linux_requirement("Debugfs setup")
 
     try:
-        # Create the debug directory if it doesn't exist
-        run_command("mkdir -p /sys/kernel/debug")
+        # First, check if /sys/kernel exists
+        try:
+            result = subprocess.run(
+                "ls -la /sys/kernel", shell=True, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"/sys/kernel directory not accessible. "
+                    f"Exit code: {result.returncode}, "
+                    f"Error: {result.stderr.strip()}"
+                )
+        except Exception as e:
+            raise RuntimeError(f"Cannot access /sys/kernel: {e}") from e
+
+        # Check current user privileges
+        try:
+            result = subprocess.run("id -u", shell=True, capture_output=True, text=True)
+            uid = result.stdout.strip()
+            if uid != "0":
+                raise RuntimeError(
+                    f"Debugfs setup requires root privileges. "
+                    f"Current UID: {uid}. "
+                    f"Please run with sudo or as root user."
+                )
+        except Exception as e:
+            raise RuntimeError(f"Cannot determine user privileges: {e}") from e
 
         # Check if debugfs is already mounted
         try:
@@ -88,8 +112,55 @@ def setup_debugfs() -> None:
             # grep returns non-zero if no matches found, which is expected
             pass
 
+        # Check if debugfs is supported in kernel
+        try:
+            result = subprocess.run(
+                "grep -q debugfs /proc/filesystems", shell=True, capture_output=True
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    "debugfs filesystem not supported by kernel. "
+                    "Please ensure debugfs is compiled into the kernel or loaded as a module."
+                )
+        except Exception as e:
+            raise RuntimeError(f"Cannot check debugfs kernel support: {e}") from e
+
+        # Create the debug directory if it doesn't exist
+        try:
+            run_command("mkdir -p /sys/kernel/debug")
+        except RuntimeError as e:
+            # Provide more specific error information
+            if "Permission denied" in str(e):
+                raise RuntimeError(
+                    f"Permission denied creating /sys/kernel/debug. "
+                    f"This operation requires root privileges. "
+                    f"Original error: {e}"
+                ) from e
+            elif "Read-only file system" in str(e):
+                raise RuntimeError(
+                    f"/sys filesystem is read-only. "
+                    f"Cannot create debugfs mount point. "
+                    f"Original error: {e}"
+                ) from e
+            else:
+                raise RuntimeError(f"Failed to create /sys/kernel/debug: {e}") from e
+
         # Mount debugfs
-        run_command("mount -t debugfs debugfs /sys/kernel/debug")
+        try:
+            run_command("mount -t debugfs debugfs /sys/kernel/debug")
+        except RuntimeError as e:
+            error_str = str(e).lower()
+            if "already mounted" in error_str or "debugfs already mounted" in error_str:
+                # This is actually a success case - debugfs is already available
+                return
+            elif "permission denied" in error_str:
+                raise RuntimeError(
+                    f"Permission denied mounting debugfs. "
+                    f"This operation requires root privileges. "
+                    f"Original error: {e}"
+                ) from e
+            else:
+                raise RuntimeError(f"Failed to mount debugfs: {e}") from e
 
     except Exception as e:
         raise RuntimeError(f"Failed to setup debugfs: {e}") from e

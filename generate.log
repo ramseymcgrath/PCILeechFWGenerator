@@ -1,0 +1,47 @@
+2025-06-15 16:57:04,014 - INFO - Starting PCILeech firmware generation process
+2025-06-15 16:57:04,014 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-15 16:57:04,014 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-16 23:31:45,507 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:31:45,508 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-16 23:31:45,508 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-16 23:31:58,408 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:31:58,410 - ERROR - Vivado not found. Checked paths:
+  • System PATH
+  • /Applications/Xilinx/Vivado
+  • /Users/ramseymcgrath/Xilinx/Vivado
+  • XILINX_VIVADO=<not set>
+2025-06-16 23:32:00,764 - ERROR - Fatal error during firmware generation: Vivado is required. Please install Vivado and try again.
+2025-06-16 23:33:02,539 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:33:02,539 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-16 23:33:02,539 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-16 23:33:07,521 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:33:07,521 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-16 23:33:07,521 - ERROR - Fatal error during firmware generation: This script requires root privileges. Run with sudo.
+2025-06-16 23:33:12,259 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:33:12,263 - ERROR - Vivado not found. Checked paths:
+  • System PATH
+  • /Applications/Xilinx/Vivado
+  • /Users/ramseymcgrath/Xilinx/Vivado
+  • XILINX_VIVADO=<not set>
+2025-06-16 23:33:18,043 - ERROR - Fatal error during firmware generation: Vivado is required. Please install Vivado and try again.
+2025-06-16 23:34:26,337 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:34:26,344 - ERROR - Vivado not found. Checked paths:
+  • System PATH
+  • /Applications/Xilinx/Vivado
+  • /Users/ramseymcgrath/Xilinx/Vivado
+  • XILINX_VIVADO=<not set>
+2025-06-16 23:34:26,344 - WARNING - User chose to continue without Vivado
+2025-06-16 23:34:26,460 - ERROR - Command failed (exit code 125): podman images pcileech-fw-generator --format '{{.Repository}}'
+2025-06-16 23:34:26,460 - ERROR - Command stderr: None
+2025-06-16 23:34:26,460 - ERROR - Error checking container image: Command 'podman images pcileech-fw-generator --format '{{.Repository}}'' returned non-zero exit status 125.
+2025-06-16 23:34:26,460 - ERROR - Fatal error during firmware generation: Error checking container image: Command 'podman images pcileech-fw-generator --format '{{.Repository}}'' returned non-zero exit status 125.
+2025-06-16 23:51:25,335 - INFO - Info message
+2025-06-16 23:51:25,336 - WARNING - Warning message
+2025-06-16 23:51:25,336 - ERROR - Error message
+2025-06-16 23:51:25,342 - INFO - [DRY RUN] Would execute: echo dry-run-test
+2025-06-16 23:59:14,322 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:59:14,324 - ERROR - This script requires root privileges. Run with sudo.
+2025-06-16 23:59:29,202 - INFO - Starting PCILeech firmware generation process
+2025-06-16 23:59:29,210 - ERROR - Build failed: No module named 'vfio'
+2025-06-17 00:01:31,133 - INFO - Starting PCILeech firmware generation process
+2025-06-17 00:01:31,145 - ERROR - Build failed: PCIe device enumeration requires Linux. Current platform: Darwin. Please run this on a Linux system with VFIO support.

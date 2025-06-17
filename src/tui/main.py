@@ -292,7 +292,7 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 config.skip_board_check
             )
             self.query_one("#donor-info-file-input", Input).value = (
-                config.donor_info_file or ""
+                config.donor_info_file
             )
             self.query_one("#profile-duration-input", Input).value = str(
                 config.profile_duration
@@ -637,7 +637,7 @@ class PCILeechTUI(App):
                 device.bdf,
                 f"{device.vendor_name} {device.device_name}"[:40],
                 device.compact_status,
-                device.driver or "none",
+                device.driver,
                 device.iommu_group,
                 key=device.bdf,
             )
@@ -701,7 +701,7 @@ class PCILeechTUI(App):
         # Vivado status
         vivado = status.get("vivado", {})
         if vivado.get("status") == "detected":
-            vivado_text = f"⚡ Vivado: {vivado.get('version', 'Unknown')} Detected"
+            vivado_text = f"⚡ Vivado: {vivado['version']} Detected"
         else:
             vivado_text = "⚡ Vivado: Not Detected"
         self.query_one("#vivado-status", Static).update(vivado_text)
@@ -730,7 +730,7 @@ class PCILeechTUI(App):
         # Donor module status (if available)
         if "donor_module" in status:
             donor_status = status.get("donor_module", {})
-            status_text = donor_status.get("status", "Unknown")
+            status_text = donor_status["status"]
 
             # Format status with appropriate emoji
             if status_text == "installed":
@@ -1119,7 +1119,7 @@ class PCILeechTUI(App):
             from pathlib import Path
 
             sys.path.append(str(Path(__file__).parent.parent.parent))
-            from donor_dump_manager import DonorDumpManager
+            from file_management.donor_dump_manager import DonorDumpManager
 
             # Create manager and check status
             manager = DonorDumpManager()
@@ -1132,8 +1132,8 @@ class PCILeechTUI(App):
 
             # Show notification if requested
             if show_notification:
-                status = module_status.get("status", "unknown")
-                details = module_status.get("details", "")
+                status = module_status["status"]
+                details = module_status["details"]
 
                 if status == "installed":
                     self.notify(f"Donor module status: {details}", severity="success")
@@ -1180,7 +1180,7 @@ class PCILeechTUI(App):
                     "status": "error",
                     "details": f"Error checking module: {str(e)}",
                     "issues": [f"Exception occurred: {str(e)}"],
-                    "fixes": ["Check if donor_dump_manager.py is accessible"],
+                    "fixes": ["Check if src/file_management/donor_dump_manager.py is accessible"],
                 }
                 self._update_status_display()
 
@@ -1188,7 +1188,7 @@ class PCILeechTUI(App):
                 "status": "error",
                 "details": f"Error checking module: {str(e)}",
                 "issues": [f"Exception occurred: {str(e)}"],
-                "fixes": ["Check if donor_dump_manager.py is accessible"],
+                "fixes": ["Check if src/file_management/donor_dump_manager.py is accessible"],
             }
 
     async def _toggle_donor_dump(self) -> None:

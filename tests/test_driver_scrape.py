@@ -1127,9 +1127,6 @@ class TestMainWorkflow:
                 # components
                 pass
 
-        # Verify workflow steps would be called
-        # (In a real test, we'd call the main function and verify output)
-
 
 class TestErrorHandling:
     """Test error handling and edge cases."""

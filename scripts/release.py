@@ -11,6 +11,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from git import GitCommandError, InvalidGitRepositoryError, Repo
+
+    GIT_AVAILABLE = True
+except ModuleNotFoundError:
+    GIT_AVAILABLE = False
+    Repo = None
+    GitCommandError = InvalidGitRepositoryError = Exception
+
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 VERSION_FILE = PROJECT_ROOT / "src" / "__version__.py"
@@ -122,21 +131,41 @@ def update_changelog(new_version: str, release_notes: str) -> None:
 
 def check_git_status() -> None:
     """Check if git working directory is clean."""
-    result = run_command("git status --porcelain", check=False)
-    if result.stdout.strip():
-        print("Git working directory is not clean. Please commit or stash changes.")
+    if not GIT_AVAILABLE or Repo is None:
+        print("GitPython not available. Please install with: pip install GitPython")
+        sys.exit(1)
+
+    try:
+        repo = Repo(PROJECT_ROOT)
+        if repo.is_dirty() or repo.untracked_files:
+            print("Git working directory is not clean. Please commit or stash changes.")
+            sys.exit(1)
+    except Exception as e:
+        print(f"Error checking git status: {e}")
         sys.exit(1)
 
 
 def create_git_tag(version: str) -> None:
     """Create and push git tag."""
+    if not GIT_AVAILABLE or Repo is None:
+        print("GitPython not available. Please install with: pip install GitPython")
+        sys.exit(1)
+
     tag_name = f"v{version}"
 
-    # Create tag
-    run_command(f"git tag -a {tag_name} -m 'Release {version}'")
+    try:
+        repo = Repo(PROJECT_ROOT)
 
-    # Push tag
-    run_command(f"git push origin {tag_name}")
+        # Create tag
+        repo.create_tag(tag_name, message=f"Release {version}")
+
+        # Push tag
+        origin = repo.remotes.origin
+        origin.push(tag_name)
+
+    except Exception as e:
+        print(f"Error creating/pushing git tag: {e}")
+        sys.exit(1)
 
     print(f"Created and pushed tag {tag_name}")
 
@@ -215,11 +244,26 @@ def main():
     # Git operations
     if not args.skip_git:
         # Commit changes
-        run_command("git add .")
-        run_command(f"git commit -m 'chore: bump version to {new_version}'")
+        if not GIT_AVAILABLE or Repo is None:
+            print("GitPython not available. Please install with: pip install GitPython")
+            sys.exit(1)
 
-        # Push changes
-        run_command("git push origin main")
+        try:
+            repo = Repo(PROJECT_ROOT)
+
+            # Add all changes
+            repo.git.add(A=True)
+
+            # Commit changes
+            repo.index.commit(f"chore: bump version to {new_version}")
+
+            # Push changes
+            origin = repo.remotes.origin
+            origin.push()
+
+        except Exception as e:
+            print(f"Error committing/pushing changes: {e}")
+            sys.exit(1)
 
         # Create and push tag
         create_git_tag(new_version)

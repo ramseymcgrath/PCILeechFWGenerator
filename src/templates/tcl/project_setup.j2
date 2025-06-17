@@ -26,6 +26,13 @@ puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.cl
 # Create project with correct FPGA part
 create_project $project_name $project_dir -part {{ board.fpga_part }} -force
 
+# Part-sanity guard (must be after project creation)
+set expected_part {{ board.fpga_part }}
+set actual_part [get_property PART [current_project]]
+if {[string tolower $actual_part] ne [string tolower $expected_part]} {
+    puts "CRITICAL: wrong -part (found $actual_part, need $expected_part)"; exit 1
+}
+
 # Set project properties
 set_property target_language Verilog [current_project]
 set_property simulator_language Mixed [current_project]

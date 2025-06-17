@@ -44,7 +44,7 @@ class TUIError:
             ErrorSeverity.ERROR: "❌",
             ErrorSeverity.CRITICAL: "🚨",
         }
-        return icons.get(self.severity, "❓")
+        return icons[self.severity]
 
     @property
     def severity_color(self) -> str:
@@ -55,7 +55,7 @@ class TUIError:
             ErrorSeverity.ERROR: "red",
             ErrorSeverity.CRITICAL: "bright_red",
         }
-        return colors.get(self.severity, "white")
+        return colors[self.severity]
 
     @property
     def title(self) -> str:

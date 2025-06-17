@@ -18,7 +18,7 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from tcl_builder import TCLBuilder, generate_tcl_scripts
+from src.tcl_builder import TCLBuilder
 
 
 @pytest.fixture

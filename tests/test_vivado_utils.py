@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 # Add src to path for imports
-from src.vivado_utils import (
+from src.vivado_handling import (
     find_vivado_installation,
     get_vivado_executable,
     get_vivado_version,
@@ -165,7 +165,7 @@ class TestVivadoDetection:
             version = get_vivado_version("/opt/Xilinx/Vivado/2022.2/bin/vivado")
             assert version == "2022.2"
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     def test_run_vivado_command(self, mock_find_vivado):
         """Test running Vivado commands."""
         # Mock Vivado installation
@@ -191,7 +191,7 @@ class TestVivadoDetection:
             assert args[0][1] == "-mode"
             assert args[0][2] == "batch"
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     def test_run_vivado_command_with_tcl(self, mock_find_vivado):
         """Test running Vivado commands with TCL file."""
         # Mock Vivado installation
@@ -219,7 +219,7 @@ class TestVivadoDetection:
             assert args[0][3] == "-source"
             assert args[0][4] == "script.tcl"
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     def test_run_vivado_command_vivado_not_found(self, mock_find_vivado):
         """Test running Vivado commands when Vivado is not found."""
         # Mock Vivado not found
@@ -359,7 +359,7 @@ class TestVivadoDetection:
 
     def test_get_vivado_executable(self):
         """Test getting Vivado executable path."""
-        with patch("src.vivado_utils.find_vivado_installation") as mock_find:
+        with patch("src.vivado_handling.vivado_utils.find_vivado_installation") as mock_find:
             # Test when Vivado is found
             mock_find.return_value = {
                 "executable": "/opt/Xilinx/Vivado/2023.1/bin/vivado",
@@ -376,7 +376,7 @@ class TestVivadoDetection:
             result = get_vivado_executable()
             assert result is None
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     @patch("shutil.which")
     def test_run_vivado_command_fallback_to_path(self, mock_which, mock_find_vivado):
         """Test running Vivado commands with fallback to PATH."""
@@ -396,7 +396,7 @@ class TestVivadoDetection:
             args, kwargs = mock_run.call_args
             assert args[0][0] == "/usr/bin/vivado"
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     @patch("shutil.which")
     def test_run_vivado_command_use_discovered_path_false(
         self, mock_which, mock_find_vivado
@@ -421,7 +421,7 @@ class TestVivadoDetection:
             args, kwargs = mock_run.call_args
             assert args[0][0] == "/usr/bin/vivado"
 
-    @patch("src.vivado_utils.find_vivado_installation")
+    @patch("src.vivado_handling.vivado_utils.find_vivado_installation")
     @patch("shutil.which")
     def test_run_vivado_command_both_methods_fail(self, mock_which, mock_find_vivado):
         """Test running Vivado commands when both discovery and PATH fail."""

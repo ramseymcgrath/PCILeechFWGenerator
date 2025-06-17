@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""
+Wrapper script to properly invoke the build.py module with correct Python path setup.
+This ensures that relative imports work correctly in the container environment.
+"""
+
+import sys
+import os
+from pathlib import Path
+
+# Determine if we're in container or local environment
+if Path("/app").exists():
+    # Container environment
+    app_dir = Path("/app")
+    src_dir = app_dir / "src"
+else:
+    # Local environment - we're in src/cli, so go up two levels to get to project root
+    app_dir = Path(__file__).parent.parent.parent.absolute()
+    src_dir = app_dir / "src"
+
+# Ensure both directories are in Python path
+if str(app_dir) not in sys.path:
+    sys.path.insert(0, str(app_dir))
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
+# Change to the src directory so relative imports work
+if src_dir.exists():
+    os.chdir(str(src_dir))
+else:
+    print(f"Error: Source directory {src_dir} does not exist")
+    sys.exit(1)
+
+# Now import and run the build module
+if __name__ == "__main__":
+    # Import the build module
+    import build
+
+    # Run the main function with the original arguments
+    sys.argv[0] = "build.py"  # Fix the script name for argument parsing
+    build.main()

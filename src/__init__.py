@@ -1,28 +1,16 @@
+#!/usr/bin/env python3
 """
-PCILeech Firmware Generator
+PCILeech Firmware Generator Package
 
-A comprehensive tool for generating spoofed PCIe DMA firmware from real donor hardware.
-Includes both command-line and interactive TUI interfaces.
+This package provides comprehensive PCIe device firmware generation capabilities
+for DMA attack research and security testing.
 """
 
-from .__version__ import (
-    __author__,
-    __author_email__,
-    __description__,
-    __license__,
-    __title__,
-    __url__,
-    __version__,
-    __version_info__,
-)
+# Version information
+from .__version__ import __version__, __author__
 
+# Core functionality
 __all__ = [
     "__version__",
-    "__version_info__",
-    "__title__",
-    "__description__",
     "__author__",
-    "__author_email__",
-    "__license__",
-    "__url__",
 ]

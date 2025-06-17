@@ -430,7 +430,13 @@ class TestTCLGeneration:
         assert "set_property" in tcl_content
         assert mock_donor_info["vendor_id"] in tcl_content
         assert mock_donor_info["device_id"] in tcl_content
-        assert "128_KB" in tcl_content  # BAR size conversion
+        # Check for new BAR size format (separate scale and size)
+        assert (
+            "Bar0_Scale" in tcl_content
+            and "Kilobytes" in tcl_content
+            and "Bar0_Size" in tcl_content
+            and "128" in tcl_content
+        )  # BAR size conversion
 
         assert tcl_file.endswith(".tcl")
 

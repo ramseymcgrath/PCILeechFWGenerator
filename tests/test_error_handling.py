@@ -271,7 +271,7 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_vivado_not_found_handling(self):
         """Test handling when Vivado is not found."""
-        from src.vivado_utils import find_vivado_installation
+        from src.vivado_handling import find_vivado_installation
 
         with (
             patch("shutil.which", return_value=None),

@@ -203,10 +203,10 @@ class ConfigManager:
                         data = json.load(f)
                         profiles.append(
                             {
-                                "name": data.get("name", profile_file.stem),
-                                "description": data.get("description", ""),
-                                "created_at": data.get("created_at", ""),
-                                "last_used": data.get("last_used", ""),
+                                "name": data["name"],
+                                "description": data["description"],
+                                "created_at": data["created_at"],
+                                "last_used": data["last_used"],
                                 "filename": profile_file.name,
                             }
                         )
@@ -221,7 +221,7 @@ class ConfigManager:
                     invalid_files.append(f"{profile_file.name} (unknown error)")
 
             # Sort by last used (most recent first)
-            profiles.sort(key=lambda x: x.get("last_used", ""), reverse=True)
+            profiles.sort(key=lambda x: x["last_used"], reverse=True)
 
             # If we found invalid files, return a warning
             if invalid_files:
@@ -571,7 +571,9 @@ class ConfigManager:
                     "device_type": config.device_type,
                     "features": config.feature_summary,
                     "advanced": "Yes" if config.is_advanced else "No",
-                    "last_used": config.last_used or "Never",
+                    "last_used": (
+                        config.last_used if config.last_used is not None else ""
+                    ),
                 }
             return {"error": "Failed to load profile", "details": "Unknown error"}
         except Exception as e:

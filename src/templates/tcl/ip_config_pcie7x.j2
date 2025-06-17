@@ -15,26 +15,43 @@ puts "Creating PCIe IP core for device {{ device.vendor_id }}:{{ device.device_i
 puts "FPGA Part: {{ board.fpga_part }}"
 puts "Board: {{ board.name }}"
 
-# Create PCIe 7-series IP core
-create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_0
+# Create PCIe 7-series IP core with specific version for reproducible builds
+create_ip -name pcie_7x -vendor xilinx.com -library ip -version 3.3 -module_name pcie_7x_0
 
-# Configure PCIe IP core with device-specific settings
-set_property -dict [list \
-    CONFIG.Bar0_Scale {Kilobytes} \
-    CONFIG.Bar0_Size {128_KB} \
-    CONFIG.Device_ID {0x{{ device.device_id }}} \
-    CONFIG.Vendor_ID {0x{{ device.vendor_id }}} \
-    CONFIG.Subsystem_Vendor_ID {0x{{ device.vendor_id }}} \
-    CONFIG.Subsystem_ID {0x0000} \
-    CONFIG.Revision_ID {0x{{ device.revision_id }}} \
-    CONFIG.Link_Speed {2.5_GT/s} \
-    CONFIG.Max_Link_Width {X1} \
-    CONFIG.Maximum_Link_Width {X1} \
-    CONFIG.Enable_Slot_Clock_Configuration {false} \
-    CONFIG.Legacy_Interrupt {NONE} \
-    CONFIG.MSI_Enabled {false} \
-    CONFIG.MSI_64b_Address_Capable {false} \
-    CONFIG.MSIX_Enabled {true} \
-] [get_ips pcie_7x_0]
+# Helper procedure to safely set IP properties
+proc safe_set {ip key val} {
+    if {[lsearch -exact [list_property $ip] $key] < 0} {
+        error "IP $ip has no parameter $key"
+    }
+    set_property $key $val $ip
+}
+
+# Get IP instance once for cleaner code
+set ip [get_ips pcie_7x_0]
+
+# Configure PCIe IP core with device-specific settings using safe_set
+# BAR-0 configuration: use plain integer for size, not string with units
+safe_set $ip CONFIG.Bar0_Scale {Kilobytes}
+safe_set $ip CONFIG.Bar0_Size {128}
+safe_set $ip CONFIG.Device_ID {0x{{ device.device_id }}}
+safe_set $ip CONFIG.Vendor_ID {0x{{ device.vendor_id }}}
+safe_set $ip CONFIG.Subsystem_Vendor_ID {0x{{ device.vendor_id }}}
+safe_set $ip CONFIG.Subsystem_ID {0x0000}
+safe_set $ip CONFIG.Revision_ID {0x{{ device.revision_id }}}
+# Link speed must use exact enum values with underscores
+safe_set $ip CONFIG.Link_Speed {2.5_GT/s}
+safe_set $ip CONFIG.Link_Width {X1}
+safe_set $ip CONFIG.Maximum_Link_Width {X1}
+safe_set $ip CONFIG.Support_Slot_Clk_Config {false}
+safe_set $ip CONFIG.Legacy_Interrupt {NONE}
+# MSI/MSIX configuration: disable MSI, enable MSIX
+safe_set $ip CONFIG.MSI_Enabled {false}
+safe_set $ip CONFIG.MSIX_Enabled {true}
+
+# Generate IP targets for complete synthesis flow
+generate_target {instantiation_template synthesis implementation} $ip
+
+# Export IP user files for out-of-context runs
+export_ip_user_files -of_objects $ip -force
 
 puts "PCIe IP core configuration completed"

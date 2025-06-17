@@ -12,13 +12,17 @@ from pathlib import Path
 
 import pytest
 
-from src.advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator, ErrorType
-from src.advanced_sv_perf import DeviceType as PerfDeviceType
-from src.advanced_sv_perf import (
+from src.templating.advanced_sv_error import (
+    ErrorHandlingConfig,
+    ErrorHandlingGenerator,
+    ErrorType,
+)
+from src.templating.advanced_sv_perf import DeviceType as PerfDeviceType
+from src.templating.advanced_sv_perf import (
     PerformanceCounterConfig,
     PerformanceCounterGenerator,
 )
-from src.advanced_sv_power import (
+from src.templating.advanced_sv_power import (
     PowerManagementConfig,
     PowerManagementGenerator,
     PowerState,

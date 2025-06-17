@@ -1,0 +1,33 @@
+{#
+AXI PCIe Configuration Template for Artix-7 35T
+
+This template generates configuration for Artix-7 35T parts that use
+custom SystemVerilog modules instead of Xilinx IP cores.
+
+Context variables expected:
+- device: Device information (vendor_id, device_id, revision_id)
+- board: Board information (name, fpga_part)
+#}
+{{ header }}
+
+puts "Configuring custom PCIe implementation for Artix-7 35T..."
+puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Rev: {{ device.revision_id }})"
+puts "FPGA Part: {{ board.fpga_part }}"
+
+# Artix-7 35T PCIe Configuration
+# This part uses custom SystemVerilog modules instead of Xilinx IP cores
+
+# Set device-specific parameters for custom PCIe implementation
+set DEVICE_ID 0x{{ device.device_id }}
+set VENDOR_ID 0x{{ device.vendor_id }}
+set REVISION_ID 0x{{ device.revision_id }}
+set SUBSYSTEM_VENDOR_ID 0x{{ device.vendor_id }}
+set SUBSYSTEM_ID 0x0000
+
+puts "Using custom PCIe implementation for Artix-7 35T"
+puts "Device ID: $DEVICE_ID"
+puts "Vendor ID: $VENDOR_ID"
+puts "Revision ID: $REVISION_ID"
+
+# No IP cores required - PCIe functionality implemented in custom SystemVerilog modules
+puts "Custom PCIe configuration completed"

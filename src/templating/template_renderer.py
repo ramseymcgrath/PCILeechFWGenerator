@@ -1,0 +1,284 @@
+"""
+Jinja2-based template rendering system for PCILeech firmware generation.
+
+This module provides a centralized template rendering system to replace
+the string formatting and concatenation currently used in build.py.
+"""
+
+import logging
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
+try:
+    from jinja2 import Environment, FileSystemLoader, Template, TemplateError
+except ImportError:
+    raise ImportError(
+        "Jinja2 is required for template rendering. Install with: pip install jinja2"
+    )
+
+logger = logging.getLogger(__name__)
+
+
+class TemplateRenderer:
+    """
+    Jinja2-based template renderer for TCL scripts and other text files.
+
+    This class provides a clean interface for rendering templates with
+    proper error handling and context management.
+    """
+
+    def __init__(self, template_dir: Optional[Union[str, Path]] = None):
+        """
+        Initialize the template renderer.
+
+        Args:
+            template_dir: Directory containing template files. If None,
+                         defaults to src/templates/
+        """
+        if template_dir is None:
+            # Default to templates directory relative to this file
+            template_dir = Path(__file__).parent / "templates"
+
+        self.template_dir = Path(template_dir)
+        self.template_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize Jinja2 environment
+        self.env = Environment(
+            loader=FileSystemLoader(str(self.template_dir)),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True,
+        )
+
+        # Add custom filters if needed
+        self._setup_custom_filters()
+
+        # Add global functions
+        self._setup_global_functions()
+
+        logger.debug(
+            f"Template renderer initialized with directory: {self.template_dir}"
+        )
+
+    def _setup_custom_filters(self):
+        """Setup custom Jinja2 filters for TCL and SystemVerilog generation."""
+
+        def hex_format(value: int, width: int = 4) -> str:
+            """Format integer as hex string with specified width."""
+            return f"{value:0{width}x}"
+
+        def tcl_string_escape(value: str) -> str:
+            """Escape string for safe use in TCL."""
+            # Basic TCL string escaping
+            return value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
+
+        def tcl_list_format(items: list) -> str:
+            """Format Python list as TCL list."""
+            escaped_items = [tcl_string_escape(str(item)) for item in items]
+            return " ".join(f'"{item}"' for item in escaped_items)
+
+        # SystemVerilog-specific filters
+        def sv_hex(value, width: int = 32) -> str:
+            """Format value as SystemVerilog hex literal with proper width."""
+            if isinstance(value, str):
+                # Handle hex strings like "0x1234"
+                if value.startswith("0x") or value.startswith("0X"):
+                    int_value = int(value, 16)
+                else:
+                    int_value = (
+                        int(value, 16)
+                        if all(c in "0123456789abcdefABCDEF" for c in value)
+                        else int(value, 16)
+                    )
+            else:
+                int_value = int(value)
+
+            hex_digits = (width + 3) // 4  # Round up to nearest hex digit
+            return f"{width}'h{int_value:0{hex_digits}X}"
+
+        def sv_width(msb: int, lsb: int = 0) -> str:
+            """Generate SystemVerilog bit width specification."""
+            if msb == lsb:
+                return ""
+            return f"[{msb}:{lsb}]"
+
+        def sv_param(name: str, value, width: Optional[int] = None) -> str:
+            """Format SystemVerilog parameter declaration."""
+            if width:
+                return f"parameter {name} = {sv_hex(value, width)}"
+            return f"parameter {name} = {value}"
+
+        def sv_signal(name: str, width: Optional[int] = None, initial=None) -> str:
+            """Format SystemVerilog signal declaration."""
+            width_str = f"[{width-1}:0] " if width and width > 1 else ""
+            init_str = f" = {initial}" if initial is not None else ""
+            return f"logic {width_str}{name}{init_str};"
+
+        def sv_identifier(name: str) -> str:
+            """Validate and return SystemVerilog identifier."""
+            import re
+
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
+                raise ValueError(f"Invalid SystemVerilog identifier: {name}")
+            return name
+
+        def sv_comment(text: str, style: str = "//") -> str:
+            """Format SystemVerilog comment."""
+            if style == "//":
+                return f"// {text}"
+            elif style == "/*":
+                return f"/* {text} */"
+            else:
+                return f"// {text}"
+
+        # Register filters
+        self.env.filters["hex"] = hex_format
+        self.env.filters["tcl_escape"] = tcl_string_escape
+        self.env.filters["tcl_list"] = tcl_list_format
+
+        # SystemVerilog filters
+        self.env.filters["sv_hex"] = sv_hex
+        self.env.filters["sv_width"] = sv_width
+        self.env.filters["sv_param"] = sv_param
+        self.env.filters["sv_signal"] = sv_signal
+        self.env.filters["sv_identifier"] = sv_identifier
+        self.env.filters["sv_comment"] = sv_comment
+
+    def _setup_global_functions(self):
+        """Setup global functions available in templates."""
+        try:
+            from ..string_utils import generate_tcl_header_comment
+        except ImportError:
+            # Fallback for when running as script (not package)
+            from string_utils import generate_tcl_header_comment
+
+        # Add global functions to template environment
+        self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
+
+    def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
+        """
+        Render a template file with the given context.
+
+        Args:
+            template_name: Name of the template file (relative to template_dir)
+            context: Dictionary of variables to pass to the template
+
+        Returns:
+            Rendered template content as string
+
+        Raises:
+            TemplateRenderError: If template rendering fails
+        """
+        try:
+            template = self.env.get_template(template_name)
+            rendered = template.render(**context)
+            logger.debug(f"Successfully rendered template: {template_name}")
+            return rendered
+
+        except TemplateError as e:
+            error_msg = f"Failed to render template '{template_name}': {e}"
+            logger.error(error_msg)
+            raise TemplateRenderError(error_msg) from e
+        except Exception as e:
+            error_msg = f"Unexpected error rendering template '{template_name}': {e}"
+            logger.error(error_msg)
+            raise TemplateRenderError(error_msg) from e
+
+    def render_string(self, template_string: str, context: Dict[str, Any]) -> str:
+        """
+        Render a template from a string with the given context.
+
+        Args:
+            template_string: Template content as string
+            context: Dictionary of variables to pass to the template
+
+        Returns:
+            Rendered template content as string
+
+        Raises:
+            TemplateRenderError: If template rendering fails
+        """
+        try:
+            template = self.env.from_string(template_string)
+            rendered = template.render(**context)
+            logger.debug("Successfully rendered string template")
+            return rendered
+
+        except TemplateError as e:
+            error_msg = f"Failed to render string template: {e}"
+            logger.error(error_msg)
+            raise TemplateRenderError(error_msg) from e
+        except Exception as e:
+            error_msg = f"Unexpected error rendering string template: {e}"
+            logger.error(error_msg)
+            raise TemplateRenderError(error_msg) from e
+
+    def template_exists(self, template_name: str) -> bool:
+        """
+        Check if a template file exists.
+
+        Args:
+            template_name: Name of the template file
+
+        Returns:
+            True if template exists, False otherwise
+        """
+        template_path = self.template_dir / template_name
+        return template_path.exists()
+
+    def list_templates(self, pattern: str = "*.j2") -> list[str]:
+        """
+        List available template files.
+
+        Args:
+            pattern: Glob pattern to match template files
+
+        Returns:
+            List of template file names
+        """
+        templates = []
+        for template_path in self.template_dir.rglob(pattern):
+            # Get relative path from template directory
+            rel_path = template_path.relative_to(self.template_dir)
+            templates.append(str(rel_path))
+
+        return sorted(templates)
+
+    def get_template_path(self, template_name: str) -> Path:
+        """
+        Get the full path to a template file.
+
+        Args:
+            template_name: Name of the template file
+
+        Returns:
+            Full path to the template file
+        """
+        return self.template_dir / template_name
+
+
+class TemplateRenderError(Exception):
+    """Exception raised when template rendering fails."""
+
+    pass
+
+
+# Convenience function for quick template rendering
+def render_tcl_template(
+    template_name: str,
+    context: Dict[str, Any],
+    template_dir: Optional[Union[str, Path]] = None,
+) -> str:
+    """
+    Convenience function to render a TCL template.
+
+    Args:
+        template_name: Name of the template file
+        context: Template context variables
+        template_dir: Template directory (optional)
+
+    Returns:
+        Rendered template content
+    """
+    renderer = TemplateRenderer(template_dir)
+    return renderer.render_template(template_name, context)
