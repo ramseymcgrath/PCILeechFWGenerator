@@ -62,12 +62,9 @@ class DeviceManager:
             raise RuntimeError(f"Failed to scan PCIe devices: {e}")
 
     async def _get_raw_devices(self) -> List[Dict[str, str]]:
-        """Get raw device list using existing generate.py functionality."""
-        # Import the existing function
-        import sys
-
-        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-        from generate import list_pci_devices
+        """Get raw device list using existing CLI functionality."""
+        # Import the existing function from CLI module
+        from src.cli.cli import list_pci_devices
 
         # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
@@ -75,7 +72,7 @@ class DeviceManager:
 
     async def _enhance_device_info(self, raw_device: Dict[str, str]) -> PCIDevice:
         """Enhance raw device information with additional details."""
-        bdf = raw_device["bd"]
+        bdf = raw_device["bdf"]
         vendor_id = raw_device["ven"]
         device_id = raw_device["dev"]
         device_class = raw_device["class"]
@@ -163,10 +160,7 @@ class DeviceManager:
     async def _get_device_driver(self, bdf: str) -> Optional[str]:
         """Get current driver for device."""
         try:
-            import sys
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import get_current_driver
+            from src.cli.vfio import get_current_driver
 
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, get_current_driver, bdf)
@@ -176,10 +170,7 @@ class DeviceManager:
     async def _get_iommu_group(self, bdf: str) -> str:
         """Get IOMMU group for device."""
         try:
-            import sys
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import get_iommu_group
+            from src.cli.vfio import get_iommu_group
 
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, get_iommu_group, bdf)

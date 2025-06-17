@@ -465,8 +465,8 @@ class PCILeechTUI(App):
     build_progress: reactive[Optional[BuildProgress]] = reactive(None)
 
     def __init__(self):
-        # For test compatibility - initialize attributes before super().__init__()
-        # to avoid ScreenStackError in tests
+        # First call super().__init__() to initialize Textual app properly
+        super().__init__()
 
         # Core services
         self.device_manager = DeviceManager()
@@ -478,11 +478,8 @@ class PCILeechTUI(App):
         self._devices = []
         self._system_status = {}
 
-        # Initialize current_config from config manager
+        # Initialize current_config from config manager after super().__init__()
         self.current_config = self.config_manager.get_current_config()
-
-        # Now call super().__init__()
-        super().__init__()
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
