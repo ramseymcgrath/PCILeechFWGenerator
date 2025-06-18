@@ -1,26 +1,79 @@
 #!/usr/bin/env python3
 """
-VFIO Diagnostics and Remediation System
+VFIO‑Assist – smarter VFIO diagnostics & auto‑fixer
 
-Provides automated checks for VFIO prerequisites and guided remediation
-for common VFIO configuration issues.
+Usage (examples)
+----------------
+```bash
+# Full diagnostic with coloured TTY output
+sudo ./vfio_assist.py diagnose --device 0000:01:00.0
+
+# Attempt automatic remediation non‑interactively
+sudo ./vfio_assist.py fix --device 0000:01:00.0 --yes
+
+# Generate a remediation script only
+./vfio_assist.py script > vfio_fix.sh && chmod +x vfio_fix.sh
+
+# Machine‑readable JSON for a GitHub Action step
+./vfio_assist.py json --device 0000:01:00.0
+```
 """
+from __future__ import annotations
 
+import argparse
+import json
 import logging
 import os
+import platform
 import re
+import shutil
 import subprocess
+import sys
+import textwrap
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
-logger = logging.getLogger(__name__)
+# ──────────────────────────────────────────────────────────────────────────────
+# Pretty terminal helpers
+# ──────────────────────────────────────────────────────────────────────────────
+try:
+    from colorama import Fore, Style, init as colorama_init  # type: ignore
+
+    colorama_init()
+
+    def colour(txt: str, col: str) -> str:  # noqa: D401 – short lambda‑style fn
+        return f"{col}{txt}{Style.RESET_ALL}"
+
+except ImportError:  # colour optional – silently degrade
+
+    class Fore:  # type: ignore
+        RED = ""
+        GREEN = ""
+        YELLOW = ""
+        CYAN = ""
+        MAGENTA = ""
+        RESET = ""
+
+    Style = Fore  # type: ignore – dummy placeholder
+
+    def colour(txt: str, col: str) -> str:  # noqa: D401
+        return txt
 
 
-class VFIOStatus(Enum):
-    """VFIO component status levels."""
+# ──────────────────────────────────────────────────────────────────────────────
+# Logging setup – verbose by default, override with --quiet
+# ──────────────────────────────────────────────────────────────────────────────
+LOG_FORMAT = "%(levelname)s: %(message)s"
+logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+log = logging.getLogger("vfio-assist")
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Data structures
+# ──────────────────────────────────────────────────────────────────────────────
+class Status(Enum):
     OK = "ok"
     WARNING = "warning"
     ERROR = "error"
@@ -28,598 +81,453 @@ class VFIOStatus(Enum):
 
 
 @dataclass
-class VFIOCheck:
-    """Represents a single VFIO diagnostic check."""
-
+class Check:
     name: str
-    status: VFIOStatus
+    status: Status
     message: str
     remediation: Optional[str] = None
     commands: Optional[List[str]] = None
 
 
 @dataclass
-class VFIODiagnosticResult:
-    """Complete VFIO diagnostic results."""
-
-    overall_status: VFIOStatus
-    checks: List[VFIOCheck]
+class Report:
+    overall: Status
+    checks: List[Check]
     device_bdf: Optional[str] = None
     can_proceed: bool = False
-    critical_issues: Optional[List[str]] = None
 
-
-class VFIODiagnostics:
-    """VFIO diagnostic and remediation system."""
-
-    def __init__(self, device_bdf: Optional[str] = None):
-        self.device_bdf = device_bdf
-        self.checks = []
-
-    def run_full_diagnostic(self) -> VFIODiagnosticResult:
-        """Run complete VFIO diagnostic suite."""
-        logger.info("Running comprehensive VFIO diagnostic...")
-
-        self.checks = []
-
-        # Core system checks
-        self._check_linux_platform()
-        self._check_iommu_support()
-        self._check_iommu_enabled()
-        self._check_vfio_modules()
-        self._check_vfio_drivers()
-
-        # Device-specific checks if BDF provided
-        if self.device_bdf:
-            self._check_device_exists()
-            self._check_device_iommu_group()
-            self._check_device_driver_status()
-            self._check_vfio_device_availability()
-
-        # Determine overall status
-        overall_status = self._determine_overall_status()
-        critical_issues = [
-            check.message for check in self.checks if check.status == VFIOStatus.ERROR
-        ]
-        can_proceed = overall_status in [VFIOStatus.OK, VFIOStatus.WARNING]
-
-        return VFIODiagnosticResult(
-            overall_status=overall_status,
-            checks=self.checks,
-            device_bdf=self.device_bdf,
-            can_proceed=can_proceed,
-            critical_issues=critical_issues,
-        )
-
-    def _check_linux_platform(self) -> None:
-        """Check if running on Linux platform."""
-        import platform
-
-        if platform.system().lower() == "linux":
-            self.checks.append(
-                VFIOCheck(
-                    name="Linux Platform",
-                    status=VFIOStatus.OK,
-                    message="Running on Linux platform",
-                )
-            )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="Linux Platform",
-                    status=VFIOStatus.ERROR,
-                    message=f"VFIO requires Linux, currently on {platform.system()}",
-                    remediation="Run this tool on a Linux system with VFIO support",
-                )
-            )
-
-    def _check_iommu_support(self) -> None:
-        """Check if IOMMU is supported by hardware."""
-        try:
-            # Check CPU flags for IOMMU support
-            with open("/proc/cpuinfo", "r") as f:
-                cpuinfo = f.read()
-
-            intel_iommu = "vmx" in cpuinfo and "ept" in cpuinfo
-            amd_iommu = "svm" in cpuinfo and "npt" in cpuinfo
-
-            if intel_iommu or amd_iommu:
-                cpu_type = "Intel VT-d" if intel_iommu else "AMD-Vi"
-                self.checks.append(
-                    VFIOCheck(
-                        name="IOMMU Hardware Support",
-                        status=VFIOStatus.OK,
-                        message=f"IOMMU supported by hardware ({cpu_type})",
-                    )
-                )
-            else:
-                self.checks.append(
-                    VFIOCheck(
-                        name="IOMMU Hardware Support",
-                        status=VFIOStatus.WARNING,
-                        message="Cannot detect IOMMU support in CPU flags",
-                        remediation="Verify IOMMU is enabled in BIOS/UEFI settings",
-                    )
-                )
-        except Exception as e:
-            self.checks.append(
-                VFIOCheck(
-                    name="IOMMU Hardware Support",
-                    status=VFIOStatus.WARNING,
-                    message=f"Could not check IOMMU support: {e}",
-                    remediation="Manually verify IOMMU is enabled in BIOS/UEFI",
-                )
-            )
-
-    def _check_iommu_enabled(self) -> None:
-        """Check if IOMMU is enabled in kernel."""
-        try:
-            # Check kernel command line
-            with open("/proc/cmdline", "r") as f:
-                cmdline = f.read().strip()
-
-            intel_enabled = "intel_iommu=on" in cmdline
-            amd_enabled = "amd_iommu=on" in cmdline or "iommu=pt" in cmdline
-
-            if intel_enabled or amd_enabled:
-                self.checks.append(
-                    VFIOCheck(
-                        name="IOMMU Kernel Parameter",
-                        status=VFIOStatus.OK,
-                        message="IOMMU enabled in kernel parameters",
-                    )
-                )
-            else:
-                self.checks.append(
-                    VFIOCheck(
-                        name="IOMMU Kernel Parameter",
-                        status=VFIOStatus.ERROR,
-                        message="IOMMU not enabled in kernel parameters",
-                        remediation="Add IOMMU parameters to kernel command line",
-                        commands=[
-                            "sudo sed -i 's/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"intel_iommu=on iommu=pt /' /etc/default/grub",
-                            "sudo update-grub",
-                            "reboot",
-                        ],
-                    )
-                )
-
-            # Check dmesg for IOMMU initialization
-            try:
-                result = subprocess.run(
-                    ["dmesg"], capture_output=True, text=True, timeout=10
-                )
-                dmesg_output = result.stdout
-
-                if any(
-                    pattern in dmesg_output
-                    for pattern in ["IOMMU enabled", "Intel-IOMMU", "AMD-Vi", "DMAR"]
-                ):
-                    self.checks.append(
-                        VFIOCheck(
-                            name="IOMMU Runtime Status",
-                            status=VFIOStatus.OK,
-                            message="IOMMU detected as active in kernel logs",
-                        )
-                    )
-                else:
-                    self.checks.append(
-                        VFIOCheck(
-                            name="IOMMU Runtime Status",
-                            status=VFIOStatus.WARNING,
-                            message="IOMMU not detected in kernel logs",
-                            remediation="Check BIOS settings and kernel parameters",
-                        )
-                    )
-            except Exception:
-                self.checks.append(
-                    VFIOCheck(
-                        name="IOMMU Runtime Status",
-                        status=VFIOStatus.WARNING,
-                        message="Could not check IOMMU status in kernel logs",
-                    )
-                )
-
-        except Exception as e:
-            self.checks.append(
-                VFIOCheck(
-                    name="IOMMU Kernel Parameter",
-                    status=VFIOStatus.ERROR,
-                    message=f"Could not check kernel parameters: {e}",
-                )
-            )
-
-    def _check_vfio_modules(self) -> None:
-        """Check if VFIO kernel modules are loaded."""
-        required_modules = ["vfio", "vfio_pci", "vfio_iommu_type1"]
-        loaded_modules = []
-        missing_modules = []
-
-        for module in required_modules:
-            module_path = f"/sys/module/{module}"
-            if os.path.exists(module_path):
-                loaded_modules.append(module)
-            else:
-                missing_modules.append(module)
-
-        if not missing_modules:
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO Kernel Modules",
-                    status=VFIOStatus.OK,
-                    message=f"All VFIO modules loaded: {', '.join(loaded_modules)}",
-                )
-            )
-        elif loaded_modules:
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO Kernel Modules",
-                    status=VFIOStatus.WARNING,
-                    message=f"Some VFIO modules missing: {', '.join(missing_modules)}",
-                    remediation="Load missing VFIO modules",
-                    commands=[f"sudo modprobe {module}" for module in missing_modules],
-                )
-            )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO Kernel Modules",
-                    status=VFIOStatus.ERROR,
-                    message="No VFIO modules loaded",
-                    remediation="Load VFIO kernel modules",
-                    commands=[
-                        "sudo modprobe vfio",
-                        "sudo modprobe vfio-pci",
-                        "sudo modprobe vfio_iommu_type1",
-                    ],
-                )
-            )
-
-    def _check_vfio_drivers(self) -> None:
-        """Check if VFIO drivers are available."""
-        vfio_pci_path = "/sys/bus/pci/drivers/vfio-pci"
-
-        if os.path.exists(vfio_pci_path):
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO-PCI Driver",
-                    status=VFIOStatus.OK,
-                    message="vfio-pci driver available",
-                )
-            )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO-PCI Driver",
-                    status=VFIOStatus.ERROR,
-                    message="vfio-pci driver not available",
-                    remediation="Ensure VFIO is compiled into kernel or load vfio-pci module",
-                    commands=["sudo modprobe vfio-pci"],
-                )
-            )
-
-    def _check_device_exists(self) -> None:
-        """Check if the target device exists."""
-        if not self.device_bdf:
-            return
-
-        device_path = f"/sys/bus/pci/devices/{self.device_bdf}"
-
-        if os.path.exists(device_path):
-            # Get device info
-            try:
-                with open(f"{device_path}/vendor", "r") as f:
-                    vendor = f.read().strip()
-                with open(f"{device_path}/device", "r") as f:
-                    device = f.read().strip()
-
-                self.checks.append(
-                    VFIOCheck(
-                        name="Target Device",
-                        status=VFIOStatus.OK,
-                        message=f"Device {self.device_bdf} found (vendor:{vendor} device:{device})",
-                    )
-                )
-            except Exception as e:
-                self.checks.append(
-                    VFIOCheck(
-                        name="Target Device",
-                        status=VFIOStatus.WARNING,
-                        message=f"Device {self.device_bdf} found but could not read details: {e}",
-                    )
-                )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="Target Device",
-                    status=VFIOStatus.ERROR,
-                    message=f"Device {self.device_bdf} not found",
-                    remediation="Verify device BDF is correct using 'lspci'",
-                )
-            )
-
-    def _check_device_iommu_group(self) -> None:
-        """Check if device has IOMMU group."""
-        if not self.device_bdf:
-            return
-
-        iommu_group_path = f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group"
-
-        if os.path.exists(iommu_group_path):
-            try:
-                group = os.path.basename(os.readlink(iommu_group_path))
-                self.checks.append(
-                    VFIOCheck(
-                        name="Device IOMMU Group",
-                        status=VFIOStatus.OK,
-                        message=f"Device {self.device_bdf} in IOMMU group {group}",
-                    )
-                )
-            except Exception as e:
-                self.checks.append(
-                    VFIOCheck(
-                        name="Device IOMMU Group",
-                        status=VFIOStatus.ERROR,
-                        message=f"Could not read IOMMU group for {self.device_bdf}: {e}",
-                    )
-                )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="Device IOMMU Group",
-                    status=VFIOStatus.ERROR,
-                    message=f"No IOMMU group for device {self.device_bdf}",
-                    remediation="Ensure IOMMU is enabled and device supports IOMMU",
-                )
-            )
-
-    def _check_device_driver_status(self) -> None:
-        """Check current driver binding for device."""
-        if not self.device_bdf:
-            return
-
-        driver_path = f"/sys/bus/pci/devices/{self.device_bdf}/driver"
-
-        if os.path.exists(driver_path):
-            try:
-                current_driver = os.path.basename(os.readlink(driver_path))
-                if current_driver == "vfio-pci":
-                    self.checks.append(
-                        VFIOCheck(
-                            name="Device Driver Binding",
-                            status=VFIOStatus.OK,
-                            message=f"Device {self.device_bdf} already bound to vfio-pci",
-                        )
-                    )
-                else:
-                    self.checks.append(
-                        VFIOCheck(
-                            name="Device Driver Binding",
-                            status=VFIOStatus.WARNING,
-                            message=f"Device {self.device_bdf} bound to {current_driver}, needs rebinding to vfio-pci",
-                            remediation="Device will be automatically rebound during operation",
-                        )
-                    )
-            except Exception as e:
-                self.checks.append(
-                    VFIOCheck(
-                        name="Device Driver Binding",
-                        status=VFIOStatus.WARNING,
-                        message=f"Could not determine driver for {self.device_bdf}: {e}",
-                    )
-                )
-        else:
-            self.checks.append(
-                VFIOCheck(
-                    name="Device Driver Binding",
-                    status=VFIOStatus.WARNING,
-                    message=f"Device {self.device_bdf} not bound to any driver",
-                )
-            )
-
-    def _check_vfio_device_availability(self) -> None:
-        """Check if VFIO device file is available."""
-        if not self.device_bdf:
-            return
-
-        try:
-            iommu_group_path = f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group"
-            if os.path.exists(iommu_group_path):
-                group = os.path.basename(os.readlink(iommu_group_path))
-                vfio_device = f"/dev/vfio/{group}"
-
-                if os.path.exists(vfio_device):
-                    self.checks.append(
-                        VFIOCheck(
-                            name="VFIO Device File",
-                            status=VFIOStatus.OK,
-                            message=f"VFIO device {vfio_device} available",
-                        )
-                    )
-                else:
-                    self.checks.append(
-                        VFIOCheck(
-                            name="VFIO Device File",
-                            status=VFIOStatus.WARNING,
-                            message=f"VFIO device {vfio_device} not found",
-                            remediation="Device will be bound to vfio-pci during operation",
-                        )
-                    )
-        except Exception as e:
-            self.checks.append(
-                VFIOCheck(
-                    name="VFIO Device File",
-                    status=VFIOStatus.WARNING,
-                    message=f"Could not check VFIO device availability: {e}",
-                )
-            )
-
-    def _determine_overall_status(self) -> VFIOStatus:
-        """Determine overall VFIO status from individual checks."""
-        if any(check.status == VFIOStatus.ERROR for check in self.checks):
-            return VFIOStatus.ERROR
-        elif any(check.status == VFIOStatus.WARNING for check in self.checks):
-            return VFIOStatus.WARNING
-        else:
-            return VFIOStatus.OK
-
-    def print_diagnostic_report(self, result: VFIODiagnosticResult) -> None:
-        """Print formatted diagnostic report."""
-        print("\n" + "=" * 60)
-        print("VFIO DIAGNOSTIC REPORT")
-        print("=" * 60)
-
-        # Overall status
-        status_symbols = {
-            VFIOStatus.OK: "✅",
-            VFIOStatus.WARNING: "⚠️",
-            VFIOStatus.ERROR: "❌",
-            VFIOStatus.MISSING: "❓",
+    # Serialize for JSON output / CI integration
+    def as_dict(self) -> dict:
+        return {
+            "overall": self.overall.value,
+            "device_bdf": self.device_bdf,
+            "can_proceed": self.can_proceed,
+            "checks": [
+                {
+                    "name": c.name,
+                    "status": c.status.value,
+                    "message": c.message,
+                    "remediation": c.remediation,
+                    "commands": c.commands,
+                }
+                for c in self.checks
+            ],
         }
 
-        symbol = status_symbols.get(result.overall_status, "❓")
-        print(f"\nOverall Status: {symbol} {result.overall_status.value.upper()}")
 
-        if result.device_bdf:
-            print(f"Target Device: {result.device_bdf}")
+# ──────────────────────────────────────────────────────────────────────────────
+# Core diagnostic engine
+# ──────────────────────────────────────────────────────────────────────────────
+class Diagnostics:
+    def __init__(self, device_bdf: Optional[str] = None):
+        self.device_bdf = device_bdf
+        self.checks: List[Check] = []
 
-        print(f"Can Proceed: {'Yes' if result.can_proceed else 'No'}")
+    # Public API --------------------------------------------------------------
+    def run(self) -> Report:
+        log.debug("Starting diagnostics…")
+        self.checks.clear()
 
-        # Individual checks
-        print(f"\nDetailed Checks ({len(result.checks)} total):")
-        print("-" * 60)
+        self._check_linux()
+        self._check_iommu_hw()
+        self._check_kernel_params()
+        self._check_modules()
+        self._check_vfio_driver_path()
 
-        for check in result.checks:
-            symbol = status_symbols.get(check.status, "❓")
-            print(f"{symbol} {check.name}: {check.message}")
+        if self.device_bdf:
+            self._device_exists()
+            self._device_iommu_group()
+            self._device_driver_binding()
+            self._device_node()
 
-            if check.remediation:
-                print(f"   💡 Remediation: {check.remediation}")
+        overall = self._overall()
+        can_proceed = overall in (Status.OK, Status.WARNING)
+        return Report(overall, self.checks, self.device_bdf, can_proceed)
 
-            if check.commands:
-                print("   🔧 Commands:")
-                for cmd in check.commands:
-                    print(f"      {cmd}")
-            print()
+    # Private helpers ---------------------------------------------------------
+    @staticmethod
+    def _path_exists(path: str | Path) -> bool:
+        return Path(path).exists()
 
-        # Critical issues summary
-        if result.critical_issues:
-            print("🚨 CRITICAL ISSUES REQUIRING ATTENTION:")
-            print("-" * 60)
-            for issue in result.critical_issues:
-                print(f"❌ {issue}")
-            print()
+    def _append(self, **kw):  # tiny helper
+        self.checks.append(Check(**kw))
 
-        # Next steps
-        print("📋 NEXT STEPS:")
-        print("-" * 60)
-        if result.can_proceed:
-            print("✅ System is ready for VFIO operations")
-            if any(check.status == VFIOStatus.WARNING for check in result.checks):
-                print("⚠️  Some warnings present - monitor for issues")
+    # Individual checks -------------------------------------------------------
+    def _check_linux(self):
+        if platform.system().lower() == "linux":
+            self._append(name="Platform", status=Status.OK, message="Linux detected")
         else:
-            print("❌ System requires configuration before VFIO operations")
-            print("   Please address the critical issues listed above")
-
-        print("=" * 60)
-
-    def get_remediation_script(self, result: VFIODiagnosticResult) -> str:
-        """Generate a shell script to fix identified issues."""
-        script_lines = [
-            "#!/bin/bash",
-            "# VFIO Remediation Script",
-            "# Generated automatically by PCILeech VFIO Diagnostics",
-            "",
-            "set -e  # Exit on any error",
-            "",
-            "echo 'Starting VFIO remediation...'",
-            "",
-        ]
-
-        for check in result.checks:
-            if (
-                check.status in [VFIOStatus.ERROR, VFIOStatus.WARNING]
-                and check.commands
-            ):
-                script_lines.extend(
-                    [f"# Fix: {check.name}", f"echo 'Fixing: {check.name}'"]
-                )
-                script_lines.extend(check.commands)
-                script_lines.append("")
-
-        script_lines.extend(
-            [
-                "echo 'VFIO remediation completed!'",
-                "echo 'Please reboot if kernel parameters were modified.'",
-            ]
-        )
-
-        return "\n".join(script_lines)
-
-
-def run_vfio_diagnostic(
-    device_bdf: Optional[str] = None, interactive: bool = True
-) -> VFIODiagnosticResult:
-    """Run VFIO diagnostic and optionally provide interactive remediation."""
-    diagnostics = VFIODiagnostics(device_bdf)
-    result = diagnostics.run_full_diagnostic()
-
-    # Always print the report
-    diagnostics.print_diagnostic_report(result)
-
-    # Interactive remediation
-    if interactive and not result.can_proceed:
-        print("\n🔧 AUTOMATIC REMEDIATION AVAILABLE")
-        print("-" * 40)
-
-        response = (
-            input("Would you like to generate a remediation script? (y/N): ")
-            .strip()
-            .lower()
-        )
-        if response in ["y", "yes"]:
-            script = diagnostics.get_remediation_script(result)
-            script_path = "vfio_remediation.sh"
-
-            with open(script_path, "w") as f:
-                f.write(script)
-
-            os.chmod(script_path, 0o755)
-
-            print(f"✅ Remediation script saved to: {script_path}")
-            print("📋 To apply fixes, run:")
-            print(f"   sudo ./{script_path}")
-            print("\n⚠️  WARNING: This will modify system configuration!")
-            print("   Review the script before running it.")
-
-            response = (
-                input("\nWould you like to run the remediation script now? (y/N): ")
-                .strip()
-                .lower()
+            self._append(
+                name="Platform",
+                status=Status.ERROR,
+                message=f"Unsupported OS: {platform.system()}",
+                remediation="Run on a Linux system with VFIO support",
             )
-            if response in ["y", "yes"]:
-                try:
-                    subprocess.run(["sudo", f"./{script_path}"], check=True)
-                    print("✅ Remediation script completed successfully!")
-                    print("🔄 Re-running diagnostics...")
 
-                    # Re-run diagnostics
-                    new_result = diagnostics.run_full_diagnostic()
-                    diagnostics.print_diagnostic_report(new_result)
-                    return new_result
-                except subprocess.CalledProcessError as e:
-                    print(f"❌ Remediation script failed: {e}")
-                except KeyboardInterrupt:
-                    print("\n⚠️  Remediation cancelled by user")
+    def _check_iommu_hw(self):
+        try:
+            cpuinfo = Path("/proc/cpuinfo").read_text()
+            intel = "vmx" in cpuinfo and "ept" in cpuinfo
+            amd = "svm" in cpuinfo and "npt" in cpuinfo
+            if intel or amd:
+                self._append(
+                    name="IOMMU HW",
+                    status=Status.OK,
+                    message="VT‑d / AMD‑Vi supported by CPU",
+                )
+            else:
+                self._append(
+                    name="IOMMU HW",
+                    status=Status.WARNING,
+                    message="CPU flags missing VT‑d/AMD‑Vi – maybe disabled in BIOS",
+                    remediation="Enable IOMMU in firmware setup (VT‑d, AMD‑Vi)",
+                )
+        except Exception as e:  # pragma: no cover – unlikely
+            self._append(
+                name="IOMMU HW",
+                status=Status.WARNING,
+                message=f"Could not parse /proc/cpuinfo: {e}",
+            )
 
-    return result
+    def _check_kernel_params(self):
+        try:
+            cmdline = Path("/proc/cmdline").read_text()
+            enabled = any(
+                k in cmdline
+                for k in ("intel_iommu=on", "amd_iommu=on", "iommu=pt", "iommu=on")
+            )
+            if enabled:
+                self._append(
+                    name="Kernel cmdline",
+                    status=Status.OK,
+                    message="IOMMU enabled in cmdline",
+                )
+            else:
+                fix = "Enable intel_iommu=on and/or amd_iommu=on iommu=pt in grub"
+                self._append(
+                    name="Kernel cmdline",
+                    status=Status.ERROR,
+                    message="IOMMU not present in kernel parameters",
+                    remediation=fix,
+                    commands=self._kernel_param_commands(),
+                )
+        except Exception as e:
+            self._append(
+                name="Kernel cmdline",
+                status=Status.ERROR,
+                message=f"Failed to read /proc/cmdline: {e}",
+            )
+
+    @staticmethod
+    def _kernel_param_commands() -> List[str]:
+        cmd: list[str] = []
+        if shutil.which("grubby"):
+            cmd.append(
+                'sudo grubby --update-kernel=ALL --args "intel_iommu=on amd_iommu=on iommu=pt"'
+            )
+        elif Path("/etc/default/grub").exists():
+            # Minimal fallback; user should still review
+            cmd.extend(
+                [
+                    'sudo sed -Ei \'s/GRUB_CMDLINE_LINUX=("[^"]*)/GRUB_CMDLINE_LINUX="\\1 intel_iommu=on amd_iommu=on iommu=pt"/\' /etc/default/grub',
+                    "sudo update-grub",
+                ]
+            )
+        elif Path(
+            "/etc/kernel/cmdline"
+        ).exists():  # systemd‑boot (Fedora Silverblue, etc.)
+            cmd.extend(
+                [
+                    "echo 'intel_iommu=on amd_iommu=on iommu=pt' | sudo tee -a /etc/kernel/cmdline",
+                    "sudo rpm-ostree initramfs --enable",
+                ]
+            )
+        cmd.append("sudo reboot # required for kernel param changes")
+        return cmd
+
+    def _check_modules(self):
+        required = ["vfio", "vfio_pci", "vfio_iommu_type1"]
+        missing = [m for m in required if not self._path_exists(f"/sys/module/{m}")]
+        if not missing:
+            self._append(
+                name="Kernel modules",
+                status=Status.OK,
+                message="All VFIO modules loaded",
+            )
+        else:
+            self._append(
+                name="Kernel modules",
+                status=(
+                    Status.ERROR if len(missing) == len(required) else Status.WARNING
+                ),
+                message="Missing modules: " + ", ".join(missing),
+                remediation="Load required modules with modprobe",
+                commands=[f"sudo modprobe {m.replace('_', '-')}" for m in missing],
+            )
+
+    def _check_vfio_driver_path(self):
+        path = Path("/sys/bus/pci/drivers/vfio-pci")
+        if path.exists():
+            self._append(
+                name="vfio-pci driver", status=Status.OK, message="vfio-pci registered"
+            )
+        else:
+            self._append(
+                name="vfio-pci driver",
+                status=Status.ERROR,
+                message="vfio-pci driver not present in sysfs",
+                remediation="Ensure kernel has VFIO support compiled or module present",
+                commands=["sudo modprobe vfio-pci"],
+            )
+
+    # Device‑specific ---------------------------------------------------------
+    def _device_exists(self):
+        device_path = Path(f"/sys/bus/pci/devices/{self.device_bdf}")
+        if device_path.exists():
+            vendor = (device_path / "vendor").read_text().strip()
+            device = (device_path / "device").read_text().strip()
+            self._append(
+                name="Device",
+                status=Status.OK,
+                message=f"{self.device_bdf} ({vendor}:{device}) present",
+            )
+        else:
+            self._append(
+                name="Device",
+                status=Status.ERROR,
+                message=f"PCI device {self.device_bdf} not found",
+                remediation="Check BDF with lspci ‑D",
+            )
+
+    def _device_iommu_group(self):
+        group_link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        if group_link.exists():
+            group = os.path.basename(os.readlink(group_link))
+            self._append(name="IOMMU group", status=Status.OK, message=f"Group {group}")
+        else:
+            self._append(
+                name="IOMMU group",
+                status=Status.ERROR,
+                message="Device not in an IOMMU group – IOMMU disabled?",
+            )
+
+    def _device_driver_binding(self):
+        if self.device_bdf is None:
+            self._append(
+                name="Driver",
+                status=Status.ERROR,
+                message="Cannot check driver binding without device BDF",
+            )
+            return
+
+        link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/driver")
+        if link.exists():
+            driver = os.path.basename(os.readlink(link))
+            if driver == "vfio-pci":
+                self._append(
+                    name="Driver", status=Status.OK, message="Already bound to vfio-pci"
+                )
+            else:
+                self._append(
+                    name="Driver",
+                    status=Status.WARNING,
+                    message=f"Bound to {driver}",
+                    remediation="Will need to rebind to vfio-pci",
+                    commands=self._bind_commands(self.device_bdf, driver),
+                )
+        else:
+            self._append(
+                name="Driver",
+                status=Status.WARNING,
+                message="No driver bound",
+                commands=self._bind_commands(self.device_bdf, None),
+            )
+
+    @staticmethod
+    def _bind_commands(bdf: str, current: Optional[str]) -> List[str]:
+        cmds: list[str] = [
+            (
+                f"echo '{bdf}' | sudo tee /sys/bus/pci/devices/{bdf}/driver/unbind"
+                if current
+                else ""
+            ),
+            f"echo '{bdf}' | sudo tee /sys/bus/pci/drivers/vfio-pci/bind",
+        ]
+        return [c for c in cmds if c]
+
+    def _device_node(self):
+        link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        if not link.exists():
+            return
+        group = os.path.basename(os.readlink(link))
+        node = Path(f"/dev/vfio/{group}")
+        if node.exists():
+            self._append(
+                name="/dev/vfio node", status=Status.OK, message=node.as_posix()
+            )
+        else:
+            self._append(
+                name="/dev/vfio node",
+                status=Status.WARNING,
+                message=f"{node} missing (will appear after binding)",
+            )
+
+    # Overall --------------------------------------------------------------
+    def _overall(self) -> Status:
+        if any(c.status == Status.ERROR for c in self.checks):
+            return Status.ERROR
+        if any(c.status == Status.WARNING for c in self.checks):
+            return Status.WARNING
+        return Status.OK
 
 
-if __name__ == "__main__":
-    import sys
+# ──────────────────────────────────────────────────────────────────────────────
+# Remediation script generator
+# ──────────────────────────────────────────────────────────────────────────────
+def remediation_script(report: Report) -> str:
+    lines = [
+        "#!/bin/bash",
+        "# Auto‑generated VFIO remediation script – review before running!",
+        "set -euo pipefail",
+        "echo '>> VFIO remediation started'",
+    ]
+    for c in report.checks:
+        if c.commands and c.status in (Status.ERROR, Status.WARNING):
+            lines.append(f"# — {c.name}")
+            lines += c.commands
+            lines.append("")
+    lines += [
+        "echo '>> Remediation completed. Reboot if kernel params changed.'",
+    ]
+    return "\n".join(lines) + "\n"
 
-    device_bdf = sys.argv[1] if len(sys.argv) > 1 else None
-    result = run_vfio_diagnostic(device_bdf)
 
-    # Exit with appropriate code
-    sys.exit(0 if result.can_proceed else 1)
+# ──────────────────────────────────────────────────────────────────────────────
+# Human‑readable renderer
+# ──────────────────────────────────────────────────────────────────────────────
+SYMBOLS = {
+    Status.OK: colour("✔", Fore.GREEN),
+    Status.WARNING: colour("⚠", Fore.YELLOW),
+    Status.ERROR: colour("✖", Fore.RED),
+    Status.MISSING: colour("?", Fore.MAGENTA),
+}
+
+
+def render(report: Report):
+    print(colour("\n=== VFIO DIAGNOSTIC REPORT ===", Fore.CYAN))
+    print(f"Overall: {SYMBOLS[report.overall]} {report.overall.value.upper()}")
+    if report.device_bdf:
+        print(f"Device : {report.device_bdf}")
+    print(f"Proceed: {'yes' if report.can_proceed else 'no'}\n")
+    for ck in report.checks:
+        sym = SYMBOLS.get(ck.status, "?")
+        print(f"{sym} {ck.name}: {ck.message}")
+        if ck.remediation:
+            print("   · " + ck.remediation)
+    print()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CLI entry‑point
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="vfio-assist",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent(
+            """\
+            Smart VFIO diagnostics & remediation tool.
+            --------------------------------------------------------------------
+            Most commands require *root* – either run with sudo or prefix
+            privileged sub‑steps with sudo when prompted.
+            """,
+        ),
+    )
+
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "-d", "--device", dest="device_bdf", help="Target PCIe BDF (0000:01:00.0)"
+    )
+    common.add_argument(
+        "--quiet", action="store_true", help="Silence info logs (warnings still shown)"
+    )
+
+    sub.add_parser(
+        "diagnose", parents=[common], help="Run diagnostics and print report"
+    )
+    fix_p = sub.add_parser(
+        "fix", parents=[common], help="Attempt automatic remediation"
+    )
+    fix_p.add_argument(
+        "-y", "--yes", action="store_true", help="Run fixes without confirmation"
+    )
+
+    sub.add_parser(
+        "script", parents=[common], help="Output a shell script that would fix issues"
+    )
+    sub.add_parser(
+        "json", parents=[common], help="Machine‑readable JSON report (stdout)"
+    )
+
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None):
+    args = parse_args(argv or sys.argv[1:])
+    if args.quiet:
+        logging.getLogger().setLevel(logging.WARNING)
+
+    diag = Diagnostics(args.device_bdf)
+    report = diag.run()
+
+    if args.cmd == "diagnose":
+        render(report)
+        sys.exit(0 if report.can_proceed else 1)
+
+    if args.cmd == "script":
+        script = remediation_script(report)
+        print(script, end="")
+        return
+
+    if args.cmd == "json":
+        print(json.dumps(report.as_dict(), indent=2))
+        return
+
+    if args.cmd == "fix":
+        if report.overall == Status.OK:
+            render(report)
+            print(colour("System already VFIO‑ready – nothing to do", Fore.GREEN))
+            return
+
+        script_text = remediation_script(report)
+        temp = Path("/tmp/vfio_fix.sh")
+        temp.write_text(script_text)
+        temp.chmod(0o755)
+        render(report)
+        print(colour(f"Remediation script written to {temp}", Fore.CYAN))
+
+        if not args.yes:
+            confirm = input("Run remediation script now? [y/N]: ").strip().lower()
+            if confirm not in ("y", "yes"):
+                print("Aborted.")
+                return
+        log.info("Executing remediation script (requires root)…")
+        try:
+            subprocess.run(["sudo", str(temp)], check=True)
+        except subprocess.CalledProcessError as e:
+            log.error("Script failed: %s", e)
+            sys.exit(1)
+
+        # Re‑run diagnostics after remediation
+        print(colour("\nRe‑running diagnostics after remediation…", Fore.CYAN))
+        new_report = Diagnostics(args.device_bdf).run()
+        render(new_report)
+        sys.exit(0 if new_report.can_proceed else 1)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

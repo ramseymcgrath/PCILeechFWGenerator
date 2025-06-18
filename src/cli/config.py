@@ -12,8 +12,8 @@ class BuildConfig:
     bdf: str
     vendor: str
     device: str
-    board: str = "pcileech_75t484_x1"
-    device_type: str = "generic"
+    board: str
+    device_type: str
 
     # Advanced features
     advanced_sv: bool = True

@@ -171,6 +171,8 @@ class PCILeechGenerator:
         )
 
         try:
+            # First Validate VFIO configuration space
+
             # Step 1: Capture device behavior profile
             behavior_profile = self._capture_device_behavior()
 

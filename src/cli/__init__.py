@@ -1,16 +1,16 @@
 """CLI components for PCILeech FW Generator."""
 
-from .cli import create_build_config_from_args, parse_args
+from .cli import get_parser, main
 from .config import BuildConfig
-from .container import require_podman, run_build_container
+from .container import require_podman, run_build
 from .flash import flash_firmware
 from .vfio import VFIOBinder
 
 __all__ = [
-    "parse_args",
-    "create_build_config_from_args",
+    "get_parser",
+    "main",
     "BuildConfig",
-    "run_build_container",
+    "run_build",
     "require_podman",
     "flash_firmware",
     "VFIOBinder",
