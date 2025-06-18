@@ -20,7 +20,7 @@ except ImportError:
     render_tcl_template = None
 
 try:
-    from .tcl_builder import TCLBuilder, TCLScriptBuilder, TCLScriptType, BuildContext
+    from .tcl_builder import BuildContext, TCLBuilder, TCLScriptBuilder, TCLScriptType
 except ImportError:
     TCLBuilder = None
     TCLScriptBuilder = None

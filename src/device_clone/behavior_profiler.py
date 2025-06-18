@@ -28,18 +28,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
 try:
+    from scripts.kernel_utils import setup_debugfs
+
     from .manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
     )
-    from scripts.kernel_utils import setup_debugfs
 except ImportError:
     # Fallback for direct execution
+    from scripts.kernel_utils import setup_debugfs
+
     from .manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
     )
-    from scripts.kernel_utils import setup_debugfs
 
 
 def is_linux() -> bool:

@@ -4,9 +4,10 @@ Test for the refactored ErrorHandlingGenerator using TemplateRenderer.
 """
 
 import pytest
+
 from src.templating.advanced_sv_error import (
-    ErrorHandlingGenerator,
     ErrorHandlingConfig,
+    ErrorHandlingGenerator,
     ErrorType,
 )
 

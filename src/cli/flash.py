@@ -3,27 +3,26 @@
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Tuple
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from utils.shell import Shell
 from utils.logging import get_logger
+from utils.shell import Shell
 
 logger = get_logger(__name__)
 
 
 def list_usb_devices() -> List[Tuple[str, str]]:
     """Return list of USB devices as (vid:pid, description) tuples.
-    
+
     Returns:
         List of tuples containing (vid:pid, description) for each USB device
     """
     shell = Shell()
-    
+
     try:
         output = shell.run("lsusb").splitlines()
     except Exception:
@@ -46,10 +45,10 @@ def list_usb_devices() -> List[Tuple[str, str]]:
 
 def select_usb_device() -> str:
     """Interactive USB device selection for flashing.
-    
+
     Returns:
         Selected device VID:PID string
-        
+
     Raises:
         RuntimeError: If no USB devices found or selection fails
     """
@@ -77,10 +76,10 @@ def select_usb_device() -> str:
 
 def flash_firmware(bin_path: Path) -> None:
     """Flash firmware to FPGA board using usbloader.
-    
+
     Args:
         bin_path: Path to firmware binary file
-        
+
     Raises:
         RuntimeError: If flashing fails or usbloader not found
     """
@@ -102,9 +101,7 @@ def flash_firmware(bin_path: Path) -> None:
         print(f"[*] Flashing firmware using VID:PID {vid_pid}")
 
         subprocess.run(
-            f"usbloader --vidpid {vid_pid} -f {bin_path}", 
-            shell=True, 
-            check=True
+            f"usbloader --vidpid {vid_pid} -f {bin_path}", shell=True, check=True
         )
         logger.info("Firmware flashed successfully")
         print("[✓] Firmware flashed successfully")

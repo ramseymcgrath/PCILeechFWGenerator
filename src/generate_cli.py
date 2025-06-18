@@ -21,15 +21,23 @@ def main():
         if len(sys.argv) > 1 and "--interactive" in sys.argv:
             print("=== PCILeech Firmware Generator - Interactive Mode ===\n")
             print("This will guide you through the firmware generation process.")
-            print("You can also use the full command-line interface with all options.\n")
-            
+            print(
+                "You can also use the full command-line interface with all options.\n"
+            )
+
             # Show help for available options
-            response = input("Would you like to see all available options first? [y/N]: ").strip().lower()
-            if response in ['y', 'yes']:
+            response = (
+                input("Would you like to see all available options first? [y/N]: ")
+                .strip()
+                .lower()
+            )
+            if response in ["y", "yes"]:
                 # Remove --interactive from args and add --help
-                help_args = [arg for arg in sys.argv if arg != "--interactive"] + ["--help"]
+                help_args = [arg for arg in sys.argv if arg != "--interactive"] + [
+                    "--help"
+                ]
                 sys.argv = help_args
-        
+
         # Import the original generate module
         from generate import main as generate_main
 

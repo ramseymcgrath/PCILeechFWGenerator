@@ -18,6 +18,7 @@ from advanced_sv_error import ErrorHandlingConfig
 from advanced_sv_perf import DeviceType, PerformanceCounterConfig
 from advanced_sv_power import PowerManagementConfig
 from manufacturing_variance import DeviceClass
+
 from src.templating.systemverilog_generator import (
     AdvancedSVGenerator,
     DeviceSpecificLogic,

@@ -4,8 +4,8 @@ Wrapper script to properly invoke the build.py module with correct Python path s
 This ensures that relative imports work correctly in the container environment.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Determine if we're in container or local environment

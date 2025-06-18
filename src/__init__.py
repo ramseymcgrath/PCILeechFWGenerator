@@ -7,7 +7,7 @@ for DMA attack research and security testing.
 """
 
 # Version information
-from .__version__ import __version__, __author__
+from .__version__ import __author__, __version__
 
 # Core functionality
 __all__ = [

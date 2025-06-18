@@ -117,7 +117,7 @@ module pcileech_fifo #(
     );
     {% else %}
     // Distributed RAM FIFO for lower latency
-    logic [{{ (fifo_depth | log2) | int }}:0] wr_ptr, rd_ptr;
+    logic [{{ ((fifo_depth | default(512)) | log2) | int }}:0] wr_ptr, rd_ptr;
     logic [DATA_WIDTH-1:0] fifo_mem [0:FIFO_DEPTH-1];
     
     always @(posedge clk) begin
@@ -126,7 +126,7 @@ module pcileech_fifo #(
             rd_ptr <= 0;
         end else begin
             if (fifo_wr_en && !fifo_full) begin
-                fifo_mem[wr_ptr[{{ (fifo_depth | log2) | int - 1 }}:0]] <= fifo_din;
+                fifo_mem[wr_ptr[{{ ((fifo_depth | default(512)) | log2) | int - 1 }}:0]] <= fifo_din;
                 wr_ptr <= wr_ptr + 1;
             end
             if (fifo_rd_en && !fifo_empty) begin
@@ -135,7 +135,7 @@ module pcileech_fifo #(
         end
     end
     
-    assign fifo_dout = fifo_mem[rd_ptr[{{ (fifo_depth | log2) | int - 1 }}:0]];
+    assign fifo_dout = fifo_mem[rd_ptr[{{ ((fifo_depth | default(512)) | log2) | int - 1 }}:0]];
     assign fifo_empty = (wr_ptr == rd_ptr);
     assign fifo_full = ((wr_ptr + 1) == rd_ptr);
     assign fifo_count = wr_ptr - rd_ptr;

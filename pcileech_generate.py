@@ -10,9 +10,9 @@ This is the main entry point that uses PCILeech as the primary build pattern:
 """
 
 import argparse
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Add src directory to path for imports
@@ -69,8 +69,8 @@ def parse_arguments():
     parser.add_argument(
         "--profile-duration",
         type=int,
-        default=30,
-        help="Behavior profiling duration in seconds (default: 30)",
+        default=10,
+        help="Behavior profiling duration in seconds (default: 10)",
     )
 
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
@@ -98,8 +98,8 @@ def run_pcileech_generation(args):
     """Run PCILeech firmware generation."""
     try:
         from device_clone.pcileech_generator import (
-            PCILeechGenerator,
             PCILeechGenerationConfig,
+            PCILeechGenerator,
         )
 
         logger.info(

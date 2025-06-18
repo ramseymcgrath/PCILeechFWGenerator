@@ -13,25 +13,26 @@ Tests cover:
 - CLI integration and command-line options
 """
 
-import pytest
+import subprocess
 import sys
 import tempfile
-import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+from unittest.mock import MagicMock, Mock, call, patch
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
     from build import PCILeechFirmwareBuilder
+    from device_clone.pcileech_generator import (
+        PCILeechGenerationConfig,
+        PCILeechGenerator,
+    )
     from templating.systemverilog_generator import AdvancedSVGenerator
     from templating.tcl_builder import TCLBuilder
-    from device_clone.pcileech_generator import (
-        PCILeechGenerator,
-        PCILeechGenerationConfig,
-    )
 
     BUILD_SYSTEM_AVAILABLE = True
 except ImportError as e:

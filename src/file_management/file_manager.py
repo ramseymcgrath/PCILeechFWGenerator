@@ -20,7 +20,29 @@ logger = logging.getLogger(__name__)
 try:
     from ..string_utils import log_info_safe, log_warning_safe, safe_format
 except ImportError:
-    from ..string_utils import log_info_safe, log_warning_safe, safe_format
+    try:
+        from string_utils import log_info_safe, log_warning_safe, safe_format
+    except ImportError:
+        # Fallback implementations if string_utils not available
+        def log_info_safe(logger, template, **kwargs):
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                logger.info(message)
+            except Exception:
+                logger.info(template)
+
+        def log_warning_safe(logger, template, **kwargs):
+            try:
+                message = template.format(**kwargs) if kwargs else template
+                logger.warning(message)
+            except Exception:
+                logger.warning(template)
+
+        def safe_format(template, **kwargs):
+            try:
+                return template.format(**kwargs)
+            except Exception:
+                return template
 
 
 class FileManager:
@@ -498,6 +520,145 @@ class FileManager:
                     manifest["validation"]["build_script_ready"] = True
             elif file_path.suffix == ".json":
                 manifest["files"]["generated"].append(file_path.name)
+
+        return manifest
+
+    def copy_pcileech_sources(self, board: str) -> Dict[str, List[str]]:
+        """Copy PCILeech source files to output directory."""
+        copied_files = {
+            "systemverilog": [],
+            "verilog": [],
+            "packages": [],
+            "constraints": [],
+            "ip_files": [],
+        }
+
+        try:
+            # Import repo manager
+            from ..file_management.repo_manager import RepoManager
+
+            # Ensure PCILeech repository is available
+            repo_path = RepoManager.ensure_repo()
+            logger.info(f"Using PCILeech repository at: {repo_path}")
+
+            # Get board-specific path
+            board_path = RepoManager.get_board_path(board, repo_root=repo_path)
+            logger.info(f"Board path: {board_path}")
+
+            # Create source directory structure
+            src_dir = self.output_dir / "src"
+            src_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy board-specific source files
+            if board_path.exists():
+                # Look for SystemVerilog/Verilog files in board directory
+                for pattern in ["*.sv", "*.v"]:
+                    for src_file in board_path.rglob(pattern):
+                        if src_file.is_file():
+                            dest_file = src_dir / src_file.name
+                            shutil.copy2(src_file, dest_file)
+
+                            if src_file.suffix == ".sv":
+                                copied_files["systemverilog"].append(str(dest_file))
+                            else:
+                                copied_files["verilog"].append(str(dest_file))
+
+                            logger.info(f"Copied source file: {src_file.name}")
+
+                # Copy package files
+                for pkg_file in board_path.rglob("*_pkg.sv*"):
+                    if pkg_file.is_file():
+                        dest_file = src_dir / pkg_file.name
+                        shutil.copy2(pkg_file, dest_file)
+                        copied_files["packages"].append(str(dest_file))
+                        logger.info(f"Copied package file: {pkg_file.name}")
+
+            # Copy local PCILeech files from project directory
+            local_pcileech_dir = Path(__file__).parent.parent.parent / "pcileech"
+            if local_pcileech_dir.exists():
+                logger.info(f"Copying local PCILeech files from: {local_pcileech_dir}")
+
+                # Copy package files
+                for pkg_file in local_pcileech_dir.glob("*.svh"):
+                    dest_file = src_dir / pkg_file.name
+                    shutil.copy2(pkg_file, dest_file)
+                    copied_files["packages"].append(str(dest_file))
+                    logger.info(f"Copied local package: {pkg_file.name}")
+
+                # Copy RTL files
+                rtl_dir = local_pcileech_dir / "rtl"
+                if rtl_dir.exists():
+                    for rtl_file in rtl_dir.glob("*.sv"):
+                        dest_file = src_dir / rtl_file.name
+                        shutil.copy2(rtl_file, dest_file)
+                        copied_files["systemverilog"].append(str(dest_file))
+                        logger.info(f"Copied local RTL: {rtl_file.name}")
+
+            # Copy constraint files using repo manager
+            try:
+                xdc_files = RepoManager.get_xdc_files(board, repo_root=repo_path)
+                constraints_dir = self.output_dir / "constraints"
+                constraints_dir.mkdir(parents=True, exist_ok=True)
+
+                for xdc_file in xdc_files:
+                    dest_file = constraints_dir / xdc_file.name
+                    shutil.copy2(xdc_file, dest_file)
+                    copied_files["constraints"].append(str(dest_file))
+                    logger.info(f"Copied constraint file: {xdc_file.name}")
+
+            except Exception as e:
+                logger.warning(f"Could not copy constraint files: {e}")
+
+            # Log summary
+            total_files = sum(len(files) for files in copied_files.values())
+            logger.info(f"Successfully copied {total_files} PCILeech source files")
+
+        except ImportError as e:
+            logger.error(f"Could not import repo manager: {e}")
+        except Exception as e:
+            logger.error(f"Error copying PCILeech sources: {e}")
+
+        return copied_files
+
+    def get_source_file_lists(self) -> Dict[str, List[str]]:
+        """Get lists of source files in the output directory for TCL generation."""
+        file_lists = {
+            "systemverilog_files": [],
+            "verilog_files": [],
+            "constraint_files": [],
+            "package_files": [],
+            "ip_files": [],
+        }
+
+        # Scan source directory
+        src_dir = self.output_dir / "src"
+        if src_dir.exists():
+            # SystemVerilog files
+            for sv_file in src_dir.glob("*.sv"):
+                file_lists["systemverilog_files"].append(f"src/{sv_file.name}")
+
+            # Verilog files
+            for v_file in src_dir.glob("*.v"):
+                file_lists["verilog_files"].append(f"src/{v_file.name}")
+
+            # Package files
+            for pkg_file in src_dir.glob("*_pkg.sv*"):
+                file_lists["package_files"].append(f"src/{pkg_file.name}")
+
+        # Scan constraints directory
+        constraints_dir = self.output_dir / "constraints"
+        if constraints_dir.exists():
+            for xdc_file in constraints_dir.glob("*.xdc"):
+                file_lists["constraint_files"].append(f"constraints/{xdc_file.name}")
+
+        # Scan IP directory
+        ip_dir = self.output_dir / "ip"
+        if ip_dir.exists():
+            for ip_file in ip_dir.glob("*"):
+                if ip_file.is_file():
+                    file_lists["ip_files"].append(f"ip/{ip_file.name}")
+
+        return file_lists
 
         # Validate required files
         required_files = ["device_config.sv", "pcileech_top.sv"]

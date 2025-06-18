@@ -16,9 +16,13 @@ sys.path.insert(0, str(project_root))
 # Import the interactive functions from generate.py
 try:
     from generate import (
-        choose_board, choose_device_type, prompt_yes_no,
-        prompt_integer, interactive_configuration
+        choose_board,
+        choose_device_type,
+        interactive_configuration,
+        prompt_integer,
+        prompt_yes_no,
     )
+
     INTERACTIVE_AVAILABLE = True
 except ImportError:
     # Fallback if imports fail
@@ -69,12 +73,16 @@ def main():
         # Handle interactive configuration
         if args.interactive:
             if not INTERACTIVE_AVAILABLE or not interactive_configuration:
-                print("[!] Interactive configuration not available. Launching TUI directly...")
+                print(
+                    "[!] Interactive configuration not available. Launching TUI directly..."
+                )
             else:
                 try:
                     print("=== Pre-TUI Interactive Configuration ===\n")
                     config = interactive_configuration()
-                    print(f"\n[✓] Configuration saved. Launching TUI with your settings...")
+                    print(
+                        f"\n[✓] Configuration saved. Launching TUI with your settings..."
+                    )
                     # The TUI will pick up the configuration
                 except KeyboardInterrupt:
                     print("\n[!] Configuration cancelled by user")
@@ -86,7 +94,9 @@ def main():
         # Handle quick configuration
         elif args.quick_config:
             if not INTERACTIVE_AVAILABLE:
-                print("[!] Interactive functions not available. Launching TUI directly...")
+                print(
+                    "[!] Interactive functions not available. Launching TUI directly..."
+                )
             else:
                 try:
                     print("=== Quick Configuration ===\n")
@@ -95,14 +105,14 @@ def main():
                     device_type = choose_device_type()  # type: ignore
                     advanced_sv = prompt_yes_no("Enable advanced SystemVerilog generation?")  # type: ignore
                     flash_after = prompt_yes_no("Flash firmware after build?")  # type: ignore
-                    
+
                     print(f"\n=== Quick Config Summary ===")
                     print(f"Board: {board}")
                     print(f"Device Type: {device_type}")
                     print(f"Advanced SystemVerilog: {advanced_sv}")
                     print(f"Flash After Build: {flash_after}")
                     print(f"\n[✓] Quick configuration complete. Launching TUI...")
-                    
+
                 except KeyboardInterrupt:
                     print("\n[!] Quick configuration cancelled by user")
                     return 1

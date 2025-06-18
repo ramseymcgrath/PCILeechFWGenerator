@@ -13,22 +13,23 @@ Tests cover:
 - Dynamic variable usage validation (no hard-coded values)
 """
 
-import pytest
-import sys
 import re
+import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List, Set
+from typing import Any, Dict, List, Set
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from templating.template_renderer import TemplateRenderer, TemplateRenderError
+    from device_clone.pcileech_context import PCILeechContextBuilder
     from templating.systemverilog_generator import AdvancedSVGenerator
     from templating.tcl_builder import TCLBuilder
-    from device_clone.pcileech_context import PCILeechContextBuilder
+    from templating.template_renderer import TemplateRenderer, TemplateRenderError
 
     TEMPLATING_AVAILABLE = True
 except ImportError as e:

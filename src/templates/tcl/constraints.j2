@@ -69,19 +69,12 @@ puts "Attempting to load board-specific XDC constraints for: {{ board.name }}"
 
 {% if board.constraints and board.constraints.xdc_file %}
 # Load board-specific XDC file
-{% if board.features and board.features.ft601 %}
-puts "Loading mandatory FT601 constraints for {{ board.name }}"
-{% else %}
-puts "Loading board-specific constraints for {{ board.name }}"
-{% endif %}
+puts "Constraints for {{ board.name }}"
 set board_xdc_file "{{ board.constraints.xdc_file }}"
 if {[file exists $board_xdc_file]} {
     add_files -fileset constrs_1 -norecurse $board_xdc_file
     lappend already_added_files $board_xdc_file
     puts "Added board-specific XDC constraints: $board_xdc_file"
-    {% if board.features and board.features.ft601 %}
-    puts "FT601 present – USB3 path enabled"
-    {% endif %}
 } else {
     error "Missing required XDC for board {{ board.name }} – aborting build."
 }
@@ -129,7 +122,7 @@ set_property PROCESSING_ORDER LATE [get_files $constraints_file]
 puts "Generated device constraints file: $constraints_file"
 
 # Quality-of-life tweaks for USB-heavy designs
-{% if board.features and board.features.ft601 %}
+{% if board.features %}
 set_param xicom.use_bs_reader 1
 puts "Enabled fast bitstream reader for FT601 board"
 {% endif %}

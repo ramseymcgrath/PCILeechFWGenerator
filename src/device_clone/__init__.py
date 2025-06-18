@@ -15,116 +15,106 @@ The module is organized to provide a clean separation of device cloning
 functionality from the rest of the PCILeech firmware generation system.
 """
 
-# Core device cloning functionality
-from .board_config import (
-    get_fpga_part,
-    get_fpga_family,
-    get_pcie_ip_type,
-    get_pcileech_board_config,
-    get_board_info,
-    validate_board,
-    list_supported_boards,
+from .behavior_profiler import (
+    BehaviorProfile,
+    BehaviorProfiler,
+    RegisterAccess,
+    TimingPattern,
 )
 
+# Core device cloning functionality
+from .board_config import (
+    get_board_info,
+    get_fpga_family,
+    get_fpga_part,
+    get_pcie_ip_type,
+    get_pcileech_board_config,
+    list_supported_boards,
+    validate_board,
+)
+from .config_space_manager import ConfigSpaceManager
 from .constants import *
-
 from .device_config import (
-    DeviceType,
-    DeviceClass,
-    PCIeRegisters,
-    DeviceIdentification,
     DeviceCapabilities,
-    DeviceConfiguration,
+    DeviceClass,
     DeviceConfigManager,
+    DeviceConfiguration,
+    DeviceIdentification,
+    DeviceType,
+    PCIeRegisters,
     get_config_manager,
     get_device_config,
     validate_hex_id,
 )
 
-from .config_space_manager import ConfigSpaceManager
-
+# Manufacturing variance and behavior profiling
+from .manufacturing_variance import DeviceClass as VarianceDeviceClass
+from .manufacturing_variance import (
+    ManufacturingVarianceSimulator,
+    VarianceModel,
+    VarianceParameters,
+    VarianceType,
+)
 from .msix_capability import (
-    hex_to_bytes,
-    read_u16_le,
-    read_u32_le,
-    is_valid_offset,
     find_cap,
+    generate_msix_capability_registers,
+    generate_msix_table_sv,
+    hex_to_bytes,
+    is_valid_offset,
     msix_size,
     parse_msix_capability,
-    generate_msix_table_sv,
+    read_u16_le,
+    read_u32_le,
     validate_msix_configuration,
-    generate_msix_capability_registers,
 )
-
-# Manufacturing variance and behavior profiling
-from .manufacturing_variance import (
-    DeviceClass as VarianceDeviceClass,
-    VarianceType,
-    VarianceParameters,
-    VarianceModel,
-    ManufacturingVarianceSimulator,
-)
-
-from .behavior_profiler import (
-    RegisterAccess,
-    TimingPattern,
-    BehaviorProfile,
-    BehaviorProfiler,
-)
-
-from .variance_manager import VarianceManager
 
 # PCI capability processing
 from .pci_capability import *
+from .variance_manager import VarianceManager
 
 __all__ = [
     # Board configuration
-    'get_fpga_part',
-    'get_fpga_family', 
-    'get_pcie_ip_type',
-    'get_pcileech_board_config',
-    'get_board_info',
-    'validate_board',
-    'list_supported_boards',
-    
+    "get_fpga_part",
+    "get_fpga_family",
+    "get_pcie_ip_type",
+    "get_pcileech_board_config",
+    "get_board_info",
+    "validate_board",
+    "list_supported_boards",
     # Device configuration
-    'DeviceType',
-    'DeviceClass',
-    'PCIeRegisters',
-    'DeviceIdentification', 
-    'DeviceCapabilities',
-    'DeviceConfiguration',
-    'DeviceConfigManager',
-    'get_config_manager',
-    'get_device_config',
-    'validate_hex_id',
-    
+    "DeviceType",
+    "DeviceClass",
+    "PCIeRegisters",
+    "DeviceIdentification",
+    "DeviceCapabilities",
+    "DeviceConfiguration",
+    "DeviceConfigManager",
+    "get_config_manager",
+    "get_device_config",
+    "validate_hex_id",
     # Config space management
-    'ConfigSpaceManager',
-    
+    "ConfigSpaceManager",
     # MSI-X capability
-    'hex_to_bytes',
-    'read_u16_le',
-    'read_u32_le',
-    'is_valid_offset',
-    'find_cap',
-    'msix_size',
-    'parse_msix_capability',
-    'generate_msix_table_sv',
-    'validate_msix_configuration',
-    'generate_msix_capability_registers',
-    
+    "hex_to_bytes",
+    "read_u16_le",
+    "read_u32_le",
+    "is_valid_offset",
+    "find_cap",
+    "msix_size",
+    "parse_msix_capability",
+    "generate_msix_table_sv",
+    "validate_msix_configuration",
+    "generate_msix_capability_registers",
     # Manufacturing variance
-    'VarianceDeviceClass',
-    'VarianceType',
-    'VarianceParameters',
-    'VarianceModel',
-    'ManufacturingVarianceSimulator',
-    
+    "VarianceDeviceClass",
+    "VarianceType",
+    "VarianceParameters",
+    "VarianceModel",
+    "ManufacturingVarianceSimulator",
     # Behavior profiling
-    'RegisterAccess',
-    'TimingPattern',
-    'BehaviorProfile',
-    'BehaviorProfiler',
-    'VarianceManager',
+    "RegisterAccess",
+    "TimingPattern",
+    "BehaviorProfile",
+    "BehaviorProfiler",
+    "VarianceManager",
 ]

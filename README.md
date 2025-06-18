@@ -122,20 +122,21 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
+## CLI
+# Production mode with all advanced features enabled by default
+sudo -E python3 generate.py build
+
 ## TUI 
 sudo python3 tui_generate.py
 
-## CLI
-# Production mode with all advanced features enabled by default
-sudo python3 generate.py --board [your board type] --device-type [your device type] --behavior-profile-duration 5
 
-# Minimal build (disable advanced features)
-sudo python3 generate.py --board [your board type] --disable-advanced-sv --disable-variance
 ```
 
 Your board type is generally one of: `pcileech_35t325_x4` (35T) `pcileech_75t` (75T) or `pcileech_100t` (ZDMA 100T)
 
 If you run into issue with the donor dump process, follow the manual steps.
+
+Careful with on-board devices like audio cards. The vfio process can sometimes lock the whole southside bus up.
 
 
 ### Device Suitability Indicators
