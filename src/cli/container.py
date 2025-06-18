@@ -3,18 +3,18 @@
 import os
 import shutil
 import subprocess
+import sys
 import textwrap
 import time
 from pathlib import Path
 from typing import Optional
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from .config import BuildConfig
-from utils.shell import Shell
 from utils.logging import get_logger
+from utils.shell import Shell
+
+from .config import BuildConfig
 
 logger = get_logger(__name__)
 
@@ -28,6 +28,7 @@ CONTAINER_CHECK_TIMEOUT = 10
 
 class ContainerError(Exception):
     """Custom exception for container-related errors."""
+
     pass
 
 
@@ -41,20 +42,20 @@ def require_podman() -> None:
 
 def _image_exists(image_name: str, tag: str = "latest") -> bool:
     """Check if a container image exists locally.
-    
+
     Args:
         image_name: Name of the container image
         tag: Image tag (default: latest)
-        
+
     Returns:
         True if image exists, False otherwise
-        
+
     Raises:
         ContainerError: If unable to check image status
     """
     full_image_name = f"{image_name}:{tag}"
     shell = Shell()
-    
+
     try:
         # Use || true to prevent grep from failing when no matches are found
         result = shell.run(
@@ -69,18 +70,18 @@ def _image_exists(image_name: str, tag: str = "latest") -> bool:
 
 def _build_image(image_name: str, tag: str = "latest") -> None:
     """Build container image using build script or direct podman build.
-    
+
     Args:
         image_name: Name of the container image to build
         tag: Image tag (default: latest)
-        
+
     Raises:
         ContainerError: If container build fails
     """
     full_image_name = f"{image_name}:{tag}"
     logger.info(f"Building container image '{full_image_name}'...")
     print(f"[*] Building container image '{full_image_name}'...")
-    
+
     # Determine build method
     if os.path.exists(CONTAINER_BUILD_SCRIPT):
         logger.info("Using build script for container creation")
@@ -88,7 +89,7 @@ def _build_image(image_name: str, tag: str = "latest") -> None:
     else:
         logger.info("Using direct podman build")
         build_cmd = f"podman build -t {full_image_name} -f {CONTAINER_FILE} ."
-    
+
     try:
         subprocess.run(
             build_cmd,
@@ -111,25 +112,29 @@ def _build_image(image_name: str, tag: str = "latest") -> None:
 
 def _validate_container_environment() -> None:
     """Validate container runtime environment and ensure image availability.
-    
+
     This function:
     1. Checks if Podman is available
     2. Verifies container image exists
     3. Builds image automatically if missing
-    
+
     Raises:
         ContainerError: If validation or build fails
     """
     # Check Podman availability
     require_podman()
-    
+
     # Check if container image exists
     if _image_exists(CONTAINER_IMAGE_NAME, CONTAINER_IMAGE_TAG):
-        logger.debug(f"Container image '{CONTAINER_IMAGE_NAME}:{CONTAINER_IMAGE_TAG}' found")
+        logger.debug(
+            f"Container image '{CONTAINER_IMAGE_NAME}:{CONTAINER_IMAGE_TAG}' found"
+        )
         return
-    
+
     # Image not found, attempt to build it
-    logger.info(f"Container image '{CONTAINER_IMAGE_NAME}:{CONTAINER_IMAGE_TAG}' not found")
+    logger.info(
+        f"Container image '{CONTAINER_IMAGE_NAME}:{CONTAINER_IMAGE_TAG}' not found"
+    )
     _build_image(CONTAINER_IMAGE_NAME, CONTAINER_IMAGE_TAG)
 
 
@@ -150,20 +155,23 @@ def _validate_vfio_device_access(vfio_device: Path, bdf: str) -> None:
 
     # Verify device is actually bound to vfio-pci
     from .vfio import get_current_driver
+
     current_driver = get_current_driver(bdf)
     if current_driver != "vfio-pci":
-        error_msg = f"Device {bdf} not bound to vfio-pci (current: {current_driver or 'none'})"
+        error_msg = (
+            f"Device {bdf} not bound to vfio-pci (current: {current_driver or 'none'})"
+        )
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
 
 def run_build_container(cfg: BuildConfig, vfio_dev: Path) -> None:
     """Run the firmware build in a Podman container with enhanced validation and error handling.
-    
+
     Args:
         cfg: Build configuration
         vfio_dev: Path to VFIO device
-        
+
     Raises:
         RuntimeError: If build fails
         ContainerError: If container setup fails
@@ -222,11 +230,9 @@ def run_build_container(cfg: BuildConfig, vfio_dev: Path) -> None:
         build_cmd_parts.append("--disable-performance-counters")
 
     if cfg.behavior_profile_duration != 30:
-        build_cmd_parts.append(f"--behavior-profile-duration {cfg.behavior_profile_duration}")
-
-    # Always enable FT601 (USB-3 capture functionality)
-    build_cmd_parts.append("--enable-ft601")
-
+        build_cmd_parts.append(
+            f"--behavior-profile-duration {cfg.behavior_profile_duration}"
+        )
     build_cmd = " ".join(build_cmd_parts)
 
     # Construct Podman command

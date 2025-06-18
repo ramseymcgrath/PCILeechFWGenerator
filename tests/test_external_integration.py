@@ -12,6 +12,12 @@ from pathlib import Path
 
 import pytest
 
+from src.manufacturing_variance import DeviceClass
+from src.systemverilog_generator import (
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    DeviceType,
+)
 from src.templating.advanced_sv_error import (
     ErrorHandlingConfig,
     ErrorHandlingGenerator,
@@ -26,12 +32,6 @@ from src.templating.advanced_sv_power import (
     PowerManagementConfig,
     PowerManagementGenerator,
     PowerState,
-)
-from src.manufacturing_variance import DeviceClass
-from src.systemverilog_generator import (
-    AdvancedSVGenerator,
-    DeviceSpecificLogic,
-    DeviceType,
 )
 from tests.utils import get_pcileech_wifi_sv_file, get_pcileech_wifi_tcl_file
 

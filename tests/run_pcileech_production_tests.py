@@ -13,11 +13,11 @@ Test Categories:
 5. Production Validation Tests
 """
 
-import sys
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))

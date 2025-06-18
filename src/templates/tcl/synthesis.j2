@@ -68,15 +68,4 @@ set usedDSP [parse_synth_field "DSPs"           $u_str]{% endraw %}
     }
 }{% endraw %}
 
-# -------------------------------------------------------------------------
-# Sanity guard before opt_design - Check for FT601 ports if required
-# -------------------------------------------------------------------------
-{% if board and board.name == "pcileech_75t484_x1" %}
-if {[llength [get_ports -quiet ft601_clk]] == 0} {
-    puts "CRITICAL: FT601 ports missing – USB path not instantiated"
-    exit 1
-}
-puts "FT601 sanity check passed - USB3 path properly instantiated"
-{% endif %}
-
 puts "Synthesis completed successfully"

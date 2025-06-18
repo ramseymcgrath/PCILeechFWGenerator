@@ -61,14 +61,15 @@ for path in container_paths:
 
 # Import project modules with new helper functions
 try:
-    from device_clone.behavior_profiler import BehaviorProfiler
     from build_helpers import safe_import_with_fallback, write_tcl_file_with_logging
+    from device_clone.behavior_profiler import BehaviorProfiler
     from device_clone.config_space_manager import ConfigSpaceManager
     from device_clone.constants import (
         BOARD_PARTS,
         LEGACY_TCL_FILES,
         PRODUCTION_DEFAULTS,
     )
+    from device_clone.variance_manager import VarianceManager
     from file_management.donor_dump_manager import DonorDumpManager
     from file_management.file_manager import FileManager
     from scripts.driver_scrape import extract_registers_with_analysis, validate_hex_id
@@ -89,7 +90,6 @@ try:
     )
     from templating.tcl_builder import TCLBuilder
     from templating.template_renderer import TemplateRenderer
-    from device_clone.variance_manager import VarianceManager
     from vivado_handling import find_vivado_installation, run_vivado_command
 
 except ImportError as import_error:
@@ -348,8 +348,8 @@ class PCILeechFirmwareBuilder:
         # Initialize PCILeech generator as primary build component
         try:
             from device_clone.pcileech_generator import (
-                PCILeechGenerator,
                 PCILeechGenerationConfig,
+                PCILeechGenerator,
             )
 
             # Create PCILeech configuration
@@ -585,19 +585,34 @@ class PCILeechFirmwareBuilder:
                     else int(revision_id, 16)
                 )
 
-            # Get PCILeech board configuration for file lists
-            try:
-                from device_clone.board_config import get_pcileech_board_config
+            # Get actual source files from file manager (files that were copied)
+            if self.file_manager:
+                file_lists = self.file_manager.get_source_file_lists()
+                source_files = (
+                    file_lists["systemverilog_files"]
+                    + file_lists["verilog_files"]
+                    + file_lists["package_files"]
+                )
+                ip_files = file_lists["ip_files"]
+                constraint_files = file_lists["constraint_files"]
+                logger.info(
+                    f"Using actual copied files: {len(source_files)} source files, {len(ip_files)} IP files, {len(constraint_files)} constraint files"
+                )
+            else:
+                # Fallback to board configuration if file manager not available
+                try:
+                    from device_clone.board_config import get_pcileech_board_config
 
-                pcileech_config = get_pcileech_board_config(self.board)
-                source_files = pcileech_config.get("src_files", [])
-                ip_files = pcileech_config.get("ip_files", [])
-                coefficient_files = pcileech_config.get("coefficient_files", [])
-            except (ImportError, KeyError) as e:
-                logger.warning(f"Could not get PCILeech board config: {e}")
-                source_files = []
-                ip_files = []
-                coefficient_files = []
+                    pcileech_config = get_pcileech_board_config(self.board)
+                    source_files = pcileech_config.get("src_files", [])
+                    ip_files = pcileech_config.get("ip_files", [])
+                    constraint_files = pcileech_config.get("constraint_files", [])
+                    logger.warning("Using fallback board config for file lists")
+                except (ImportError, KeyError) as e:
+                    logger.warning(f"Could not get PCILeech board config: {e}")
+                    source_files = []
+                    ip_files = []
+                    constraint_files = []
 
             # Generate custom configuration space files if enabled
             if enable_custom_config:
@@ -614,10 +629,10 @@ class PCILeechFirmwareBuilder:
                 device_id=device_id,
                 revision_id=revision_id,
                 source_files=source_files,
-                constraint_files=None,  # Will be auto-discovered
+                constraint_files=constraint_files,  # Use actual constraint files
                 source_file_list=source_files,
                 ip_file_list=ip_files,
-                coefficient_file_list=coefficient_files,
+                coefficient_file_list=[],  # Empty for now, can be added later if needed
                 enable_custom_config=enable_custom_config,
             )
 
@@ -817,6 +832,17 @@ memory_initialization_vector=
                 # Fall back to hardcoded implementation if template fails
                 pass
 
+        # Fallback implementation
+        return """// Basic BAR controller fallback implementation
+module basic_bar_controller (
+    input wire clk,
+    input wire rst,
+    // Add basic ports here
+);
+    // Basic implementation
+endmodule
+"""
+
     def run_behavior_profiling(
         self, device_info: Dict[str, Any], duration: int = 30
     ) -> Optional[str]:
@@ -885,7 +911,6 @@ memory_initialization_vector=
         device_type: Optional[str] = None,
         enable_variance: bool = False,
         behavior_profile_duration: int = 30,
-        enable_ft601: bool = False,
         enable_custom_config: bool = True,
     ) -> Dict[str, Any]:
         """Main firmware build process with PCILeech as primary generation path."""
@@ -954,47 +979,59 @@ memory_initialization_vector=
                 logger.info("Step 2: Extracting device information")
                 device_info = self.extract_device_info(config_space)
 
-                # Step 3: Generate SystemVerilog files
-                logger.info("Step 3: Generating SystemVerilog files")
+                # Step 3: Copy PCILeech source files
+                logger.info("Step 3: Copying PCILeech source files")
+                if self.file_manager:
+                    copied_files = self.file_manager.copy_pcileech_sources(self.board)
+                    for file_type, files in copied_files.items():
+                        build_results["files_generated"].extend(files)
+                        logger.info(f"Copied {len(files)} {file_type} files")
+                else:
+                    logger.warning(
+                        "File manager not available - skipping PCILeech source copy"
+                    )
+
+                # Step 4: Generate SystemVerilog files
+                logger.info("Step 4: Generating SystemVerilog files")
                 sv_files = self.generate_systemverilog_files(
                     device_info, advanced_sv, device_type, enable_variance
                 )
                 build_results["files_generated"].extend(sv_files)
 
-                # Step 4: Run behavior profiling if requested
+                # Step 5: Run behavior profiling if requested
                 if behavior_profile_duration > 0:
-                    logger.info("Step 4: Running behavior profiling")
+                    logger.info("Step 5: Running behavior profiling")
                     profile_file = self.run_behavior_profiling(
                         device_info, behavior_profile_duration
                     )
                     if profile_file:
                         build_results["files_generated"].append(profile_file)
 
-                # Step 5: Generate build files with custom configuration space support
+                # Step 6: Generate build files with custom configuration space support
                 logger.info(
-                    "Step 5: Generating build files with custom configuration space support"
+                    "Step 6: Generating build files with custom configuration space support"
                 )
                 build_files = self.generate_build_files(
                     device_info, enable_custom_config
                 )
                 build_results["files_generated"].extend(build_files)
 
-            # Step 6: Save device info
+            # Step 7: Save device info
             device_info_file = self.output_dir / "device_info.json"
             with open(device_info_file, "w") as f:
                 json.dump(device_info, f, indent=2)
             build_results["files_generated"].append(str(device_info_file))
 
-            # Step 7: Clean up intermediate files
-            logger.info("Step 7: Cleaning up intermediate files")
+            # Step 8: Clean up intermediate files
+            logger.info("Step 8: Cleaning up intermediate files")
             if self.file_manager:
                 preserved_files = self.file_manager.cleanup_intermediate_files()
             else:
                 preserved_files = []
                 logger.warning("File manager not available for cleanup")
 
-            # Step 8: Validate final outputs
-            logger.info("Step 8: Validating final outputs")
+            # Step 9: Validate final outputs
+            logger.info("Step 9: Validating final outputs")
             if self.file_manager:
                 validation_results = self.file_manager.validate_final_outputs()
             else:
@@ -1116,11 +1153,12 @@ def _execute_vivado_build(preserved_files: List[str]) -> bool:
         True if Vivado build succeeded, False otherwise
     """
     try:
+        from pathlib import Path
+
         from vivado_handling import (
             find_vivado_installation,
             run_vivado_with_error_reporting,
         )
-        from pathlib import Path
 
         # Find Vivado installation
         vivado_info = find_vivado_installation()
@@ -1235,11 +1273,6 @@ def main():
     )
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     parser.add_argument(
-        "--enable-ft601",
-        action="store_true",
-        help="Enable FT601 USB-3 capture functionality",
-    )
-    parser.add_argument(
         "--enable-custom-config",
         action="store_true",
         default=True,
@@ -1282,7 +1315,6 @@ def main():
             device_type=args.device_type,
             enable_variance=args.enable_variance,
             behavior_profile_duration=args.behavior_profile_duration,
-            enable_ft601=args.enable_ft601,
             enable_custom_config=args.enable_custom_config,
         )
 

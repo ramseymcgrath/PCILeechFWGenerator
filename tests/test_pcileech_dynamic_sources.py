@@ -13,27 +13,28 @@ Tests cover:
 - Dynamic data source validation (no fallbacks)
 """
 
-import pytest
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, Mock, PropertyMock, patch
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from device_clone.behavior_profiler import BehaviorProfiler, BehaviorProfile
+    from device_clone.behavior_profiler import BehaviorProfile, BehaviorProfiler
+    from device_clone.config_space_manager import ConfigSpaceManager
+    from device_clone.msix_capability import (
+        MSIXCapability,
+        parse_msix_capability,
+        validate_msix_configuration,
+    )
     from device_clone.pcileech_context import (
         PCILeechContextBuilder,
         PCILeechContextError,
-    )
-    from device_clone.config_space_manager import ConfigSpaceManager
-    from device_clone.msix_capability import (
-        parse_msix_capability,
-        validate_msix_configuration,
-        MSIXCapability,
     )
     from device_clone.pcileech_generator import PCILeechGenerationConfig
 

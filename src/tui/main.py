@@ -1180,7 +1180,9 @@ class PCILeechTUI(App):
                     "status": "error",
                     "details": f"Error checking module: {str(e)}",
                     "issues": [f"Exception occurred: {str(e)}"],
-                    "fixes": ["Check if src/file_management/donor_dump_manager.py is accessible"],
+                    "fixes": [
+                        "Check if src/file_management/donor_dump_manager.py is accessible"
+                    ],
                 }
                 self._update_status_display()
 
@@ -1188,7 +1190,9 @@ class PCILeechTUI(App):
                 "status": "error",
                 "details": f"Error checking module: {str(e)}",
                 "issues": [f"Exception occurred: {str(e)}"],
-                "fixes": ["Check if src/file_management/donor_dump_manager.py is accessible"],
+                "fixes": [
+                    "Check if src/file_management/donor_dump_manager.py is accessible"
+                ],
             }
 
     async def _toggle_donor_dump(self) -> None:

@@ -6,11 +6,11 @@ This script runs all PCILeech integration tests and provides comprehensive
 validation of the PCILeech integration implementation.
 """
 
-import sys
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Add src directory to path
 src_dir = Path(__file__).parent.parent / "src"
@@ -156,9 +156,9 @@ class PCILeechTestRunner:
         # Test 1: Validate constants
         try:
             from src.device_clone.constants import (
-                PCILEECH_TCL_SCRIPT_FILES,
-                PCILEECH_PROJECT_SCRIPT,
                 PCILEECH_BUILD_SCRIPT,
+                PCILEECH_PROJECT_SCRIPT,
+                PCILEECH_TCL_SCRIPT_FILES,
             )
 
             assert len(PCILEECH_TCL_SCRIPT_FILES) == 2
@@ -173,8 +173,8 @@ class PCILeechTestRunner:
         # Test 2: Validate board configurations
         try:
             from src.device_clone.board_config import (
-                get_pcileech_board_config,
                 PCILEECH_BOARD_CONFIG,
+                get_pcileech_board_config,
             )
 
             expected_boards = [
@@ -255,6 +255,7 @@ class PCILeechTestRunner:
         # Test 5: Validate file manager integration
         try:
             import tempfile
+
             from src.file_management.file_manager import FileManager
 
             with tempfile.TemporaryDirectory() as temp_dir:

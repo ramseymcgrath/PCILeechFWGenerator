@@ -39,6 +39,11 @@ except ImportError:
 
 # Import advanced components for integration
 try:
+    from ..device_clone.manufacturing_variance import (
+        DeviceClass,
+        ManufacturingVarianceSimulator,
+        VarianceModel,
+    )
     from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
     from .advanced_sv_perf import (
         DeviceType,
@@ -46,12 +51,12 @@ try:
         PerformanceCounterGenerator,
     )
     from .advanced_sv_power import PowerManagementConfig, PowerManagementGenerator
-    from ..device_clone.manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-        VarianceModel,
-    )
 except ImportError:
+    from ..device_clone.manufacturing_variance import (
+        DeviceClass,
+        ManufacturingVarianceSimulator,
+        VarianceModel,
+    )
     from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
     from .advanced_sv_perf import (
         DeviceType,
@@ -59,11 +64,6 @@ except ImportError:
         PerformanceCounterGenerator,
     )
     from .advanced_sv_power import PowerManagementConfig, PowerManagementGenerator
-    from ..device_clone.manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-        VarianceModel,
-    )
 
 
 @dataclass

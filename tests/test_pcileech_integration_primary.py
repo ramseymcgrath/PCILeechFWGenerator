@@ -6,10 +6,11 @@ This test validates that PCILeech has been successfully integrated as the primar
 build pattern throughout the system.
 """
 
-import pytest
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -114,8 +115,8 @@ class TestPCILeechPrimaryIntegration:
         """Test PCILeech generator integration."""
         try:
             from device_clone.pcileech_generator import (
-                PCILeechGenerator,
                 PCILeechGenerationConfig,
+                PCILeechGenerator,
             )
 
             # Should be able to create configuration

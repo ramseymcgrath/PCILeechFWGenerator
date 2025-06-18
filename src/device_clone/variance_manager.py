@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 try:
+    from ..string_utils import log_info_safe
     from .behavior_profiler import BehaviorProfiler
     from .manufacturing_variance import (
         DeviceClass,
         ManufacturingVarianceSimulator,
         VarianceModel,
     )
-    from ..string_utils import log_info_safe
 except ImportError:
     # Fallback for when modules are not available
     def log_info_safe(logger, template, **kwargs):

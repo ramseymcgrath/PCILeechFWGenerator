@@ -16,8 +16,9 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from src.file_management.file_manager import FileManager
 from constants import PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT
+
+from src.file_management.file_manager import FileManager
 
 
 class TestBuildValidationFix:
@@ -37,7 +38,7 @@ class TestBuildValidationFix:
     def create_test_tcl_file(self, file_path: Path, content_type: str = "basic"):
         """
         Create a test TCL file with appropriate content.
-        
+
         Args:
             file_path: Path where to create the file
             content_type: Type of content to include ("basic", "full", "minimal")
@@ -114,7 +115,7 @@ launch_runs synth_1
 launch_runs impl_1
 write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
 """
-        
+
         file_path.write_text(content)
 
     def test_legacy_build_firmware_tcl_validation(self, file_manager, temp_output_dir):
@@ -122,10 +123,10 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create legacy build_firmware.tcl file
         tcl_file = temp_output_dir / "build_firmware.tcl"
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         # The validation should succeed since we have device config and hex generation
         assert result["validation_status"] == "success_tcl_ready"
@@ -142,10 +143,10 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create legacy build_all.tcl file
         tcl_file = temp_output_dir / "build_all.tcl"
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -158,10 +159,10 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create PCILeech vivado_build.tcl file
         tcl_file = temp_output_dir / PCILEECH_BUILD_SCRIPT
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -169,15 +170,17 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         assert result["tcl_file_info"]["has_device_config"] is True
         assert result["build_mode"] == "tcl_only"
 
-    def test_pcileech_vivado_generate_project_tcl_validation(self, file_manager, temp_output_dir):
+    def test_pcileech_vivado_generate_project_tcl_validation(
+        self, file_manager, temp_output_dir
+    ):
         """Test validation succeeds when vivado_generate_project.tcl exists."""
         # Create PCILeech vivado_generate_project.tcl file
         tcl_file = temp_output_dir / PCILEECH_PROJECT_SCRIPT
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -190,13 +193,13 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create both legacy and PCILeech files
         legacy_file = temp_output_dir / "build_firmware.tcl"
         pcileech_file = temp_output_dir / PCILEECH_BUILD_SCRIPT
-        
+
         self.create_test_tcl_file(legacy_file, "full")
         self.create_test_tcl_file(pcileech_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results - should pick up the first one found (legacy has priority)
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -208,13 +211,13 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create both PCILeech files
         build_file = temp_output_dir / PCILEECH_BUILD_SCRIPT
         project_file = temp_output_dir / PCILEECH_PROJECT_SCRIPT
-        
+
         self.create_test_tcl_file(build_file, "full")
         self.create_test_tcl_file(project_file, "basic")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results - should pick up the build script first
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -224,39 +227,43 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
     def test_no_tcl_files_validation_fails(self, file_manager, temp_output_dir):
         """Test validation fails when no TCL files exist."""
         # Don't create any TCL files
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "failed_no_tcl"
         assert result["tcl_file_info"] is None
         # Note: build_mode is set to "tcl_only" by default, even when no TCL files exist
         assert result["build_mode"] == "tcl_only"
 
-    def test_partial_pcileech_files_only_build_script(self, file_manager, temp_output_dir):
+    def test_partial_pcileech_files_only_build_script(
+        self, file_manager, temp_output_dir
+    ):
         """Test behavior when only PCILeech build script exists."""
         # Create only the build script
         tcl_file = temp_output_dir / PCILEECH_BUILD_SCRIPT
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
         assert result["tcl_file_info"]["filename"] == PCILEECH_BUILD_SCRIPT
 
-    def test_partial_pcileech_files_only_project_script(self, file_manager, temp_output_dir):
+    def test_partial_pcileech_files_only_project_script(
+        self, file_manager, temp_output_dir
+    ):
         """Test behavior when only PCILeech project script exists."""
         # Create only the project script
         tcl_file = temp_output_dir / PCILEECH_PROJECT_SCRIPT
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"] is not None
@@ -267,10 +274,10 @@ write_cfgmem -format hex -interface spix4 -size 16 firmware.hex
         # Create TCL file with minimal content
         tcl_file = temp_output_dir / "build_firmware.tcl"
         self.create_test_tcl_file(tcl_file, "minimal")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results - should warn about missing hex (takes priority over incomplete)
         assert result["validation_status"] == "warning_missing_hex"
         assert result["tcl_file_info"] is not None
@@ -288,10 +295,10 @@ launch_runs synth_1
 launch_runs impl_1
 """
         tcl_file.write_text(content)
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "warning_missing_hex"
         assert result["tcl_file_info"] is not None
@@ -302,16 +309,16 @@ launch_runs impl_1
         # Create TCL file and bitstream
         tcl_file = temp_output_dir / "build_firmware.tcl"
         bitstream_file = temp_output_dir / "firmware.bit"
-        
+
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Create a realistic bitstream file (> 1MB)
         bitstream_content = b"0" * (2 * 1024 * 1024)  # 2MB of data
         bitstream_file.write_bytes(bitstream_content)
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_full_build"
         assert result["build_mode"] == "full_vivado"
@@ -324,16 +331,16 @@ launch_runs impl_1
         # Create TCL file and small bitstream
         tcl_file = temp_output_dir / "build_firmware.tcl"
         bitstream_file = temp_output_dir / "firmware.bit"
-        
+
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Create a small bitstream file (< 1MB)
         bitstream_content = b"0" * (500 * 1024)  # 500KB
         bitstream_file.write_bytes(bitstream_content)
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "warning_small_bitstream"
         assert result["build_mode"] == "full_vivado"
@@ -343,19 +350,19 @@ launch_runs impl_1
         """Test that backward compatibility with legacy files is maintained."""
         # Test all legacy file names
         legacy_files = ["build_firmware.tcl", "build_all.tcl"]
-        
+
         for legacy_file in legacy_files:
             # Clean up any existing files
             for file in temp_output_dir.glob("*.tcl"):
                 file.unlink()
-            
+
             # Create the legacy file
             tcl_file = temp_output_dir / legacy_file
             self.create_test_tcl_file(tcl_file, "full")
-            
+
             # Run validation
             result = file_manager.validate_final_outputs()
-            
+
             # Verify validation results
             assert result["validation_status"] == "success_tcl_ready"
             assert result["tcl_file_info"]["filename"] == legacy_file
@@ -364,19 +371,19 @@ launch_runs impl_1
     def test_pcileech_files_detection(self, file_manager, temp_output_dir):
         """Test that PCILeech files are properly detected."""
         pcileech_files = [PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT]
-        
+
         for pcileech_file in pcileech_files:
             # Clean up any existing files
             for file in temp_output_dir.glob("*.tcl"):
                 file.unlink()
-            
+
             # Create the PCILeech file
             tcl_file = temp_output_dir / pcileech_file
             self.create_test_tcl_file(tcl_file, "full")
-            
+
             # Run validation
             result = file_manager.validate_final_outputs()
-            
+
             # Verify validation results
             assert result["validation_status"] == "success_tcl_ready"
             assert result["tcl_file_info"]["filename"] == pcileech_file
@@ -387,18 +394,18 @@ launch_runs impl_1
         # Create all possible TCL files
         files_to_create = [
             "build_firmware.tcl",
-            "build_all.tcl", 
+            "build_all.tcl",
             PCILEECH_BUILD_SCRIPT,
-            PCILEECH_PROJECT_SCRIPT
+            PCILEECH_PROJECT_SCRIPT,
         ]
-        
+
         for file_name in files_to_create:
             tcl_file = temp_output_dir / file_name
             self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Should pick up build_firmware.tcl first (highest priority)
         assert result["validation_status"] == "success_tcl_ready"
         assert result["tcl_file_info"]["filename"] == "build_firmware.tcl"
@@ -408,16 +415,16 @@ launch_runs impl_1
         # Create TCL file
         tcl_file = temp_output_dir / "build_firmware.tcl"
         self.create_test_tcl_file(tcl_file, "full")
-        
+
         # Create additional files that might be present
         (temp_output_dir / "firmware.mcs").write_text("MCS flash file content")
         (temp_output_dir / "debug.ltx").write_text("Debug probe file")
         (temp_output_dir / "timing.rpt").write_text("Timing report")
         (temp_output_dir / "utilization.rpt").write_text("Utilization report")
-        
+
         # Run validation
         result = file_manager.validate_final_outputs()
-        
+
         # Verify validation results
         assert result["validation_status"] == "success_tcl_ready"
         assert result["flash_file_info"] is not None

@@ -36,6 +36,65 @@ FPGA_FAMILY_PATTERNS = {
     "ultrascale_plus": ["xcku", "xcvu", "xczu"],  # UltraScale+ uses same prefixes
 }
 
+# Board display information for user interface
+BOARD_DISPLAY_INFO = {
+    "pcileech_75t484_x1": {
+        "display_name": "CaptainDMA 75T",
+        "description": "[RECOMMENDED - CaptainDMA 75T with USB-3]",
+        "is_recommended": True,
+    },
+    "35t": {
+        "display_name": "35T Legacy Board",
+        "description": "",
+        "is_recommended": False,
+    },
+    "75t": {
+        "display_name": "75T Legacy Board",
+        "description": "",
+        "is_recommended": False,
+    },
+    "100t": {
+        "display_name": "100T Legacy Board",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_35t484_x1": {
+        "display_name": "CaptainDMA 35T x1",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_35t325_x4": {
+        "display_name": "CaptainDMA 35T x4",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_35t325_x1": {
+        "display_name": "CaptainDMA 35T x1 (325)",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_100t484_x1": {
+        "display_name": "CaptainDMA 100T",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_enigma_x1": {
+        "display_name": "CaptainDMA Enigma x1",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_squirrel": {
+        "display_name": "CaptainDMA Squirrel",
+        "description": "",
+        "is_recommended": False,
+    },
+    "pcileech_pciescreamer_xc7a35": {
+        "display_name": "PCIeScreamer XC7A35",
+        "description": "",
+        "is_recommended": False,
+    },
+}
+
 # PCILeech-specific board configurations
 PCILEECH_BOARD_CONFIG = {
     "pcileech_35t325_x4": {
@@ -49,12 +108,10 @@ PCILEECH_BOARD_CONFIG = {
             "pcileech_top.sv",
             "bar_controller.sv",
             "cfg_shadow.sv",
-            "msix_table.sv"
+            "msix_table.sv",
         ],
-        "ip_files": [
-            "pcie_axi_bridge.xci"
-        ],
-        "coefficient_files": []
+        "ip_files": ["pcie_axi_bridge.xci"],
+        "coefficient_files": [],
     },
     "pcileech_75t484_x1": {
         "fpga_part": "xc7a75tfgg484-2",
@@ -69,12 +126,10 @@ PCILEECH_BOARD_CONFIG = {
             "cfg_shadow.sv",
             "msix_table.sv",
             "msix_capability_registers.sv",
-            "msix_implementation.sv"
+            "msix_implementation.sv",
         ],
-        "ip_files": [
-            "pcie_7x_bridge.xci"
-        ],
-        "coefficient_files": []
+        "ip_files": ["pcie_7x_bridge.xci"],
+        "coefficient_files": [],
     },
     "pcileech_100t484_x1": {
         "fpga_part": "xczu3eg-sbva484-1-e",
@@ -90,13 +145,11 @@ PCILEECH_BOARD_CONFIG = {
             "msix_table.sv",
             "msix_capability_registers.sv",
             "msix_implementation.sv",
-            "advanced_controller.sv"
+            "advanced_controller.sv",
         ],
-        "ip_files": [
-            "pcie_ultrascale_bridge.xci"
-        ],
-        "coefficient_files": []
-    }
+        "ip_files": ["pcie_ultrascale_bridge.xci"],
+        "coefficient_files": [],
+    },
 }
 
 
@@ -157,19 +210,19 @@ def get_pcie_ip_type(fpga_part: str) -> str:
 def get_pcileech_board_config(board: str) -> Dict[str, Any]:
     """
     Get PCILeech-specific board configuration.
-    
+
     Args:
         board: Board name
-        
+
     Returns:
         PCILeech board configuration dictionary
-        
+
     Raises:
         KeyError: If board is not found in PCILeech configurations
     """
     if board not in PCILEECH_BOARD_CONFIG:
         raise KeyError(f"PCILeech board configuration not found for: {board}")
-    
+
     return PCILEECH_BOARD_CONFIG[board]
 
 
@@ -216,3 +269,42 @@ def list_supported_boards() -> list[str]:
         List of supported board names
     """
     return list(BOARD_FPGA_MAPPING.keys())
+
+
+def get_board_display_info(board: str) -> Dict[str, str]:
+    """
+    Get display information for a board.
+
+    Args:
+        board: Board name
+
+    Returns:
+        Dictionary with display information (display_name, description, is_recommended)
+    """
+    return BOARD_DISPLAY_INFO.get(
+        board,
+        {
+            "display_name": board,
+            "description": "",
+            "is_recommended": False,
+        },
+    )
+
+
+def list_boards_with_recommendations() -> list[tuple[str, Dict[str, str]]]:
+    """
+    Get list of boards with their display information, ordered by recommendation.
+
+    Returns:
+        List of tuples (board_name, display_info) with recommended boards first
+    """
+    boards = list_supported_boards()
+
+    # Sort so recommended boards come first
+    def sort_key(board):
+        display_info = get_board_display_info(board)
+        return (not display_info.get("is_recommended", False), board)
+
+    sorted_boards = sorted(boards, key=sort_key)
+
+    return [(board, get_board_display_info(board)) for board in sorted_boards]

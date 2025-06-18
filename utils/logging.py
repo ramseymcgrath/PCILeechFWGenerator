@@ -6,14 +6,17 @@ from typing import Optional
 
 try:
     from colorlog import ColoredFormatter
+
     HAS_COLORLOG = True
 except ImportError:
     HAS_COLORLOG = False
 
 
-def setup_logging(level: int = logging.INFO, log_file: Optional[str] = "generate.log") -> None:
+def setup_logging(
+    level: int = logging.INFO, log_file: Optional[str] = "generate.log"
+) -> None:
     """Setup logging with color support using colorlog.
-    
+
     Args:
         level: Logging level (default: INFO)
         log_file: Optional log file path (default: generate.log)
@@ -22,51 +25,48 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = "generate
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
+
     handlers = []
-    
+
     # Console handler with color support
     console_handler = logging.StreamHandler(sys.stdout)
-    
-    if HAS_COLORLOG and hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
+
+    if HAS_COLORLOG and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
         # Use colorlog for colored output
         console_formatter = ColoredFormatter(
             "%(log_color)s%(asctime)s %(levelname)s %(message)s",
             datefmt="%H:%M:%S",
             log_colors={
-                'DEBUG': 'cyan',
-                'INFO': 'green',
-                'WARNING': 'yellow',
-                'ERROR': 'red',
-                'CRITICAL': 'red,bg_white',
-            }
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
         )
     else:
         # Fallback to basic formatter
         console_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
-            datefmt="%H:%M:%S"
+            "%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
         )
-    
+
     console_handler.setFormatter(console_formatter)
     handlers.append(console_handler)
-    
+
     # File handler (no colors)
     if log_file:
         file_handler = logging.FileHandler(log_file, mode="a")
-        file_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s"
-        )
+        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(file_formatter)
         handlers.append(file_handler)
-    
+
     # Configure root logger
     logging.basicConfig(
         level=level,
         handlers=handlers,
-        force=True  # Override any existing configuration
+        force=True,  # Override any existing configuration
     )
-    
+
     # Log the setup
     logger = logging.getLogger(__name__)
     if HAS_COLORLOG:
@@ -77,10 +77,10 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = "generate
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance.
-    
+
     Args:
         name: Logger name (typically __name__)
-        
+
     Returns:
         Logger instance
     """
@@ -93,11 +93,11 @@ class FallbackColoredFormatter(logging.Formatter):
 
     # ANSI color codes
     COLORS = {
-        "RED": "\033[91m", 
-        "YELLOW": "\033[93m", 
+        "RED": "\033[91m",
+        "YELLOW": "\033[93m",
         "GREEN": "\033[92m",
         "CYAN": "\033[96m",
-        "RESET": "\033[0m"
+        "RESET": "\033[0m",
     }
 
     def __init__(self, fmt=None, datefmt=None):

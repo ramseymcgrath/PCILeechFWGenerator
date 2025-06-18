@@ -17,26 +17,27 @@ Tests cover:
 - Production readiness validation
 """
 
-import pytest
-import sys
 import re
+import sys
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
+    from device_clone.behavior_profiler import BehaviorProfile
+    from device_clone.pcileech_context import PCILeechContextBuilder
     from device_clone.pcileech_generator import (
-        PCILeechGenerator,
         PCILeechGenerationConfig,
         PCILeechGenerationError,
+        PCILeechGenerator,
     )
-    from device_clone.pcileech_context import PCILeechContextBuilder
-    from device_clone.behavior_profiler import BehaviorProfile
     from templating.systemverilog_generator import AdvancedSVGenerator
     from templating.tcl_builder import TCLBuilder
 

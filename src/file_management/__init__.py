@@ -12,10 +12,10 @@ Modules:
 - option_rom_manager: Manages Option-ROM file extraction and preparation
 """
 
-from .file_manager import *
-from .repo_manager import *
 from .donor_dump_manager import *
+from .file_manager import *
 from .option_rom_manager import *
+from .repo_manager import *
 
 __all__ = [
     # Re-export all public symbols from submodules

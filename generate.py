@@ -10,9 +10,9 @@ This is the main orchestrator that coordinates the modular components:
 - Centralized logging
 """
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Add src directory to path for imports
@@ -20,11 +20,14 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Import from src.cli if available, otherwise use fallback
 try:
-    from src.cli import parse_args, create_build_config_from_args
-    from src.cli import BuildConfig
-    from src.cli import run_build_container
-    from src.cli import flash_firmware
-    from src.cli import VFIOBinder
+    from src.cli import (
+        BuildConfig,
+        VFIOBinder,
+        create_build_config_from_args,
+        flash_firmware,
+        parse_args,
+        run_build_container,
+    )
 except ImportError:
     # Fallback to direct build system integration
     parse_args = None
@@ -35,7 +38,7 @@ except ImportError:
     VFIOBinder = None
 
 try:
-    from utils.logging import setup_logging, get_logger
+    from utils.logging import get_logger, setup_logging
 except ImportError:
     # Fallback logging setup
     import logging
@@ -81,7 +84,7 @@ def validate_environment() -> None:
         raise RuntimeError(error_msg)
 
     # Check if Podman is available
-    from cli import require_podman
+    from src.cli.container import require_podman
 
     require_podman()
 
@@ -109,8 +112,8 @@ def handle_build_command(args) -> int:
         # Try PCILeech generator first
         try:
             from src.device_clone.pcileech_generator import (
-                PCILeechGenerator,
                 PCILeechGenerationConfig,
+                PCILeechGenerator,
             )
 
             # Create PCILeech configuration

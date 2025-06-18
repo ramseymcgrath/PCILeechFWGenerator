@@ -1,29 +1,28 @@
 """VFIO device binding and management with context manager support."""
 
+import logging
 import os
 import re
+import sys
 import time
-import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, Generator
+from typing import Generator, Optional
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from utils.shell import Shell
 from utils.logging import get_logger
+from utils.shell import Shell
 
 logger = get_logger(__name__)
 
 
 def validate_bdf_format(bdf: str) -> bool:
     """Validate BDF (Bus:Device.Function) format.
-    
+
     Args:
         bdf: BDF string to validate
-        
+
     Returns:
         True if valid, False otherwise
     """
@@ -34,6 +33,7 @@ def validate_bdf_format(bdf: str) -> bool:
 def check_linux_requirement(operation: str) -> None:
     """Check if operation requires Linux and raise error if not available."""
     import platform
+
     if platform.system().lower() != "linux":
         raise RuntimeError(
             f"{operation} requires Linux. "
@@ -72,21 +72,21 @@ def get_iommu_group(bdf: str) -> str:
 
 def read_ids(bdf: str) -> tuple[str, str]:
     """Read vendor and device IDs from a PCIe device.
-    
+
     Args:
         bdf: Device BDF string
-        
+
     Returns:
         Tuple of (vendor_id, device_id)
     """
     device_path = f"/sys/bus/pci/devices/{bdf}"
-    
+
     with open(f"{device_path}/vendor", "r") as f:
         vendor = f.read().strip().replace("0x", "")
-    
+
     with open(f"{device_path}/device", "r") as f:
         device = f.read().strip().replace("0x", "")
-    
+
     return vendor, device
 
 
@@ -153,7 +153,9 @@ def _wait_for_device_state(
     return False
 
 
-def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[str]) -> None:
+def bind_to_vfio(
+    bdf: str, vendor: str, device: str, original_driver: Optional[str]
+) -> None:
     """Bind PCIe device to vfio-pci driver with enhanced error handling and validation."""
     check_linux_requirement("VFIO device binding")
 
@@ -174,7 +176,9 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
 
     # Early exit if already bound to vfio-pci
     if original_driver == "vfio-pci":
-        print("[*] Device already bound to vfio-pci driver, skipping binding process...")
+        print(
+            "[*] Device already bound to vfio-pci driver, skipping binding process..."
+        )
         logger.info(f"Device {bdf} already bound to vfio-pci, skipping binding process")
         return
 
@@ -198,8 +202,12 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                shell.write_file("/sys/bus/pci/drivers/vfio-pci/new_id", f"{vendor} {device}\n")
-                logger.info(f"Successfully registered device ID {vendor}:{device} with vfio-pci")
+                shell.write_file(
+                    "/sys/bus/pci/drivers/vfio-pci/new_id", f"{vendor} {device}\n"
+                )
+                logger.info(
+                    f"Successfully registered device ID {vendor}:{device} with vfio-pci"
+                )
                 break
             except RuntimeError as e:
                 if (
@@ -207,13 +215,19 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
                     or "Invalid argument" in str(e)
                     or "Device or resource busy" in str(e)
                 ):
-                    logger.info(f"Device ID {vendor}:{device} already registered with vfio-pci or busy")
+                    logger.info(
+                        f"Device ID {vendor}:{device} already registered with vfio-pci or busy"
+                    )
                     break
                 elif attempt < max_retries - 1:
-                    logger.warning(f"Failed to register device ID (attempt {attempt + 1}): {e}, retrying...")
+                    logger.warning(
+                        f"Failed to register device ID (attempt {attempt + 1}): {e}, retrying..."
+                    )
                     time.sleep(1)
                 else:
-                    logger.error(f"Failed to register device ID after {max_retries} attempts: {e}")
+                    logger.error(
+                        f"Failed to register device ID after {max_retries} attempts: {e}"
+                    )
                     raise RuntimeError(f"Failed to register device ID: {e}")
 
         # Unbind from current driver if present
@@ -222,28 +236,40 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    shell.write_file(f"/sys/bus/pci/devices/{bdf}/driver/unbind", f"{bdf}\n")
+                    shell.write_file(
+                        f"/sys/bus/pci/devices/{bdf}/driver/unbind", f"{bdf}\n"
+                    )
                     logger.info(f"Successfully unbound {bdf} from {original_driver}")
 
                     # Wait for unbind to complete
                     if _wait_for_device_state(bdf, None, max_retries=3):
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Device still bound after unbind (attempt {attempt + 1}), retrying...")
+                        logger.warning(
+                            f"Device still bound after unbind (attempt {attempt + 1}), retrying..."
+                        )
                         time.sleep(1)
                     else:
-                        logger.warning("Device may still be bound to original driver, continuing...")
+                        logger.warning(
+                            "Device may still be bound to original driver, continuing..."
+                        )
                         break
 
                 except RuntimeError as e:
-                    if "No such device" in str(e) or "No such file or directory" in str(e):
+                    if "No such device" in str(e) or "No such file or directory" in str(
+                        e
+                    ):
                         logger.info(f"Device {bdf} already unbound")
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Failed to unbind from current driver (attempt {attempt + 1}): {e}, retrying...")
+                        logger.warning(
+                            f"Failed to unbind from current driver (attempt {attempt + 1}): {e}, retrying..."
+                        )
                         time.sleep(1)
                     else:
-                        logger.warning(f"Failed to unbind from current driver after {max_retries} attempts: {e}")
+                        logger.warning(
+                            f"Failed to unbind from current driver after {max_retries} attempts: {e}"
+                        )
                         # Continue anyway, as the bind might still work
 
         # Bind to vfio-pci with retries
@@ -262,7 +288,9 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
                     bind_successful = True
                     break
                 elif attempt < max_retries - 1:
-                    logger.warning(f"Bind command succeeded but device not bound to vfio-pci (attempt {attempt + 1}), retrying...")
+                    logger.warning(
+                        f"Bind command succeeded but device not bound to vfio-pci (attempt {attempt + 1}), retrying..."
+                    )
                     time.sleep(1)
 
             except RuntimeError as e:
@@ -271,33 +299,45 @@ def bind_to_vfio(bdf: str, vendor: str, device: str, original_driver: Optional[s
                     if attempt < max_retries - 1:
                         time.sleep(2)  # Longer wait for busy devices
                         continue
-                elif "No such device" in str(e) or "No such file or directory" in str(e):
+                elif "No such device" in str(e) or "No such file or directory" in str(
+                    e
+                ):
                     logger.error(f"Device {bdf} disappeared during binding")
                     raise RuntimeError(f"Device {bdf} not found during binding")
                 elif attempt < max_retries - 1:
-                    logger.warning(f"Failed to bind to vfio-pci (attempt {attempt + 1}): {e}, retrying...")
+                    logger.warning(
+                        f"Failed to bind to vfio-pci (attempt {attempt + 1}): {e}, retrying..."
+                    )
                     time.sleep(1)
                 else:
                     # Final attempt failed, check if device is actually bound
                     current_driver = get_current_driver(bdf)
                     if current_driver == "vfio-pci":
-                        logger.info(f"Device {bdf} is bound to vfio-pci despite bind command error")
+                        logger.info(
+                            f"Device {bdf} is bound to vfio-pci despite bind command error"
+                        )
                         print("[✓] Device is bound to vfio-pci driver")
                         bind_successful = True
                         break
                     else:
-                        logger.error(f"Failed to bind to vfio-pci after {max_retries} attempts: {e}")
+                        logger.error(
+                            f"Failed to bind to vfio-pci after {max_retries} attempts: {e}"
+                        )
                         raise RuntimeError(f"Failed to bind to vfio-pci: {e}")
 
         if not bind_successful:
-            error_msg = f"Failed to bind device {bdf} to vfio-pci after {max_retries} attempts"
+            error_msg = (
+                f"Failed to bind device {bdf} to vfio-pci after {max_retries} attempts"
+            )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
         # Final verification
         final_driver = get_current_driver(bdf)
         if final_driver != "vfio-pci":
-            error_msg = f"Device {bdf} not bound to vfio-pci (current driver: {final_driver})"
+            error_msg = (
+                f"Device {bdf} not bound to vfio-pci (current driver: {final_driver})"
+            )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
@@ -313,14 +353,18 @@ def restore_original_driver(bdf: str, original_driver: Optional[str]) -> None:
         logger.warning(f"Invalid BDF format during restore: {bdf}")
         return
 
-    logger.info(f"Restoring original driver binding for {bdf} (target driver: {original_driver or 'none'})")
+    logger.info(
+        f"Restoring original driver binding for {bdf} (target driver: {original_driver or 'none'})"
+    )
     print("[*] Restoring original driver binding...")
 
     try:
         # Check if device exists
         device_path = f"/sys/bus/pci/devices/{bdf}"
         if not os.path.exists(device_path):
-            logger.warning(f"Device {bdf} not found during restore, may have been removed")
+            logger.warning(
+                f"Device {bdf} not found during restore, may have been removed"
+            )
             return
 
         # Check current driver state
@@ -345,33 +389,47 @@ def restore_original_driver(bdf: str, original_driver: Optional[str]) -> None:
                         unbind_successful = True
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Device still bound to vfio-pci (attempt {attempt + 1}), retrying...")
+                        logger.warning(
+                            f"Device still bound to vfio-pci (attempt {attempt + 1}), retrying..."
+                        )
                         time.sleep(1)
 
                 except RuntimeError as e:
-                    if "No such device" in str(e) or "No such file or directory" in str(e):
+                    if "No such device" in str(e) or "No such file or directory" in str(
+                        e
+                    ):
                         logger.info(f"Device {bdf} already unbound from vfio-pci")
                         unbind_successful = True
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Failed to unbind from vfio-pci (attempt {attempt + 1}): {e}, retrying...")
+                        logger.warning(
+                            f"Failed to unbind from vfio-pci (attempt {attempt + 1}): {e}, retrying..."
+                        )
                         time.sleep(1)
                     else:
-                        logger.warning(f"Failed to unbind from vfio-pci after {max_retries} attempts: {e}")
+                        logger.warning(
+                            f"Failed to unbind from vfio-pci after {max_retries} attempts: {e}"
+                        )
                         # Continue with restore attempt anyway
                         break
 
             if not unbind_successful and get_current_driver(bdf) == "vfio-pci":
-                logger.warning(f"Device {bdf} still bound to vfio-pci, restore may fail")
+                logger.warning(
+                    f"Device {bdf} still bound to vfio-pci, restore may fail"
+                )
         else:
-            logger.info(f"Device {bdf} not bound to vfio-pci (current: {current_driver or 'none'})")
+            logger.info(
+                f"Device {bdf} not bound to vfio-pci (current: {current_driver or 'none'})"
+            )
 
         # Bind back to original driver if it existed
         if original_driver:
             # Check if original driver is available
             driver_path = f"/sys/bus/pci/drivers/{original_driver}"
             if not os.path.exists(driver_path):
-                logger.warning(f"Original driver {original_driver} not available for restore")
+                logger.warning(
+                    f"Original driver {original_driver} not available for restore"
+                )
                 print(f"Warning: Original driver {original_driver} not available")
                 return
 
@@ -381,7 +439,9 @@ def restore_original_driver(bdf: str, original_driver: Optional[str]) -> None:
 
             for attempt in range(max_retries):
                 try:
-                    shell.write_file(f"/sys/bus/pci/drivers/{original_driver}/bind", f"{bdf}\n")
+                    shell.write_file(
+                        f"/sys/bus/pci/drivers/{original_driver}/bind", f"{bdf}\n"
+                    )
 
                     # Verify restore was successful
                     if _wait_for_device_state(bdf, original_driver, max_retries=3):
@@ -390,33 +450,49 @@ def restore_original_driver(bdf: str, original_driver: Optional[str]) -> None:
                         restore_successful = True
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Restore command succeeded but device not bound to {original_driver} (attempt {attempt + 1}), retrying...")
+                        logger.warning(
+                            f"Restore command succeeded but device not bound to {original_driver} (attempt {attempt + 1}), retrying..."
+                        )
                         time.sleep(1)
 
                 except RuntimeError as e:
                     if "Device or resource busy" in str(e):
-                        logger.warning(f"Device {bdf} is busy during restore (attempt {attempt + 1})")
+                        logger.warning(
+                            f"Device {bdf} is busy during restore (attempt {attempt + 1})"
+                        )
                         if attempt < max_retries - 1:
                             time.sleep(2)
                             continue
-                    elif "No such device" in str(e) or "No such file or directory" in str(e):
+                    elif "No such device" in str(
+                        e
+                    ) or "No such file or directory" in str(e):
                         logger.warning(f"Device {bdf} not found during restore")
                         break
                     elif attempt < max_retries - 1:
-                        logger.warning(f"Failed to restore to {original_driver} (attempt {attempt + 1}): {e}, retrying...")
+                        logger.warning(
+                            f"Failed to restore to {original_driver} (attempt {attempt + 1}): {e}, retrying..."
+                        )
                         time.sleep(1)
                     else:
-                        logger.warning(f"Failed to restore to {original_driver} after {max_retries} attempts: {e}")
+                        logger.warning(
+                            f"Failed to restore to {original_driver} after {max_retries} attempts: {e}"
+                        )
                         break
 
             if not restore_successful:
                 final_driver = get_current_driver(bdf)
                 if final_driver == original_driver:
-                    logger.info(f"Device {bdf} is bound to {original_driver} despite restore errors")
+                    logger.info(
+                        f"Device {bdf} is bound to {original_driver} despite restore errors"
+                    )
                     print(f"[✓] Device is bound to {original_driver} driver")
                 else:
-                    logger.warning(f"Failed to restore {bdf} to {original_driver}, current driver: {final_driver or 'none'}")
-                    print(f"Warning: Failed to restore to {original_driver}, current driver: {final_driver or 'none'}")
+                    logger.warning(
+                        f"Failed to restore {bdf} to {original_driver}, current driver: {final_driver or 'none'}"
+                    )
+                    print(
+                        f"Warning: Failed to restore to {original_driver}, current driver: {final_driver or 'none'}"
+                    )
         else:
             logger.info(f"No original driver to restore for {bdf}")
             print("[*] No original driver to restore")
@@ -429,13 +505,13 @@ def restore_original_driver(bdf: str, original_driver: Optional[str]) -> None:
 @contextmanager
 def VFIOBinder(bdf: str) -> Generator[Path, None, None]:
     """Context manager for VFIO device binding with guaranteed cleanup.
-    
+
     Args:
         bdf: Device BDF string
-        
+
     Yields:
         Path to VFIO device (/dev/vfio/{group})
-        
+
     Example:
         with VFIOBinder("0000:03:00.0") as vfio_dev:
             # Use vfio_dev for container operations
@@ -443,26 +519,28 @@ def VFIOBinder(bdf: str) -> Generator[Path, None, None]:
     """
     if not validate_bdf_format(bdf):
         raise ValueError(f"Invalid BDF format: {bdf}")
-    
+
     # Get device information
     vendor, device = read_ids(bdf)
     original_driver = get_current_driver(bdf)
     iommu_group = get_iommu_group(bdf)
     vfio_device_path = Path(f"/dev/vfio/{iommu_group}")
-    
+
     logger.info(f"Starting VFIO binding for {bdf} (group: {iommu_group})")
-    
+
     try:
         # Bind to VFIO
         bind_to_vfio(bdf, vendor, device, original_driver)
-        
+
         # Verify VFIO device exists
         if not vfio_device_path.exists():
-            raise RuntimeError(f"VFIO device {vfio_device_path} not found after binding")
-        
+            raise RuntimeError(
+                f"VFIO device {vfio_device_path} not found after binding"
+            )
+
         logger.info(f"VFIO binding successful, yielding {vfio_device_path}")
         yield vfio_device_path
-        
+
     finally:
         # Always attempt to restore original driver
         logger.info(f"Restoring original driver for {bdf}")

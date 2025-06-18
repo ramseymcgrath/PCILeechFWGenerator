@@ -131,10 +131,38 @@ class TemplateRenderer:
             else:
                 return f"// {text}"
 
+        def python_list(value) -> str:
+            """Format value as Python list literal."""
+            if isinstance(value, list):
+                # Safely format as Python list with proper string escaping
+                escaped_items = [repr(str(item)) for item in value]
+                return "[" + ", ".join(escaped_items) + "]"
+            elif isinstance(value, (str, int, float)):
+                return repr([str(value)])
+            else:
+                return "[]"
+
+        def python_repr(value) -> str:
+            """Format value as Python representation."""
+            return repr(value)
+
+        def log2(value) -> int:
+            """Calculate log base 2 of a value."""
+            import math
+
+            return int(math.log2(max(1, int(value))))
+
         # Register filters
         self.env.filters["hex"] = hex_format
         self.env.filters["tcl_escape"] = tcl_string_escape
         self.env.filters["tcl_list"] = tcl_list_format
+
+        # Python code generation filters
+        self.env.filters["python_list"] = python_list
+        self.env.filters["python_repr"] = python_repr
+
+        # Math filters
+        self.env.filters["log2"] = log2
 
         # SystemVerilog filters
         self.env.filters["sv_hex"] = sv_hex
@@ -170,8 +198,11 @@ class TemplateRenderer:
             TemplateRenderError: If template rendering fails
         """
         try:
+            # Validate and sanitize context before rendering
+            validated_context = self._validate_template_context(template_name, context)
+
             template = self.env.get_template(template_name)
-            rendered = template.render(**context)
+            rendered = template.render(**validated_context)
             logger.debug(f"Successfully rendered template: {template_name}")
             return rendered
 
@@ -255,6 +286,67 @@ class TemplateRenderer:
             Full path to the template file
         """
         return self.template_dir / template_name
+
+    def _validate_template_context(
+        self, template_name: str, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Validate and sanitize template context to prevent rendering errors.
+
+        Args:
+            template_name: Name of the template being rendered
+            context: Original template context
+
+        Returns:
+            Validated and sanitized context
+
+        Raises:
+            TemplateRenderError: If context validation fails
+        """
+        validated_context = context.copy()
+
+        # Special validation for PCILeech build integration template
+        if template_name == "python/pcileech_build_integration.py.j2":
+            # Ensure pcileech_modules is a proper list
+            pcileech_modules = validated_context.get("pcileech_modules", [])
+            if not isinstance(pcileech_modules, list):
+                logger.warning(
+                    f"pcileech_modules is not a list: {type(pcileech_modules)}, converting to list"
+                )
+                if isinstance(pcileech_modules, (str, dict)):
+                    # Convert single string to list, or extract from dict
+                    if isinstance(pcileech_modules, str):
+                        validated_context["pcileech_modules"] = [pcileech_modules]
+                    else:
+                        # If it's a dict, try to extract a list from common keys
+                        validated_context["pcileech_modules"] = (
+                            list(pcileech_modules.keys()) if pcileech_modules else []
+                        )
+                else:
+                    validated_context["pcileech_modules"] = []
+
+            # Ensure all required context keys have safe defaults
+            safe_defaults = {
+                "build_system_version": "2.0",
+                "integration_type": "pcileech",
+                "pcileech_modules": [],
+            }
+
+            for key, default_value in safe_defaults.items():
+                if key not in validated_context or validated_context[key] is None:
+                    validated_context[key] = default_value
+                    logger.debug(f"Set default value for {key}: {default_value}")
+
+        # General validation for all templates
+        # Ensure no None values that could cause template errors
+        for key, value in validated_context.items():
+            if value is None:
+                logger.warning(
+                    f"Template context key '{key}' is None, replacing with empty string"
+                )
+                validated_context[key] = ""
+
+        return validated_context
 
 
 class TemplateRenderError(Exception):

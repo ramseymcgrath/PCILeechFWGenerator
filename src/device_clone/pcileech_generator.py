@@ -23,6 +23,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import string utilities
+from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
+
+# Import templating infrastructure
+from ..templating.systemverilog_generator import AdvancedSVGenerator
+from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
+
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
 from .config_space_manager import ConfigSpaceManager
@@ -31,13 +38,6 @@ from .msix_capability import (
     validate_msix_configuration,
 )
 from .pcileech_context import PCILeechContextBuilder
-
-# Import templating infrastructure
-from ..templating.systemverilog_generator import AdvancedSVGenerator
-from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
-
-# Import string utilities
-from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,9 @@ class PCILeechGenerator:
 
         # Initialize configuration space manager
         self.config_space_manager = ConfigSpaceManager(
-            bdf=self.config.device_bdf, device_profile=self.config.device_profile
+            bdf=self.config.device_bdf,
+            device_profile=self.config.device_profile,
+            strict_vfio=getattr(self.config, "strict_vfio", True),
         )
 
         # Initialize template renderer

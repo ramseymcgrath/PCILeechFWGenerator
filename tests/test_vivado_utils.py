@@ -359,7 +359,9 @@ class TestVivadoDetection:
 
     def test_get_vivado_executable(self):
         """Test getting Vivado executable path."""
-        with patch("src.vivado_handling.vivado_utils.find_vivado_installation") as mock_find:
+        with patch(
+            "src.vivado_handling.vivado_utils.find_vivado_installation"
+        ) as mock_find:
             # Test when Vivado is found
             mock_find.return_value = {
                 "executable": "/opt/Xilinx/Vivado/2023.1/bin/vivado",
