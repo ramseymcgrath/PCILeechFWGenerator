@@ -124,6 +124,7 @@ pip install -r requirements.txt
 
 ## CLI
 # Production mode with all advanced features enabled by default
+# NOTE: use -E to preserve your paths
 sudo -E python3 generate.py build
 
 ## TUI 

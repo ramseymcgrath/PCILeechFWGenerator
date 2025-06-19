@@ -33,9 +33,9 @@ from typing import Any, Dict, List
 # Mandatory project‑local imports – these *must* exist in production images
 # ──────────────────────────────────────────────────────────────────────────────
 REQUIRED_MODULES = [
-    "device_clone.pcileech_generator",
-    "device_clone.behavior_profiler",
-    "templating.tcl_builder",
+    "src.device_clone.pcileech_generator",
+    "src.device_clone.behavior_profiler",
+    "src.templating.tcl_builder",
 ]
 for module in REQUIRED_MODULES:
     try:
@@ -48,12 +48,12 @@ for module in REQUIRED_MODULES:
         )
         raise SystemExit(2) from err
 
-from device_clone.pcileech_generator import (
+from src.device_clone.pcileech_generator import (
     PCILeechGenerationConfig,
     PCILeechGenerator,
 )
-from templating.tcl_builder import TCLBuilder
-from device_clone.behavior_profiler import BehaviorProfiler
+from src.templating.tcl_builder import TCLBuilder
+from src.device_clone.behavior_profiler import BehaviorProfiler
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
