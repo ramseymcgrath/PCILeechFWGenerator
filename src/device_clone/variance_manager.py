@@ -34,11 +34,22 @@ logger = logging.getLogger(__name__)
 class VarianceManager:
     """Manages manufacturing variance simulation and behavior profiling."""
 
-    def __init__(self, bdf: str, output_dir: Path):
+    def __init__(self, bdf: str, output_dir: Path, fallback_manager=None):
         self.bdf = bdf
         self.output_dir = output_dir
         self.variance_simulator = None
         self.behavior_profiler = None
+
+        # Use provided fallback manager or create a default one
+        if fallback_manager is None:
+            try:
+                from .fallback_manager import FallbackManager
+
+                self.fallback_manager = FallbackManager(mode="none")
+            except ImportError:
+                self.fallback_manager = None
+        else:
+            self.fallback_manager = fallback_manager
 
     def apply_manufacturing_variance(self, device_info: Dict[str, Any]) -> List[str]:
         """Apply manufacturing variance simulation."""
@@ -46,7 +57,20 @@ class VarianceManager:
 
         try:
             if not DeviceClass or not VarianceModel:
-                logger.warning("Manufacturing variance modules not available")
+                error_msg = "Manufacturing variance modules not available"
+                logger.warning(error_msg)
+
+                # Check with fallback manager if available
+                if (
+                    self.fallback_manager
+                    and not self.fallback_manager.confirm_fallback(
+                        "variance-modules",
+                        error_msg,
+                        "Variance simulation enhances realism but isn't critical for functionality.",
+                    )
+                ):
+                    logger.error("Manufacturing variance fallback denied by policy")
+
                 return variance_files
 
             # Determine device class based on actual enum values
@@ -99,7 +123,16 @@ class VarianceManager:
             )
 
         except Exception as e:
-            logger.error(f"Error applying manufacturing variance: {e}")
+            error_msg = f"Error applying manufacturing variance: {e}"
+            logger.error(error_msg)
+
+            # Check with fallback manager if available
+            if self.fallback_manager:
+                self.fallback_manager.confirm_fallback(
+                    "variance-simulation",
+                    str(e),
+                    "Without variance simulation, the generated firmware will use default timing values.",
+                )
 
         return variance_files
 
@@ -108,7 +141,17 @@ class VarianceManager:
     ) -> Optional[str]:
         """Run behavior profiling if available."""
         if not BehaviorProfiler:
-            logger.warning("Behavior profiler not available")
+            error_msg = "Behavior profiler not available"
+            logger.warning(error_msg)
+
+            # Check with fallback manager if available
+            if self.fallback_manager and not self.fallback_manager.confirm_fallback(
+                "profiling-module",
+                error_msg,
+                "Behavior profiling enhances device emulation but isn't critical for functionality.",
+            ):
+                logger.error("Behavior profiling fallback denied by policy")
+
             return None
 
         try:
@@ -159,7 +202,17 @@ class VarianceManager:
             return str(profile_file)
 
         except Exception as e:
-            logger.error(f"Error during behavior profiling: {e}")
+            error_msg = f"Error during behavior profiling: {e}"
+            logger.error(error_msg)
+
+            # Check with fallback manager if available
+            if self.fallback_manager and not self.fallback_manager.confirm_fallback(
+                "behavior-profiling",
+                str(e),
+                "Without behavior profiling, the generated firmware may not accurately reflect device timing patterns.",
+            ):
+                logger.error("Behavior profiling fallback denied by policy")
+
             return None
 
     def is_variance_available(self) -> bool:

@@ -14,6 +14,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import List, Optional
 
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -81,7 +82,38 @@ def parse_arguments():
         help="Force use of legacy build system",
     )
 
-    return parser.parse_args()
+    # Add fallback control group
+    fallback_group = parser.add_argument_group("Fallback Control")
+    fallback_group.add_argument(
+        "--fallback-mode",
+        choices=["none", "prompt", "auto"],
+        default="none",
+        help="Control fallback behavior (none=fail-fast, prompt=ask, auto=allow)",
+    )
+    fallback_group.add_argument(
+        "--allow-fallbacks", type=str, help="Comma-separated list of allowed fallbacks"
+    )
+    fallback_group.add_argument(
+        "--deny-fallbacks", type=str, help="Comma-separated list of denied fallbacks"
+    )
+    fallback_group.add_argument(
+        "--legacy-compatibility",
+        action="store_true",
+        help="Enable legacy compatibility mode (temporarily restores old fallback behavior)",
+    )
+
+    args = parser.parse_args()
+
+    # Process fallback lists
+    allowed_fallbacks = []
+    if args.allow_fallbacks:
+        allowed_fallbacks = [f.strip() for f in args.allow_fallbacks.split(",")]
+
+    denied_fallbacks = []
+    if args.deny_fallbacks:
+        denied_fallbacks = [f.strip() for f in args.deny_fallbacks.split(",")]
+
+    return args, allowed_fallbacks, denied_fallbacks
 
 
 def validate_environment():
@@ -94,10 +126,11 @@ def validate_environment():
     return True
 
 
-def run_pcileech_generation(args):
+def run_pcileech_generation(args, allowed_fallbacks, denied_fallbacks):
     """Run PCILeech firmware generation."""
     try:
-        from device_clone.pcileech_generator import (
+        # Import with proper path relative to project root
+        from src.device_clone.pcileech_generator import (
             PCILeechGenerationConfig,
             PCILeechGenerator,
         )
@@ -110,6 +143,21 @@ def run_pcileech_generation(args):
         output_dir = Path(args.output_dir)
         output_dir.mkdir(exist_ok=True)
 
+        # Determine fallback mode based on legacy compatibility flag
+        fallback_mode = args.fallback_mode
+        if args.legacy_compatibility and fallback_mode == "none":
+            logger.warning(
+                "Legacy compatibility mode enabled - using 'auto' fallback mode"
+            )
+            fallback_mode = "auto"
+            if not allowed_fallbacks:
+                allowed_fallbacks = [
+                    "config-space",
+                    "msix",
+                    "behavior-profiling",
+                    "build-integration",
+                ]
+
         # Create PCILeech configuration
         pcileech_config = PCILeechGenerationConfig(
             device_bdf=args.bdf,
@@ -121,6 +169,9 @@ def run_pcileech_generation(args):
             output_dir=output_dir,
             strict_validation=True,
             fail_on_missing_data=True,
+            fallback_mode=fallback_mode,
+            allowed_fallbacks=allowed_fallbacks,
+            denied_fallbacks=denied_fallbacks,
         )
 
         # Initialize PCILeech generator
@@ -155,7 +206,8 @@ def run_pcileech_generation(args):
 def run_legacy_generation(args):
     """Run legacy firmware generation as fallback."""
     try:
-        from build import PCILeechFirmwareBuilder
+        # Import with proper path relative to project root
+        from src.build import FirmwareBuilder
 
         logger.info(
             f"Starting legacy firmware generation for {args.bdf} on {args.board}"
@@ -166,18 +218,19 @@ def run_legacy_generation(args):
         output_dir.mkdir(exist_ok=True)
 
         # Initialize legacy builder
-        builder = PCILeechFirmwareBuilder(
-            bdf=args.bdf, board=args.board, output_dir=output_dir
-        )
+        builder = FirmwareBuilder(bdf=args.bdf, board=args.board, out_dir=output_dir)
 
         # Run legacy build
-        build_result = builder.build_firmware(
-            advanced_sv=args.enable_advanced,
-            enable_variance=args.enable_variance,
-            behavior_profile_duration=(
-                args.profile_duration if args.enable_profiling else 0
-            ),
-        )
+        # Run legacy build with the correct method
+        profile_duration = args.profile_duration if args.enable_profiling else 0
+        generated_files = builder.build(profile_secs=profile_duration)
+
+        # Create a compatible result structure
+        build_result = {
+            "success": True,
+            "files_generated": generated_files,
+            "build_time": 0,  # Not tracked in the new API
+        }
 
         if build_result.get("success", False):
             files_generated = len(build_result.get("files_generated", []))
@@ -201,7 +254,7 @@ def run_legacy_generation(args):
 
 def main():
     """Main entry point."""
-    args = parse_arguments()
+    args, allowed_fallbacks, denied_fallbacks = parse_arguments()
 
     # Setup verbose logging if requested
     if args.verbose:
@@ -212,18 +265,52 @@ def main():
     logger.info(f"Target board: {args.board}")
     logger.info(f"Output directory: {args.output_dir}")
 
+    # Log fallback settings
+    if args.fallback_mode != "none" or allowed_fallbacks or denied_fallbacks:
+        logger.info(f"Fallback mode: {args.fallback_mode}")
+        if allowed_fallbacks:
+            logger.info(f"Allowed fallbacks: {', '.join(allowed_fallbacks)}")
+        if denied_fallbacks:
+            logger.info(f"Denied fallbacks: {', '.join(denied_fallbacks)}")
+
     # Validate environment
     if not validate_environment():
         return 1
 
+    # Initialize fallback manager for high-level decisions
+    try:
+        from src.device_clone.fallback_manager import FallbackManager
+
+        fallback_manager = FallbackManager(
+            mode=args.fallback_mode,
+            allowed_fallbacks=allowed_fallbacks,
+            denied_fallbacks=denied_fallbacks,
+        )
+    except ImportError:
+        fallback_manager = None
+        logger.warning("FallbackManager not available, using legacy fallback behavior")
+
     # Try PCILeech generation first (unless legacy fallback is forced)
     if not args.legacy_fallback:
         logger.info("Attempting PCILeech generation (primary path)")
-        if run_pcileech_generation(args):
+        if run_pcileech_generation(args, allowed_fallbacks, denied_fallbacks):
             logger.info("PCILeech generation completed successfully")
             return 0
         else:
-            logger.warning("PCILeech generation failed, falling back to legacy system")
+            # Check if legacy fallback is allowed
+            if fallback_manager and not fallback_manager.confirm_fallback(
+                "legacy-build-system",
+                "PCILeech generation failed",
+                "The legacy build system uses a different approach that may work in some cases.",
+            ):
+                logger.error(
+                    "PCILeech generation failed and legacy fallback denied by policy"
+                )
+                return 1
+            else:
+                logger.warning(
+                    "PCILeech generation failed, falling back to legacy system"
+                )
 
     # Fallback to legacy generation
     logger.info("Using legacy build system")

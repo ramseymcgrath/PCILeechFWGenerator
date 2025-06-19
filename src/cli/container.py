@@ -11,6 +11,7 @@ import sys
 import textwrap
 import time
 from dataclasses import dataclass, field
+from typing import List, Optional
 from pathlib import Path
 from typing import List, Optional
 
@@ -55,6 +56,10 @@ class BuildConfig:
     auto_fix: bool = True  # hand to VFIOBinder
     container_tag: str = "latest"
     container_image: str = "pcileech-fw-generator"
+    # fallback control options
+    fallback_mode: str = "none"  # "none", "prompt", or "auto"
+    allowed_fallbacks: List[str] = field(default_factory=list)
+    denied_fallbacks: List[str] = field(default_factory=list)
 
     def cmd_args(self) -> List[str]:
         """Translate config to build.py flags"""
@@ -73,6 +78,15 @@ class BuildConfig:
             args.append("--disable-performance-counters")
         if self.behavior_profile_duration != 30:
             args.append(f"--behavior-profile-duration {self.behavior_profile_duration}")
+
+        # Add fallback control arguments
+        if self.fallback_mode != "none":
+            args.append(f"--fallback-mode {self.fallback_mode}")
+        if self.allowed_fallbacks:
+            args.append(f"--allow-fallbacks {','.join(self.allowed_fallbacks)}")
+        if self.denied_fallbacks:
+            args.append(f"--deny-fallbacks {','.join(self.denied_fallbacks)}")
+
         return args
 
 

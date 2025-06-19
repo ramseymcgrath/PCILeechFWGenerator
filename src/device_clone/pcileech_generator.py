@@ -19,7 +19,7 @@ fast if required data is not available.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -70,6 +70,11 @@ class PCILeechGenerationConfig:
     strict_validation: bool = True
     fail_on_missing_data: bool = True
 
+    # Fallback control options
+    fallback_mode: str = "none"  # "none", "prompt", or "auto"
+    allowed_fallbacks: List[str] = field(default_factory=list)
+    denied_fallbacks: List[str] = field(default_factory=list)
+
 
 class PCILeechGenerationError(Exception):
     """Exception raised when PCILeech generation fails."""
@@ -106,6 +111,15 @@ class PCILeechGenerator:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
+
+        # Initialize fallback manager
+        from .fallback_manager import FallbackManager
+
+        self.fallback_manager = FallbackManager(
+            mode=config.fallback_mode,
+            allowed_fallbacks=config.allowed_fallbacks,
+            denied_fallbacks=config.denied_fallbacks,
+        )
 
         # Initialize infrastructure components
         try:
@@ -271,17 +285,21 @@ class PCILeechGenerator:
             return behavior_profile
 
         except Exception as e:
-            if self.config.fail_on_missing_data:
-                raise PCILeechGenerationError(
-                    f"Device behavior profiling failed: {e}"
-                ) from e
-            else:
+            implications = "Without behavior profiling, the generated firmware may not accurately reflect device timing patterns and behavior."
+
+            if self.fallback_manager.confirm_fallback(
+                "behavior-profiling", str(e), implications=implications
+            ):
                 log_warning_safe(
                     self.logger,
                     "Device behavior profiling failed, continuing without profile: {error}",
                     error=str(e),
                 )
                 return None
+            else:
+                raise PCILeechGenerationError(
+                    f"Device behavior profiling failed: {e}"
+                ) from e
 
     def _analyze_configuration_space(self) -> Dict[str, Any]:
         """
@@ -332,14 +350,15 @@ class PCILeechGenerator:
             return config_space_data
 
         except Exception as e:
-            if self.config.fail_on_missing_data:
-                raise PCILeechGenerationError(
-                    f"Configuration space analysis failed: {e}"
-                ) from e
-            else:
+            # Configuration space is critical for device identity
+            implications = "Using minimal configuration space data may result in incorrect device identity and security risks."
+
+            if self.fallback_manager.confirm_fallback(
+                "config-space", str(e), implications=implications
+            ):
                 log_warning_safe(
                     self.logger,
-                    "Configuration space analysis failed: {error}",
+                    "Configuration space analysis failed, using minimal data with user confirmation: {error}",
                     error=str(e),
                 )
                 # Return minimal fallback data
@@ -354,6 +373,10 @@ class PCILeechGenerator:
                     "bars": [],
                     "config_space_size": 0,
                 }
+            else:
+                raise PCILeechGenerationError(
+                    f"Configuration space analysis failed: {e}"
+                ) from e
 
     def _process_msix_capabilities(
         self, config_space_data: Dict[str, Any]
@@ -417,17 +440,21 @@ class PCILeechGenerator:
             return msix_data
 
         except Exception as e:
-            if self.config.fail_on_missing_data:
-                raise PCILeechGenerationError(
-                    f"MSI-X capability processing failed: {e}"
-                ) from e
-            else:
+            implications = "Using default MSI-X configuration may affect device compatibility and interrupt handling."
+
+            if self.fallback_manager.confirm_fallback(
+                "msix", str(e), implications=implications
+            ):
                 log_warning_safe(
                     self.logger,
-                    "MSI-X capability processing failed: {error}",
+                    "MSI-X capability processing failed, using default data with user confirmation: {error}",
                     error=str(e),
                 )
                 return self._get_default_msix_data()
+            else:
+                raise PCILeechGenerationError(
+                    f"MSI-X capability processing failed: {e}"
+                ) from e
 
     def _get_default_msix_data(self) -> Dict[str, Any]:
         """Get default MSI-X data when processing fails."""
@@ -654,21 +681,39 @@ class PCILeechGenerator:
                 template_context
             )
         except Exception as e:
-            log_warning_safe(
-                self.logger,
-                "PCILeech build integration generation failed: {error}",
-                error=str(e),
-            )
-            # Fallback to base integration
-            try:
-                return self.sv_generator.generate_enhanced_build_integration()
-            except Exception as fallback_e:
+            implications = "Using fallback build integration may result in inconsistent or unpredictable build behavior."
+
+            if self.fallback_manager.confirm_fallback(
+                "build-integration", str(e), implications=implications
+            ):
                 log_warning_safe(
                     self.logger,
-                    "Fallback build integration also failed: {error}",
-                    error=str(fallback_e),
+                    "PCILeech build integration generation failed, attempting fallback: {error}",
+                    error=str(e),
                 )
-                return "# Build integration generation failed"
+                # Fallback to base integration
+                try:
+                    return self.sv_generator.generate_enhanced_build_integration()
+                except Exception as fallback_e:
+                    if self.fallback_manager.confirm_fallback(
+                        "basic-build-integration",
+                        str(fallback_e),
+                        implications="Using minimal build integration may result in build failures.",
+                    ):
+                        log_warning_safe(
+                            self.logger,
+                            "Enhanced build integration also failed, using minimal integration: {error}",
+                            error=str(fallback_e),
+                        )
+                        return "# Build integration generation failed"
+                    else:
+                        raise PCILeechGenerationError(
+                            f"Build integration generation failed: {fallback_e}"
+                        ) from fallback_e
+            else:
+                raise PCILeechGenerationError(
+                    f"Build integration generation failed: {e}"
+                ) from e
 
     def _generate_constraint_files(
         self, template_context: Dict[str, Any]

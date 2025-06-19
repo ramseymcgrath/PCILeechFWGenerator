@@ -108,6 +108,26 @@ def build_sub(parser: argparse._SubParsersAction):
         "--auto-fix", action="store_true", help="Let VFIOBinder auto-remediate issues"
     )
 
+    # Add fallback control group
+    fallback_group = p.add_argument_group("Fallback Control")
+    fallback_group.add_argument(
+        "--fallback-mode",
+        choices=["none", "prompt", "auto"],
+        default="none",
+        help="Control fallback behavior (none=fail-fast, prompt=ask, auto=allow)",
+    )
+    fallback_group.add_argument(
+        "--allow-fallbacks", type=str, help="Comma-separated list of allowed fallbacks"
+    )
+    fallback_group.add_argument(
+        "--deny-fallbacks", type=str, help="Comma-separated list of denied fallbacks"
+    )
+    fallback_group.add_argument(
+        "--legacy-compatibility",
+        action="store_true",
+        help="Enable legacy compatibility mode (temporarily restores old fallback behavior)",
+    )
+
 
 def flash_sub(parser: argparse._SubParsersAction):
     p = parser.add_parser("flash", help="Flash a firmware binary via usbloader")
@@ -142,6 +162,34 @@ def main(argv: Optional[List[str]] = None):
     if args.cmd == "build":
         bdf = args.bdf or choose_device()["bdf"]
         board = args.board or pick(SUPPORTED_BOARDS, "Board #: ")
+        # Process fallback lists
+        allowed_fallbacks = []
+        if hasattr(args, "allow_fallbacks") and args.allow_fallbacks:
+            allowed_fallbacks = [f.strip() for f in args.allow_fallbacks.split(",")]
+
+        denied_fallbacks = []
+        if hasattr(args, "deny_fallbacks") and args.deny_fallbacks:
+            denied_fallbacks = [f.strip() for f in args.deny_fallbacks.split(",")]
+
+        # Determine fallback mode based on legacy compatibility flag
+        fallback_mode = getattr(args, "fallback_mode", "none")
+        if (
+            hasattr(args, "legacy_compatibility")
+            and args.legacy_compatibility
+            and fallback_mode == "none"
+        ):
+            logger.warning(
+                "Legacy compatibility mode enabled - using 'auto' fallback mode"
+            )
+            fallback_mode = "auto"
+            if not allowed_fallbacks:
+                allowed_fallbacks = [
+                    "config-space",
+                    "msix",
+                    "behavior-profiling",
+                    "build-integration",
+                ]
+
         cfg = BuildConfig(
             bdf=bdf,
             board=board,
@@ -149,6 +197,9 @@ def main(argv: Optional[List[str]] = None):
             advanced_sv=args.advanced_sv,
             enable_variance=args.enable_variance,
             auto_fix=args.auto_fix,
+            fallback_mode=fallback_mode,
+            allowed_fallbacks=allowed_fallbacks,
+            denied_fallbacks=denied_fallbacks,
         )
         run_build(cfg)
 
