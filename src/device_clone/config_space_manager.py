@@ -354,6 +354,57 @@ class ConfigSpaceManager:
             subsys_vendor_id = int.from_bytes(config_space[44:46], "little")
             subsys_device_id = int.from_bytes(config_space[46:48], "little")
 
+        # Extract BAR information
+        bars = []
+        if len(config_space) >= 40:  # Ensure we have enough bytes to read BARs
+            for i in range(6):  # PCI has up to 6 BARs
+                bar_offset = 16 + (i * 4)  # BARs start at offset 0x10
+                if bar_offset + 4 <= len(config_space):
+                    bar_value = int.from_bytes(
+                        config_space[bar_offset : bar_offset + 4], "little"
+                    )
+                    if bar_value != 0:  # Only include non-zero BARs
+                        bar_type = "io" if (bar_value & 0x1) else "memory"
+                        bar_prefetchable = (
+                            bool(bar_value & 0x8) if bar_type == "memory" else False
+                        )
+                        bar_64bit = (
+                            ((bar_value & 0x6) == 0x4)
+                            if bar_type == "memory"
+                            else False
+                        )
+
+                        # For 64-bit BARs, we need to read the next BAR as well
+                        bar_addr = (
+                            bar_value & ~0xF
+                            if bar_type == "memory"
+                            else bar_value & ~0x3
+                        )
+
+                        if bar_64bit and i < 5:  # Ensure we can read the next BAR
+                            next_bar_offset = bar_offset + 4
+                            if next_bar_offset + 4 <= len(config_space):
+                                next_bar_value = int.from_bytes(
+                                    config_space[next_bar_offset : next_bar_offset + 4],
+                                    "little",
+                                )
+                                bar_addr |= next_bar_value << 32
+
+                        bars.append(
+                            {
+                                "index": i,
+                                "type": bar_type,
+                                "address": bar_addr,
+                                "size": 0,  # Size would need to be determined by probing
+                                "prefetchable": bar_prefetchable,
+                                "is_64bit": bar_64bit,
+                            }
+                        )
+
+                        # Skip the next BAR if this was a 64-bit BAR
+                        if bar_64bit:
+                            i += 1
+
         device_info = {
             "vendor_id": vendor_id,
             "device_id": device_id,
@@ -367,6 +418,7 @@ class ConfigSpaceManager:
             "bist": bist,
             "subsys_vendor_id": subsys_vendor_id,
             "subsys_device_id": subsys_device_id,
+            "bars": bars,
         }
 
         log_info_safe(
