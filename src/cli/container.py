@@ -139,32 +139,54 @@ def run_build(cfg: BuildConfig) -> None:
     # Ensure host output dir exists and is absolute
     output_dir = (Path.cwd() / "output").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    with VFIOBinder(cfg.bdf, auto_fix=cfg.auto_fix) as vfio_node:
-        logger.info(
-            "Launching build container – board=%s, tag=%s", cfg.board, cfg.container_tag
-        )
 
-        cmd_args = " ".join(cfg.cmd_args())
-        podman_cmd = textwrap.dedent(
-            f"""
-            podman run --rm --privileged \
-              --device={vfio_node} \
-              --entrypoint python3 \
-              --device=/dev/vfio/vfio \
-              -v {output_dir}:/app/output \
-              {cfg.container_image}:{cfg.container_tag} \
-              /app/src/build.py {cmd_args}
-        """
-        ).strip()
+    try:
+        with VFIOBinder(cfg.bdf, auto_fix=cfg.auto_fix) as vfio_node:
+            logger.info(
+                "Launching build container – board=%s, tag=%s",
+                cfg.board,
+                cfg.container_tag,
+            )
 
-        logger.debug("Container command: %s", podman_cmd)
-        start = time.time()
-        try:
-            subprocess.run(podman_cmd, shell=True, check=True)
-        except subprocess.CalledProcessError as e:
-            raise ContainerError(f"Build failed (exit {e.returncode})") from e
-        duration = time.time() - start
-        logger.info("Build completed in %.1fs", duration)
+            cmd_args = " ".join(cfg.cmd_args())
+            podman_cmd = textwrap.dedent(
+                f"""
+                podman run --rm --privileged \
+                  --device={vfio_node} \
+                  --entrypoint python3 \
+                  --device=/dev/vfio/vfio \
+                  -v {output_dir}:/app/output \
+                  {cfg.container_image}:{cfg.container_tag} \
+                  /app/src/build.py {cmd_args}
+                """
+            ).strip()
+
+            logger.debug("Container command: %s", podman_cmd)
+            start = time.time()
+            try:
+                subprocess.run(podman_cmd, shell=True, check=True)
+            except subprocess.CalledProcessError as e:
+                raise ContainerError(f"Build failed (exit {e.returncode})") from e
+            duration = time.time() - start
+            logger.info("Build completed in %.1fs", duration)
+    except RuntimeError as e:
+        if "VFIO" in str(e):
+            # VFIO binding failed, diagnostics have already been run
+            logger.error("Build aborted due to VFIO issues: %s", e)
+            from .vfio_diagnostics import Diagnostics, render
+
+            # Run diagnostics one more time to ensure user sees the report
+            diag = Diagnostics(cfg.bdf)
+            report = diag.run()
+            if not report.can_proceed:
+                logger.error(
+                    "VFIO diagnostics indicate system is not ready for VFIO operations"
+                )
+                logger.error("Please fix the issues reported above and try again")
+            sys.exit(1)
+        else:
+            # Re-raise other runtime errors
+            raise
 
 
 # ──────────────────────────────────────────────────────────────────────────────

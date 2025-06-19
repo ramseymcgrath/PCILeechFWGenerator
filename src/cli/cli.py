@@ -101,9 +101,12 @@ def build_sub(parser: argparse._SubParsersAction):
         "--device-type",
         default="generic",
         choices=["generic", "network", "storage", "graphics", "audio"],
+        help="Type of device being cloned",
     )
-    p.add_argument("--advanced-sv", action="store_true")
-    p.add_argument("--enable-variance", action="store_true")
+    p.add_argument(
+        "--advanced-sv", action="store_true", help="Enable advanced SV features"
+    )
+    p.add_argument("--enable-variance", action="store_true", help="Enable variance")
     p.add_argument(
         "--auto-fix", action="store_true", help="Let VFIOBinder auto-remediate issues"
     )
@@ -132,12 +135,18 @@ def build_sub(parser: argparse._SubParsersAction):
 def flash_sub(parser: argparse._SubParsersAction):
     p = parser.add_parser("flash", help="Flash a firmware binary via usbloader")
     p.add_argument("firmware", help="Path to .bin")
-    p.add_argument("--board", required=True, choices=SUPPORTED_BOARDS)
+    p.add_argument(
+        "--board", required=True, choices=SUPPORTED_BOARDS, help="FPGA board"
+    )
 
 
 def get_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser("cli", description=__doc__)
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub = ap.add_subparsers(
+        dest="cmd",
+        required=True,
+        help="Command to run (build/flash)",
+    )
     build_sub(sub)
     flash_sub(sub)
     return ap

@@ -138,18 +138,53 @@ def _write(path: Path, data: str):
     Shell().write_file(path.as_posix(), data)
 
 
+def run_vfio_diagnostics(bdf: str) -> None:
+    """Run VFIO diagnostics and display results to help troubleshoot issues."""
+    log.warning("VFIO binding failed - running diagnostics to identify issues")
+    from .vfio_diagnostics import Diagnostics, render
+
+    diag = Diagnostics(bdf)
+    report = diag.run()
+    render(report)
+
+    if not report.can_proceed:
+        log.error("VFIO diagnostics found critical issues that must be fixed")
+        from .vfio_diagnostics import remediation_script
+
+        script_text = remediation_script(report)
+        temp = Path("/tmp/vfio_fix.sh")
+        temp.write_text(script_text)
+        temp.chmod(0o755)
+        log.info(f"Remediation script written to {temp}")
+        log.info("You can run this script to fix VFIO issues, then try again")
+        log.info(f"Command: sudo {temp}")
+
+
 def bind_to_vfio(bdf: str):
     vendor, device = read_ids(bdf)
     if get_current_driver(bdf) == "vfio-pci":
         log.info("%s already bound to vfio-pci", bdf)
         return
-    _write(Path("/sys/bus/pci/drivers/vfio-pci/new_id"), f"{vendor} {device}\n")
-    cur_drv = get_current_driver(bdf)
-    if cur_drv:
-        _write(Path(f"/sys/bus/pci/devices/{bdf}/driver/unbind"), f"{bdf}\n")
-    _write(Path("/sys/bus/pci/drivers/vfio-pci/bind"), f"{bdf}\n")
-    if get_current_driver(bdf) != "vfio-pci":
-        raise RuntimeError(f"Failed to bind {bdf} to vfio-pci")
+
+    # Check if vfio-pci driver path exists before attempting to write
+    vfio_path = Path("/sys/bus/pci/drivers/vfio-pci")
+    if not vfio_path.exists():
+        log.error("VFIO driver path not found: %s", vfio_path)
+        run_vfio_diagnostics(bdf)
+        raise RuntimeError(f"VFIO driver not available - see diagnostics above")
+
+    try:
+        _write(Path("/sys/bus/pci/drivers/vfio-pci/new_id"), f"{vendor} {device}\n")
+        cur_drv = get_current_driver(bdf)
+        if cur_drv:
+            _write(Path(f"/sys/bus/pci/devices/{bdf}/driver/unbind"), f"{bdf}\n")
+        _write(Path("/sys/bus/pci/drivers/vfio-pci/bind"), f"{bdf}\n")
+        if get_current_driver(bdf) != "vfio-pci":
+            raise RuntimeError(f"Failed to bind {bdf} to vfio-pci")
+    except Exception as e:
+        log.error("Failed to bind device to VFIO: %s", e)
+        run_vfio_diagnostics(bdf)
+        raise RuntimeError(f"VFIO binding failed - see diagnostics above") from e
 
 
 def restore_driver(bdf: str, original: Optional[str]):
@@ -170,28 +205,53 @@ def VFIOBinder(bdf: str, *, auto_fix: bool = False) -> Generator[Path, None, Non
     if not validate_bdf_format(bdf):
         raise ValueError(f"Invalid BDF: {bdf}")
 
-    ensure_vfio_ready(bdf, auto_fix=auto_fix)
+    try:
+        ensure_vfio_ready(bdf, auto_fix=auto_fix)
+    except RuntimeError as e:
+        log.error("VFIO environment not ready: %s", e)
+        run_vfio_diagnostics(bdf)
+        raise RuntimeError("VFIO environment not ready - see diagnostics above") from e
 
     original_driver = get_current_driver(bdf)
-    iommu_group = get_iommu_group(bdf)
+    try:
+        iommu_group = get_iommu_group(bdf)
+    except (FileNotFoundError, OSError) as e:
+        log.error("Failed to get IOMMU group: %s", e)
+        run_vfio_diagnostics(bdf)
+        raise RuntimeError("Failed to get IOMMU group - see diagnostics above") from e
+
     vfio_node = Path(f"/dev/vfio/{iommu_group}")
 
     log.info("Binding %s (IOMMU grp %s) to vfio-pci", bdf, iommu_group)
-    bind_to_vfio(bdf)
-    if not vfio_node.exists():
-        raise RuntimeError(f"VFIO node {vfio_node} missing after bind")
     try:
+        bind_to_vfio(bdf)
+        if not vfio_node.exists():
+            log.error("VFIO node %s missing after bind", vfio_node)
+            run_vfio_diagnostics(bdf)
+            raise RuntimeError(
+                f"VFIO node {vfio_node} missing after bind - see diagnostics above"
+            )
         yield vfio_node
+    except Exception as e:
+        # If binding fails, run diagnostics and re-raise
+        if not isinstance(e, RuntimeError) or "see diagnostics above" not in str(e):
+            # Only run diagnostics if they haven't been run already
+            run_vfio_diagnostics(bdf)
+        raise
     finally:
         log.info("Restoring %s to %s", bdf, original_driver or "<none>")
-        restore_driver(bdf, original_driver)
-        log.info("Cleanup complete")
-        if vfio_node.exists():
-            log.info(
-                "VFIO node %s still exists – manual cleanup may be needed", vfio_node
-            )
-        else:
-            log.info("VFIO node %s removed successfully", vfio_node)
+        try:
+            restore_driver(bdf, original_driver)
+            log.info("Cleanup complete")
+            if vfio_node.exists():
+                log.info(
+                    "VFIO node %s still exists – manual cleanup may be needed",
+                    vfio_node,
+                )
+            else:
+                log.info("VFIO node %s removed successfully", vfio_node)
+        except Exception as cleanup_error:
+            log.warning("Error during cleanup: %s", cleanup_error)
 
 
 # at end of vfio_handler.py
