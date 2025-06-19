@@ -33,4 +33,4 @@ RUN mkdir -p /app/output && chown appuser /app/output
 HEALTHCHECK CMD python3 - <<'PY'\nimport psutil, pydantic, sys; sys.exit(0)\nPY
 
 USER appuser
-ENTRYPOINT [\"entrypoint\"]
+ENTRYPOINT ["entrypoint"]
