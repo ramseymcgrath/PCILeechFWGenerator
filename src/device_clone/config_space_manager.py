@@ -76,53 +76,10 @@ class ConfigSpaceManager:
         if strict is None:
             strict = self.strict_vfio
 
-        try:
-            # Find IOMMU group for the device
-            iommu_group_path = f"/sys/bus/pci/devices/{self.bdf}/iommu_group"
-            if not os.path.exists(iommu_group_path):
-                error_msg = f"IOMMU group not found for device {self.bdf}"
-                if strict:
-                    logger.error(f"{error_msg} - VFIO is required but not available")
-                    raise RuntimeError(
-                        f"{error_msg}. VFIO is required but IOMMU group not found. "
-                        "Ensure IOMMU is enabled and device supports VFIO."
-                    )
-                else:
-                    logger.warning(f"{error_msg}, using fallback")
-                    return self._try_sysfs_config_or_synthetic()
-
-            # Get IOMMU group number
-            iommu_group = os.path.basename(os.path.realpath(iommu_group_path))
-            vfio_device = f"/dev/vfio/{iommu_group}"
-
-            if not os.path.exists(vfio_device):
-                error_msg = f"VFIO device {vfio_device} not found"
-                if strict:
-                    logger.error(f"{error_msg} - VFIO is required but not available")
-                    logger.error(
-                        "Running VFIO diagnostics to help troubleshoot the issue..."
-                    )
-
-                    # Run diagnostics to help user fix the issue
-                    try:
-                        self.run_vfio_diagnostics()
-                    except Exception as diag_error:
-                        logger.warning(f"Could not run VFIO diagnostics: {diag_error}")
-
-                    raise RuntimeError(
-                        f"{error_msg}. VFIO is required but device is not available. "
-                        "Ensure device is properly bound to VFIO driver and VFIO modules are loaded."
-                    )
-                else:
-                    logger.warning(f"{error_msg}, using fallback")
-                    return self._try_sysfs_config_or_synthetic()
-
-            logger.info(
-                f"Reading configuration space for device {self.bdf} via VFIO group {iommu_group}"
-            )
-
-            # Implement actual VFIO config space reading using VFIOBinder
+        # Quick & dirty approach: use pure sysfs unless strict_vfio is enabled
+        if strict:
             try:
+                # Only attempt VFIO binding if strict mode is enabled
                 from ..cli.vfio import VFIOBinder
 
                 logger.info(
@@ -133,8 +90,9 @@ class ConfigSpaceManager:
                         f"Reading configuration space via VFIO device {vfio_device_path}"
                     )
 
-                    # Read configuration space through VFIO device
-                    config_space = self._read_vfio_config_space(vfio_device_path)
+                    # TODO: Implement proper VFIO ioctl for config space access
+                    # For now, we're using the sysfs method while device is bound to VFIO
+                    config_space = self._read_sysfs_config_space()
 
                     log_info_safe(
                         logger,
@@ -145,48 +103,35 @@ class ConfigSpaceManager:
 
             except ImportError as e:
                 error_msg = f"VFIO module not available: {e}"
-                if strict:
-                    logger.error(error_msg)
-                    raise RuntimeError(
-                        f"VFIO config space reading failed: {error_msg}"
-                    ) from e
-                else:
-                    logger.warning(f"{error_msg}, using sysfs fallback")
-                    return self._try_sysfs_config_or_synthetic()
+                logger.error(error_msg)
+                raise RuntimeError(
+                    f"VFIO config space reading failed: {error_msg}"
+                ) from e
+
             except Exception as e:
                 error_msg = f"VFIO config space reading failed: {e}"
-                if strict:
-                    logger.error(error_msg)
-                    raise RuntimeError(error_msg) from e
-                else:
-                    logger.warning(f"{error_msg}, using sysfs fallback")
-                    return self._try_sysfs_config_or_synthetic()
+                logger.error(error_msg)
 
-        except Exception as e:
-            if strict:
-                logger.error(f"Failed to read VFIO config space in strict mode: {e}")
+                # Run diagnostics to help user fix the issue
+                try:
+                    self.run_vfio_diagnostics()
+                except Exception as diag_error:
+                    logger.warning(f"Could not run VFIO diagnostics: {diag_error}")
+
                 raise RuntimeError(f"VFIO config space reading failed: {e}") from e
-            else:
-                logger.error(f"Failed to read VFIO config space: {e}")
+        else:
+            # In non-strict mode, just use sysfs directly
+            try:
+                logger.info(
+                    f"Reading configuration space for device {self.bdf} via sysfs"
+                )
+                return self._read_sysfs_config_space()
+            except Exception as e:
+                logger.error(f"Failed to read sysfs config space: {e}")
                 logger.info("Generating synthetic configuration space as fallback")
                 return self.generate_synthetic_config_space()
 
-    def _read_vfio_config_space(self, vfio_device_path) -> bytes:
-        """Read PCI configuration space through VFIO device file."""
-        try:
-            # For now, fall back to sysfs reading while device is bound to VFIO
-            # This is a simplified implementation - full VFIO implementation would
-            # use proper VFIO ioctls for configuration space access
-            logger.info(
-                "Using sysfs fallback for config space reading while device is bound to VFIO"
-            )
-            # Use the modified _read_sysfs_config_space method that reads 4096 bytes
-            return self._read_sysfs_config_space()
-
-        except Exception as e:
-            logger.error(f"Failed to read VFIO config space: {e}")
-            # Fall back to sysfs reading
-            return self._read_sysfs_config_space()
+    # _read_vfio_config_space method removed as part of VFIO/sysfs strategy simplification
 
     def _read_sysfs_config_space(self) -> bytes:
         """Read configuration space from sysfs."""
@@ -199,35 +144,7 @@ class ConfigSpaceManager:
         else:
             raise RuntimeError(f"Config space file not found: {config_path}")
 
-    def _try_sysfs_config_or_synthetic(self) -> bytes:
-        """Try to read config space from sysfs, or generate synthetic if not available."""
-        # Read actual configuration space from sysfs as fallback
-        config_path = f"/sys/bus/pci/devices/{self.bdf}/config"
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "rb") as f:
-                    config_space = f.read(
-                        4096
-                    )  # Read full extended configuration space
-                log_info_safe(
-                    logger,
-                    "Successfully read {bytes} bytes of configuration space from sysfs",
-                    bytes=len(config_space),
-                )
-                return config_space
-            except Exception as e:
-                log_warning_safe(
-                    logger,
-                    "Failed to read configuration space from sysfs: {error}",
-                    error=str(e),
-                )
-                logger.info("Generating synthetic configuration space as fallback")
-                return self.generate_synthetic_config_space()
-        else:
-            logger.info(
-                f"Configuration space file not found at {config_path}, generating synthetic"
-            )
-            return self.generate_synthetic_config_space()
+    # _try_sysfs_config_or_synthetic method removed as part of VFIO/sysfs strategy simplification
 
     def generate_synthetic_config_space(self) -> bytes:
         """Generate production-quality synthetic PCI configuration space using device configuration."""
@@ -278,11 +195,13 @@ class ConfigSpaceManager:
         # Command Register (0x04-0x05)
         config_space[4:6] = command_reg.to_bytes(2, "little")
         # Status Register (0x06-0x07)
+        # Ensure the Capabilities List bit (bit 4) is set if we have capabilities
+        status_reg |= 0x10
         config_space[6:8] = status_reg.to_bytes(2, "little")
         # Revision ID (0x08)
         config_space[8] = revision_id
-        # Class Code (0x09-0x0B)
-        config_space[9:12] = class_code.to_bytes(3, "little")
+        # Class Code (0x09-0x0B) - PCI spec uses big-endian (base-class, subclass, progIF)
+        config_space[9:12] = class_code.to_bytes(3, "big")
         # Cache Line Size (0x0C)
         config_space[12] = cache_line_size
         # Latency Timer (0x0D)
@@ -331,10 +250,12 @@ class ConfigSpaceManager:
         config_space[113] = 0x00  # Next Capability Pointer (end of list)
         # Message Control: Enable bit (15), Table Size = 1 (bits 0-10)
         config_space[114:116] = (0x8001).to_bytes(2, "little")
-        # Table Offset/BIR: BAR 0, offset 0x1000
-        config_space[116:120] = (0x00001000).to_bytes(4, "little")
-        # PBA Offset/BIR: BAR 0, offset 0x2000
-        config_space[120:124] = (0x00002000).to_bytes(4, "little")
+        # Table Offset/BIR: BAR 0 (BIR = 0), offset 0x1000
+        table_offset_bir = 0x00001000 | 0x0  # BAR 0 (BIR = 0)
+        config_space[116:120] = table_offset_bir.to_bytes(4, "little")
+        # PBA Offset/BIR: BAR 0 (BIR = 0), offset 0x2000
+        pba_offset_bir = 0x00002000 | 0x0  # BAR 0 (BIR = 0)
+        config_space[120:124] = pba_offset_bir.to_bytes(4, "little")
 
         log_info_safe(
             logger,
@@ -372,7 +293,8 @@ class ConfigSpaceManager:
         # Extract BAR information
         bars = []
         if len(config_space) >= 40:  # Ensure we have enough bytes to read BARs
-            for i in range(6):  # PCI has up to 6 BARs
+            i = 0
+            while i < 6:  # PCI has up to 6 BARs
                 bar_offset = 16 + (i * 4)  # BARs start at offset 0x10
                 if bar_offset + 4 <= len(config_space):
                     bar_value = int.from_bytes(
@@ -418,7 +340,11 @@ class ConfigSpaceManager:
 
                         # Skip the next BAR if this was a 64-bit BAR
                         if bar_64bit:
+                            i += 2  # Properly consume next BAR for 64-bit BAR
+                        else:
                             i += 1
+                else:
+                    i += 1
 
         device_info = {
             "vendor_id": vendor_id,

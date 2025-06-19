@@ -40,6 +40,23 @@ def hex_to_bytes(hex_string: str) -> bytearray:
     return bytearray.fromhex(hex_string)
 
 
+def read_u8(data: bytearray, offset: int) -> int:
+    """
+    Read an 8-bit value from bytearray.
+
+    Args:
+        data: Byte data
+        offset: Byte offset to read from
+
+    Returns:
+        8-bit unsigned integer value
+
+    Raises:
+        IndexError: If offset is out of bounds
+    """
+    return data[offset]
+
+
 def read_u16_le(data: bytearray, offset: int) -> int:
     """
     Read a 16-bit little-endian value from bytearray.
@@ -89,6 +106,27 @@ def is_valid_offset(data: bytearray, offset: int, size: int) -> bool:
     return offset + size <= len(data)
 
 
+def _bytes_from_cfg(cfg: str) -> bytearray:
+    """
+    Convert hex string to bytes for efficient processing.
+    Helper function to avoid redundant hex decoding.
+
+    Args:
+        cfg: Configuration space as a hex string
+
+    Returns:
+        bytearray representation of the hex string
+    """
+    if len(cfg) % 2 != 0:
+        raise ValueError("Hex string must have even length")
+    return bytearray.fromhex(cfg)
+
+
+# TODO: Add support for PCIe extended capabilities (offset >= 0x100)
+# This would require a separate walker function similar to find_cap but
+# starting at 0x100 and using a different linked list structure
+
+
 def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     """
     Find a capability in the PCI configuration space.
@@ -100,14 +138,14 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     Returns:
         Offset of the capability in the configuration space, or None if not found
     """
-    # Check if configuration space is valid (minimum 128 bytes for basic config space)
-    if not cfg or len(cfg) < 256:
-        logger.warning("Configuration space is too small or invalid")
+    # Check if configuration space is valid (minimum 256 bytes for basic config space)
+    if not cfg or len(cfg) < 512:  # 256 bytes = 512 hex chars
+        logger.warning("Configuration space is too small (need ≥256 bytes)")
         return None
 
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = hex_to_bytes(cfg)
+        cfg_bytes = _bytes_from_cfg(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return None
@@ -134,7 +172,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
         return None
 
     try:
-        cap_ptr = cfg_bytes[cap_ptr_offset]
+        cap_ptr = read_u8(cfg_bytes, cap_ptr_offset)
         if cap_ptr == 0:
             logger.debug("No capabilities present")
             return None
@@ -156,8 +194,8 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
         # Read capability ID and next pointer
         try:
-            current_cap_id = cfg_bytes[current_ptr]
-            next_ptr = cfg_bytes[current_ptr + 1]
+            current_cap_id = read_u8(cfg_bytes, current_ptr)
+            next_ptr = read_u8(cfg_bytes, current_ptr + 1)
 
             if current_cap_id == cap_id:
                 return current_ptr
@@ -184,12 +222,12 @@ def msix_size(cfg: str) -> int:
     # Find MSI-X capability (ID 0x11)
     cap = find_cap(cfg, 0x11)
     if cap is None:
-        logger.debug("MSI-X capability not found")
+        logger.info("MSI-X capability not found")
         return 0
 
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = hex_to_bytes(cfg)
+        cfg_bytes = _bytes_from_cfg(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return 0
@@ -246,12 +284,12 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
     # Find MSI-X capability (ID 0x11)
     cap = find_cap(cfg, 0x11)
     if cap is None:
-        logger.debug("MSI-X capability not found")
+        logger.info("MSI-X capability not found")
         return result
 
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = hex_to_bytes(cfg)
+        cfg_bytes = _bytes_from_cfg(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return result
@@ -280,7 +318,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         table_offset_bir = read_u32_le(cfg_bytes, table_offset_bir_offset)
         table_bir = table_offset_bir & 0x7  # Lower 3 bits
         table_offset = (
-            table_offset_bir & ~0x7
+            table_offset_bir & 0xFFFFFFF8
         )  # Clear lower 3 bits for 8-byte alignment
 
         # Read PBA Offset/BIR register (offset 8 from capability start)
@@ -291,7 +329,9 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
 
         pba_offset_bir = read_u32_le(cfg_bytes, pba_offset_bir_offset)
         pba_bir = pba_offset_bir & 0x7  # Lower 3 bits
-        pba_offset = pba_offset_bir & ~0x7  # Clear lower 3 bits for 8-byte alignment
+        pba_offset = (
+            pba_offset_bir & 0xFFFFFFF8
+        )  # Clear lower 3 bits for 8-byte alignment
 
         # Update result
         result.update(
@@ -410,8 +450,14 @@ def validate_msix_configuration(msix_info: Dict[str, Any]) -> Tuple[bool, List[s
     # Check for overlap if table and PBA are in the same BAR
     if table_bir == pba_bir:
         table_end = table_offset + (table_size * 16)  # 16 bytes per entry
-        pba_size = (table_size + 31) // 32 * 4  # PBA size in bytes
+        pba_size = (
+            (table_size + 31) // 32
+        ) * 4  # PBA size in bytes (parenthesized for clarity)
         pba_end = pba_offset + pba_size
+
+        # TODO: Enhance overlap detection for 64-bit BARs
+        # Current implementation assumes 32-bit addresses; for 64-bit BARs above 4GiB,
+        # we would need to parse BAR size bits and handle 64-bit math properly
 
         if table_offset < pba_end and table_end > pba_offset:
             errors.append("MSI-X table and PBA overlap in the same BAR")
