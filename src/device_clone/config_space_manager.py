@@ -180,6 +180,7 @@ class ConfigSpaceManager:
             logger.info(
                 "Using sysfs fallback for config space reading while device is bound to VFIO"
             )
+            # Use the modified _read_sysfs_config_space method that reads 4096 bytes
             return self._read_sysfs_config_space()
 
         except Exception as e:
@@ -192,7 +193,9 @@ class ConfigSpaceManager:
         config_path = f"/sys/bus/pci/devices/{self.bdf}/config"
         if os.path.exists(config_path):
             with open(config_path, "rb") as f:
-                return f.read(256)  # Read first 256 bytes
+                # Read 4096 bytes (full extended configuration space) instead of just 256 bytes
+                # This ensures we capture MSI-X capabilities that may be in extended space
+                return f.read(4096)
         else:
             raise RuntimeError(f"Config space file not found: {config_path}")
 
@@ -203,7 +206,9 @@ class ConfigSpaceManager:
         if os.path.exists(config_path):
             try:
                 with open(config_path, "rb") as f:
-                    config_space = f.read(256)  # Read first 256 bytes
+                    config_space = f.read(
+                        4096
+                    )  # Read full extended configuration space
                 log_info_safe(
                     logger,
                     "Successfully read {bytes} bytes of configuration space from sysfs",
@@ -318,8 +323,18 @@ class ConfigSpaceManager:
 
         # Add PCIe Capability at offset 0x60
         config_space[96] = 0x10  # Capability ID: PCIe
-        config_space[97] = 0x00  # Next Capability Pointer (end of list)
+        config_space[97] = 0x70  # Next Capability Pointer (points to MSI-X)
         config_space[98:100] = (0x0002).to_bytes(2, "little")  # PCIe Capabilities
+
+        # Add MSI-X Capability at offset 0x70
+        config_space[112] = 0x11  # Capability ID: MSI-X
+        config_space[113] = 0x00  # Next Capability Pointer (end of list)
+        # Message Control: Enable bit (15), Table Size = 1 (bits 0-10)
+        config_space[114:116] = (0x8001).to_bytes(2, "little")
+        # Table Offset/BIR: BAR 0, offset 0x1000
+        config_space[116:120] = (0x00001000).to_bytes(4, "little")
+        # PBA Offset/BIR: BAR 0, offset 0x2000
+        config_space[120:124] = (0x00002000).to_bytes(4, "little")
 
         log_info_safe(
             logger,
