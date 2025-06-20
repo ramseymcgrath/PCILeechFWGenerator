@@ -63,6 +63,13 @@ This interactive mode makes it easy to use the script without remembering specif
 
 ## Examples
 
+### Interactive Mode
+
+```bash
+# Run with interactive prompts for device and board selection
+sudo ./build_without_container.py
+```
+
 ### Basic Usage
 
 ```bash
@@ -79,6 +86,12 @@ sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 
 
 ```bash
 sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 --enable-advanced --enable-variance
+```
+
+### With Custom Device Type
+
+```bash
+sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 --device-type network
 ```
 
 ## Troubleshooting
