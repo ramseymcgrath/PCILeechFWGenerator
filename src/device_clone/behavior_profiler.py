@@ -239,6 +239,10 @@ class BehaviorProfiler:
             self._log("Debugfs setup completed")
         except Exception as e:
             self._log(f"Failed to setup debugfs: {e}")
+            # In container environments, debugfs might not be available
+            # Check if we're in a container and adjust behavior accordingly
+            if os.path.exists("/.dockerenv") or os.environ.get("container"):
+                self._log("Container environment detected, continuing without debugfs")
             # Disable ftrace for this session since debugfs is not available
             self.enable_ftrace = False
             return

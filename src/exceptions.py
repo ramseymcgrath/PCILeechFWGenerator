@@ -64,13 +64,49 @@ class RepositoryError(PCILeechError):
 class BuildError(PCILeechError):
     """Raised when build operations fail."""
 
-    pass
+    def __init__(self, message: str, root_cause: str | None = None):
+        super().__init__(message)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        if self.root_cause and self.root_cause != str(super().__str__()):
+            # Only show root cause if it's different from the main message
+            return self.root_cause
+        return super().__str__()
 
 
 class ValidationError(PCILeechError):
     """Raised when validation fails."""
 
     pass
+
+
+class ContextError(PCILeechError):
+    """Exception raised when context building fails."""
+
+    def __init__(self, message: str, root_cause: str | None = None):
+        super().__init__(message)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        if self.root_cause and self.root_cause != str(super().__str__()):
+            # Only show root cause if it's different from the main message
+            return self.root_cause
+        return super().__str__()
+
+
+class PCILeechGenerationError(PCILeechError):
+    """Exception raised when PCILeech generation fails."""
+
+    def __init__(self, message: str, root_cause: str | None = None):
+        super().__init__(message)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        if self.root_cause and self.root_cause != str(super().__str__()):
+            # Only show root cause if it's different from the main message
+            return self.root_cause
+        return super().__str__()
 
 
 class ImportError(PCILeechError):

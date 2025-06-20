@@ -19,11 +19,12 @@ from typing import List, Optional
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Import and setup proper colored logging
+from utils.logging import setup_logging, get_logger
+
+# Setup logging with color support
+setup_logging(level=logging.INFO)
+logger = get_logger(__name__)
 
 
 def parse_arguments():

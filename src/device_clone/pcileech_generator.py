@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import string utilities
+from ..exceptions import PCILeechGenerationError
+from ..error_utils import extract_root_cause
 from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
 
 # Import templating infrastructure
@@ -74,12 +76,6 @@ class PCILeechGenerationConfig:
     fallback_mode: str = "none"  # "none", "prompt", or "auto"
     allowed_fallbacks: List[str] = field(default_factory=list)
     denied_fallbacks: List[str] = field(default_factory=list)
-
-
-class PCILeechGenerationError(Exception):
-    """Exception raised when PCILeech generation fails."""
-
-    pass
 
 
 class PCILeechGenerator:
@@ -185,23 +181,79 @@ class PCILeechGenerator:
         )
 
         try:
-            # First Validate VFIO configuration space
+            # Use a single VFIO binding session for both config space reading and BAR analysis
+            # This prevents the cleanup from happening too early
+            from ..cli.vfio_handler import VFIOBinder
 
-            # Step 1: Capture device behavior profile
+            # Step 1: Capture device behavior profile (doesn't need VFIO)
             behavior_profile = self._capture_device_behavior()
 
-            # Step 2: Analyze configuration space
-            config_space_data = self._analyze_configuration_space()
+            # Steps 2-4: Perform all VFIO-dependent operations within a single context
+            with VFIOBinder(self.config.device_bdf) as vfio_device_path:
+                log_info_safe(
+                    self.logger,
+                    "VFIO binding established for device {bdf} at {path}",
+                    bdf=self.config.device_bdf,
+                    path=vfio_device_path,
+                )
 
-            # Step 3: Process MSI-X capabilities
-            msix_data = self._process_msix_capabilities(config_space_data)
+                # Step 2: Analyze configuration space (with VFIO active)
+                config_space_data = self._analyze_configuration_space_with_vfio()
 
-            # Step 4: Build comprehensive template context
-            template_context = self._build_template_context(
-                behavior_profile, config_space_data, msix_data
+                # Step 3: Process MSI-X capabilities
+                msix_data = self._process_msix_capabilities(config_space_data)
+
+                # Step 3a: Handle interrupt strategy fallback if MSI-X not available
+                if msix_data is None:
+                    log_info_safe(
+                        self.logger, "MSI-X not available, checking for MSI capability"
+                    )
+                    # Check for MSI capability (ID 0x05)
+                    config_space_hex = config_space_data.get("config_space_hex", "")
+                    if config_space_hex:
+                        from .msix_capability import find_cap
+
+                        msi_cap = find_cap(config_space_hex, 0x05)
+                        if msi_cap is not None:
+                            log_info_safe(
+                                self.logger,
+                                "MSI capability found, using MSI with 1 vector",
+                            )
+                            interrupt_strategy = "msi"
+                            interrupt_vectors = 1
+                        else:
+                            log_info_safe(
+                                self.logger, "No MSI capability found, using INTx"
+                            )
+                            interrupt_strategy = "intx"
+                            interrupt_vectors = 1
+                    else:
+                        log_info_safe(
+                            self.logger, "No config space data, defaulting to INTx"
+                        )
+                        interrupt_strategy = "intx"
+                        interrupt_vectors = 1
+                else:
+                    interrupt_strategy = "msix"
+                    interrupt_vectors = msix_data["table_size"]
+
+                # Step 4: Build comprehensive template context (with VFIO still active for BAR analysis)
+                template_context = self._build_template_context(
+                    behavior_profile,
+                    config_space_data,
+                    msix_data,
+                    interrupt_strategy,
+                    interrupt_vectors,
+                )
+
+            # VFIO cleanup happens here automatically when exiting the 'with' block
+            log_info_safe(
+                self.logger,
+                "VFIO binding cleanup completed for device {bdf}",
+                bdf=self.config.device_bdf,
             )
 
-            # Step 5: Generate SystemVerilog modules
+            # Step 5: Generate SystemVerilog modules (no VFIO needed)
             systemverilog_modules = self._generate_systemverilog_modules(
                 template_context
             )
@@ -239,7 +291,10 @@ class PCILeechGenerator:
                 "PCILeech firmware generation failed: {error}",
                 error=str(e),
             )
-            raise PCILeechGenerationError(f"Firmware generation failed: {e}") from e
+            root_cause = extract_root_cause(e)
+            raise PCILeechGenerationError(
+                "Firmware generation failed", root_cause=root_cause
+            )
 
     def _capture_device_behavior(self) -> Optional[BehaviorProfile]:
         """
@@ -331,10 +386,10 @@ class PCILeechGenerator:
                 "raw_config_space": config_space_bytes,
                 "config_space_hex": config_space_bytes.hex(),
                 "device_info": device_info,
-                "vendor_id": device_info["vendor_id"],
-                "device_id": device_info["device_id"],
-                "class_code": device_info["class_code"],
-                "revision_id": device_info["revision_id"],
+                "vendor_id": f"{device_info['vendor_id']:04x}",
+                "device_id": f"{device_info['device_id']:04x}",
+                "class_code": f"{device_info['class_code']:06x}",
+                "revision_id": f"{device_info['revision_id']:02x}",
                 "bars": device_info["bars"],
                 "config_space_size": len(config_space_bytes),
             }
@@ -350,29 +405,92 @@ class PCILeechGenerator:
             return config_space_data
 
         except Exception as e:
-            # Configuration space is critical for device identity
-            implications = "Using minimal configuration space data may result in incorrect device identity and security risks."
+            # Configuration space is critical for device identity - no hardcoded fallbacks
+            implications = "Configuration space analysis is required for device identity and security. No fallback data will be provided."
+
+            if self.fallback_manager.is_fallback_allowed("config-space-analysis"):
+                log_warning_safe(
+                    self.logger,
+                    "Configuration space analysis failed, checking fallback options: {error}",
+                    error=str(e),
+                )
+                # Let the fallback manager handle providing fallback data
+                # This should not provide hardcoded defaults
+                raise PCILeechGenerationError(
+                    f"Configuration space analysis failed and no fallback data available: {e}"
+                ) from e
+            else:
+                raise PCILeechGenerationError(
+                    f"Configuration space analysis failed: {e}"
+                ) from e
+
+    def _analyze_configuration_space_with_vfio(self) -> Dict[str, Any]:
+        """
+        Analyze device configuration space when VFIO is already bound.
+
+        This method assumes VFIO is already active and doesn't create its own binding.
+
+        Returns:
+            Dictionary containing configuration space data and analysis
+
+        Raises:
+            PCILeechGenerationError: If configuration space analysis fails
+        """
+        log_info_safe(
+            self.logger,
+            "Analyzing configuration space for device {bdf} (VFIO already active)",
+            bdf=self.config.device_bdf,
+        )
+
+        try:
+            # Read configuration space without creating new VFIO binding
+            config_space_bytes = self.config_space_manager._read_sysfs_config_space()
+
+            # Extract device information
+            device_info = self.config_space_manager.extract_device_info(
+                config_space_bytes
+            )
+
+            # Build comprehensive configuration space data
+            config_space_data = {
+                "raw_config_space": config_space_bytes,
+                "config_space_hex": config_space_bytes.hex(),
+                "device_info": device_info,
+                "vendor_id": f"{device_info['vendor_id']:04x}",
+                "device_id": f"{device_info['device_id']:04x}",
+                "class_code": f"{device_info['class_code']:06x}",
+                "revision_id": f"{device_info['revision_id']:02x}",
+                "bars": device_info["bars"],
+                "config_space_size": len(config_space_bytes),
+            }
+
+            log_info_safe(
+                self.logger,
+                "Configuration space analyzed: VID={vendor_id}, DID={device_id}, Class={class_code}",
+                vendor_id=device_info["vendor_id"],
+                device_id=device_info["device_id"],
+                class_code=device_info["class_code"],
+            )
+
+            return config_space_data
+
+        except Exception as e:
+            # Configuration space is critical for device identity - no hardcoded fallbacks
+            implications = "Configuration space analysis is required for device identity and security. No fallback data will be provided."
 
             if self.fallback_manager.confirm_fallback(
                 "config-space", str(e), implications=implications
             ):
                 log_warning_safe(
                     self.logger,
-                    "Configuration space analysis failed, using minimal data with user confirmation: {error}",
+                    "Configuration space analysis failed, but fallback manager approved continuation: {error}",
                     error=str(e),
                 )
-                # Return minimal fallback data
-                return {
-                    "raw_config_space": b"",
-                    "config_space_hex": "",
-                    "device_info": {},
-                    "vendor_id": "0000",
-                    "device_id": "0000",
-                    "class_code": "0000",
-                    "revision_id": "00",
-                    "bars": [],
-                    "config_space_size": 0,
-                }
+                # Let the fallback manager handle providing fallback data
+                # This should not provide hardcoded defaults
+                raise PCILeechGenerationError(
+                    f"Configuration space analysis failed and no fallback data available: {e}"
+                ) from e
             else:
                 raise PCILeechGenerationError(
                     f"Configuration space analysis failed: {e}"
@@ -380,7 +498,7 @@ class PCILeechGenerator:
 
     def _process_msix_capabilities(
         self, config_space_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """
         Process MSI-X capabilities from configuration space.
 
@@ -388,102 +506,69 @@ class PCILeechGenerator:
             config_space_data: Configuration space data
 
         Returns:
-            Dictionary containing MSI-X capability information
-
-        Raises:
-            PCILeechGenerationError: If MSI-X processing fails
+            Dictionary containing MSI-X capability information, or None if MSI-X
+            capability is missing or table_size == 0
         """
         log_info_safe(self.logger, "Processing MSI-X capabilities")
 
-        try:
-            config_space_hex = config_space_data.get("config_space_hex", "")
+        config_space_hex = config_space_data.get("config_space_hex", "")
 
-            if not config_space_hex:
-                log_warning_safe(
-                    self.logger,
-                    "No configuration space data available for MSI-X analysis",
-                )
-                return self._get_default_msix_data()
-
-            # Parse MSI-X capability
-            msix_info = parse_msix_capability(config_space_hex)
-
-            # Validate MSI-X configuration
-            is_valid, validation_errors = validate_msix_configuration(msix_info)
-
-            if not is_valid and self.config.strict_validation:
-                error_msg = f"MSI-X validation failed: {'; '.join(validation_errors)}"
-                raise PCILeechGenerationError(error_msg)
-
-            # Build comprehensive MSI-X data
-            msix_data = {
-                "capability_info": msix_info,
-                "table_size": msix_info["table_size"],
-                "table_bir": msix_info["table_bir"],
-                "table_offset": msix_info["table_offset"],
-                "pba_bir": msix_info["pba_bir"],
-                "pba_offset": msix_info["pba_offset"],
-                "enabled": msix_info["enabled"],
-                "function_mask": msix_info["function_mask"],
-                "validation_errors": validation_errors,
-                "is_valid": is_valid,
-            }
-
+        if not config_space_hex:
             log_info_safe(
-                self.logger,
-                "MSI-X capabilities processed: {vectors} vectors, table BIR {bir}, offset 0x{offset:x}",
-                vectors=msix_info["table_size"],
-                bir=msix_info["table_bir"],
-                offset=msix_info["table_offset"],
+                self.logger, "No configuration space data available for MSI-X analysis"
             )
+            return None
 
-            return msix_data
+        # Parse MSI-X capability
+        msix_info = parse_msix_capability(config_space_hex)
 
-        except Exception as e:
-            implications = "Using default MSI-X configuration may affect device compatibility and interrupt handling."
+        # Return None if capability is missing or table_size == 0
+        if msix_info["table_size"] == 0:
+            log_info_safe(self.logger, "MSI-X capability not found or table_size is 0")
+            return None
 
-            if self.fallback_manager.confirm_fallback(
-                "msix", str(e), implications=implications
-            ):
-                log_warning_safe(
-                    self.logger,
-                    "MSI-X capability processing failed, using default data with user confirmation: {error}",
-                    error=str(e),
-                )
-                return self._get_default_msix_data()
-            else:
-                raise PCILeechGenerationError(
-                    f"MSI-X capability processing failed: {e}"
-                ) from e
+        # Validate MSI-X configuration
+        is_valid, validation_errors = validate_msix_configuration(msix_info)
 
-    def _get_default_msix_data(self) -> Dict[str, Any]:
-        """Get default MSI-X data when processing fails."""
-        return {
-            "capability_info": {
-                "table_size": 0,
-                "table_bir": 0,
-                "table_offset": 0,
-                "pba_bir": 0,
-                "pba_offset": 0,
-                "enabled": False,
-                "function_mask": False,
-            },
-            "table_size": 0,
-            "table_bir": 0,
-            "table_offset": 0,
-            "pba_bir": 0,
-            "pba_offset": 0,
-            "enabled": False,
-            "function_mask": False,
-            "validation_errors": ["MSI-X not available"],
-            "is_valid": False,
+        if not is_valid and self.config.strict_validation:
+            log_warning_safe(
+                self.logger,
+                "MSI-X validation failed: {errors}",
+                errors="; ".join(validation_errors),
+            )
+            return None
+
+        # Build comprehensive MSI-X data
+        msix_data = {
+            "capability_info": msix_info,
+            "table_size": msix_info["table_size"],
+            "table_bir": msix_info["table_bir"],
+            "table_offset": msix_info["table_offset"],
+            "pba_bir": msix_info["pba_bir"],
+            "pba_offset": msix_info["pba_offset"],
+            "enabled": msix_info["enabled"],
+            "function_mask": msix_info["function_mask"],
+            "validation_errors": validation_errors,
+            "is_valid": is_valid,
         }
+
+        log_info_safe(
+            self.logger,
+            "MSI-X capabilities processed: {vectors} vectors, table BIR {bir}, offset 0x{offset:x}",
+            vectors=msix_info["table_size"],
+            bir=msix_info["table_bir"],
+            offset=msix_info["table_offset"],
+        )
+
+        return msix_data
 
     def _build_template_context(
         self,
         behavior_profile: Optional[BehaviorProfile],
         config_space_data: Dict[str, Any],
-        msix_data: Dict[str, Any],
+        msix_data: Optional[Dict[str, Any]],
+        interrupt_strategy: str,
+        interrupt_vectors: int,
     ) -> Dict[str, Any]:
         """
         Build comprehensive template context from all data sources.
@@ -491,7 +576,9 @@ class PCILeechGenerator:
         Args:
             behavior_profile: Device behavior profile
             config_space_data: Configuration space data
-            msix_data: MSI-X capability data
+            msix_data: MSI-X capability data (None if not available)
+            interrupt_strategy: Interrupt strategy ("msix", "msi", or "intx")
+            interrupt_vectors: Number of interrupt vectors
 
         Returns:
             Comprehensive template context dictionary
@@ -512,6 +599,8 @@ class PCILeechGenerator:
                 behavior_profile=behavior_profile,
                 config_space_data=config_space_data,
                 msix_data=msix_data,
+                interrupt_strategy=interrupt_strategy,
+                interrupt_vectors=interrupt_vectors,
             )
 
             # Validate context completeness
@@ -526,9 +615,10 @@ class PCILeechGenerator:
             return template_context
 
         except Exception as e:
+            root_cause = extract_root_cause(e)
             raise PCILeechGenerationError(
-                f"Template context building failed: {e}"
-            ) from e
+                "Template context building failed", root_cause=root_cause
+            )
 
     def _validate_template_context(self, context: Dict[str, Any]) -> None:
         """

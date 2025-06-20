@@ -15,6 +15,7 @@ Expected kernel layout:
     /usr/src/linux-source-*/ - Extracted kernel source directory
 """
 
+import os
 import pathlib
 import platform
 import subprocess
@@ -94,12 +95,40 @@ def setup_debugfs() -> None:
         try:
             result = subprocess.run("id -u", shell=True, capture_output=True, text=True)
             uid = result.stdout.strip()
-            if uid != "0":
-                raise RuntimeError(
-                    f"Debugfs setup requires root privileges. "
-                    f"Current UID: {uid}. "
-                    f"Please run with sudo or as root user."
+
+            # Check if we can write to /sys/kernel/debug (privileged container check)
+            can_access_sys = False
+            try:
+                # Test if we can access privileged paths
+                test_path = "/sys/kernel/debug"
+                if os.path.exists(test_path):
+                    can_access_sys = os.access(test_path, os.W_OK)
+                else:
+                    # Try to create the directory to test privileges
+                    try:
+                        os.makedirs(test_path, exist_ok=True)
+                        can_access_sys = True
+                    except PermissionError:
+                        can_access_sys = False
+            except Exception:
+                can_access_sys = False
+
+            # If not root and can't access sys, try with sudo
+            if uid != "0" and not can_access_sys:
+                # Check if sudo is available
+                sudo_available = (
+                    subprocess.run(
+                        "which sudo", shell=True, capture_output=True
+                    ).returncode
+                    == 0
                 )
+
+                if not sudo_available:
+                    raise RuntimeError(
+                        f"Debugfs setup requires root privileges. "
+                        f"Current UID: {uid}. "
+                        f"Please run with sudo or as root user."
+                    )
         except Exception as e:
             raise RuntimeError(f"Cannot determine user privileges: {e}") from e
 

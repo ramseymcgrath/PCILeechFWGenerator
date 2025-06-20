@@ -4,7 +4,7 @@ from .cli import get_parser, main
 from .config import BuildConfig
 from .container import require_podman, run_build
 from .flash import flash_firmware
-from .vfio import VFIOBinder
+from .vfio_handler import VFIOBinder
 
 __all__ = [
     "get_parser",

@@ -123,8 +123,6 @@ def _bytes_from_cfg(cfg: str) -> bytearray:
 
 
 # TODO: Add support for PCIe extended capabilities (offset >= 0x100)
-# This would require a separate walker function similar to find_cap but
-# starting at 0x100 and using a different linked list structure
 
 
 def find_cap(cfg: str, cap_id: int) -> Optional[int]:
@@ -138,6 +136,9 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     Returns:
         Offset of the capability in the configuration space, or None if not found
     """
+    logger.debug(f"Searching for capability ID 0x{cap_id:02x} in configuration space")
+    logger.debug(f"Configuration space length: {len(cfg)} characters")
+
     # Check if configuration space is valid (minimum 256 bytes for basic config space)
     if not cfg or len(cfg) < 512:  # 256 bytes = 512 hex chars
         logger.warning("Configuration space is too small (need ≥256 bytes)")
@@ -280,13 +281,12 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         "enabled": False,
         "function_mask": False,
     }
-
     # Find MSI-X capability (ID 0x11)
     cap = find_cap(cfg, 0x11)
     if cap is None:
         logger.info("MSI-X capability not found")
         return result
-
+    logger.debug(f"MSI-X capability found at offset 0x{cap:02x}")
     try:
         # Convert hex string to bytes for efficient processing
         cfg_bytes = _bytes_from_cfg(cfg)
@@ -377,7 +377,8 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
         SystemVerilog code for the MSI-X table and PBA
     """
     if msix_info["table_size"] == 0:
-        return "// MSI-X not supported or no entries"
+        return "MSI-X not supported or no entries"
+    logger.debug("MSI-X: Found, generating SystemVerilog code for MSI-X table")
 
     table_size = msix_info["table_size"]
     pba_size = (table_size + 31) // 32  # Number of 32-bit words needed for PBA

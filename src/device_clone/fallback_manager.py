@@ -50,10 +50,9 @@ class FallbackManager:
         # In production mode, override settings to enforce fail-fast
         if production_mode:
             self.mode = "none"
-            # Allow MSI-X fallbacks even in production mode
-            self.allowed_fallbacks = {"msix"}
+            # Allow MSI-X and config-space fallbacks even in production mode
+            self.allowed_fallbacks = {"msix", "config-space"}
             self.denied_fallbacks = {
-                "config-space",
                 "build-integration",
                 "module-import",
             }

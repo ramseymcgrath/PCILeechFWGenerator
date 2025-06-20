@@ -23,6 +23,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
+from pathlib import Path
+
+# Add utils to path for logging imports
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.logging import setup_logging, get_logger
 import os
 import sys
 import time
@@ -58,12 +64,8 @@ from src.device_clone.behavior_profiler import BehaviorProfiler
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    level=logging.INFO,
-    stream=sys.stdout,
-)
-log = logging.getLogger("pcileech_builder")
+setup_logging(level=logging.INFO)
+log = get_logger("pcileech_builder")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -72,7 +74,9 @@ log = logging.getLogger("pcileech_builder")
 class FirmwareBuilder:
     """Thin wrapper around *PCILeechGenerator* for unified builds."""
 
-    def __init__(self, bdf: str, board: str, out_dir: Path):
+    def __init__(
+        self, bdf: str, board: str, out_dir: Path, enable_profiling: bool = True
+    ):
         self.out_dir = out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,6 +86,7 @@ class FirmwareBuilder:
                 device_profile="generic",
                 template_dir=None,
                 output_dir=self.out_dir,
+                enable_behavior_profiling=enable_profiling,
             )
         )
         self.tcl = TCLBuilder(output_dir=self.out_dir)
@@ -182,7 +187,10 @@ def main(argv: List[str] | None = None) -> int:  # noqa: D401
 
     try:
         t0 = time.perf_counter()
-        builder = FirmwareBuilder(args.bdf, args.board, out_dir)
+        enable_profiling = args.profile > 0
+        builder = FirmwareBuilder(
+            args.bdf, args.board, out_dir, enable_profiling=enable_profiling
+        )
         artifacts = builder.build(profile_secs=args.profile)
         dt = time.perf_counter() - t0
         log.info("Build finished in %.1f s ✓", dt)
@@ -197,7 +205,17 @@ def main(argv: List[str] | None = None) -> int:  # noqa: D401
         return 0
 
     except Exception as exc:  # pragma: no cover
-        log.error("Build failed: %s", exc, exc_info=True)
+        # Extract root cause manually to avoid import issues when run as script
+        root_cause = str(exc)
+        current = exc
+        while hasattr(current, "__cause__") and current.__cause__:
+            current = current.__cause__
+            root_cause = str(current)
+
+        log.error("Build failed: %s", root_cause)
+        # Only show full traceback in debug mode
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Full traceback:", exc_info=True)
         return 1
 
 

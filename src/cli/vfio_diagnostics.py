@@ -23,6 +23,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
+from pathlib import Path
+
+# Add project root to path for utils imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from utils.logging import setup_logging, get_logger
 import os
 import platform
 import re
@@ -56,7 +62,8 @@ except ImportError:  # colour optional – silently degrade
         MAGENTA = ""
         RESET = ""
 
-    Style = Fore  # type: ignore – dummy placeholder
+    class Style:  # type: ignore – dummy placeholder
+        RESET_ALL = ""
 
     def colour(txt: str, col: str) -> str:  # noqa: D401
         return txt
@@ -65,9 +72,8 @@ except ImportError:  # colour optional – silently degrade
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging setup – verbose by default, override with --quiet
 # ──────────────────────────────────────────────────────────────────────────────
-LOG_FORMAT = "%(levelname)s: %(message)s"
-logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
-log = logging.getLogger("vfio-assist")
+setup_logging(level=logging.INFO)
+log = get_logger("vfio-assist")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -180,7 +186,7 @@ class Diagnostics:
                     name="IOMMU HW",
                     status=Status.WARNING,
                     message="CPU flags missing VT‑d/AMD‑Vi – maybe disabled in BIOS",
-                    remediation="Enable IOMMU in firmware setup (VT‑d, AMD‑Vi)",
+                    remediation="Enable IOMMU in firmware setup (VT‑d, AMD‑Vi) or echo 1 > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode if you can't in BIOS (unsafe)",
                 )
         except Exception as e:  # pragma: no cover – unlikely
             self._append(
@@ -301,15 +307,56 @@ class Diagnostics:
 
     def _device_iommu_group(self):
         group_link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        log.debug(f"Checking IOMMU group link: {group_link}")
+
         if group_link.exists():
-            group = os.path.basename(os.readlink(group_link))
-            self._append(name="IOMMU group", status=Status.OK, message=f"Group {group}")
+            try:
+                group_target = os.readlink(group_link)
+                group = os.path.basename(group_target)
+                log.debug(f"IOMMU group link target: {group_target}, group: {group}")
+
+                # Check if the group directory exists
+                group_dir = Path(f"/sys/kernel/iommu_groups/{group}")
+                if group_dir.exists():
+                    # List devices in the group for debugging
+                    devices_dir = group_dir / "devices"
+                    if devices_dir.exists():
+                        try:
+                            devices = list(devices_dir.iterdir())
+                            device_names = [d.name for d in devices]
+                            log.debug(f"Devices in IOMMU group {group}: {device_names}")
+                        except Exception as e:
+                            log.debug(
+                                f"Could not list devices in IOMMU group {group}: {e}"
+                            )
+
+                self._append(
+                    name="IOMMU group", status=Status.OK, message=f"Group {group}"
+                )
+            except OSError as e:
+                log.debug(f"Failed to read IOMMU group symlink: {e}")
+                self._append(
+                    name="IOMMU group",
+                    status=Status.ERROR,
+                    message=f"Failed to read IOMMU group symlink: {e}",
+                )
         else:
-            self._append(
-                name="IOMMU group",
-                status=Status.ERROR,
-                message="Device not in an IOMMU group – IOMMU disabled?",
-            )
+            # Check if device exists at all
+            device_path = Path(f"/sys/bus/pci/devices/{self.device_bdf}")
+            if device_path.exists():
+                log.debug(f"Device {self.device_bdf} exists but has no IOMMU group")
+                self._append(
+                    name="IOMMU group",
+                    status=Status.ERROR,
+                    message="Device exists but not in an IOMMU group – IOMMU disabled?",
+                )
+            else:
+                log.debug(f"Device {self.device_bdf} does not exist in sysfs")
+                self._append(
+                    name="IOMMU group",
+                    status=Status.ERROR,
+                    message=f"Device {self.device_bdf} not found in sysfs",
+                )
 
     def _device_driver_binding(self):
         if self.device_bdf is None:
@@ -321,21 +368,40 @@ class Diagnostics:
             return
 
         link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/driver")
+        log.debug(f"Checking driver binding for {self.device_bdf} at {link}")
+
         if link.exists():
-            driver = os.path.basename(os.readlink(link))
-            if driver == "vfio-pci":
-                self._append(
-                    name="Driver", status=Status.OK, message="Already bound to vfio-pci"
-                )
-            else:
+            try:
+                driver_target = os.readlink(link)
+                driver = os.path.basename(driver_target)
+                log.debug(f"Driver link target: {driver_target}, driver: {driver}")
+
+                if driver == "vfio-pci":
+                    self._append(
+                        name="Driver",
+                        status=Status.OK,
+                        message="Already bound to vfio-pci",
+                    )
+                else:
+                    log.debug(
+                        f"Device {self.device_bdf} bound to {driver}, needs rebinding to vfio-pci"
+                    )
+                    self._append(
+                        name="Driver",
+                        status=Status.WARNING,
+                        message=f"Bound to {driver}",
+                        remediation="Will need to rebind to vfio-pci",
+                        commands=self._bind_commands(self.device_bdf, driver),
+                    )
+            except OSError as e:
+                log.debug(f"Failed to read driver symlink for {self.device_bdf}: {e}")
                 self._append(
                     name="Driver",
-                    status=Status.WARNING,
-                    message=f"Bound to {driver}",
-                    remediation="Will need to rebind to vfio-pci",
-                    commands=self._bind_commands(self.device_bdf, driver),
+                    status=Status.ERROR,
+                    message=f"Failed to read driver symlink: {e}",
                 )
         else:
+            log.debug(f"No driver bound to device {self.device_bdf}")
             self._append(
                 name="Driver",
                 status=Status.WARNING,
@@ -357,19 +423,58 @@ class Diagnostics:
 
     def _device_node(self):
         link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        log.debug(f"Checking VFIO device node for {self.device_bdf}")
+
         if not link.exists():
+            log.debug(f"IOMMU group link does not exist for {self.device_bdf}")
             return
-        group = os.path.basename(os.readlink(link))
-        node = Path(f"/dev/vfio/{group}")
-        if node.exists():
-            self._append(
-                name="/dev/vfio node", status=Status.OK, message=node.as_posix()
-            )
-        else:
+
+        try:
+            group_target = os.readlink(link)
+            group = os.path.basename(group_target)
+            log.debug(f"IOMMU group for {self.device_bdf}: {group}")
+
+            node = Path(f"/dev/vfio/{group}")
+            log.debug(f"Checking VFIO node: {node}")
+
+            if node.exists():
+                # Check node permissions and properties
+                try:
+                    stat_info = node.stat()
+                    log.debug(f"VFIO node {node} permissions: {oct(stat_info.st_mode)}")
+                except Exception as e:
+                    log.debug(f"Could not stat VFIO node {node}: {e}")
+
+                self._append(
+                    name="/dev/vfio node", status=Status.OK, message=node.as_posix()
+                )
+            else:
+                log.debug(f"VFIO node {node} does not exist")
+
+                # Check if /dev/vfio directory exists
+                vfio_dir = Path("/dev/vfio")
+                if vfio_dir.exists():
+                    try:
+                        vfio_entries = list(vfio_dir.iterdir())
+                        log.debug(
+                            f"Available VFIO entries: {[e.name for e in vfio_entries]}"
+                        )
+                    except Exception as e:
+                        log.debug(f"Could not list /dev/vfio entries: {e}")
+                else:
+                    log.debug("/dev/vfio directory does not exist")
+
+                self._append(
+                    name="/dev/vfio node",
+                    status=Status.WARNING,
+                    message=f"{node} missing (will appear after binding)",
+                )
+        except OSError as e:
+            log.debug(f"Failed to read IOMMU group symlink for device node check: {e}")
             self._append(
                 name="/dev/vfio node",
-                status=Status.WARNING,
-                message=f"{node} missing (will appear after binding)",
+                status=Status.ERROR,
+                message=f"Failed to determine VFIO node: {e}",
             )
 
     # Overall --------------------------------------------------------------

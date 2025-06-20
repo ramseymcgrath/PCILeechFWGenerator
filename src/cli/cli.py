@@ -24,13 +24,18 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from utils.logging import get_logger
+import sys
+from pathlib import Path
+
+# Add project root to path for utils imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from utils.logging import get_logger, setup_logging
 from utils.shell import Shell
 
 from .container import BuildConfig, run_build  # new unified runner
 
 logger = get_logger(__name__)
-logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers – PCIe enumeration & interactive pickers
@@ -166,6 +171,9 @@ def flash_bin(path: Path):
 
 
 def main(argv: Optional[List[str]] = None):
+    # Setup proper logging with color support
+    setup_logging(level=logging.INFO)
+
     args = get_parser().parse_args(argv)
 
     if args.cmd == "build":

@@ -8,7 +8,7 @@ cause syntax errors when split across lines.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 def safe_format(template: str, **kwargs: Any) -> str:
@@ -54,14 +54,14 @@ def safe_format(template: str, **kwargs: Any) -> str:
 
 
 def safe_log_format(
-    logger: logging.Logger, level: int, template: str, **kwargs: Any
+    logger: logging.Logger, log_level: int, template: str, **kwargs: Any
 ) -> None:
     """
     Safely log a formatted message.
 
     Args:
         logger: The logger instance to use
-        level: The logging level (e.g., logging.INFO, logging.ERROR)
+        log_level: The logging level (e.g., logging.INFO, logging.ERROR)
         template: The string template with {variable} placeholders
         **kwargs: Keyword arguments to substitute in the template
 
@@ -74,11 +74,11 @@ def safe_log_format(
     """
     try:
         formatted_message = safe_format(template, **kwargs)
-        logger.log(level, formatted_message)
+        logger.log(log_level, formatted_message)
     except Exception as e:
         # Fallback to basic logging if formatting fails
         logger.error(f"Failed to format log message: {e}")
-        logger.log(level, f"Original template: {template}")
+        logger.log(log_level, f"Original template: {template}")
 
 
 def safe_print_format(template: str, **kwargs: Any) -> None:
@@ -211,22 +211,22 @@ def build_file_size_string(size_bytes: int) -> str:
 # Convenience functions for common logging patterns
 def log_info_safe(logger: logging.Logger, template: str, **kwargs: Any) -> None:
     """Convenience function for safe INFO level logging."""
-    safe_log_format(logger, logging.INFO, template, **kwargs)
+    safe_log_format(logger, log_level=logging.INFO, template=template, **kwargs)
 
 
 def log_error_safe(logger: logging.Logger, template: str, **kwargs: Any) -> None:
     """Convenience function for safe ERROR level logging."""
-    safe_log_format(logger, logging.ERROR, template, **kwargs)
+    safe_log_format(logger, log_level=logging.ERROR, template=template, **kwargs)
 
 
 def log_warning_safe(logger: logging.Logger, template: str, **kwargs: Any) -> None:
     """Convenience function for safe WARNING level logging."""
-    safe_log_format(logger, logging.WARNING, template, **kwargs)
+    safe_log_format(logger, log_level=logging.WARNING, template=template, **kwargs)
 
 
 def log_debug_safe(logger: logging.Logger, template: str, **kwargs: Any) -> None:
     """Convenience function for safe DEBUG level logging."""
-    safe_log_format(logger, logging.DEBUG, template, **kwargs)
+    safe_log_format(logger, log_level=logging.DEBUG, template=template, **kwargs)
 
 
 def generate_sv_header_comment(
@@ -358,5 +358,267 @@ def generate_tcl_header_comment(
     lines.append(
         "#=============================================================================="
     )
+
+    return "\n".join(lines)
+
+
+def format_bar_table(bar_configs: List[Any], primary_bar: Any = None) -> str:
+    """
+    Format BAR configuration data into a nice ASCII table.
+
+    Args:
+        bar_configs: List of BarConfiguration objects
+        primary_bar: Optional primary BAR to highlight
+
+    Returns:
+        Formatted ASCII table string
+    """
+    if not bar_configs:
+        return "No BAR configurations found"
+
+    # Table headers
+    headers = [
+        "BAR",
+        "Address",
+        "Size",
+        "Size (MB)",
+        "Type",
+        "Prefetch",
+        "Memory",
+        "Candidate",
+        "Primary",
+    ]
+
+    # Calculate column widths
+    col_widths = [len(h) for h in headers]
+
+    # Prepare data rows
+    rows = []
+    for bar_info in bar_configs:
+        is_candidate = bar_info.is_memory and bar_info.size > 0
+        is_primary = primary_bar and bar_info.index == primary_bar.index
+
+        size_mb = bar_info.size / (1024 * 1024) if bar_info.size > 0 else 0
+
+        row = [
+            str(bar_info.index),
+            f"0x{bar_info.base_address:08X}",
+            f"{bar_info.size:,}",
+            f"{size_mb:.2f}" if size_mb > 0 else "0.00",
+            "memory" if bar_info.is_memory else "io",
+            "yes" if bar_info.prefetchable else "no",
+            "yes" if bar_info.is_memory else "no",
+            "yes" if is_candidate else "no",
+            "★" if is_primary else "",
+        ]
+        rows.append(row)
+
+        # Update column widths
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    # Build the table
+    lines = []
+
+    # Top border
+    border = "┌" + "┬".join("─" * (w + 2) for w in col_widths) + "┐"
+    lines.append(border)
+
+    # Header row
+    header_row = (
+        "│"
+        + "│".join(f" {headers[i]:<{col_widths[i]}} " for i in range(len(headers)))
+        + "│"
+    )
+    lines.append(header_row)
+
+    # Header separator
+    separator = "├" + "┼".join("─" * (w + 2) for w in col_widths) + "┤"
+    lines.append(separator)
+
+    # Data rows
+    for row in rows:
+        data_row = (
+            "│"
+            + "│".join(f" {row[i]:<{col_widths[i]}} " for i in range(len(row)))
+            + "│"
+        )
+        lines.append(data_row)
+
+    # Bottom border
+    bottom_border = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
+    lines.append(bottom_border)
+
+    return "\n".join(lines)
+
+
+def format_bar_summary_table(bar_configs: List[Any], primary_bar: Any = None) -> str:
+    """
+    Format a compact BAR summary table showing only essential information.
+
+    Args:
+        bar_configs: List of BarConfiguration objects
+        primary_bar: Optional primary BAR to highlight
+
+    Returns:
+        Formatted ASCII table string
+    """
+    if not bar_configs:
+        return "No BAR configurations found"
+
+    # Table headers for summary
+    headers = ["BAR", "Address", "Size (MB)", "Type", "Status"]
+
+    # Calculate column widths
+    col_widths = [len(h) for h in headers]
+
+    # Prepare data rows
+    rows = []
+    for bar_info in bar_configs:
+        is_candidate = bar_info.is_memory and bar_info.size > 0
+        is_primary = primary_bar and bar_info.index == primary_bar.index
+
+        size_mb = bar_info.size / (1024 * 1024) if bar_info.size > 0 else 0
+
+        # Determine status
+        if is_primary:
+            status = "PRIMARY ★"
+        elif is_candidate:
+            status = "candidate"
+        elif bar_info.size == 0:
+            status = "empty"
+        elif not bar_info.is_memory:
+            status = "I/O port"
+        else:
+            status = "skipped"
+
+        row = [
+            str(bar_info.index),
+            f"0x{bar_info.base_address:08X}",
+            f"{size_mb:.2f}" if size_mb > 0 else "0.00",
+            "memory" if bar_info.is_memory else "io",
+            status,
+        ]
+        rows.append(row)
+
+        # Update column widths
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    # Build the table
+    lines = []
+
+    # Top border
+    border = "┌" + "┬".join("─" * (w + 2) for w in col_widths) + "┐"
+    lines.append(border)
+
+    # Header row
+    header_row = (
+        "│"
+        + "│".join(f" {headers[i]:<{col_widths[i]}} " for i in range(len(headers)))
+        + "│"
+    )
+    lines.append(header_row)
+
+    # Header separator
+    separator = "├" + "┼".join("─" * (w + 2) for w in col_widths) + "┤"
+    lines.append(separator)
+
+    # Data rows
+    for row in rows:
+        data_row = (
+            "│"
+            + "│".join(f" {row[i]:<{col_widths[i]}} " for i in range(len(row)))
+            + "│"
+        )
+        lines.append(data_row)
+
+    # Bottom border
+    bottom_border = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
+    lines.append(bottom_border)
+
+    return "\n".join(lines)
+
+
+def format_raw_bar_table(bars: List[Any], device_bdf: str) -> str:
+    """
+    Format raw BAR data from config space into a nice ASCII table.
+
+    Args:
+        bars: List of raw BAR data (dict or int values)
+        device_bdf: Device BDF for context
+
+    Returns:
+        Formatted ASCII table string
+    """
+    if not bars:
+        return "No BAR data found"
+
+    # Table headers
+    headers = ["BAR", "Type", "Address", "Size", "Prefetchable", "64-bit"]
+
+    # Calculate column widths
+    col_widths = [len(h) for h in headers]
+
+    # Prepare data rows
+    rows = []
+    for i, bar_data in enumerate(bars[:6]):  # Only show first 6 BARs
+        if isinstance(bar_data, dict):
+            row = [
+                str(i),
+                bar_data.get("type", "unknown"),
+                f"0x{bar_data.get('address', 0):08X}",
+                str(bar_data.get("size", 0)),
+                "Yes" if bar_data.get("prefetchable", False) else "No",
+                "Yes" if bar_data.get("is_64bit", False) else "No",
+            ]
+        else:
+            # Simple address value
+            row = [
+                str(i),
+                "unknown",
+                f"0x{bar_data:08X}",
+                "unknown",
+                "unknown",
+                "unknown",
+            ]
+
+        rows.append(row)
+
+        # Update column widths
+        for j, cell in enumerate(row):
+            col_widths[j] = max(col_widths[j], len(cell))
+
+    # Build the table
+    lines = []
+
+    # Top border
+    top_border = "┌" + "┬".join("─" * (w + 2) for w in col_widths) + "┐"
+    lines.append(top_border)
+
+    # Header row
+    header_row = (
+        "│"
+        + "│".join(f" {headers[i]:<{col_widths[i]}} " for i in range(len(headers)))
+        + "│"
+    )
+    lines.append(header_row)
+
+    # Header separator
+    header_sep = "├" + "┼".join("─" * (w + 2) for w in col_widths) + "┤"
+    lines.append(header_sep)
+
+    # Data rows
+    for row in rows:
+        data_row = (
+            "│"
+            + "│".join(f" {row[i]:<{col_widths[i]}} " for i in range(len(row)))
+            + "│"
+        )
+        lines.append(data_row)
+
+    # Bottom border
+    bottom_border = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
+    lines.append(bottom_border)
 
     return "\n".join(lines)

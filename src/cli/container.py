@@ -17,7 +17,7 @@ from typing import List, Optional
 
 from utils.logging import get_logger
 from utils.shell import Shell
-from .vfio import VFIOBinder  # auto‑fix & diagnostics baked in
+from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 
 logger = get_logger(__name__)
 
@@ -141,7 +141,7 @@ def run_build(cfg: BuildConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        with VFIOBinder(cfg.bdf, auto_fix=cfg.auto_fix) as vfio_node:
+        with VFIOBinder(cfg.bdf) as vfio_node:
             logger.info(
                 "Launching build container – board=%s, tag=%s",
                 cfg.board,
@@ -154,6 +154,7 @@ def run_build(cfg: BuildConfig) -> None:
                 podman run --rm --privileged \
                   --device={vfio_node} \
                   --entrypoint python3 \
+                  --user root \
                   --device=/dev/vfio/vfio \
                   -v {output_dir}:/app/output \
                   {cfg.container_image}:{cfg.container_tag} \
@@ -167,6 +168,51 @@ def run_build(cfg: BuildConfig) -> None:
                 subprocess.run(podman_cmd, shell=True, check=True)
             except subprocess.CalledProcessError as e:
                 raise ContainerError(f"Build failed (exit {e.returncode})") from e
+            except KeyboardInterrupt:
+                logger.warning("Build interrupted by user - cleaning up...")
+                # Get the container ID if possible
+                try:
+                    container_id = (
+                        subprocess.check_output(
+                            "podman ps -q --filter ancestor=pcileech-fw-generator:latest",
+                            shell=True,
+                        )
+                        .decode()
+                        .strip()
+                    )
+                    if container_id:
+                        logger.info(f"Stopping container {container_id}")
+                        subprocess.run(
+                            f"podman stop {container_id}", shell=True, check=False
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to clean up container: {e}")
+
+                # Ensure VFIO cleanup
+                try:
+                    from .vfio import restore_driver
+
+                    if hasattr(cfg, "bdf") and cfg.bdf:
+                        logger.info(f"Ensuring VFIO cleanup for device {cfg.bdf}")
+                        # Get original driver if possible
+                        try:
+                            from .vfio import get_current_driver
+
+                            original_driver = get_current_driver(cfg.bdf)
+                            restore_driver(cfg.bdf, original_driver)
+                        except Exception:
+                            # Just try to unbind from vfio-pci
+                            try:
+                                with open(
+                                    f"/sys/bus/pci/drivers/vfio-pci/unbind", "w"
+                                ) as f:
+                                    f.write(f"{cfg.bdf}\n")
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.warning(f"VFIO cleanup after interrupt failed: {e}")
+
+                raise KeyboardInterrupt("Build interrupted by user")
             duration = time.time() - start
             logger.info("Build completed in %.1fs", duration)
     except RuntimeError as e:

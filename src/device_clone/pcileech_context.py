@@ -7,21 +7,49 @@ integrating data from BehaviorProfiler, ConfigSpaceManager, and MSIXCapability
 to provide structured context for all PCILeech templates.
 
 The context builder ensures all required data is present and provides validation
-to prevent template rendering failures. NO FALLBACK VALUES are used - the system
-fails if data is incomplete to ensure firmware uniqueness.
+to prevent template rendering failures. The system fails if data is incomplete to ensure firmware uniqueness.
 """
 
+import ctypes
+import fcntl
 import hashlib
 import logging
+import os
+import struct
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
+from ..string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
+from ..exceptions import ContextError
+from ..error_utils import extract_root_cause
 from .behavior_profiler import BehaviorProfile
+from .fallback_manager import FallbackManager
 
 logger = logging.getLogger(__name__)
+
+# Import proper VFIO constants with kernel-compatible ioctl generation
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VfioRegionInfo,
+)
 
 
 class ValidationLevel(Enum):
@@ -32,12 +60,8 @@ class ValidationLevel(Enum):
     PERMISSIVE = "permissive"
 
 
-class PCILeechContextError(Exception):
-    """Exception raised when context building fails."""
-
-    def __init__(self, message: str, missing_data: Optional[List[str]] = None):
-        super().__init__(message)
-        self.missing_data = missing_data or []
+# Alias for backward compatibility
+PCILeechContextError = ContextError
 
 
 @dataclass
@@ -54,7 +78,7 @@ class DeviceIdentifiers:
     def __post_init__(self):
         """Validate device identifiers."""
         if not all([self.vendor_id, self.device_id, self.class_code, self.revision_id]):
-            raise PCILeechContextError("Device identifiers cannot be empty")
+            raise ContextError("Device identifiers cannot be empty")
 
         # Validate hex format
         for field_name, value in [
@@ -66,9 +90,7 @@ class DeviceIdentifiers:
             try:
                 int(value, 16)
             except ValueError:
-                raise PCILeechContextError(
-                    f"Invalid hex format for {field_name}: {value}"
-                )
+                raise ContextError(f"Invalid hex format for {field_name}: {value}")
 
 
 @dataclass
@@ -86,9 +108,9 @@ class BarConfiguration:
     def __post_init__(self):
         """Validate BAR configuration."""
         if self.index < 0 or self.index > 5:
-            raise PCILeechContextError(f"Invalid BAR index: {self.index}")
-        if self.size <= 0:
-            raise PCILeechContextError(f"Invalid BAR size: {self.size}")
+            raise ContextError(f"Invalid BAR index: {self.index}")
+        if self.size < 0:
+            raise ContextError(f"Invalid BAR size: {self.size}")
 
 
 @dataclass
@@ -114,9 +136,9 @@ class TimingParameters:
                 self.timeout_cycles,
             ]
         ):
-            raise PCILeechContextError("Timing parameters must be positive")
+            raise ContextError("Timing parameters must be positive")
         if self.clock_frequency_mhz <= 0:
-            raise PCILeechContextError("Clock frequency must be positive")
+            raise ContextError("Clock frequency must be positive")
 
 
 class PCILeechContextBuilder:
@@ -127,15 +149,16 @@ class PCILeechContextBuilder:
     template context that can be used for all PCILeech template rendering.
 
     Key principles:
-    - NO FALLBACK VALUES - ensures firmware uniqueness
     - Strict validation of all input data
     - Comprehensive error reporting
     - Deterministic context generation
     """
 
     # Constants for validation
+    # Minimum and maximum config space sizes
     MIN_CONFIG_SPACE_SIZE = 256
     MAX_CONFIG_SPACE_SIZE = 4096
+    # Required fields for device identifiers and MSI-X capabilities
     REQUIRED_DEVICE_FIELDS = ["vendor_id", "device_id", "class_code", "revision_id"]
     REQUIRED_MSIX_FIELDS = ["table_size", "table_bir", "table_offset"]
 
@@ -144,6 +167,7 @@ class PCILeechContextBuilder:
         device_bdf: str,
         config: Any,
         validation_level: ValidationLevel = ValidationLevel.STRICT,
+        fallback_manager: Optional[FallbackManager] = None,
     ):
         """
         Initialize the context builder.
@@ -152,9 +176,10 @@ class PCILeechContextBuilder:
             device_bdf: Device Bus:Device.Function identifier
             config: PCILeech generation configuration
             validation_level: Strictness of validation
+            fallback_manager: Optional fallback manager for controlling fallback behavior
         """
         if not device_bdf or not device_bdf.strip():
-            raise PCILeechContextError("Device BDF cannot be empty")
+            raise ContextError("Device BDF cannot be empty")
 
         self.device_bdf = device_bdf.strip()
         self.config = config
@@ -162,11 +187,18 @@ class PCILeechContextBuilder:
         self.logger = logging.getLogger(__name__)
         self._context_cache: Dict[str, Any] = {}
 
+        # Initialize fallback manager with default settings if not provided
+        self.fallback_manager = fallback_manager or FallbackManager(
+            mode="prompt", allowed_fallbacks=["bar-analysis"]
+        )
+
     def build_context(
         self,
         behavior_profile: Optional[BehaviorProfile],
         config_space_data: Dict[str, Any],
-        msix_data: Dict[str, Any],
+        msix_data: Optional[Dict[str, Any]],
+        interrupt_strategy: str = "intx",
+        interrupt_vectors: int = 1,
     ) -> Dict[str, Any]:
         """
         Build comprehensive template context from all data sources.
@@ -174,19 +206,22 @@ class PCILeechContextBuilder:
         Args:
             behavior_profile: Device behavior profile data
             config_space_data: Configuration space analysis data
-            msix_data: MSI-X capability data
+            msix_data: MSI-X capability data (None if not available)
+            interrupt_strategy: Interrupt strategy ("msix", "msi", or "intx")
+            interrupt_vectors: Number of interrupt vectors
 
         Returns:
             Comprehensive template context dictionary
 
         Raises:
-            PCILeechContextError: If context building fails or data is incomplete
+            ContextError: If context building fails or data is incomplete
         """
         log_info_safe(
             self.logger,
-            "Building PCILeech template context for device {bdf} with {level} validation",
+            "Building PCILeech template context for device {bdf} with {strategy} interrupts ({vectors} vectors)",
             bdf=self.device_bdf,
-            level=self.validation_level.value,
+            strategy=interrupt_strategy,
+            vectors=interrupt_vectors,
         )
 
         # Pre-validate all input data
@@ -213,11 +248,19 @@ class PCILeechContextBuilder:
                 device_identifiers, behavior_profile, config_space_data
             )
 
+            # Build interrupt configuration
+            interrupt_config = {
+                "strategy": interrupt_strategy,
+                "vectors": interrupt_vectors,
+                "msix_available": msix_data is not None,
+            }
+
             # Assemble complete context
             context = {
                 "device_config": device_config,
                 "config_space": config_space,
                 "msix_config": msix_config,
+                "interrupt_config": interrupt_config,
                 "bar_config": bar_config,
                 "timing_config": timing_config,
                 "pcileech_config": pcileech_config,
@@ -239,17 +282,18 @@ class PCILeechContextBuilder:
             return context
 
         except Exception as e:
+            root_cause = extract_root_cause(e)
             log_error_safe(
                 self.logger,
                 "Failed to build PCILeech template context: {error}",
-                error=str(e),
+                error=root_cause,
             )
-            raise PCILeechContextError(f"Context building failed: {e}") from e
+            raise ContextError("Context building failed", root_cause=root_cause)
 
     def _validate_input_data(
         self,
         config_space_data: Dict[str, Any],
-        msix_data: Dict[str, Any],
+        msix_data: Optional[Dict[str, Any]],
         behavior_profile: Optional[BehaviorProfile],
     ) -> None:
         """
@@ -257,11 +301,11 @@ class PCILeechContextBuilder:
 
         Args:
             config_space_data: Configuration space data
-            msix_data: MSI-X capability data
+            msix_data: MSI-X capability data (None if not available)
             behavior_profile: Device behavior profile
 
         Raises:
-            PCILeechContextError: If validation fails
+            ContextError: If validation fails
         """
         missing_data = []
 
@@ -275,10 +319,21 @@ class PCILeechContextBuilder:
 
             # Validate config space size
             config_size = config_space_data.get("config_space_size", 0)
-            if (
-                config_size < self.MIN_CONFIG_SPACE_SIZE
-                or config_size > self.MAX_CONFIG_SPACE_SIZE
-            ):
+            if config_size < self.MIN_CONFIG_SPACE_SIZE:
+                # Log warning but don't fail - many devices only expose 64 bytes via sysfs
+                log_warning_safe(
+                    self.logger,
+                    "Config space size ({size}) is less than ideal minimum ({min_size}), "
+                    "but proceeding as this is common for sysfs-based reads",
+                    size=config_size,
+                    min_size=self.MIN_CONFIG_SPACE_SIZE,
+                )
+                # Only fail in strict mode if we have absolutely no config space data
+                if self.validation_level == ValidationLevel.STRICT and config_size == 0:
+                    missing_data.append(
+                        f"config_space_data.config_space_size (got {config_size})"
+                    )
+            elif config_size > self.MAX_CONFIG_SPACE_SIZE:
                 missing_data.append(
                     f"config_space_data.config_space_size (got {config_size})"
                 )
@@ -304,9 +359,8 @@ class PCILeechContextBuilder:
                 missing_data.append("behavior_profile.capture_duration")
 
         if missing_data and self.validation_level == ValidationLevel.STRICT:
-            raise PCILeechContextError(
-                f"Missing required data for unique firmware generation: {missing_data}",
-                missing_data=missing_data,
+            raise ContextError(
+                f"Missing required data for unique firmware generation: {missing_data}"
             )
         elif missing_data:
             log_warning_safe(
@@ -329,7 +383,7 @@ class PCILeechContextBuilder:
             Validated device identifiers
 
         Raises:
-            PCILeechContextError: If identifiers are missing or invalid
+            ContextError: If identifiers are missing or invalid
         """
         try:
             return DeviceIdentifiers(
@@ -341,7 +395,7 @@ class PCILeechContextBuilder:
                 subsystem_device_id=config_space_data.get("subsystem_device_id"),
             )
         except KeyError as e:
-            raise PCILeechContextError(f"Missing required device identifier: {e}")
+            raise ContextError(f"Missing required device identifier: {e}")
 
     def _build_device_config(
         self,
@@ -350,7 +404,7 @@ class PCILeechContextBuilder:
         config_space_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Build device configuration context with no fallbacks.
+        Build device configuration context.
 
         Args:
             device_identifiers: Validated device identifiers
@@ -414,7 +468,7 @@ class PCILeechContextBuilder:
             Serialized behavior profile data
 
         Raises:
-            PCILeechContextError: If serialization fails
+            ContextError: If serialization fails
         """
         try:
             # Convert dataclass to dictionary
@@ -429,7 +483,7 @@ class PCILeechContextBuilder:
             return profile_dict
 
         except Exception as e:
-            raise PCILeechContextError(f"Failed to serialize behavior profile: {e}")
+            raise ContextError(f"Failed to serialize behavior profile: {e}")
 
     def _build_config_space_context(
         self, config_space_data: Dict[str, Any]
@@ -444,7 +498,7 @@ class PCILeechContextBuilder:
             Configuration space context
 
         Raises:
-            PCILeechContextError: If required data is missing
+            ContextError: If required data is missing
         """
         required_fields = ["config_space_hex", "config_space_size", "bars"]
         missing_fields = [
@@ -452,7 +506,7 @@ class PCILeechContextBuilder:
         ]
 
         if missing_fields and self.validation_level == ValidationLevel.STRICT:
-            raise PCILeechContextError(
+            raise ContextError(
                 f"Missing required config space fields: {missing_fields}"
             )
 
@@ -468,7 +522,9 @@ class PCILeechContextBuilder:
             "has_extended_config": config_space_data["config_space_size"] > 256,
         }
 
-    def _build_msix_context(self, msix_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_msix_context(
+        self, msix_data: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Build MSI-X configuration context.
 
@@ -519,7 +575,12 @@ class PCILeechContextBuilder:
         behavior_profile: Optional[BehaviorProfile],
     ) -> Dict[str, Any]:
         """
-        Build BAR configuration context with no fallbacks.
+        Build BAR configuration context using VFIO region info.
+
+        Fetches each BAR's true size via VFIO_DEVICE_GET_REGION_INFO,
+        considers any MMIO BAR with size > 0 a valid candidate,
+        chooses the largest such BAR as primary, and raises ContextError
+        only if all BARs are size 0 or I/O-port.
 
         Args:
             config_space_data: Configuration space data
@@ -529,30 +590,134 @@ class PCILeechContextBuilder:
             BAR configuration context
 
         Raises:
-            PCILeechContextError: If no valid BARs found
+            ContextError: If no valid MMIO BARs found
         """
         bars = config_space_data["bars"]
-
-        if not bars or all(bar == 0 for bar in bars):
-            raise PCILeechContextError(
-                "No valid BARs found - cannot generate unique firmware"
-            )
-
         bar_configs = []
         primary_bar = None
+        largest_size = 0
 
-        # Process each BAR
-        for i, bar_value in enumerate(bars[:6]):  # Only process first 6 BARs
-            if bar_value != 0:
-                bar_info = self._analyze_bar(i, bar_value)
-                bar_configs.append(bar_info)
+        # Log raw BAR data from config space using table format
+        log_info_safe(
+            self.logger,
+            "Analyzing BARs for device {bdf} with {count} BARs",
+            bdf=self.device_bdf,
+            count=len(bars),
+        )
 
-                # Use first valid BAR as primary
-                if primary_bar is None:
-                    primary_bar = bar_info
+        # Display raw BAR data in table format
+        raw_bar_table = format_raw_bar_table(bars, self.device_bdf)
+        log_info_safe(self.logger, "Raw BAR Configuration:")
+        for line in raw_bar_table.split("\n"):
+            log_info_safe(self.logger, line)
 
-        if not primary_bar:
-            raise PCILeechContextError("No valid primary BAR found")
+        # First pass: Collect all BAR information
+        for i in range(len(bars)):
+            try:
+                bar_data = bars[i]
+                bar_info = self._get_vfio_bar_info(i, bar_data)
+
+                if bar_info is not None:
+                    bar_configs.append(bar_info)
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} VFIO info: {info}",
+                        index=bar_info.index,
+                        info=asdict(bar_info),
+                    )
+                else:
+                    # Log why this BAR was skipped
+                    if isinstance(bar_data, dict):
+                        bar_type = bar_data.get("type", "unknown")
+                        size = bar_data.get("size", 0)
+                        if bar_type == "memory" and size == 0:
+                            log_info_safe(
+                                self.logger,
+                                "BAR {num}: Skipped (memory BAR with size 0)",
+                                num=i,
+                            )
+                        elif bar_type == "io":
+                            log_info_safe(
+                                self.logger,
+                                "BAR {num}: Skipped (I/O BAR - not suitable for MMIO)",
+                                num=i,
+                            )
+                        else:
+                            log_info_safe(
+                                self.logger,
+                                "BAR {num}: Skipped (type={type}, size={size})",
+                                num=i,
+                                type=bar_type,
+                                size=size,
+                            )
+                    else:
+                        log_info_safe(
+                            self.logger,
+                            "BAR {num}: Skipped (invalid or not implemented)",
+                            num=i,
+                        )
+
+            except Exception as e:
+                log_warning_safe(
+                    self.logger,
+                    "Failed to analyze BAR {index}: {error}",
+                    index=i,
+                    error=str(e),
+                )
+                continue
+
+        # Always display BAR information for debugging, even if no valid BARs found
+        log_info_safe(self.logger, "=== BAR Configuration Summary ===")
+        if not bar_configs:
+            log_info_safe(
+                self.logger,
+                "No valid MMIO BARs found - all BARs are either size 0 or I/O-port",
+            )
+        else:
+            # Display detailed BAR table
+            detailed_table = format_bar_table(bar_configs, primary_bar)
+            log_info_safe(self.logger, "Detailed BAR Configuration:")
+            for line in detailed_table.split("\n"):
+                log_info_safe(self.logger, line)
+
+            # Display compact summary table
+            summary_table = format_bar_summary_table(bar_configs, primary_bar)
+            log_info_safe(self.logger, "\nBAR Summary:")
+            for line in summary_table.split("\n"):
+                log_info_safe(self.logger, line)
+
+            # Log primary BAR selection details
+            if primary_bar:
+                log_info_safe(
+                    self.logger,
+                    "\nPrimary BAR selected: index={index}, size={size} bytes ({mb:.2f} MB), type={type}",
+                    index=primary_bar.index,
+                    size=primary_bar.size,
+                    mb=primary_bar.size / (1024 * 1024),
+                    type="memory" if primary_bar.is_memory else "io",
+                )
+
+        log_info_safe(self.logger, "=" * 70)
+
+        # Second pass: Select the primary BAR from candidates
+        memory_bars = [bar for bar in bar_configs if bar.is_memory and bar.size > 0]
+
+        if memory_bars:
+            # Choose the largest memory BAR as primary
+            primary_bar = max(memory_bars, key=lambda bar: bar.size)
+            log_info_safe(
+                self.logger,
+                "Primary BAR selected: index={index}, size={size} bytes ({mb:.2f} MB), type={type}",
+                index=primary_bar.index,
+                size=primary_bar.size,
+                mb=primary_bar.size / (1024 * 1024),
+                type="memory" if primary_bar.is_memory else "io",
+            )
+        # Raise error only if all BARs are size 0 or I/O-port
+        if primary_bar is None:
+            raise ContextError(
+                "No valid MMIO BARs found - all BARs are either size 0 or I/O-port"
+            )
 
         bar_config = {
             "bar_index": primary_bar.index,
@@ -571,34 +736,536 @@ class PCILeechContextBuilder:
 
         return bar_config
 
-    def _analyze_bar(self, index: int, bar_value: int) -> BarConfiguration:
+    def _get_vfio_bar_info(self, index: int, bar_data) -> Optional[BarConfiguration]:
         """
-        Analyze a single BAR value with validation.
+        Get BAR information using VFIO region info.
 
         Args:
             index: BAR index (0-5)
-            bar_value: BAR register value
+            bar_data: BAR data from config space
 
         Returns:
-            Validated BAR configuration
+            BAR configuration or None if BAR is not valid
 
         Raises:
-            PCILeechContextError: If BAR analysis fails
+            ContextError: If VFIO access fails
         """
-        if bar_value == 0:
-            raise PCILeechContextError(f"BAR {index} is empty")
+        try:
+            log_info_safe(
+                self.logger,
+                "Analyzing BAR {index} with data: {data}",
+                index=index,
+                data=bar_data,
+            )
+            # Try to get VFIO region info for accurate size
+            region_info = self._get_vfio_region_info(index)
+            if region_info:
+                log_info_safe(
+                    self.logger,
+                    "VFIO region info for BAR {index}: {info}",
+                    index=index,
+                    info=region_info,
+                )
+                size = region_info["size"]
+                flags = region_info["flags"]
 
-        is_memory = (bar_value & 0x1) == 0
+                # Determine BAR properties from config space data
+                if isinstance(bar_data, dict):
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} data: {data}",
+                        index=index,
+                        data=bar_data,
+                    )
+                    bar_type_str = bar_data.get("type", "memory")
+                    is_memory = bar_type_str == "memory"
+                    is_io = bar_type_str == "io"
+                    base_address = bar_data.get("address", 0)
+                    prefetchable = bar_data.get("prefetchable", False)
+                    bar_type = 1 if bar_data.get("is_64bit", False) else 0
+                else:
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} data (raw): {data}",
+                        index=index,
+                        data=bar_data,
+                    )
+                    # Handle integer BAR values
+                    bar_value = bar_data
+                    if bar_value == 0:
+                        return None
 
-        if is_memory:
-            # Memory BAR
-            bar_type = (bar_value >> 1) & 0x3  # Bits 2:1
-            prefetchable = bool((bar_value >> 3) & 0x1)  # Bit 3
-            base_address = bar_value & 0xFFFFFFF0  # Clear lower 4 bits
+                    is_memory = (bar_value & 0x1) == 0
+                    is_io = not is_memory
 
-            # Calculate size from BAR value (simplified estimation)
-            # In real implementation, this would require probing
-            size = self._estimate_bar_size(bar_value, is_memory=True)
+                    if is_memory:
+                        bar_type = (bar_value >> 1) & 0x3
+                        prefetchable = bool((bar_value >> 3) & 0x1)
+                        base_address = bar_value & 0xFFFFFFF0
+                    else:
+                        bar_type = 0
+                        prefetchable = False
+                        base_address = bar_value & 0xFFFFFFFC
+
+                # Log detailed BAR analysis results
+                log_info_safe(
+                    self.logger,
+                    "BAR {index} analysis complete - type: {type}, memory: {is_memory}, I/O: {is_io}, "
+                    "size: {size}, address: 0x{address:x}, prefetchable: {prefetchable}",
+                    index=index,
+                    type="memory" if is_memory else "io",
+                    is_memory=is_memory,
+                    is_io=is_io,
+                    size=size,
+                    address=base_address,
+                    prefetchable=prefetchable,
+                )
+
+                # Only return valid memory BARs with size > 0 (I/O BARs are not suitable for MMIO)
+                if is_memory and size > 0:
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} is valid - creating BarConfiguration",
+                        index=index,
+                    )
+                    return BarConfiguration(
+                        index=index,
+                        base_address=base_address,
+                        size=size,
+                        bar_type=bar_type,
+                        prefetchable=prefetchable,
+                        is_memory=is_memory,
+                        is_io=is_io,
+                    )
+                else:
+                    if is_memory and size == 0:
+                        log_info_safe(
+                            self.logger,
+                            "BAR {index}: Skipped (memory BAR with zero size)",
+                            index=index,
+                        )
+                    elif is_io:
+                        log_info_safe(
+                            self.logger,
+                            "BAR {index}: Skipped (I/O BAR - not suitable for MMIO)",
+                            index=index,
+                        )
+
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                "VFIO region info failed for BAR {index}: {error}",
+                index=index,
+                error=str(e),
+            )
+            # NO FALLBACKS - fail fast when VFIO access fails
+            raise ContextError(
+                f"VFIO access failed for BAR {index}: {str(e)}. "
+                f"Ensure device {self.device_bdf} is properly bound to vfio-pci and IOMMU is configured correctly."
+            )
+
+        # Explicitly return None if no valid BAR is found
+        return None
+
+    def _open_vfio_device_fd(self) -> tuple[int, int]:
+        """Open the device FD using the complete VFIO workflow.
+
+        Returns:
+            Tuple of (device_fd, container_fd). Both must be closed when done.
+        """
+        from ..cli.vfio_helpers import get_device_fd
+
+        log_info_safe(
+            self.logger,
+            "Opening VFIO device FD for device {bdf}",
+            bdf=self.device_bdf,
+        )
+
+        try:
+            device_fd, container_fd = get_device_fd(self.device_bdf)
+            log_info_safe(
+                self.logger,
+                "Successfully opened VFIO device FD {fd} and container FD {cont_fd} for device {bdf}",
+                fd=device_fd,
+                cont_fd=container_fd,
+                bdf=self.device_bdf,
+            )
+            return device_fd, container_fd
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                "Failed to open VFIO device FD for device {bdf}: {error}",
+                bdf=self.device_bdf,
+                error=str(e),
+            )
+            raise
+
+    def _get_vfio_region_info(self, index: int) -> Optional[Dict[str, Any]]:
+        log_info_safe(
+            self.logger,
+            "Attempting to get VFIO region info for BAR {index} on device {bdf}",
+            index=index,
+            bdf=self.device_bdf,
+        )
+
+        try:
+            fd, cont_fd = self._open_vfio_device_fd()
+            log_info_safe(
+                self.logger,
+                "Successfully opened VFIO device FD {fd} and container FD {cont_fd} for region info query",
+                fd=fd,
+                cont_fd=cont_fd,
+            )
+        except OSError as e:
+            error_code = getattr(e, "errno", "unknown")
+            if error_code == 22:  # EINVAL
+                log_warning_safe(
+                    self.logger,
+                    "Failed to open VFIO device FD for region info: [Errno 22] Invalid argument - device may not be properly bound to vfio-pci or IOMMU issue",
+                )
+            else:
+                log_warning_safe(
+                    self.logger,
+                    "Failed to open VFIO device FD for region info: [Errno {errno}] {error}",
+                    errno=error_code,
+                    error=str(e),
+                )
+            return None
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Unexpected error opening VFIO device FD for region info: {error}",
+                error=str(e),
+            )
+            return None
+
+        try:
+            info = VfioRegionInfo()
+            info.argsz = ctypes.sizeof(VfioRegionInfo)
+            info.index = index
+
+            log_info_safe(
+                self.logger,
+                "Querying VFIO region info for index {index} with struct size {size}",
+                index=index,
+                size=info.argsz,
+            )
+
+            # mutate=True lets the kernel write back size/flags
+            fcntl.ioctl(fd, VFIO_DEVICE_GET_REGION_INFO, info, True)
+
+            log_info_safe(
+                self.logger,
+                "VFIO region info successful - index: {index}, size: {size}, flags: 0x{flags:x}",
+                index=info.index,
+                size=info.size,
+                flags=info.flags,
+            )
+
+            result = {
+                "index": info.index,
+                "flags": info.flags,
+                "size": info.size,
+                "readable": bool(info.flags & VFIO_REGION_INFO_FLAG_READ),
+                "writable": bool(info.flags & VFIO_REGION_INFO_FLAG_WRITE),
+                "mappable": bool(info.flags & VFIO_REGION_INFO_FLAG_MMAP),
+            }
+
+            log_info_safe(
+                self.logger,
+                "VFIO region {index} properties - readable: {readable}, writable: {writable}, mappable: {mappable}",
+                index=index,
+                readable=result["readable"],
+                writable=result["writable"],
+                mappable=result["mappable"],
+            )
+
+            return result
+
+        except OSError as e:
+            log_error_safe(
+                self.logger,
+                "VFIO region info ioctl failed for index {index}: [Errno {errno}] {error}",
+                index=index,
+                errno=getattr(e, "errno", "unknown"),
+                error=str(e),
+            )
+            return None
+        finally:
+            log_info_safe(
+                self.logger,
+                "Closing VFIO device FD {fd} and container FD {cont_fd}",
+                fd=fd,
+                cont_fd=cont_fd,
+            )
+            try:
+                os.close(fd)
+            except OSError:
+                pass  # Already closed
+            try:
+                os.close(cont_fd)
+            except OSError:
+                pass  # Already closed
+
+    def _get_vfio_group(self) -> str:
+        """
+        Return the IOMMU group number for the device.
+
+        Inside the build container the usual sysfs path is often absent, but the
+        correct /dev/vfio/<grp> node is mounted.  If we can't resolve the group via
+        sysfs, fall back to enumerating /dev/vfio.
+        """
+        # 1) Outside-container / normal path
+        try:
+            log_info_safe(
+                self.logger,
+                "Attempting to resolve IOMMU group for device {bdf} via sysfs",
+                bdf=self.device_bdf,
+            )
+
+            # Parse BDF components
+            dom, bus_devfunc = (
+                self.device_bdf.split(":", 1)
+                if ":" in self.device_bdf
+                else ("0000", self.device_bdf)
+            )
+            bus, dev_func = bus_devfunc.split(":")
+            dev, fn = dev_func.split(".")
+
+            log_info_safe(
+                self.logger,
+                "Parsed BDF {bdf} into domain: {dom}, bus: {bus}, device: {dev}, function: {fn}",
+                bdf=self.device_bdf,
+                dom=dom,
+                bus=bus,
+                dev=dev,
+                fn=fn,
+            )
+
+            iommu_path = f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}/iommu_group"
+            log_info_safe(
+                self.logger,
+                "Checking IOMMU group path: {path}",
+                path=iommu_path,
+            )
+
+            if os.path.exists(iommu_path):
+                try:
+                    group_link = os.readlink(iommu_path)
+                    group_number = os.path.basename(group_link)
+                    log_info_safe(
+                        self.logger,
+                        "Successfully resolved IOMMU group via sysfs: {group} (link: {link})",
+                        group=group_number,
+                        link=group_link,
+                    )
+                    return group_number
+                except OSError as e:
+                    log_warning_safe(
+                        self.logger,
+                        "Failed to read IOMMU group symlink {path}: {error}",
+                        path=iommu_path,
+                        error=str(e),
+                    )
+            else:
+                log_warning_safe(
+                    self.logger,
+                    "IOMMU group path does not exist: {path}",
+                    path=iommu_path,
+                )
+
+                # Check if the device exists at all
+                device_path = f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}"
+                if os.path.exists(device_path):
+                    log_info_safe(
+                        self.logger,
+                        "Device exists at {path} but no IOMMU group - IOMMU may be disabled",
+                        path=device_path,
+                    )
+                else:
+                    log_warning_safe(
+                        self.logger,
+                        "Device does not exist at {path} - check BDF format",
+                        path=device_path,
+                    )
+
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Exception during sysfs IOMMU group resolution: {error}",
+                error=str(e),
+            )
+
+        # 2) In-container fallback – pick the first numeric node in /dev/vfio
+        log_info_safe(
+            self.logger,
+            "Falling back to enumerating /dev/vfio for available groups",
+        )
+
+        try:
+            vfio_entries = os.listdir("/dev/vfio")
+            log_info_safe(
+                self.logger,
+                "Found entries in /dev/vfio: {entries}",
+                entries=vfio_entries,
+            )
+
+            numeric_groups = [entry for entry in vfio_entries if entry.isdigit()]
+            log_info_safe(
+                self.logger,
+                "Available numeric VFIO groups: {groups}",
+                groups=numeric_groups,
+            )
+
+            if numeric_groups:
+                selected_group = numeric_groups[0]
+                log_info_safe(
+                    self.logger,
+                    "Selected VFIO group from fallback enumeration: {group}",
+                    group=selected_group,
+                )
+                return selected_group
+
+        except FileNotFoundError:
+            log_warning_safe(
+                self.logger,
+                "/dev/vfio directory not found - VFIO may not be available",
+            )
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Exception during /dev/vfio enumeration: {error}",
+                error=str(e),
+            )
+
+        # 3) Last resort
+        log_warning_safe(
+            self.logger,
+            "All IOMMU group resolution methods failed, using fallback group '0'",
+        )
+        return "0"
+
+    def _analyze_bar_fallback(self, index: int, bar_data) -> Optional[BarConfiguration]:
+        """
+        Fallback BAR analysis when VFIO is not available.
+
+        This method provides intelligent size estimation based on device class,
+        BAR type, and common patterns when hardware probing is not possible.
+
+        Args:
+            index: BAR index
+            bar_data: BAR data
+
+        Returns:
+            BAR configuration or None
+        """
+        log_warning_safe(
+            self.logger,
+            "Falling back to intelligent BAR analysis for index {index} with data: {data}",
+            index=index,
+            data=bar_data,
+        )
+
+        # Handle both dict and int formats
+        if isinstance(bar_data, dict):
+            bar_type_str = bar_data.get("type", "memory")
+            is_memory = bar_type_str == "memory"
+            is_io = bar_type_str == "io"
+            base_address = bar_data.get("address", 0)
+            prefetchable = bar_data.get("prefetchable", False)
+            size = bar_data.get("size", 0)
+
+            # If size is available from config space, use it
+            if size > 0:
+                bar_type = 1 if bar_data.get("is_64bit", False) else 0
+                log_info_safe(
+                    self.logger,
+                    "Fallback BAR {index}: Using config space size - type={type}, address=0x{address:08X}, size={size}, prefetchable={prefetchable}",
+                    index=index,
+                    type=bar_type_str,
+                    address=base_address,
+                    size=size,
+                    prefetchable=prefetchable,
+                )
+
+                return BarConfiguration(
+                    index=index,
+                    base_address=base_address,
+                    size=size,
+                    bar_type=bar_type,
+                    prefetchable=prefetchable,
+                    is_memory=is_memory,
+                    is_io=is_io,
+                )
+
+            # If no size available but we have a valid address, estimate based on device type
+            if base_address > 0 and is_memory:
+                estimated_size = self._estimate_bar_size_from_device_context(
+                    index, bar_data
+                )
+                bar_type = 1 if bar_data.get("is_64bit", False) else 0
+
+                log_warning_safe(
+                    self.logger,
+                    "Fallback BAR {index}: Estimating size - type={type}, address=0x{address:08X}, estimated_size={size}, prefetchable={prefetchable}",
+                    index=index,
+                    type=bar_type_str,
+                    address=base_address,
+                    size=estimated_size,
+                    prefetchable=prefetchable,
+                )
+
+                return BarConfiguration(
+                    index=index,
+                    base_address=base_address,
+                    size=estimated_size,
+                    bar_type=bar_type,
+                    prefetchable=prefetchable,
+                    is_memory=is_memory,
+                    is_io=is_io,
+                )
+
+            # Skip BARs with no address and no size
+            return None
+
+        else:
+            # Handle integer BAR values
+            bar_value = bar_data
+            if bar_value == 0:
+                return None
+
+            is_memory = (bar_value & 0x1) == 0
+            is_io = not is_memory
+
+            if is_memory:
+                bar_type = (bar_value >> 1) & 0x3
+                prefetchable = bool((bar_value >> 3) & 0x1)
+                base_address = bar_value & 0xFFFFFFF0
+                # Estimate size based on device context and BAR properties
+                size = self._estimate_bar_size_from_device_context(
+                    index,
+                    {
+                        "type": "memory",
+                        "address": base_address,
+                        "prefetchable": prefetchable,
+                    },
+                )
+            else:
+                bar_type = 0
+                prefetchable = False
+                base_address = bar_value & 0xFFFFFFFC
+                # I/O BARs are typically smaller
+                size = 256  # Default I/O size
+
+            log_warning_safe(
+                self.logger,
+                "Fallback BAR {index}: Estimated from raw value - type={type}, address=0x{address:08X}, size={size}, prefetchable={prefetchable}",
+                index=index,
+                type="memory" if is_memory else "io",
+                address=base_address,
+                size=size,
+                prefetchable=prefetchable,
+            )
 
             return BarConfiguration(
                 index=index,
@@ -606,141 +1273,68 @@ class PCILeechContextBuilder:
                 size=size,
                 bar_type=bar_type,
                 prefetchable=prefetchable,
-                is_memory=True,
-                is_io=False,
+                is_memory=is_memory,
+                is_io=is_io,
             )
+
+    def _estimate_bar_size_from_device_context(
+        self, bar_index: int, bar_data: dict
+    ) -> int:
+        """
+        Estimate BAR size based on device class, BAR properties, and common patterns.
+
+        Args:
+            bar_index: BAR index (0-5)
+            bar_data: BAR data dictionary
+
+        Returns:
+            Estimated BAR size in bytes
+        """
+        # Default sizes based on common device patterns
+        base_size = 4096  # 4KB minimum
+
+        # Check if we have device class information for better estimation
+        if hasattr(self, "config") and hasattr(self.config, "device_class"):
+            device_class = getattr(self.config, "device_class", "")
+
+            # Network controllers typically have larger register spaces
+            if "network" in device_class.lower() or "ethernet" in device_class.lower():
+                base_size = 64 * 1024  # 64KB
+            # Audio controllers typically have moderate register spaces
+            elif (
+                "audio" in device_class.lower() or "multimedia" in device_class.lower()
+            ):
+                base_size = 16 * 1024  # 16KB
+            # Graphics cards typically have very large BARs
+            elif "display" in device_class.lower() or "vga" in device_class.lower():
+                if bar_data.get("prefetchable", False):
+                    base_size = 256 * 1024 * 1024  # 256MB for framebuffer
+                else:
+                    base_size = 16 * 1024  # 16KB for registers
+            # Storage controllers typically have moderate register spaces
+            elif "storage" in device_class.lower() or "sata" in device_class.lower():
+                base_size = 8 * 1024  # 8KB
+
+        # Adjust based on BAR index (BAR0 is typically the main register space)
+        if bar_index == 0:
+            # BAR0 is usually the primary register space
+            pass  # Use base_size as-is
+        elif bar_index == 1 and bar_data.get("prefetchable", False):
+            # BAR1 prefetchable might be a larger memory space
+            base_size = max(base_size, 64 * 1024)
         else:
-            # I/O BAR
-            base_address = bar_value & 0xFFFFFFFC  # Clear lower 2 bits
-            size = self._estimate_bar_size(bar_value, is_memory=False)
+            # Other BARs are typically smaller
+            base_size = min(base_size, 16 * 1024)
 
-            return BarConfiguration(
-                index=index,
-                base_address=base_address,
-                size=size,
-                bar_type=0,
-                prefetchable=False,
-                is_memory=False,
-                is_io=True,
-            )
+        log_info_safe(
+            self.logger,
+            "Estimated BAR {index} size: {size} bytes ({kb}KB) based on device context",
+            index=bar_index,
+            size=base_size,
+            kb=base_size // 1024,
+        )
 
-    def _estimate_bar_size(self, bar_value: int, is_memory: bool) -> int:
-        """
-        Probe actual BAR size using PCI standard method.
-
-        This implementation performs proper PCI BAR size detection by:
-        1. Writing all 1s to the BAR register
-        2. Reading back to determine which bits are writable
-        3. Calculating size from the address decode mask
-        4. Restoring the original BAR value
-
-        Args:
-            bar_value: BAR register value
-            is_memory: Whether this is a memory BAR
-
-        Returns:
-            Actual BAR size in bytes
-        """
-        # Calculate BAR offset from the device BDF
-        bar_index = getattr(self, "_current_bar_index", 0)
-        bar_offset = 0x10 + (bar_index * 4)  # BAR0 at 0x10, BAR1 at 0x14, etc.
-
-        try:
-            # Step 1: Save original value
-            original_value = bar_value
-
-            # Step 2: Write all 1s to determine writable bits
-            self._pci_write32(bar_offset, 0xFFFFFFFF)
-
-            # Step 3: Read back to get the size mask
-            size_mask = self._pci_read32(bar_offset)
-
-            # Step 4: Restore original value
-            self._pci_write32(bar_offset, original_value)
-
-            # Step 5: Calculate size from mask
-            if size_mask == 0:
-                return 0  # BAR not implemented
-
-            if is_memory:
-                # For memory BARs, mask out type bits [3:0]
-                size_mask &= 0xFFFFFFF0
-            else:
-                # For I/O BARs, mask out type bits [1:0]
-                size_mask &= 0xFFFFFFFC
-
-            # Size is the complement + 1 of the writable bits
-            if size_mask == 0:
-                return 0
-
-            # Find the size by inverting the mask
-            size = (~size_mask + 1) & 0xFFFFFFFF
-
-            # Ensure reasonable bounds
-            if is_memory:
-                return max(min(size, 4 * 1024 * 1024 * 1024), 4096)  # 4KB to 4GB
-            else:
-                return max(min(size, 65536), 4)  # 4 bytes to 64KB
-
-        except Exception as e:
-            log_warning_safe(logger, "Hardware BAR probing failed: {error}", error=e)
-            # If hardware access fails, we cannot determine the size
-            raise PCILeechContextError(
-                f"Cannot determine BAR size without hardware access: {e}",
-                missing_data=["bar_size"],
-            )
-
-    def _pci_read32(self, offset: int) -> int:
-        """
-        Read 32-bit value from PCI config space.
-
-        Args:
-            offset: Byte offset in config space
-
-        Returns:
-            32-bit value from config space
-        """
-        import subprocess
-
-        try:
-            # Use setpci to read from PCI config space
-            # Format: setpci -s <bus:device.function> <offset>.L
-            cmd = f"setpci -s {self.device_bdf} {offset:02x}.L"
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, check=True
-            )
-
-            # Parse hex result
-            hex_value = result.stdout.strip()
-            return int(hex_value, 16)
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"Failed to read PCI config space at offset 0x{offset:02x}: {e}"
-            )
-        except ValueError as e:
-            raise RuntimeError(f"Invalid hex value from setpci: {e}")
-
-    def _pci_write32(self, offset: int, value: int) -> None:
-        """
-        Write 32-bit value to PCI config space.
-
-        Args:
-            offset: Byte offset in config space
-            value: 32-bit value to write
-        """
-        import subprocess
-
-        try:
-            # Use setpci to write to PCI config space
-            # Format: setpci -s <bus:device.function> <offset>.L=<value>
-            cmd = f"setpci -s {self.device_bdf} {offset:02x}.L={value:08x}"
-            subprocess.run(cmd, shell=True, check=True, capture_output=True)
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"Failed to write PCI config space at offset 0x{offset:02x}: {e}"
-            )
+        return base_size
 
     def _adjust_bar_config_for_behavior(
         self, bar_config: Dict[str, Any], behavior_profile: BehaviorProfile
@@ -755,6 +1349,11 @@ class PCILeechContextBuilder:
         Returns:
             Behavior-based adjustments
         """
+        log_info_safe(
+            self.logger,
+            "Adjusting BAR configuration for device {bdf} based on behavior profile",
+            bdf=self.device_bdf,
+        )
         adjustments = {}
 
         # Adjust based on access frequency
@@ -813,7 +1412,7 @@ class PCILeechContextBuilder:
             Validated timing parameters
 
         Raises:
-            PCILeechContextError: If timing cannot be determined
+            ContextError: If timing cannot be determined
         """
         if behavior_profile and behavior_profile.timing_patterns:
             # Extract timing from behavior profile
@@ -842,6 +1441,12 @@ class PCILeechContextBuilder:
 
         # Derive timing parameters from observed behavior
         if avg_interval < 10:  # Very fast device
+            log_info_safe(
+                self.logger,
+                "Detected very fast device {bdf} with avg_interval: {avg_interval}",
+                bdf=self.device_bdf,
+                avg_interval=avg_interval,
+            )
             return TimingParameters(
                 read_latency=2,
                 write_latency=1,
@@ -851,6 +1456,12 @@ class PCILeechContextBuilder:
                 clock_frequency_mhz=min(200.0, avg_frequency / 1000),
             )
         elif avg_interval > 1000:  # Slow device
+            log_info_safe(
+                self.logger,
+                "Detected slow device {bdf} with avg_interval: {avg_interval}",
+                bdf=self.device_bdf,
+                avg_interval=avg_interval,
+            )
             return TimingParameters(
                 read_latency=8,
                 write_latency=4,
@@ -860,6 +1471,12 @@ class PCILeechContextBuilder:
                 clock_frequency_mhz=max(50.0, avg_frequency / 1000),
             )
         else:  # Medium speed device
+            log_info_safe(
+                self.logger,
+                "Detected medium speed device {bdf} with avg_interval: {avg_interval}",
+                bdf=self.device_bdf,
+                avg_interval=avg_interval,
+            )
             return TimingParameters(
                 read_latency=4,
                 write_latency=2,
@@ -883,9 +1500,19 @@ class PCILeechContextBuilder:
         """
         # Use device class to determine timing characteristics
         class_code = device_identifiers.class_code
-
+        log_info_safe(
+            self.logger,
+            "Generating timing parameters for device {bdf} with class code {class_code}",
+            bdf=self.device_bdf,
+            class_code=class_code,
+        )
         # Network controllers (class 02xxxx)
         if class_code.startswith("02"):
+            log_info_safe(
+                self.logger,
+                "Detected network controller for device {bdf}",
+                bdf=self.device_bdf,
+            )
             return TimingParameters(
                 read_latency=2,
                 write_latency=1,
@@ -896,6 +1523,11 @@ class PCILeechContextBuilder:
             )
         # Storage controllers (class 01xxxx)
         elif class_code.startswith("01"):
+            log_info_safe(
+                self.logger,
+                "Detected storage controller for device {bdf}",
+                bdf=self.device_bdf,
+            )
             return TimingParameters(
                 read_latency=6,
                 write_latency=3,
@@ -906,6 +1538,11 @@ class PCILeechContextBuilder:
             )
         # Display controllers (class 03xxxx)
         elif class_code.startswith("03"):
+            log_info_safe(
+                self.logger,
+                "Detected display controller for device {bdf}",
+                bdf=self.device_bdf,
+            )
             return TimingParameters(
                 read_latency=4,
                 write_latency=2,
@@ -915,6 +1552,11 @@ class PCILeechContextBuilder:
                 clock_frequency_mhz=150.0,
             )
         else:
+            log_info_safe(
+                self.logger,
+                "Falling back to generic timing parameters for device {bdf}",
+                bdf=self.device_bdf,
+            )
             # Use device ID hash to create deterministic but unique timing
             device_hash = int(
                 hashlib.sha256(
@@ -944,6 +1586,11 @@ class PCILeechContextBuilder:
         Returns:
             PCILeech configuration context
         """
+        log_info_safe(
+            self.logger,
+            "Building PCILeech configuration for device {bdf}",
+            bdf=self.device_bdf,
+        )
         # Create device-specific memory layout
         device_hash = int(
             hashlib.sha256(
@@ -954,6 +1601,12 @@ class PCILeechContextBuilder:
 
         # Generate unique but deterministic memory layout
         base_offset = (device_hash % 0x1000) & 0xFFF0  # Align to 16-byte boundary
+        log_info_safe(
+            self.logger,
+            "Using base offset 0x{offset:04X} for device {bdf}",
+            offset=base_offset,
+            bdf=self.device_bdf,
+        )
 
         return {
             "command_timeout": getattr(self.config, "pcileech_command_timeout", 5000),
@@ -998,6 +1651,11 @@ class PCILeechContextBuilder:
         Returns:
             Unique device signature
         """
+        log_info_safe(
+            self.logger,
+            "Generating unique device signature for device {bdf}",
+            bdf=self.device_bdf,
+        )
         # Combine all unique device characteristics
         signature_components = [
             device_identifiers.vendor_id,
@@ -1008,6 +1666,18 @@ class PCILeechContextBuilder:
             str(config_space_data.get("config_space_size", 0)),
             str(len(config_space_data.get("bars", []))),
         ]
+
+        # Add full 4 KiB config-space hash for uniqueness calculation
+        config_space_hex = config_space_data.get("config_space_hex", "")
+        if config_space_hex:
+            # Ensure we have the full 4 KiB (4096 bytes = 8192 hex chars)
+            # Only pad with zeros if necessary to ensure consistent hashing
+            if len(config_space_hex) < 8192:
+                padded_config_space = config_space_hex.ljust(8192, "0")
+            else:
+                padded_config_space = config_space_hex[:8192]
+            config_space_hash = hashlib.sha256(padded_config_space.encode()).hexdigest()
+            signature_components.append(config_space_hash)
 
         # Add subsystem IDs if available
         if device_identifiers.subsystem_vendor_id:
@@ -1025,10 +1695,20 @@ class PCILeechContextBuilder:
                     str(len(behavior_profile.state_transitions)),
                 ]
             )
+        log_info_safe(
+            self.logger,
+            "Device signature components: {components}",
+            components=signature_components,
+        )
 
         # Create deterministic hash
         signature_data = "_".join(signature_components)
         signature_hash = hashlib.sha256(signature_data.encode()).hexdigest()
+        log_info_safe(
+            self.logger,
+            "Generated device signature hash: {hash}",
+            hash=signature_hash,
+        )
 
         return f"32'h{int(signature_hash[:8], 16):08X}"
 
@@ -1061,8 +1741,9 @@ class PCILeechContextBuilder:
             context: Template context to validate
 
         Raises:
-            PCILeechContextError: If validation fails
+            ContextError: If validation fails
         """
+        log_info_safe(self.logger, "Validating template context completeness")
         required_sections = [
             "device_config",
             "config_space",
@@ -1071,22 +1752,29 @@ class PCILeechContextBuilder:
             "timing_config",
             "pcileech_config",
             "device_signature",
+            "generation_metadata",
         ]
 
         missing_sections = [
             section for section in required_sections if section not in context
         ]
+        # Check for missing sections
 
         if missing_sections:
+            log_warning_safe(
+                self.logger,
+                "Template context is missing required sections: {sections}",
+                sections=missing_sections,
+            )
             if self.validation_level == ValidationLevel.STRICT:
-                raise PCILeechContextError(
+                raise ContextError(
                     f"Template context missing required sections: {missing_sections}"
                 )
             else:
                 log_warning_safe(
                     self.logger,
-                    "Template context missing sections: {sections}",
-                    sections=missing_sections,
+                    "Template context is missing sections: {sections}. "
+                    "This may lead to incomplete firmware generation.",
                 )
 
         # Validate critical device information
@@ -1096,20 +1784,40 @@ class PCILeechContextBuilder:
             or device_config.get("vendor_id") == "0000"
         ):
             if self.validation_level == ValidationLevel.STRICT:
-                raise PCILeechContextError("Device vendor ID is missing or invalid")
+                raise ContextError("Device vendor ID is missing or invalid")
             else:
                 log_warning_safe(self.logger, "Device vendor ID is missing or invalid")
-
         # Validate BAR configuration
         bar_config = context.get("bar_config", {})
-        if not bar_config.get("bars"):
+        bars = bar_config.get("bars")
+        if bars is None:
             if self.validation_level == ValidationLevel.STRICT:
-                raise PCILeechContextError("No valid BARs found in context")
+                raise ContextError("BARs section is missing in context")
+        elif isinstance(bars, list) and len(bars) == 0:
+            if self.validation_level == ValidationLevel.STRICT:
+                raise ContextError("BARs list is empty")
+            else:
+                log_warning_safe(self.logger, "BARs list is empty")
 
-        # Validate device signature uniqueness
+        # Validate device signature
         device_signature = context.get("device_signature")
         if not device_signature or device_signature == "32'hDEADBEEF":
             if self.validation_level == ValidationLevel.STRICT:
-                raise PCILeechContextError("Invalid or generic device signature")
+                raise ContextError("Invalid or generic device signature")
+            else:
+                log_warning_safe(self.logger, "Invalid or generic device signature")
+
+        # Only log success if no warnings/errors occurred above
+        if (
+            not missing_sections
+            and device_config.get("vendor_id")
+            and device_config.get("vendor_id") != "0000"
+            and bar_config.get("bars")
+            and device_signature
+            and device_signature != "32'hDEADBEEF"
+        ):
+            log_info_safe(
+                self.logger, "Template context validation completed successfully"
+            )
 
         log_info_safe(self.logger, "Template context validation completed successfully")

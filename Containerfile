@@ -11,11 +11,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3 python3-pip pciutils bsdextrautils kmod ca-certificates git \
+        python3 python3-pip pciutils bsdextrautils kmod ca-certificates git sudo \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -r appuser
+# Create non-root user and configure sudo
+RUN useradd -m -r appuser && \
+    echo "appuser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    echo "Defaults !requiretty" >> /etc/sudoers
 
 WORKDIR /app
 COPY requirements.txt requirements-tui.txt ./
