@@ -47,8 +47,9 @@ SUPPORTED_BOARDS = [
     "pcileech_pciescreamer_xc7a35",
 ]
 
-# Device types
-DEVICE_TYPES = ["generic", "network", "storage", "graphics", "audio"]
+# Device types - removed "generic" to prevent fallback
+DEVICE_TYPES = ["network", "storage", "graphics", "audio"]
+
 
 # Regular expression for parsing lspci output
 PCI_RE = re.compile(
@@ -124,9 +125,9 @@ def parse_arguments():
 
     parser.add_argument(
         "--device-type",
-        default="generic",
+        default="network",  # Changed default from "generic" to "network"
         choices=DEVICE_TYPES,
-        help="Type of device being cloned",
+        help="Type of device being cloned (generic not allowed)",
     )
 
     parser.add_argument(
@@ -168,32 +169,36 @@ def parse_arguments():
 
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
-    # Add fallback control group
+    # Add fallback control group - but force "none" mode
     fallback_group = parser.add_argument_group("Fallback Control")
     fallback_group.add_argument(
         "--fallback-mode",
-        choices=["none", "prompt", "auto"],
+        choices=["none"],  # Only allow "none" mode
         default="none",
-        help="Control fallback behavior (none=fail-fast, prompt=ask, auto=allow)",
+        help="Control fallback behavior (only none=fail-fast is allowed)",
+    )
+    # These arguments are kept for compatibility but will be ignored
+    fallback_group.add_argument(
+        "--allow-fallbacks",
+        type=str,
+        help="[DISABLED] Comma-separated list of allowed fallbacks",
     )
     fallback_group.add_argument(
-        "--allow-fallbacks", type=str, help="Comma-separated list of allowed fallbacks"
-    )
-    fallback_group.add_argument(
-        "--deny-fallbacks", type=str, help="Comma-separated list of denied fallbacks"
+        "--deny-fallbacks",
+        type=str,
+        help="[DISABLED] Comma-separated list of denied fallbacks",
     )
 
     args = parser.parse_args()
 
-    # Process fallback lists
+    # Force no fallbacks regardless of command line arguments
     allowed_fallbacks = []
-    if args.allow_fallbacks:
-        allowed_fallbacks = [f.strip() for f in args.allow_fallbacks.split(",")]
+    denied_fallbacks = ["all"]  # Deny all fallbacks
 
-    denied_fallbacks = []
-    if args.deny_fallbacks:
-        denied_fallbacks = [f.strip() for f in args.deny_fallbacks.split(",")]
+    # Force fallback mode to "none" regardless of what was passed
+    args.fallback_mode = "none"
 
+    logger.info("Fallbacks to generic code have been disabled")
     return args, allowed_fallbacks, denied_fallbacks
 
 
@@ -216,9 +221,39 @@ def validate_environment():
     return True
 
 
+def patch_config_space_manager():
+    """Patch the ConfigSpaceManager class to use 'network' as default device profile instead of 'generic'."""
+    try:
+        import src.device_clone.config_space_manager as csm
+
+        # Save the original __init__ method
+        original_init = csm.ConfigSpaceManager.__init__
+
+        # Define a new __init__ method that uses 'network' as the default device profile
+        def patched_init(self, bdf, device_profile="network", strict_vfio=False):
+            logger.info(f"Using device profile: {device_profile}")
+            return original_init(self, bdf, device_profile, strict_vfio)
+
+        # Replace the original __init__ method with our patched version
+        csm.ConfigSpaceManager.__init__ = patched_init
+
+        logger.info(
+            "Successfully patched ConfigSpaceManager to prevent generic fallback"
+        )
+        return True
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Failed to patch ConfigSpaceManager: {e}")
+        return False
+
+
 def run_build(args, allowed_fallbacks, denied_fallbacks):
     """Run the PCILeech firmware generation process directly."""
     try:
+        # Patch ConfigSpaceManager to prevent generic fallback
+        if not patch_config_space_manager():
+            logger.error("Cannot continue without patching ConfigSpaceManager")
+            return False
+
         # Import VFIO handler and build components
         from src.cli.vfio_handler import VFIOBinder
         from src.build import FirmwareBuilder
@@ -227,19 +262,28 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
         output_dir = Path(args.output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Try to initialize fallback manager
+        # Initialize fallback manager with strict settings to prevent fallbacks
         try:
             from src.device_clone.fallback_manager import FallbackManager
 
+            # Force strict settings regardless of what was passed
             fallback_manager = FallbackManager(
-                mode=args.fallback_mode,
-                allowed_fallbacks=allowed_fallbacks,
-                denied_fallbacks=denied_fallbacks,
+                mode="none",  # Force "none" mode
+                allowed_fallbacks=[],  # Allow no fallbacks
+                denied_fallbacks=[
+                    "all",
+                    "generic",
+                    "config-space",
+                    "msix",
+                    "behavior-profiling",
+                ],  # Deny all fallbacks
             )
-            logger.info("Fallback manager initialized")
+            logger.info(
+                "Fallback manager initialized in strict mode (no fallbacks allowed)"
+            )
         except ImportError:
             logger.warning(
-                "FallbackManager not available, fallback options will be ignored"
+                "FallbackManager not available, continuing without fallback management"
             )
             fallback_manager = None
 
@@ -340,13 +384,14 @@ def main():
         board = pick(SUPPORTED_BOARDS, "Select board #: ")
         logger.info(f"Selected board: {board}")
 
-    # Interactive device type selection if using default
+    # Interactive device type selection - never allow "generic"
     device_type = args.device_type
-    if device_type == "generic" and not args.device_type:
-        logger.info("Using default device type, would you like to change it?")
-        if input("Change device type? [y/N]: ").lower().startswith("y"):
-            device_type = pick(DEVICE_TYPES, "Select device type #: ")
-            logger.info(f"Selected device type: {device_type}")
+    if not args.device_type or args.device_type == "":
+        logger.info(
+            "No device type specified, launching interactive device type picker..."
+        )
+        device_type = pick(DEVICE_TYPES, "Select device type #: ")
+        logger.info(f"Selected device type: {device_type}")
 
     # Update args with interactive selections
     args.bdf = bdf
