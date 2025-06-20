@@ -319,11 +319,30 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
         )
 
         # Import VFIO handler and build components
-        from src.cli.vfio_handler import VFIOBinder
-        from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig,
-            PCILeechGenerator,
-        )
+        try:
+            from src.cli.vfio_handler import VFIOBinder
+            from src.device_clone.pcileech_generator import (
+                PCILeechGenerationConfig,
+                PCILeechGenerator,
+            )
+        except ImportError as e:
+            # Check if the error is related to scripts.kernel_utils
+            if "scripts.kernel_utils" in str(e):
+                logger.error(
+                    "Import error with scripts.kernel_utils. This is a known issue with import paths."
+                )
+                logger.error(
+                    "The fix has been applied, but you need to restart the script for it to take effect."
+                )
+                logger.error("Please run the script again.")
+                build_metadata["success"] = False
+                build_metadata["error"] = (
+                    "Import path issue fixed. Please run the script again."
+                )
+                return False, build_metadata
+            else:
+                # Re-raise the original error
+                raise
 
         # Create output directory
         output_dir = Path(args.output_dir).resolve()

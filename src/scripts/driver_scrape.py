@@ -57,7 +57,7 @@ import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
-    from scripts.kernel_utils import (
+    from src.scripts.kernel_utils import (
         check_linux_requirement,
         ensure_kernel_source,
         find_driver_sources,

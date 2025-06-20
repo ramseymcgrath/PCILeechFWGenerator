@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
 try:
-    from scripts.kernel_utils import setup_debugfs
+    from src.scripts.kernel_utils import setup_debugfs
 
     from .manufacturing_variance import (
         DeviceClass,
@@ -36,7 +36,12 @@ try:
     )
 except ImportError:
     # Fallback for direct execution
-    from scripts.kernel_utils import setup_debugfs
+    try:
+        # Try relative import first
+        from ..scripts.kernel_utils import setup_debugfs
+    except ImportError:
+        # Fall back to absolute import
+        from src.scripts.kernel_utils import setup_debugfs
 
     from .manufacturing_variance import (
         DeviceClass,
