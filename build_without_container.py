@@ -432,28 +432,30 @@ def main():
         board = pick(SUPPORTED_BOARDS, "Select board #: ")
         logger.info(f"Selected board: {board}")
 
-    # Interactive device profile selection
+    # Get device type first
+    device_type = args.device_type
+
+    # Interactive device type selection if needed
+    if not device_type or device_type == "":
+        logger.info(
+            "No device type specified, launching interactive device type picker..."
+        )
+        device_type = pick(DEVICE_TYPES, "Select device type #: ")
+        logger.info(f"Selected device type: {device_type}")
+
+    # Validate device type is one of the supported types
+    if device_type not in DEVICE_TYPES:
+        logger.warning(
+            f"Device type '{device_type}' not in supported types: {DEVICE_TYPES}"
+        )
+        logger.info("Defaulting to 'network' device type")
+        device_type = "network"
+
+    # Now handle device profile
     device_profile = args.device_profile
     if device_profile:
         logger.info(f"Using provided device profile: {device_profile}")
     else:
-        # Interactive device type selection - never allow "generic"
-        device_type = args.device_type
-        if not args.device_type or args.device_type == "":
-            logger.info(
-                "No device type specified, launching interactive device type picker..."
-            )
-            device_type = pick(DEVICE_TYPES, "Select device type #: ")
-            logger.info(f"Selected device type: {device_type}")
-
-        # Validate device type is one of the supported types
-        if device_type not in DEVICE_TYPES:
-            logger.warning(
-                f"Device type '{device_type}' not in supported types: {DEVICE_TYPES}"
-            )
-            logger.info("Defaulting to 'network' device type")
-            device_type = "network"
-
         # Map device type to profile
         device_profile = DEVICE_TYPE_TO_PROFILE.get(device_type, "network_card")
         logger.info(
