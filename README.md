@@ -124,6 +124,12 @@ sudo -E python3 src/tui/main.py
 
 Use the prompts to select your donor device and target FPGA.
 
+## Common errors (at a glance)
+
+`No valid MMIO BARs found - all BARs are either size 0 or I/O-port`: Your device is probably fine, the container just can't read the pcie device. Run the vfio fix script, make sure immou is enabled, and restart. 
+
+`TUI errors`: Run a cli build, its just as easy and has more logs
+
 ### Entry Points Summary
 
 The tool provides multiple entry points depending on your use case:
