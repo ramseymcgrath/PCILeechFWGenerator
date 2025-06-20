@@ -136,15 +136,9 @@ def parse_arguments():
 
     parser.add_argument(
         "--device-type",
-        default="network",  # Changed default from "generic" to "network"
+        default="network",  # For compatibility only
         choices=DEVICE_TYPES,
-        help="Type of device being cloned (generic not allowed)",
-    )
-
-    parser.add_argument(
-        "--device-profile",
-        choices=DEVICE_PROFILES,
-        help="Device profile to use (overrides --device-type if provided)",
+        help="Type of device being cloned (generic not allowed) - for compatibility only",
     )
 
     parser.add_argument(
@@ -241,15 +235,17 @@ def validate_environment():
 def run_build(args, allowed_fallbacks, denied_fallbacks):
     """Run the PCILeech firmware generation process directly."""
     try:
-        # Ensure we're not using "generic" device type
-        if args.device_type == "generic":
+        # Validate device type is in the allowed list
+        if args.device_type not in DEVICE_TYPES:
             logger.error(
-                "Generic device type is not allowed. Please use a specific device type."
+                f"Device type '{args.device_type}' not in supported types: {DEVICE_TYPES}"
             )
+            logger.info("Please use one of the supported device types")
             return False
 
+        logger.info(f"Device type '{args.device_type}' is used for compatibility only")
         logger.info(
-            f"Using specific device type: {args.device_type} (no fallback to generic)"
+            f"Will use 'generic' as the device profile (matching container approach)"
         )
 
         # Import VFIO handler and build components
@@ -292,7 +288,7 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
         logger.info(
             f"Starting PCILeech firmware generation for {args.bdf} on {args.board}"
         )
-        logger.info(f"Device type: {args.device_type}")
+        logger.info(f"Device type: {args.device_type} (for compatibility only)")
         logger.info(f"Output directory: {output_dir}")
 
         # Bind device to VFIO
@@ -306,26 +302,15 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
                 # Create PCILeech configuration with the specific device type
                 # Map device type to profile name
                 # Determine device profile to use
-                # Use the profile name directly without any conversion to DeviceType enum
-                if args.device_profile:
-                    # Use explicitly provided device profile
-                    device_profile = args.device_profile
-                    logger.info(
-                        f"Using explicitly provided device profile: '{device_profile}'"
-                    )
-                else:
-                    # Map device type to profile name
-                    device_type = args.device_type
-                    device_profile = DEVICE_TYPE_TO_PROFILE.get(
-                        device_type, "network_card"
-                    )
-                    logger.info(
-                        f"Using device type '{device_type}' with mapped profile '{device_profile}'"
-                    )
+                # Simplify by using "generic" as the device_profile, matching the container approach
+                device_profile = "generic"
+                logger.info(
+                    f"Using device profile: '{device_profile}' (matching container approach)"
+                )
 
                 pcileech_config = PCILeechGenerationConfig(
                     device_bdf=args.bdf,
-                    device_profile=device_profile,  # Use the mapped profile name
+                    device_profile=device_profile,  # Using "generic" to match container approach
                     enable_behavior_profiling=args.enable_profiling,
                     behavior_capture_duration=float(args.profile_duration),
                     enable_manufacturing_variance=args.enable_variance,
@@ -452,27 +437,19 @@ def main():
         logger.info("Defaulting to 'network' device type")
         device_type = "network"
 
-    # Now handle device profile
-    device_profile = args.device_profile
-    if device_profile:
-        logger.info(f"Using provided device profile: {device_profile}")
-    else:
-        # Map device type to profile
-        device_profile = DEVICE_TYPE_TO_PROFILE.get(device_type, "network_card")
-        logger.info(
-            f"Using device profile: {device_profile} (mapped from {device_type})"
-        )
+    # We're using "generic" as the device_profile in run_build, so this is just for logging
+    logger.info(
+        f"Note: Using 'generic' as device profile (matching container approach)"
+    )
 
     # Update args with interactive selections
     args.bdf = bdf
     args.board = board
     args.device_type = device_type
-    args.device_profile = device_profile
 
     logger.info(f"Target device: {args.bdf}")
     logger.info(f"Target board: {args.board}")
-    logger.info(f"Device type: {args.device_type}")
-    logger.info(f"Device profile: {args.device_profile}")
+    logger.info(f"Device type: {args.device_type} (for compatibility only)")
 
     # Validate environment
     if not validate_environment():
