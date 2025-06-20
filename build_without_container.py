@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 
@@ -246,6 +247,7 @@ def parse_arguments():
     args = parser.parse_args()
 
     # Force no fallbacks regardless of command line arguments
+    # Create explicit lists to avoid type annotation issues
     allowed_fallbacks = []
     denied_fallbacks = ["all"]  # Deny all fallbacks
 
@@ -332,16 +334,20 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
             from src.device_clone.fallback_manager import FallbackManager
 
             # Force strict settings regardless of what was passed
+            # Convert type annotations to actual lists to avoid 'type' object is not subscriptable error
+            allowed_fallbacks_list = []
+            denied_fallbacks_list = [
+                "all",
+                "generic",
+                "config-space",
+                "msix",
+                "behavior-profiling",
+            ]
+
             fallback_manager = FallbackManager(
                 mode="none",  # Force "none" mode
-                allowed_fallbacks=[],  # Allow no fallbacks
-                denied_fallbacks=[
-                    "all",
-                    "generic",
-                    "config-space",
-                    "msix",
-                    "behavior-profiling",
-                ],  # Deny all fallbacks
+                allowed_fallbacks=allowed_fallbacks_list,  # Allow no fallbacks
+                denied_fallbacks=denied_fallbacks_list,  # Deny all fallbacks
             )
             logger.info(
                 "Fallback manager initialized in strict mode (no fallbacks allowed)"
@@ -368,6 +374,10 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
                 f"Using device profile: '{device_profile}' (matching container approach)"
             )
 
+            # Create explicit lists for fallbacks to avoid type annotation issues
+            allowed_fallbacks_list = []
+            denied_fallbacks_list = ["all"]
+
             pcileech_config = PCILeechGenerationConfig(
                 device_bdf=args.bdf,
                 device_profile=device_profile,  # Using "generic" to match container approach
@@ -379,8 +389,8 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
                 strict_validation=True,
                 fail_on_missing_data=True,
                 fallback_mode="none",  # Force "none" mode
-                allowed_fallbacks=[],  # Allow no fallbacks
-                denied_fallbacks=["all"],  # Deny all fallbacks
+                allowed_fallbacks=allowed_fallbacks_list,  # Allow no fallbacks
+                denied_fallbacks=denied_fallbacks_list,  # Deny all fallbacks
             )
 
             # Initialize PCILeech generator
@@ -439,6 +449,10 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
                     f"Using device profile: '{device_profile}' (matching container approach)"
                 )
 
+                # Create explicit lists for fallbacks to avoid type annotation issues
+                allowed_fallbacks_list = []
+                denied_fallbacks_list = ["all"]
+
                 pcileech_config = PCILeechGenerationConfig(
                     device_bdf=args.bdf,
                     device_profile=device_profile,  # Using "generic" to match container approach
@@ -450,8 +464,8 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
                     strict_validation=True,
                     fail_on_missing_data=True,
                     fallback_mode="none",  # Force "none" mode
-                    allowed_fallbacks=[],  # Allow no fallbacks
-                    denied_fallbacks=["all"],  # Deny all fallbacks
+                    allowed_fallbacks=allowed_fallbacks_list,  # Allow no fallbacks
+                    denied_fallbacks=denied_fallbacks_list,  # Deny all fallbacks
                 )
 
                 # Initialize PCILeech generator
@@ -514,8 +528,22 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
                 logger.info(f"Build metadata saved to: {build_metadata_path}")
 
                 return True, build_metadata
-        except Exception as e:
-            logger.error(f"Error during VFIO binding or build: {e}")
+        except TypeError as e:
+            # Provide more detailed error for type errors
+            logger.error(f"Type error during VFIO binding or build: {e}")
+            logger.error(
+                "This might be due to a typing issue or passing incorrect types to functions"
+            )
+            if "not subscriptable" in str(e):
+                logger.error(
+                    "A 'not subscriptable' error often means you're trying to use [] on a type object"
+                )
+                logger.error(
+                    "Check that all lists and dictionaries are properly initialized"
+                )
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
             if hasattr(e, "__cause__") and e.__cause__:
                 logger.error(f"Root cause: {e.__cause__}")
 
@@ -532,6 +560,29 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
 
             build_metadata["success"] = False
             build_metadata["error"] = str(e)
+            build_metadata["traceback"] = traceback.format_exc()
+            return False, build_metadata
+        except Exception as e:
+            logger.error(f"Error during VFIO binding or build: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+            if hasattr(e, "__cause__") and e.__cause__:
+                logger.error(f"Root cause: {e.__cause__}")
+
+            # Run VFIO diagnostics if available
+            try:
+                from src.cli.vfio_diagnostics import Diagnostics, render
+
+                diag = Diagnostics(args.bdf)
+                report = diag.run()
+                logger.info("\nVFIO Diagnostics Report:")
+                logger.info(render(report))
+            except ImportError:
+                logger.warning("VFIO diagnostics not available")
+
+            build_metadata["success"] = False
+            build_metadata["error"] = str(e)
+            build_metadata["traceback"] = traceback.format_exc()
             return False, build_metadata
 
     except ImportError as e:
@@ -539,10 +590,34 @@ def run_build(args, allowed_fallbacks, denied_fallbacks) -> Tuple[bool, Dict[str
         build_metadata["success"] = False
         build_metadata["error"] = f"Required module not available: {e}"
         return False, build_metadata
+    except TypeError as e:
+        # Provide more detailed error for type errors which are common with typing issues
+        logger.error(f"Type error during build: {e}")
+        logger.error(
+            "This might be due to a typing issue or passing incorrect types to functions"
+        )
+        if "not subscriptable" in str(e):
+            logger.error(
+                "A 'not subscriptable' error often means you're trying to use [] on a type object"
+            )
+            logger.error(
+                "Check that all lists and dictionaries are properly initialized"
+            )
+
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
+        build_metadata["success"] = False
+        build_metadata["error"] = f"Type error during build: {e}"
+        build_metadata["traceback"] = traceback.format_exc()
+        return False, build_metadata
     except Exception as e:
         logger.error(f"Build failed: {e}")
+        # Add traceback for better debugging
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
         build_metadata["success"] = False
         build_metadata["error"] = f"Build failed: {e}"
+        build_metadata["traceback"] = traceback.format_exc()
         return False, build_metadata
 
 
