@@ -306,6 +306,7 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
                 # Create PCILeech configuration with the specific device type
                 # Map device type to profile name
                 # Determine device profile to use
+                # Use the profile name directly without any conversion to DeviceType enum
                 if args.device_profile:
                     # Use explicitly provided device profile
                     device_profile = args.device_profile

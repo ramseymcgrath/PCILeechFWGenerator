@@ -335,10 +335,46 @@ class DeviceConfigManager:
             link_speed=data["capabilities"]["link_speed"],
         )
 
+        # Convert string device_type to DeviceType enum
+        # Handle both cases: enum name (e.g., "NETWORK") or enum value (e.g., "network")
+        device_type_str = data["device_type"]
+        try:
+            # First try to convert directly (handles case where string is enum value)
+            device_type = DeviceType(device_type_str)
+        except ValueError:
+            # If that fails, try to find the enum by value
+            try:
+                # Find the enum member whose value matches the string
+                device_type = next(
+                    (dt for dt in DeviceType if dt.value == device_type_str),
+                    DeviceType.GENERIC,  # Default to GENERIC if not found
+                )
+                logger.info(
+                    f"Mapped device type string '{device_type_str}' to enum {device_type}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to map device type '{device_type_str}' to enum: {e}"
+                )
+                device_type = DeviceType.GENERIC
+
+        # Convert string device_class to DeviceClass enum
+        device_class_str = data["device_class"]
+        try:
+            device_class = DeviceClass(device_class_str)
+        except ValueError:
+            try:
+                device_class = next(
+                    (dc for dc in DeviceClass if dc.value == device_class_str),
+                    DeviceClass.CONSUMER,  # Default to CONSUMER if not found
+                )
+            except Exception:
+                device_class = DeviceClass.CONSUMER
+
         return DeviceConfiguration(
             name=data["name"],
-            device_type=DeviceType(data["device_type"]),
-            device_class=DeviceClass(data["device_class"]),
+            device_type=device_type,
+            device_class=device_class,
             identification=identification,
             registers=registers,
             capabilities=capabilities,
