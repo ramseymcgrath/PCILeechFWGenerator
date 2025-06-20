@@ -102,6 +102,16 @@ pcileech-tui-sudo
 pcileech-build-sudo
 ```
 
+#### Common errors (at a glance)
+
+`No valid MMIO BARs found - all BARs are either size 0 or I/O-port`: Your device is probably fine, the container just can't read the pcie device. Run the vfio fix script, make sure immou is enabled, and restart.
+
+`TUI errors`: Run a cli build, its just as easy and has more logs.
+
+`PC crashes during FW clone`: You're probably flashing an on-board device (sound card or video card on a motherboard), this is very likely to crash your southside bus and reboot your PC. Besides that it's harmless. 
+
+`My device is red in the TUI`: Sometimes its fine, you can give it a try. 
+
 #### Repository Development Usage
 
 This can all be run from a venv. Ubuntu especially likes to manage the default python and some of the packages are way too old, and a venv is way easier.
@@ -123,6 +133,8 @@ sudo -E python3 src/tui/main.py
 ```
 
 Use the prompts to select your donor device and target FPGA.
+
+## User interfaces
 
 ### Entry Points Summary
 
@@ -157,7 +169,7 @@ A device is considered suitable when its suitability score is ≥ 0.7 and it has
 
 ### Software
 
-This is primarily tested in Linux, with some fiddling you could probably get it to work on Windows too.
+Only works in linux, windows and osx don't provide the required level of pcie access.
 
 | Tool | Why you need it | Install |
 |------|----------------|---------|
