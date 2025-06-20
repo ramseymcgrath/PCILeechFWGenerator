@@ -62,12 +62,9 @@ class DeviceManager:
             raise RuntimeError(f"Failed to scan PCIe devices: {e}")
 
     async def _get_raw_devices(self) -> List[Dict[str, str]]:
-        """Get raw device list using existing generate.py functionality."""
-        # Import the existing function
-        import sys
-
-        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-        from generate import list_pci_devices
+        """Get raw device list using existing CLI functionality."""
+        # Import the existing function from CLI module
+        from src.cli.cli import list_pci_devices
 
         # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
@@ -75,7 +72,7 @@ class DeviceManager:
 
     async def _enhance_device_info(self, raw_device: Dict[str, str]) -> PCIDevice:
         """Enhance raw device information with additional details."""
-        bdf = raw_device["bd"]
+        bdf = raw_device["bdf"]
         vendor_id = raw_device["ven"]
         device_id = raw_device["dev"]
         device_class = raw_device["class"]
@@ -163,10 +160,7 @@ class DeviceManager:
     async def _get_device_driver(self, bdf: str) -> Optional[str]:
         """Get current driver for device."""
         try:
-            import sys
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import get_current_driver
+            from src.cli.vfio import get_current_driver
 
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, get_current_driver, bdf)
@@ -176,10 +170,7 @@ class DeviceManager:
     async def _get_iommu_group(self, bdf: str) -> str:
         """Get IOMMU group for device."""
         try:
-            import sys
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import get_iommu_group
+            from src.cli.vfio import get_iommu_group
 
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, get_iommu_group, bdf)
@@ -213,34 +204,33 @@ class DeviceManager:
         """Get device BAR information."""
         bars = []
         try:
-            # Read BAR information from sysfs
-            for i in range(6):  # PCIe devices can have up to 6 BARs
-                bar_path = f"/sys/bus/pci/devices/{bdf}/resource{i}"
-                if os.path.exists(bar_path):
-                    with open(bar_path, "r") as f:
-                        line = f.read().strip()
-                        if (
-                            line
-                            and line
-                            != "0x0000000000000000 0x0000000000000000 0x0000000000000000"
-                        ):
-                            parts = line.split()
-                            if len(parts) >= 3:
-                                start = int(parts[0], 16)
-                                end = int(parts[1], 16)
-                                flags = int(parts[2], 16)
+            # Read BAR information from main resource file
+            resource_path = f"/sys/bus/pci/devices/{bdf}/resource"
+            if os.path.exists(resource_path):
+                with open(resource_path, "r") as f:
+                    lines = f.readlines()
+                    
+                for i, line in enumerate(lines[:6]):  # Only first 6 BARs
+                    line = line.strip()
+                    if (line and 
+                        line != "0x0000000000000000 0x0000000000000000 0x0000000000000000"):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            start = int(parts[0], 16)
+                            end = int(parts[1], 16)
+                            flags = int(parts[2], 16)
+                            
+                            # Skip empty/unused BARs
+                            if start != 0 or end != 0:
                                 size = end - start + 1 if end > start else 0
-
-                                bars.append(
-                                    {
-                                        "index": i,
-                                        "start": start,
-                                        "end": end,
-                                        "size": size,
-                                        "flags": flags,
-                                        "type": "memory" if flags & 0x1 == 0 else "io",
-                                    }
-                                )
+                                bars.append({
+                                    "index": i,
+                                    "start": start,
+                                    "end": end,
+                                    "size": size,
+                                    "flags": flags,
+                                    "type": "memory" if flags & 0x1 == 0 else "io",
+                                })
         except Exception:
             pass
         return bars
