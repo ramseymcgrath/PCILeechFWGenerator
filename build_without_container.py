@@ -250,7 +250,6 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
             PCILeechGenerationConfig,
             PCILeechGenerator,
         )
-        from src.device_clone.device_config import DeviceType
 
         # Create output directory
         output_dir = Path(args.output_dir).resolve()
@@ -304,14 +303,8 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
                     f"Using device type '{device_type}' with profile '{device_profile}'"
                 )
 
-                # Convert string device type to DeviceType enum
-                try:
-                    device_type_enum = DeviceType(device_type)
-                except ValueError:
-                    logger.warning(
-                        f"Unknown device type: {device_type}, using 'network' as fallback"
-                    )
-                    device_type_enum = DeviceType.NETWORK
+                # Skip DeviceType enum conversion entirely - it's not needed
+                # The PCILeechGenerationConfig only needs the profile name as a string
 
                 pcileech_config = PCILeechGenerationConfig(
                     device_bdf=args.bdf,
