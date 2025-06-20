@@ -108,7 +108,7 @@ pcileech-build-sudo
 
 `TUI errors`: Run a cli build, its just as easy and has more logs.
 
-`PC crashes during FW clone`: You're probably flashing an on-board device (sound card or video card on a motherboard), this is very likely to crash your southside bus and reboot your PC. Besides that it's harmless. 
+`PC crashes during FW clone`: You're probably cloning an on-board device (sound card or video card on a motherboard), this is very likely to crash your southside bus and reboot your PC. Besides that it's harmless. 
 
 `My device is red in the TUI`: Sometimes its fine, you can give it a try. 
 
