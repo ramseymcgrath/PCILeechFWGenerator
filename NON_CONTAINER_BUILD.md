@@ -34,6 +34,7 @@ This interactive mode makes it easy to use the script without remembering specif
 
 - `--bdf`: PCI Bus:Device.Function identifier (e.g., `0000:03:00.0`)
 - `--board`: Target board configuration (one of the supported boards listed below)
+- `--device-type`: Type of device being cloned (default: `network`). Note: `generic` is not allowed to prevent fallbacks.
 
 #### Supported Boards
 - `pcileech_75t484_x1`
@@ -44,6 +45,12 @@ This interactive mode makes it easy to use the script without remembering specif
 - `pcileech_enigma_x1`
 - `pcileech_squirrel`
 - `pcileech_pciescreamer_xc7a35`
+
+#### Supported Device Types
+- `network`
+- `storage`
+- `graphics`
+- `audio`
 
 ### Optional Arguments
 
@@ -57,9 +64,13 @@ This interactive mode makes it easy to use the script without remembering specif
 
 ### Fallback Control
 
-- `--fallback-mode`: Control fallback behavior (`none`=fail-fast, `prompt`=ask, `auto`=allow)
-- `--allow-fallbacks`: Comma-separated list of allowed fallbacks
-- `--deny-fallbacks`: Comma-separated list of denied fallbacks
+This script is configured to prevent any fallbacks to generic code:
+
+- `--fallback-mode`: Only `none` (fail-fast) is allowed
+- `--allow-fallbacks`: Disabled - no fallbacks are allowed
+- `--deny-fallbacks`: Disabled - all fallbacks are denied by default
+
+These arguments are kept for compatibility but will be ignored as the script enforces strict no-fallback behavior.
 
 ## Examples
 
@@ -88,11 +99,13 @@ sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 
 sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 --enable-advanced --enable-variance
 ```
 
-### With Custom Device Type
+### With Specific Device Type
 
 ```bash
 sudo ./build_without_container.py --bdf 0000:03:00.0 --board pcileech_35t325_x4 --device-type network
 ```
+
+> **Important**: This script is configured to prevent any fallbacks to generic code. It will always use the specific device type you select (default is `network` if not specified) and will fail rather than fall back to generic implementations.
 
 ## Troubleshooting
 
