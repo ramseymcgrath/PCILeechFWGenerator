@@ -113,6 +113,23 @@ except ImportError as e:
     sys.exit(1)
 "
     
+    # Test 4.2: VFIO constants
+    print_status "Testing VFIO constants..."
+    $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" python3 -c "
+import sys
+sys.path.append('/app/src')
+try:
+    from cli.vfio_constants import VFIO_GET_API_VERSION, VFIO_DEVICE_GET_INFO
+    print(f'VFIO constants loaded: API_VERSION={VFIO_GET_API_VERSION}, DEVICE_GET_INFO={VFIO_DEVICE_GET_INFO}')
+    # Verify they are numeric values, not computed functions
+    assert isinstance(VFIO_GET_API_VERSION, int), 'VFIO_GET_API_VERSION should be int'
+    assert isinstance(VFIO_DEVICE_GET_INFO, int), 'VFIO_DEVICE_GET_INFO should be int'
+    print('VFIO constants validation passed')
+except Exception as e:
+    print(f'VFIO constants error: {e}')
+    sys.exit(1)
+"
+    
     # Test 4.5: Device config with YAML support
     print_status "Testing device config with YAML support..."
     $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" python3 -c "

@@ -2,22 +2,42 @@
 """container_build – unified VFIO‑aware Podman build runner"""
 from __future__ import annotations
 
-import json
-import logging
-import os
 import shutil
 import subprocess
 import sys
 import textwrap
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
 from typing import List, Optional
 
 from utils.logging import get_logger
 from utils.shell import Shell
+
 from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
+
+# Import safe logging functions
+try:
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
+except ImportError:
+    # Fallback implementations
+    def log_info_safe(logger, template, **kwargs):
+        logger.info(template.format(**kwargs))
+
+    def log_error_safe(logger, template, **kwargs):
+        logger.error(template.format(**kwargs))
+
+    def log_warning_safe(logger, template, **kwargs):
+        logger.warning(template.format(**kwargs))
+
+    def log_debug_safe(logger, template, **kwargs):
+        logger.debug(template.format(**kwargs))
+
 
 logger = get_logger(__name__)
 
@@ -107,22 +127,9 @@ def image_exists(name: str) -> bool:
 
 
 def build_image(name: str, tag: str) -> None:
-    logger.info("Building container image %s:%s", name, tag)
+    log_info_safe(logger, "Building container image {name}:{tag}", name=name, tag=tag)
     cmd = f"podman build -t {name}:{tag} -f Containerfile ."
     subprocess.run(cmd, shell=True, check=True)
-
-
-# tqdm optional ----------------------------------------------------------------
-try:
-    from tqdm import tqdm  # type: ignore
-
-    def _prog(it, desc):
-        return tqdm(it, desc=desc)
-
-except ImportError:
-
-    def _prog(it, desc):  # Keep parameter name consistent
-        return it
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -141,94 +148,151 @@ def run_build(cfg: BuildConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        with VFIOBinder(cfg.bdf) as vfio_node:
-            logger.info(
-                "Launching build container – board=%s, tag=%s",
-                cfg.board,
-                cfg.container_tag,
+        # Bind without keeping the FD (call the context manager only long
+        # enough to flip the drivers)
+        binder = VFIOBinder(cfg.bdf, attach=False)
+        with binder:
+            # enter/exit immediately → binds device
+            pass
+
+        # Get the group device path as a string (safe, just a string)
+        from .vfio_handler import _get_iommu_group
+
+        group_id = _get_iommu_group(cfg.bdf)
+        group_dev = f"/dev/vfio/{group_id}"
+
+        log_info_safe(
+            logger,
+            "Launching build container – board={board}, tag={tag}",
+            board=cfg.board,
+            tag=cfg.container_tag,
+            prefix="CONT",
+        )
+
+        cmd_args = " ".join(cfg.cmd_args())
+        podman_cmd = textwrap.dedent(
+            f"""
+            podman run --rm --privileged \
+              --device={group_dev} \
+              --device=/dev/vfio/vfio \
+              --entrypoint python3 \
+              --user root \
+              -v {output_dir}:/app/output \
+              -v /lib/modules/$(uname -r)/build:/kernel-headers:ro \
+              {cfg.container_image}:{cfg.container_tag} \
+              src/build.py {cmd_args}
+            """
+        ).strip()
+
+        log_debug_safe(
+            logger, "Container command: {cmd}", cmd=podman_cmd, prefix="CONT"
+        )
+        start = time.time()
+        try:
+            subprocess.run(podman_cmd, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise ContainerError(f"Build failed (exit {e.returncode})") from e
+        except KeyboardInterrupt:
+            log_warning_safe(
+                logger,
+                "Build interrupted by user - cleaning up...",
+                prefix="CONT",
             )
-
-            cmd_args = " ".join(cfg.cmd_args())
-            podman_cmd = textwrap.dedent(
-                f"""
-                podman run --rm --privileged \
-                  --device={vfio_node} \
-                  --entrypoint python3 \
-                  --user root \
-                  --device=/dev/vfio/vfio \
-                  -v {output_dir}:/app/output \
-                  {cfg.container_image}:{cfg.container_tag} \
-                  /app/src/build.py {cmd_args}
-                """
-            ).strip()
-
-            logger.debug("Container command: %s", podman_cmd)
-            start = time.time()
+            # Get the container ID if possible
             try:
-                subprocess.run(podman_cmd, shell=True, check=True)
-            except subprocess.CalledProcessError as e:
-                raise ContainerError(f"Build failed (exit {e.returncode})") from e
-            except KeyboardInterrupt:
-                logger.warning("Build interrupted by user - cleaning up...")
-                # Get the container ID if possible
-                try:
-                    container_id = (
-                        subprocess.check_output(
-                            "podman ps -q --filter ancestor=pcileech-fw-generator:latest",
-                            shell=True,
-                        )
-                        .decode()
-                        .strip()
+                container_id = (
+                    subprocess.check_output(
+                        "podman ps -q --filter ancestor=pcileech-fw-generator:latest",
+                        shell=True,
                     )
-                    if container_id:
-                        logger.info(f"Stopping container {container_id}")
-                        subprocess.run(
-                            f"podman stop {container_id}", shell=True, check=False
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to clean up container: {e}")
+                    .decode()
+                    .strip()
+                )
+                if container_id:
+                    log_info_safe(
+                        logger,
+                        "Stopping container {container_id}",
+                        container_id=container_id,
+                        prefix="CONT",
+                    )
+                    subprocess.run(
+                        f"podman stop {container_id}", shell=True, check=False
+                    )
+            except Exception as e:
+                log_warning_safe(
+                    logger,
+                    "Failed to clean up container: {error}",
+                    error=str(e),
+                    prefix="CONT",
+                )
 
-                # Ensure VFIO cleanup
-                try:
-                    from .vfio import restore_driver
+            # Ensure VFIO cleanup
+            try:
+                from .vfio import restore_driver
 
-                    if hasattr(cfg, "bdf") and cfg.bdf:
-                        logger.info(f"Ensuring VFIO cleanup for device {cfg.bdf}")
-                        # Get original driver if possible
+                if hasattr(cfg, "bdf") and cfg.bdf:
+                    log_info_safe(
+                        logger,
+                        "Ensuring VFIO cleanup for device {bdf}",
+                        bdf=cfg.bdf,
+                        prefix="CLEA",
+                    )
+                    # Get original driver if possible
+                    try:
+                        from .vfio import get_current_driver
+
+                        original_driver = get_current_driver(cfg.bdf)
+                        restore_driver(cfg.bdf, original_driver)
+                    except Exception:
+                        # Just try to unbind from vfio-pci
                         try:
-                            from .vfio import get_current_driver
-
-                            original_driver = get_current_driver(cfg.bdf)
-                            restore_driver(cfg.bdf, original_driver)
+                            with open(
+                                f"/sys/bus/pci/drivers/vfio-pci/unbind", "w"
+                            ) as f:
+                                f.write(f"{cfg.bdf}\n")
                         except Exception:
-                            # Just try to unbind from vfio-pci
-                            try:
-                                with open(
-                                    f"/sys/bus/pci/drivers/vfio-pci/unbind", "w"
-                                ) as f:
-                                    f.write(f"{cfg.bdf}\n")
-                            except Exception:
-                                pass
-                except Exception as e:
-                    logger.warning(f"VFIO cleanup after interrupt failed: {e}")
+                            pass
+            except Exception as e:
+                log_warning_safe(
+                    logger,
+                    "VFIO cleanup after interrupt failed: {error}",
+                    error=str(e),
+                    prefix="CLEA",
+                )
 
-                raise KeyboardInterrupt("Build interrupted by user")
-            duration = time.time() - start
-            logger.info("Build completed in %.1fs", duration)
+            raise KeyboardInterrupt("Build interrupted by user")
+        duration = time.time() - start
+        log_info_safe(
+            logger,
+            "Build completed in {duration:.1f}s",
+            duration=duration,
+            prefix="CONT",
+        )
     except RuntimeError as e:
         if "VFIO" in str(e):
             # VFIO binding failed, diagnostics have already been run
-            logger.error("Build aborted due to VFIO issues: %s", e)
+            log_error_safe(
+                logger,
+                "Build aborted due to VFIO issues: {error}",
+                error=str(e),
+                prefix="VFIO",
+            )
             from .vfio_diagnostics import Diagnostics, render
 
             # Run diagnostics one more time to ensure user sees the report
             diag = Diagnostics(cfg.bdf)
             report = diag.run()
             if not report.can_proceed:
-                logger.error(
-                    "VFIO diagnostics indicate system is not ready for VFIO operations"
+                log_error_safe(
+                    logger,
+                    "VFIO diagnostics indicate system is not ready for VFIO operations",
+                    prefix="VFIO",
                 )
-                logger.error("Please fix the issues reported above and try again")
+                log_error_safe(
+                    logger,
+                    "Please fix the issues reported above and try again",
+                    prefix="VFIO",
+                )
             sys.exit(1)
         else:
             # Re-raise other runtime errors

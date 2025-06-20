@@ -72,6 +72,9 @@ from .msix_capability import (
 from .pci_capability import *
 from .variance_manager import VarianceManager
 
+# PCILeech generator
+from .pcileech_generator import PCILeechGenerator, PCILeechGenerationConfig
+
 __all__ = [
     # Board configuration
     "get_fpga_part",
@@ -117,4 +120,7 @@ __all__ = [
     "BehaviorProfile",
     "BehaviorProfiler",
     "VarianceManager",
+    # PCILeech generator
+    "PCILeechGenerator",
+    "PCILeechGenerationConfig",
 ]

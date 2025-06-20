@@ -21,7 +21,7 @@ def setup_logging(
         level: Logging level (default: INFO)
         log_file: Optional log file path (default: generate.log)
     """
-    # Clear any existing handlers
+    # Clear any existing handlers to avoid conflicts
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
@@ -39,14 +39,14 @@ def setup_logging(
             log_colors={
                 "DEBUG": "cyan",
                 "INFO": "green",
-                "WARNING": "yellow",
+                "WARNING": "orange",
                 "ERROR": "red",
                 "CRITICAL": "red,bg_white",
             },
         )
     else:
-        # Fallback to basic formatter
-        console_formatter = logging.Formatter(
+        # Use fallback colored formatter when colorlog is not available
+        console_formatter = FallbackColoredFormatter(
             "%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
         )
 
@@ -61,11 +61,9 @@ def setup_logging(
         handlers.append(file_handler)
 
     # Configure root logger
-    logging.basicConfig(
-        level=level,
-        handlers=handlers,
-        force=True,  # Override any existing configuration
-    )
+    root_logger.setLevel(level)
+    for handler in handlers:
+        root_logger.addHandler(handler)
 
     # Log the setup
     logger = logging.getLogger(__name__)
@@ -94,6 +92,7 @@ class FallbackColoredFormatter(logging.Formatter):
     # ANSI color codes
     COLORS = {
         "RED": "\033[91m",
+        "ORANGE": "\033[38;5;208m",  # Orange color using 256-color mode
         "YELLOW": "\033[93m",
         "GREEN": "\033[92m",
         "CYAN": "\033[96m",
@@ -111,7 +110,7 @@ class FallbackColoredFormatter(logging.Formatter):
             if record.levelno >= logging.ERROR:
                 return f"{self.COLORS['RED']}{formatted}{self.COLORS['RESET']}"
             elif record.levelno >= logging.WARNING:
-                return f"{self.COLORS['YELLOW']}{formatted}{self.COLORS['RESET']}"
+                return f"{self.COLORS['ORANGE']}{formatted}{self.COLORS['RESET']}"
             elif record.levelno >= logging.INFO:
                 return f"{self.COLORS['GREEN']}{formatted}{self.COLORS['RESET']}"
             elif record.levelno >= logging.DEBUG:

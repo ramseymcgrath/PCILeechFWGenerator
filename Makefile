@@ -1,6 +1,6 @@
 # Makefile for PCILeech Firmware Generator
 
-.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release container container-rebuild docker-build build-container
+.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release container container-rebuild docker-build build-container vfio-constants vfio-constants-clean
 
 # Default target
 help:
@@ -30,8 +30,10 @@ help:
 	@echo "  docker-build      - Build container image (default tag) with --no-cache"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  check-deps   - Check system dependencies"
-	@echo "  security     - Run security scans"
+	@echo "  check-deps      - Check system dependencies"
+	@echo "  security        - Run security scans"
+	@echo "  vfio-constants  - Build and patch VFIO ioctl constants"
+	@echo "  vfio-constants-clean - Clean VFIO build artifacts"
 
 # Development targets
 install:
@@ -140,3 +142,21 @@ help-upload:
 	@echo ""
 	@echo "Production PyPI installation:"
 	@echo "  pip install pcileech-fw-generator"
+
+# VFIO Constants targets
+vfio-constants:
+	@echo "Building VFIO constants..."
+	./build_vfio_constants.sh
+
+vfio-constants-clean:
+	@echo "Cleaning VFIO build artifacts..."
+	rm -f vfio_helper vfio_helper.exe
+	@echo "VFIO build artifacts cleaned"
+
+# Integration targets - build VFIO constants before container build
+container: vfio-constants
+	./scripts/build_container.sh --tag dma-fw
+
+build-pypi: vfio-constants
+	@echo "Running full PyPI package generation with VFIO constants..."
+	python3 scripts/generate_pypi_package.py --skip-upload

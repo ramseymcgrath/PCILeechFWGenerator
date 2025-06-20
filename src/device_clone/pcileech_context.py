@@ -327,6 +327,7 @@ class PCILeechContextBuilder:
                     "but proceeding as this is common for sysfs-based reads",
                     size=config_size,
                     min_size=self.MIN_CONFIG_SPACE_SIZE,
+                    prefix="CONF",
                 )
                 # Only fail in strict mode if we have absolutely no config space data
                 if self.validation_level == ValidationLevel.STRICT and config_size == 0:
@@ -368,6 +369,7 @@ class PCILeechContextBuilder:
                 "Missing data detected but continuing with {level} validation: {missing}",
                 level=self.validation_level.value,
                 missing=missing_data,
+                prefix="VLDN",
             )
 
     def _extract_device_identifiers(
@@ -603,6 +605,7 @@ class PCILeechContextBuilder:
             "Analyzing BARs for device {bdf} with {count} BARs",
             bdf=self.device_bdf,
             count=len(bars),
+            prefix="BARA",
         )
 
         # Display raw BAR data in table format
@@ -624,6 +627,7 @@ class PCILeechContextBuilder:
                         "BAR {index} VFIO info: {info}",
                         index=bar_info.index,
                         info=asdict(bar_info),
+                        prefix="BARA",
                     )
                 else:
                     # Log why this BAR was skipped
@@ -635,12 +639,14 @@ class PCILeechContextBuilder:
                                 self.logger,
                                 "BAR {num}: Skipped (memory BAR with size 0)",
                                 num=i,
+                                prefix="BARA",
                             )
                         elif bar_type == "io":
                             log_info_safe(
                                 self.logger,
                                 "BAR {num}: Skipped (I/O BAR - not suitable for MMIO)",
                                 num=i,
+                                prefix="BARA",
                             )
                         else:
                             log_info_safe(
@@ -649,12 +655,14 @@ class PCILeechContextBuilder:
                                 num=i,
                                 type=bar_type,
                                 size=size,
+                                prefix="BARA",
                             )
                     else:
                         log_info_safe(
                             self.logger,
                             "BAR {num}: Skipped (invalid or not implemented)",
                             num=i,
+                            prefix="BARA",
                         )
 
             except Exception as e:
@@ -663,26 +671,28 @@ class PCILeechContextBuilder:
                     "Failed to analyze BAR {index}: {error}",
                     index=i,
                     error=str(e),
+                    prefix="BARA",
                 )
                 continue
 
         # Always display BAR information for debugging, even if no valid BARs found
-        log_info_safe(self.logger, "=== BAR Configuration Summary ===")
+        log_info_safe(self.logger, "=== BAR Configuration Summary ===", prefix="BARA")
         if not bar_configs:
             log_info_safe(
                 self.logger,
                 "No valid MMIO BARs found - all BARs are either size 0 or I/O-port",
+                prefix="BARA",
             )
         else:
             # Display detailed BAR table
             detailed_table = format_bar_table(bar_configs, primary_bar)
-            log_info_safe(self.logger, "Detailed BAR Configuration:")
+            log_info_safe(self.logger, "Detailed BAR Configuration:", prefix="BARA")
             for line in detailed_table.split("\n"):
                 log_info_safe(self.logger, line)
 
             # Display compact summary table
             summary_table = format_bar_summary_table(bar_configs, primary_bar)
-            log_info_safe(self.logger, "\nBAR Summary:")
+            log_info_safe(self.logger, "\nBAR Summary:", prefix="BARA")
             for line in summary_table.split("\n"):
                 log_info_safe(self.logger, line)
 
@@ -695,6 +705,7 @@ class PCILeechContextBuilder:
                     size=primary_bar.size,
                     mb=primary_bar.size / (1024 * 1024),
                     type="memory" if primary_bar.is_memory else "io",
+                    prefix="BARA",
                 )
 
         log_info_safe(self.logger, "=" * 70)
@@ -712,6 +723,7 @@ class PCILeechContextBuilder:
                 size=primary_bar.size,
                 mb=primary_bar.size / (1024 * 1024),
                 type="memory" if primary_bar.is_memory else "io",
+                prefix="BARA",
             )
         # Raise error only if all BARs are size 0 or I/O-port
         if primary_bar is None:
@@ -756,6 +768,7 @@ class PCILeechContextBuilder:
                 "Analyzing BAR {index} with data: {data}",
                 index=index,
                 data=bar_data,
+                prefix="BARA",
             )
             # Try to get VFIO region info for accurate size
             region_info = self._get_vfio_region_info(index)
@@ -765,6 +778,7 @@ class PCILeechContextBuilder:
                     "VFIO region info for BAR {index}: {info}",
                     index=index,
                     info=region_info,
+                    prefix="BARA",
                 )
                 size = region_info["size"]
                 flags = region_info["flags"]
@@ -776,6 +790,7 @@ class PCILeechContextBuilder:
                         "BAR {index} data: {data}",
                         index=index,
                         data=bar_data,
+                        prefix="BARA",
                     )
                     bar_type_str = bar_data.get("type", "memory")
                     is_memory = bar_type_str == "memory"
@@ -789,6 +804,7 @@ class PCILeechContextBuilder:
                         "BAR {index} data (raw): {data}",
                         index=index,
                         data=bar_data,
+                        prefix="BARA",
                     )
                     # Handle integer BAR values
                     bar_value = bar_data
@@ -819,6 +835,7 @@ class PCILeechContextBuilder:
                     size=size,
                     address=base_address,
                     prefetchable=prefetchable,
+                    prefix="BARA",
                 )
 
                 # Only return valid memory BARs with size > 0 (I/O BARs are not suitable for MMIO)
@@ -827,6 +844,7 @@ class PCILeechContextBuilder:
                         self.logger,
                         "BAR {index} is valid - creating BarConfiguration",
                         index=index,
+                        prefix="BARA",
                     )
                     return BarConfiguration(
                         index=index,
@@ -843,12 +861,14 @@ class PCILeechContextBuilder:
                             self.logger,
                             "BAR {index}: Skipped (memory BAR with zero size)",
                             index=index,
+                            prefix="BARA",
                         )
                     elif is_io:
                         log_info_safe(
                             self.logger,
                             "BAR {index}: Skipped (I/O BAR - not suitable for MMIO)",
                             index=index,
+                            prefix="BARA",
                         )
 
         except Exception as e:
@@ -857,6 +877,7 @@ class PCILeechContextBuilder:
                 "VFIO region info failed for BAR {index}: {error}",
                 index=index,
                 error=str(e),
+                prefix="BARA",
             )
             # NO FALLBACKS - fail fast when VFIO access fails
             raise ContextError(
@@ -879,6 +900,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Opening VFIO device FD for device {bdf}",
             bdf=self.device_bdf,
+            prefix="BARA",
         )
 
         try:
@@ -889,6 +911,7 @@ class PCILeechContextBuilder:
                 fd=device_fd,
                 cont_fd=container_fd,
                 bdf=self.device_bdf,
+                prefix="BARA",
             )
             return device_fd, container_fd
         except Exception as e:
@@ -897,6 +920,7 @@ class PCILeechContextBuilder:
                 "Failed to open VFIO device FD for device {bdf}: {error}",
                 bdf=self.device_bdf,
                 error=str(e),
+                prefix="BARA",
             )
             raise
 
@@ -906,6 +930,7 @@ class PCILeechContextBuilder:
             "Attempting to get VFIO region info for BAR {index} on device {bdf}",
             index=index,
             bdf=self.device_bdf,
+            prefix="BARA",
         )
 
         try:
@@ -915,6 +940,7 @@ class PCILeechContextBuilder:
                 "Successfully opened VFIO device FD {fd} and container FD {cont_fd} for region info query",
                 fd=fd,
                 cont_fd=cont_fd,
+                prefix="BARA",
             )
         except OSError as e:
             error_code = getattr(e, "errno", "unknown")
@@ -922,6 +948,7 @@ class PCILeechContextBuilder:
                 log_warning_safe(
                     self.logger,
                     "Failed to open VFIO device FD for region info: [Errno 22] Invalid argument - device may not be properly bound to vfio-pci or IOMMU issue",
+                    prefix="BARA",
                 )
             else:
                 log_warning_safe(
@@ -929,6 +956,7 @@ class PCILeechContextBuilder:
                     "Failed to open VFIO device FD for region info: [Errno {errno}] {error}",
                     errno=error_code,
                     error=str(e),
+                    prefix="BARA",
                 )
             return None
         except Exception as e:
@@ -936,6 +964,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Unexpected error opening VFIO device FD for region info: {error}",
                 error=str(e),
+                prefix="BARA",
             )
             return None
 
@@ -949,6 +978,7 @@ class PCILeechContextBuilder:
                 "Querying VFIO region info for index {index} with struct size {size}",
                 index=index,
                 size=info.argsz,
+                prefix="BARA",
             )
 
             # mutate=True lets the kernel write back size/flags
@@ -960,6 +990,7 @@ class PCILeechContextBuilder:
                 index=info.index,
                 size=info.size,
                 flags=info.flags,
+                prefix="BARA",
             )
 
             result = {
@@ -978,6 +1009,7 @@ class PCILeechContextBuilder:
                 readable=result["readable"],
                 writable=result["writable"],
                 mappable=result["mappable"],
+                prefix="BARA",
             )
 
             return result
@@ -989,6 +1021,7 @@ class PCILeechContextBuilder:
                 index=index,
                 errno=getattr(e, "errno", "unknown"),
                 error=str(e),
+                prefix="BARA",
             )
             return None
         finally:
@@ -997,6 +1030,7 @@ class PCILeechContextBuilder:
                 "Closing VFIO device FD {fd} and container FD {cont_fd}",
                 fd=fd,
                 cont_fd=cont_fd,
+                prefix="BARA",
             )
             try:
                 os.close(fd)
@@ -1021,6 +1055,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Attempting to resolve IOMMU group for device {bdf} via sysfs",
                 bdf=self.device_bdf,
+                prefix="IOMMU",
             )
 
             # Parse BDF components
@@ -1040,6 +1075,7 @@ class PCILeechContextBuilder:
                 bus=bus,
                 dev=dev,
                 fn=fn,
+                prefix="IOMMU",
             )
 
             iommu_path = f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}/iommu_group"
@@ -1047,6 +1083,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Checking IOMMU group path: {path}",
                 path=iommu_path,
+                prefix="IOMMU",
             )
 
             if os.path.exists(iommu_path):
@@ -1058,6 +1095,7 @@ class PCILeechContextBuilder:
                         "Successfully resolved IOMMU group via sysfs: {group} (link: {link})",
                         group=group_number,
                         link=group_link,
+                        prefix="IOMMU",
                     )
                     return group_number
                 except OSError as e:
@@ -1066,12 +1104,14 @@ class PCILeechContextBuilder:
                         "Failed to read IOMMU group symlink {path}: {error}",
                         path=iommu_path,
                         error=str(e),
+                        prefix="IOMMU",
                     )
             else:
                 log_warning_safe(
                     self.logger,
                     "IOMMU group path does not exist: {path}",
                     path=iommu_path,
+                    prefix="IOMMU",
                 )
 
                 # Check if the device exists at all
@@ -1081,12 +1121,14 @@ class PCILeechContextBuilder:
                         self.logger,
                         "Device exists at {path} but no IOMMU group - IOMMU may be disabled",
                         path=device_path,
+                        prefix="IOMMU",
                     )
                 else:
                     log_warning_safe(
                         self.logger,
                         "Device does not exist at {path} - check BDF format",
                         path=device_path,
+                        prefix="IOMMU",
                     )
 
         except Exception as e:
@@ -1094,12 +1136,14 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Exception during sysfs IOMMU group resolution: {error}",
                 error=str(e),
+                prefix="IOMMU",
             )
 
         # 2) In-container fallback – pick the first numeric node in /dev/vfio
         log_info_safe(
             self.logger,
             "Falling back to enumerating /dev/vfio for available groups",
+            prefix="IOMMU",
         )
 
         try:
@@ -1108,6 +1152,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Found entries in /dev/vfio: {entries}",
                 entries=vfio_entries,
+                prefix="IOMMU",
             )
 
             numeric_groups = [entry for entry in vfio_entries if entry.isdigit()]
@@ -1115,6 +1160,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Available numeric VFIO groups: {groups}",
                 groups=numeric_groups,
+                prefix="IOMMU",
             )
 
             if numeric_groups:
@@ -1123,6 +1169,7 @@ class PCILeechContextBuilder:
                     self.logger,
                     "Selected VFIO group from fallback enumeration: {group}",
                     group=selected_group,
+                    prefix="IOMMU",
                 )
                 return selected_group
 
@@ -1130,18 +1177,21 @@ class PCILeechContextBuilder:
             log_warning_safe(
                 self.logger,
                 "/dev/vfio directory not found - VFIO may not be available",
+                prefix="IOMMU",
             )
         except Exception as e:
             log_warning_safe(
                 self.logger,
                 "Exception during /dev/vfio enumeration: {error}",
                 error=str(e),
+                prefix="IOMMU",
             )
 
         # 3) Last resort
         log_warning_safe(
             self.logger,
             "All IOMMU group resolution methods failed, using fallback group '0'",
+            prefix="IOMMU",
         )
         return "0"
 
@@ -1164,6 +1214,7 @@ class PCILeechContextBuilder:
             "Falling back to intelligent BAR analysis for index {index} with data: {data}",
             index=index,
             data=bar_data,
+            prefix="BARA",
         )
 
         # Handle both dict and int formats
@@ -1186,6 +1237,7 @@ class PCILeechContextBuilder:
                     address=base_address,
                     size=size,
                     prefetchable=prefetchable,
+                    prefix="BARA",
                 )
 
                 return BarConfiguration(
@@ -1213,6 +1265,7 @@ class PCILeechContextBuilder:
                     address=base_address,
                     size=estimated_size,
                     prefetchable=prefetchable,
+                    prefix="BARA",
                 )
 
                 return BarConfiguration(
@@ -1265,6 +1318,7 @@ class PCILeechContextBuilder:
                 address=base_address,
                 size=size,
                 prefetchable=prefetchable,
+                prefix="BARA",
             )
 
             return BarConfiguration(
@@ -1332,6 +1386,7 @@ class PCILeechContextBuilder:
             index=bar_index,
             size=base_size,
             kb=base_size // 1024,
+            prefix="BARA",
         )
 
         return base_size
@@ -1353,6 +1408,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Adjusting BAR configuration for device {bdf} based on behavior profile",
             bdf=self.device_bdf,
+            prefix="BARA",
         )
         adjustments = {}
 
@@ -1446,6 +1502,7 @@ class PCILeechContextBuilder:
                 "Detected very fast device {bdf} with avg_interval: {avg_interval}",
                 bdf=self.device_bdf,
                 avg_interval=avg_interval,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=2,
@@ -1461,6 +1518,7 @@ class PCILeechContextBuilder:
                 "Detected slow device {bdf} with avg_interval: {avg_interval}",
                 bdf=self.device_bdf,
                 avg_interval=avg_interval,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=8,
@@ -1476,6 +1534,7 @@ class PCILeechContextBuilder:
                 "Detected medium speed device {bdf} with avg_interval: {avg_interval}",
                 bdf=self.device_bdf,
                 avg_interval=avg_interval,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=4,
@@ -1505,6 +1564,7 @@ class PCILeechContextBuilder:
             "Generating timing parameters for device {bdf} with class code {class_code}",
             bdf=self.device_bdf,
             class_code=class_code,
+            prefix="BARA",
         )
         # Network controllers (class 02xxxx)
         if class_code.startswith("02"):
@@ -1512,6 +1572,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Detected network controller for device {bdf}",
                 bdf=self.device_bdf,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=2,
@@ -1527,6 +1588,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Detected storage controller for device {bdf}",
                 bdf=self.device_bdf,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=6,
@@ -1542,6 +1604,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Detected display controller for device {bdf}",
                 bdf=self.device_bdf,
+                prefix="BARA",
             )
             return TimingParameters(
                 read_latency=4,
@@ -1556,6 +1619,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Falling back to generic timing parameters for device {bdf}",
                 bdf=self.device_bdf,
+                prefix="BARA",
             )
             # Use device ID hash to create deterministic but unique timing
             device_hash = int(
@@ -1590,6 +1654,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Building PCILeech configuration for device {bdf}",
             bdf=self.device_bdf,
+            prefix="CONF",
         )
         # Create device-specific memory layout
         device_hash = int(
@@ -1606,6 +1671,7 @@ class PCILeechContextBuilder:
             "Using base offset 0x{offset:04X} for device {bdf}",
             offset=base_offset,
             bdf=self.device_bdf,
+            prefix="CONF",
         )
 
         return {
@@ -1655,6 +1721,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Generating unique device signature for device {bdf}",
             bdf=self.device_bdf,
+            prefix="CONF",
         )
         # Combine all unique device characteristics
         signature_components = [
@@ -1699,6 +1766,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Device signature components: {components}",
             components=signature_components,
+            prefix="CONF",
         )
 
         # Create deterministic hash
@@ -1708,6 +1776,7 @@ class PCILeechContextBuilder:
             self.logger,
             "Generated device signature hash: {hash}",
             hash=signature_hash,
+            prefix="CONF",
         )
 
         return f"32'h{int(signature_hash[:8], 16):08X}"
@@ -1765,6 +1834,7 @@ class PCILeechContextBuilder:
                 self.logger,
                 "Template context is missing required sections: {sections}",
                 sections=missing_sections,
+                prefix="VLDN",
             )
             if self.validation_level == ValidationLevel.STRICT:
                 raise ContextError(
@@ -1775,6 +1845,7 @@ class PCILeechContextBuilder:
                     self.logger,
                     "Template context is missing sections: {sections}. "
                     "This may lead to incomplete firmware generation.",
+                    prefix="VLDN",
                 )
 
         # Validate critical device information
@@ -1786,7 +1857,11 @@ class PCILeechContextBuilder:
             if self.validation_level == ValidationLevel.STRICT:
                 raise ContextError("Device vendor ID is missing or invalid")
             else:
-                log_warning_safe(self.logger, "Device vendor ID is missing or invalid")
+                log_warning_safe(
+                    self.logger,
+                    "Device vendor ID is missing or invalid",
+                    prefix="VLDN",
+                )
         # Validate BAR configuration
         bar_config = context.get("bar_config", {})
         bars = bar_config.get("bars")
@@ -1797,7 +1872,7 @@ class PCILeechContextBuilder:
             if self.validation_level == ValidationLevel.STRICT:
                 raise ContextError("BARs list is empty")
             else:
-                log_warning_safe(self.logger, "BARs list is empty")
+                log_warning_safe(self.logger, "BARs list is empty", prefix="VLDN")
 
         # Validate device signature
         device_signature = context.get("device_signature")
@@ -1805,7 +1880,11 @@ class PCILeechContextBuilder:
             if self.validation_level == ValidationLevel.STRICT:
                 raise ContextError("Invalid or generic device signature")
             else:
-                log_warning_safe(self.logger, "Invalid or generic device signature")
+                log_warning_safe(
+                    self.logger,
+                    "Invalid or generic device signature",
+                    prefix="VLDN",
+                )
 
         # Only log success if no warnings/errors occurred above
         if (
@@ -1817,7 +1896,14 @@ class PCILeechContextBuilder:
             and device_signature != "32'hDEADBEEF"
         ):
             log_info_safe(
-                self.logger, "Template context validation completed successfully"
+                self.logger,
+                "Template context validation completed successfully for device {bdf}",
+                bdf=device_config.get("bdf"),
+                prefix="VLDN",
             )
 
-        log_info_safe(self.logger, "Template context validation completed successfully")
+        log_info_safe(
+            self.logger,
+            "Template context validation completed successfully",
+            prefix="VLDN",
+        )

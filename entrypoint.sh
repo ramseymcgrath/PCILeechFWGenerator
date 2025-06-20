@@ -55,6 +55,16 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     exit 0
 fi
 
+# Check if VFIO constants need to be rebuilt at runtime
+if [ "${REBUILD_VFIO_CONSTANTS:-false}" = "true" ]; then
+    echo "Rebuilding VFIO constants for runtime kernel..."
+    if [ -f /app/build_vfio_constants.sh ]; then
+        cd /app && ./build_vfio_constants.sh || echo "Warning: VFIO constants rebuild failed"
+    else
+        echo "Warning: VFIO constants build script not found"
+    fi
+fi
+
 # Make sure the backend module is present
 modprobe -q vfio_iommu_type1 || true
 

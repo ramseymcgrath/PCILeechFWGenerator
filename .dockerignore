@@ -129,3 +129,9 @@ flash_fpga.py
 .github/
 .pytest_cache/
 .benchmarks/
+
+# Include VFIO constants build files
+!vfio_helper.c
+!patch_vfio_constants.py
+!build_vfio_constants.sh
+!VFIO_CONSTANTS_README.md

@@ -131,6 +131,7 @@ class PCILeechGenerator:
             self.logger,
             "Initializing PCILeech generator for device {bdf}",
             bdf=self.config.device_bdf,
+            prefix="PCIL",
         )
 
         # Initialize behavior profiler
@@ -161,7 +162,9 @@ class PCILeechGenerator:
         self.context_builder = None
 
         log_info_safe(
-            self.logger, "PCILeech generator components initialized successfully"
+            self.logger,
+            "PCILeech generator components initialized successfully",
+            prefix="PCIL",
         )
 
     def generate_pcileech_firmware(self) -> Dict[str, Any]:
@@ -178,6 +181,7 @@ class PCILeechGenerator:
             self.logger,
             "Starting PCILeech firmware generation for device {bdf}",
             bdf=self.config.device_bdf,
+            prefix="PCIL",
         )
 
         try:
@@ -195,6 +199,7 @@ class PCILeechGenerator:
                     "VFIO binding established for device {bdf} at {path}",
                     bdf=self.config.device_bdf,
                     path=vfio_device_path,
+                    prefix="VFIO",
                 )
 
                 # Step 2: Analyze configuration space (with VFIO active)
@@ -206,7 +211,9 @@ class PCILeechGenerator:
                 # Step 3a: Handle interrupt strategy fallback if MSI-X not available
                 if msix_data is None:
                     log_info_safe(
-                        self.logger, "MSI-X not available, checking for MSI capability"
+                        self.logger,
+                        "MSI-X not available, checking for MSI capability",
+                        prefix="PCIL",
                     )
                     # Check for MSI capability (ID 0x05)
                     config_space_hex = config_space_data.get("config_space_hex", "")
@@ -218,18 +225,23 @@ class PCILeechGenerator:
                             log_info_safe(
                                 self.logger,
                                 "MSI capability found, using MSI with 1 vector",
+                                prefix="PCIL",
                             )
                             interrupt_strategy = "msi"
                             interrupt_vectors = 1
                         else:
                             log_info_safe(
-                                self.logger, "No MSI capability found, using INTx"
+                                self.logger,
+                                "No MSI capability found, using INTx",
+                                prefix="PCIL",
                             )
                             interrupt_strategy = "intx"
                             interrupt_vectors = 1
                     else:
                         log_info_safe(
-                            self.logger, "No config space data, defaulting to INTx"
+                            self.logger,
+                            "No config space data, defaulting to INTx",
+                            prefix="PCIL",
                         )
                         interrupt_strategy = "intx"
                         interrupt_vectors = 1
@@ -251,6 +263,7 @@ class PCILeechGenerator:
                 self.logger,
                 "VFIO binding cleanup completed for device {bdf}",
                 bdf=self.config.device_bdf,
+                prefix="VFIO",
             )
 
             # Step 5: Generate SystemVerilog modules (no VFIO needed)
@@ -280,7 +293,9 @@ class PCILeechGenerator:
             }
 
             log_info_safe(
-                self.logger, "PCILeech firmware generation completed successfully"
+                self.logger,
+                "PCILeech firmware generation completed successfully",
+                prefix="PCIL",
             )
 
             return generation_result
@@ -290,6 +305,7 @@ class PCILeechGenerator:
                 self.logger,
                 "PCILeech firmware generation failed: {error}",
                 error=str(e),
+                prefix="PCIL",
             )
             root_cause = extract_root_cause(e)
             raise PCILeechGenerationError(
@@ -317,6 +333,7 @@ class PCILeechGenerator:
             self.logger,
             "Capturing device behavior profile for {duration}s",
             duration=self.config.behavior_capture_duration,
+            prefix="MSIX",
         )
 
         try:
@@ -335,6 +352,7 @@ class PCILeechGenerator:
                 "Captured {accesses} register accesses with {patterns} timing patterns",
                 accesses=behavior_profile.total_accesses,
                 patterns=len(behavior_profile.timing_patterns),
+                prefix="MSIX",
             )
 
             return behavior_profile
@@ -349,6 +367,7 @@ class PCILeechGenerator:
                     self.logger,
                     "Device behavior profiling failed, continuing without profile: {error}",
                     error=str(e),
+                    prefix="MSIX",
                 )
                 return None
             else:
@@ -370,6 +389,7 @@ class PCILeechGenerator:
             self.logger,
             "Analyzing configuration space for device {bdf}",
             bdf=self.config.device_bdf,
+            prefix="MSIX",
         )
 
         try:
@@ -400,6 +420,7 @@ class PCILeechGenerator:
                 vendor_id=device_info["vendor_id"],
                 device_id=device_info["device_id"],
                 class_code=device_info["class_code"],
+                prefix="MSIX",
             )
 
             return config_space_data
@@ -413,6 +434,7 @@ class PCILeechGenerator:
                     self.logger,
                     "Configuration space analysis failed, checking fallback options: {error}",
                     error=str(e),
+                    prefix="MSIX",
                 )
                 # Let the fallback manager handle providing fallback data
                 # This should not provide hardcoded defaults
@@ -440,6 +462,7 @@ class PCILeechGenerator:
             self.logger,
             "Analyzing configuration space for device {bdf} (VFIO already active)",
             bdf=self.config.device_bdf,
+            prefix="MSIX",
         )
 
         try:
@@ -470,6 +493,7 @@ class PCILeechGenerator:
                 vendor_id=device_info["vendor_id"],
                 device_id=device_info["device_id"],
                 class_code=device_info["class_code"],
+                prefix="MSIX",
             )
 
             return config_space_data
@@ -485,6 +509,7 @@ class PCILeechGenerator:
                     self.logger,
                     "Configuration space analysis failed, but fallback manager approved continuation: {error}",
                     error=str(e),
+                    prefix="MSIX",
                 )
                 # Let the fallback manager handle providing fallback data
                 # This should not provide hardcoded defaults
@@ -509,13 +534,15 @@ class PCILeechGenerator:
             Dictionary containing MSI-X capability information, or None if MSI-X
             capability is missing or table_size == 0
         """
-        log_info_safe(self.logger, "Processing MSI-X capabilities")
+        log_info_safe(self.logger, "Processing MSI-X capabilities", prefix="MSIX")
 
         config_space_hex = config_space_data.get("config_space_hex", "")
 
         if not config_space_hex:
             log_info_safe(
-                self.logger, "No configuration space data available for MSI-X analysis"
+                self.logger,
+                "No configuration space data available for MSI-X analysis",
+                prefix="MSIX",
             )
             return None
 
@@ -535,6 +562,7 @@ class PCILeechGenerator:
                 self.logger,
                 "MSI-X validation failed: {errors}",
                 errors="; ".join(validation_errors),
+                prefix="MSIX",
             )
             return None
 

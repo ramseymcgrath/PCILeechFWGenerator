@@ -7,9 +7,6 @@ This streamlined script **always** runs the modern unified PCILeech build flow:
     • SystemVerilog + TCL generation through *device_clone.pcileech_generator*
     • Optional Vivado hand‑off
 
-All legacy fall‑backs, mock implementations, and compatibility shims have been
-*removed*.  If a required module is missing we **fail fast** with a clear error
-message.
 
 Usage
 -----
@@ -26,8 +23,9 @@ import logging
 import sys
 from pathlib import Path
 
-# Add utils to path for logging imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent  # /app/src -> /app
+sys.path.insert(0, str(project_root))
 from utils.logging import setup_logging, get_logger
 import os
 import sys
@@ -52,7 +50,66 @@ for module in REQUIRED_MODULES:
             "Ensure the production container/image is built correctly.",
             file=sys.stderr,
         )
-        raise SystemExit(2) from err
+
+        # Add detailed diagnostics
+        print("\n[DIAGNOSTICS] Python module import failure", file=sys.stderr)
+        print(f"Python version: {sys.version}", file=sys.stderr)
+        print(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}", file=sys.stderr)
+        print(f"Current directory: {os.getcwd()}", file=sys.stderr)
+
+        # Check if the file exists
+        module_parts = module.split(".")
+        module_path = os.path.join(*module_parts) + ".py"
+        alt_module_path = os.path.join(*module_parts[1:]) + ".py"
+
+        print(f"Looking for module file at: {module_path}", file=sys.stderr)
+        if os.path.exists(module_path):
+            print(f"✓ File exists at {module_path}", file=sys.stderr)
+        else:
+            print(f"✗ File not found at {module_path}", file=sys.stderr)
+
+        print(f"Looking for module file at: {alt_module_path}", file=sys.stderr)
+        if os.path.exists(alt_module_path):
+            print(f"✓ File exists at {alt_module_path}", file=sys.stderr)
+        else:
+            print(f"✗ File not found at {alt_module_path}", file=sys.stderr)
+
+        # Check for __init__.py files
+        module_dir = os.path.dirname(module_path)
+        print(f"Checking for __init__.py files in path: {module_dir}", file=sys.stderr)
+        current_dir = ""
+        for part in module_dir.split(os.path.sep):
+            if not part:
+                continue
+            current_dir = os.path.join(current_dir, part)
+            init_path = os.path.join(current_dir, "__init__.py")
+            if os.path.exists(init_path):
+                print(f"✓ __init__.py exists in {current_dir}", file=sys.stderr)
+            else:
+                print(f"✗ Missing __init__.py in {current_dir}", file=sys.stderr)
+                # Create the missing __init__.py file
+                try:
+                    os.makedirs(current_dir, exist_ok=True)
+                    with open(init_path, "w") as f:
+                        f.write("# Auto-generated __init__.py\n")
+                    print(f"  Created {init_path}", file=sys.stderr)
+                except Exception as e:
+                    print(f"  Failed to create {init_path}: {e}", file=sys.stderr)
+
+        # List sys.path
+        print("\nPython module search path:", file=sys.stderr)
+        for path in sys.path:
+            print(f"  - {path}", file=sys.stderr)
+
+        # Try to fix the issue by adding the current directory to sys.path
+        print("\nAttempting to fix import issue...", file=sys.stderr)
+        sys.path.insert(0, os.getcwd())
+        try:
+            __import__(module)
+            print(f"✓ Successfully imported {module} after fix!", file=sys.stderr)
+        except ImportError as e:
+            print(f"✗ Still failed to import {module}: {e}", file=sys.stderr)
+            raise SystemExit(2) from err
 
 from src.device_clone.pcileech_generator import (
     PCILeechGenerationConfig,
@@ -64,7 +121,9 @@ from src.device_clone.behavior_profiler import BehaviorProfiler
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────────────────────────────────────────
-setup_logging(level=logging.INFO)
+# Only setup logging if no handlers exist (avoid overriding CLI setup)
+if not logging.getLogger().handlers:
+    setup_logging(level=logging.INFO)
 log = get_logger("pcileech_builder")
 
 
