@@ -55,62 +55,22 @@ This tool also provides a replacement for huge pools of firmware with identical 
 
 The best way to start with the latest code is to clone and run from this repo directly. However pip can also be used.
 
-### Pip Installation
+### Requirements
 
-```bash
-# Basic installation
-pip install pcileechfwgenerator
-
-# With TUI support (recommended)
-pip install pcileechfwgenerator[tui]
-
-# Get sudo wrapper scripts
-wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/heads/main/install-sudo-wrapper.sh
-
-# Install sudo wrapper scripts (recommended for TUI and build commands)
-./install-sudo-wrapper.sh
-
-# Load required kernel modules
-sudo modprobe vfio
-sudo modprobe vfio-pci
-```
-
-If you have pip issues, it's usually easiest to just run from the repo. Make sure to install the python requirements.
-
-### Other Requirements
-
-Install Podman with your package manager. **Please just use podman!** Normal docker isn't able to mount the pcie devices correctly and you'll run into issues.
+Install Podman with your package manager. **Please just use podman!** Normal docker isn't able to mount the pcie devices correctly and you'll run into issues. If your OS isn't able to run podman (Ubuntu 20 for example) you can run the local build.
 
 ### Usage
 
-#### Package Installation Commands
+#### Repository Codebase Usage
 
-After pip installation, use these commands:
-
-```bash
-# TUI interface (recommended)
-pcileech-tui
-
-# CLI interface
-pcileech-generate build
-
-# Build-only interface
-pcileech-build
-
-# With sudo wrappers (if installed)
-pcileech-tui-sudo
-pcileech-build-sudo
-```
-
-#### Repository Development Usage
-
-This can all be run from a venv. Ubuntu especially likes to manage the default python and some of the packages are way too old, and a venv is way easier.
+This can all be run from a venv. Ubuntu especially likes to manage the default python and some of the packages are way too old, and a venv is way easier. You'll want to run python 3.9+
 
 ```bash
+
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
+python3 src/cli/vfio_diagnostics.py fix
 # CLI interface
 # NOTE: use -E to preserve your paths
 sudo -E python3 generate.py
@@ -120,6 +80,11 @@ sudo -E python3 -m src.tui_cli
 
 # Alternative TUI entry point
 sudo -E python3 src/tui/main.py
+
+# Alternative non-containerized build
+sudo ./run_build_with_sudo
+# You may need to adjust the python path here depending on your venv and python path
+
 ```
 
 Use the prompts to select your donor device and target FPGA.
