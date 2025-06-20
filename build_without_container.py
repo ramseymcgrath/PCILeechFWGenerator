@@ -47,7 +47,10 @@ SUPPORTED_BOARDS = [
     "pcileech_pciescreamer_xc7a35",
 ]
 
-# Device types - removed "generic" to prevent fallback
+# Device profile names - these match the actual profiles in the system
+DEVICE_PROFILES = ["network_card", "storage_controller", "generic", "audio_controller"]
+
+# For backward compatibility with command line arguments
 DEVICE_TYPES = ["network", "storage", "graphics", "audio"]
 
 # Map device types to profile names
@@ -136,6 +139,12 @@ def parse_arguments():
         default="network",  # Changed default from "generic" to "network"
         choices=DEVICE_TYPES,
         help="Type of device being cloned (generic not allowed)",
+    )
+
+    parser.add_argument(
+        "--device-profile",
+        choices=DEVICE_PROFILES,
+        help="Device profile to use (overrides --device-type if provided)",
     )
 
     parser.add_argument(
@@ -296,15 +305,22 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
 
                 # Create PCILeech configuration with the specific device type
                 # Map device type to profile name
-                device_type = args.device_type
-                device_profile = DEVICE_TYPE_TO_PROFILE.get(device_type, "network_card")
-
-                logger.info(
-                    f"Using device type '{device_type}' with profile '{device_profile}'"
-                )
-
-                # Skip DeviceType enum conversion entirely - it's not needed
-                # The PCILeechGenerationConfig only needs the profile name as a string
+                # Determine device profile to use
+                if args.device_profile:
+                    # Use explicitly provided device profile
+                    device_profile = args.device_profile
+                    logger.info(
+                        f"Using explicitly provided device profile: '{device_profile}'"
+                    )
+                else:
+                    # Map device type to profile name
+                    device_type = args.device_type
+                    device_profile = DEVICE_TYPE_TO_PROFILE.get(
+                        device_type, "network_card"
+                    )
+                    logger.info(
+                        f"Using device type '{device_type}' with mapped profile '{device_profile}'"
+                    )
 
                 pcileech_config = PCILeechGenerationConfig(
                     device_bdf=args.bdf,
@@ -416,31 +432,44 @@ def main():
         board = pick(SUPPORTED_BOARDS, "Select board #: ")
         logger.info(f"Selected board: {board}")
 
-    # Interactive device type selection - never allow "generic"
-    device_type = args.device_type
-    if not args.device_type or args.device_type == "":
-        logger.info(
-            "No device type specified, launching interactive device type picker..."
-        )
-        device_type = pick(DEVICE_TYPES, "Select device type #: ")
-        logger.info(f"Selected device type: {device_type}")
+    # Interactive device profile selection
+    device_profile = args.device_profile
+    if device_profile:
+        logger.info(f"Using provided device profile: {device_profile}")
+    else:
+        # Interactive device type selection - never allow "generic"
+        device_type = args.device_type
+        if not args.device_type or args.device_type == "":
+            logger.info(
+                "No device type specified, launching interactive device type picker..."
+            )
+            device_type = pick(DEVICE_TYPES, "Select device type #: ")
+            logger.info(f"Selected device type: {device_type}")
 
-    # Validate device type is one of the supported types
-    if device_type not in DEVICE_TYPES:
-        logger.warning(
-            f"Device type '{device_type}' not in supported types: {DEVICE_TYPES}"
+        # Validate device type is one of the supported types
+        if device_type not in DEVICE_TYPES:
+            logger.warning(
+                f"Device type '{device_type}' not in supported types: {DEVICE_TYPES}"
+            )
+            logger.info("Defaulting to 'network' device type")
+            device_type = "network"
+
+        # Map device type to profile
+        device_profile = DEVICE_TYPE_TO_PROFILE.get(device_type, "network_card")
+        logger.info(
+            f"Using device profile: {device_profile} (mapped from {device_type})"
         )
-        logger.info("Defaulting to 'network' device type")
-        device_type = "network"
 
     # Update args with interactive selections
     args.bdf = bdf
     args.board = board
     args.device_type = device_type
+    args.device_profile = device_profile
 
     logger.info(f"Target device: {args.bdf}")
     logger.info(f"Target board: {args.board}")
     logger.info(f"Device type: {args.device_type}")
+    logger.info(f"Device profile: {args.device_profile}")
 
     # Validate environment
     if not validate_environment():
