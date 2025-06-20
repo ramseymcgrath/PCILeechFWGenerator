@@ -19,7 +19,7 @@ import sys
 import time
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -58,7 +58,7 @@ PCI_RE = re.compile(
 def list_pci_devices() -> List[Dict[str, str]]:
     """List all PCI devices on the system."""
     out = Shell().run("lspci -Dnn")
-    devs: list[dict[str, str]] = []
+    devs = []  # type: List[Dict[str, str]]
     for line in out.splitlines():
         m = PCI_RE.match(line)
         if m:
@@ -68,7 +68,7 @@ def list_pci_devices() -> List[Dict[str, str]]:
     return devs
 
 
-def pick(lst: list[str], prompt: str) -> str:
+def pick(lst: List[str], prompt: str) -> str:
     """Interactive picker for selecting from a list."""
     for i, item in enumerate(lst):
         print(f" [{i}] {item}")
