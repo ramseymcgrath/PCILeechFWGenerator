@@ -24,13 +24,16 @@ from typing import List, Dict, Optional, Any
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import and setup proper colored logging
-from utils.logging import setup_logging, get_logger
+# Import shell utility
 from utils.shell import Shell
 
-# Setup logging with color support
-setup_logging(level=logging.INFO)
-logger = get_logger(__name__)
+# Setup basic logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # Supported boards
 SUPPORTED_BOARDS = [
@@ -219,18 +222,26 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
         # Import VFIO handler and build components
         from src.cli.vfio_handler import VFIOBinder
         from src.build import FirmwareBuilder
-        from src.device_clone.fallback_manager import FallbackManager
 
         # Create output directory
         output_dir = Path(args.output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize fallback manager
-        fallback_manager = FallbackManager(
-            mode=args.fallback_mode,
-            allowed_fallbacks=allowed_fallbacks,
-            denied_fallbacks=denied_fallbacks,
-        )
+        # Try to initialize fallback manager
+        try:
+            from src.device_clone.fallback_manager import FallbackManager
+
+            fallback_manager = FallbackManager(
+                mode=args.fallback_mode,
+                allowed_fallbacks=allowed_fallbacks,
+                denied_fallbacks=denied_fallbacks,
+            )
+            logger.info("Fallback manager initialized")
+        except ImportError:
+            logger.warning(
+                "FallbackManager not available, fallback options will be ignored"
+            )
+            fallback_manager = None
 
         logger.info(
             f"Starting PCILeech firmware generation for {args.bdf} on {args.board}"
