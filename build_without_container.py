@@ -221,42 +221,27 @@ def validate_environment():
     return True
 
 
-def patch_config_space_manager():
-    """Patch the ConfigSpaceManager class to use 'network' as default device profile instead of 'generic'."""
-    try:
-        import src.device_clone.config_space_manager as csm
-
-        # Save the original __init__ method
-        original_init = csm.ConfigSpaceManager.__init__
-
-        # Define a new __init__ method that uses 'network' as the default device profile
-        def patched_init(self, bdf, device_profile="network", strict_vfio=False):
-            logger.info(f"Using device profile: {device_profile}")
-            return original_init(self, bdf, device_profile, strict_vfio)
-
-        # Replace the original __init__ method with our patched version
-        csm.ConfigSpaceManager.__init__ = patched_init
-
-        logger.info(
-            "Successfully patched ConfigSpaceManager to prevent generic fallback"
-        )
-        return True
-    except (ImportError, AttributeError) as e:
-        logger.error(f"Failed to patch ConfigSpaceManager: {e}")
-        return False
-
-
 def run_build(args, allowed_fallbacks, denied_fallbacks):
     """Run the PCILeech firmware generation process directly."""
     try:
-        # Patch ConfigSpaceManager to prevent generic fallback
-        if not patch_config_space_manager():
-            logger.error("Cannot continue without patching ConfigSpaceManager")
+        # Ensure we're not using "generic" device type
+        if args.device_type == "generic":
+            logger.error(
+                "Generic device type is not allowed. Please use a specific device type."
+            )
             return False
+
+        logger.info(
+            f"Using specific device type: {args.device_type} (no fallback to generic)"
+        )
 
         # Import VFIO handler and build components
         from src.cli.vfio_handler import VFIOBinder
         from src.build import FirmwareBuilder
+        from src.device_clone.pcileech_generator import (
+            PCILeechGenerationConfig,
+            PCILeechGenerator,
+        )
 
         # Create output directory
         output_dir = Path(args.output_dir).resolve()
@@ -301,27 +286,55 @@ def run_build(args, allowed_fallbacks, denied_fallbacks):
             with VFIOBinder(args.bdf, attach=True):
                 logger.info("Device successfully bound to VFIO")
 
-                # Initialize firmware builder
-                logger.info("Initializing firmware builder...")
-                enable_profiling = args.enable_profiling
-                builder = FirmwareBuilder(
-                    bdf=args.bdf,
-                    board=args.board,
-                    out_dir=output_dir,
-                    enable_profiling=enable_profiling,
+                # Create PCILeech configuration with the specific device type
+                pcileech_config = PCILeechGenerationConfig(
+                    device_bdf=args.bdf,
+                    device_profile=args.device_type,  # Use the specific device type
+                    enable_behavior_profiling=args.enable_profiling,
+                    behavior_capture_duration=float(args.profile_duration),
+                    enable_manufacturing_variance=args.enable_variance,
+                    enable_advanced_features=args.enable_advanced,
+                    output_dir=output_dir,
+                    strict_validation=True,
+                    fail_on_missing_data=True,
+                    fallback_mode="none",  # Force "none" mode
+                    allowed_fallbacks=[],  # Allow no fallbacks
+                    denied_fallbacks=["all"],  # Deny all fallbacks
                 )
 
-                # Run the build
-                logger.info("Running firmware build...")
-                profile_secs = args.profile_duration if enable_profiling else 0
+                # Initialize PCILeech generator
+                pcileech_generator = PCILeechGenerator(pcileech_config)
+
+                # Generate PCILeech firmware
+                logger.info("Generating PCILeech firmware...")
                 t0 = time.perf_counter()
-                artifacts = builder.build(profile_secs=profile_secs)
+                generation_result = pcileech_generator.generate_pcileech_firmware()
                 dt = time.perf_counter() - t0
                 logger.info(f"Build finished in {dt:.1f} s ✓")
+
+                # Save generated firmware
+                pcileech_generator.save_generated_firmware(
+                    generation_result, output_dir
+                )
+
+                # Get list of generated files
+                artifacts = [
+                    str(p.relative_to(output_dir))
+                    for p in output_dir.rglob("*")
+                    if p.is_file()
+                ]
 
                 # Run Vivado if requested
                 if args.vivado:
                     logger.info("Running Vivado implementation...")
+                    from src.build import FirmwareBuilder
+
+                    builder = FirmwareBuilder(
+                        bdf=args.bdf,
+                        board=args.board,
+                        out_dir=output_dir,
+                        enable_profiling=args.enable_profiling,
+                    )
                     builder.run_vivado()
 
                 # Print summary
