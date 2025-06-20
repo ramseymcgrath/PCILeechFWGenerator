@@ -1,6 +1,9 @@
 # Core dependencies for PCILeech Firmware Generator
 # Install with: pip install -r requirements.txt
 
+# Typing extensions for Python compatibility
+typing_extensions>=4.0.0
+
 # System resource monitoring
 psutil>=5.9.0
 
