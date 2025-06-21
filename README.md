@@ -701,6 +701,51 @@ sudo modprobe vfio
 sudo modprobe vfio-pci
 ```
 
+**VFIO Device Issues:**
+
+If you encounter errors like "No IOMMU group found for device", use the comprehensive VFIO diagnostic tool:
+
+```bash
+# Check VFIO setup and device compatibility
+./vfio_setup_checker.py
+
+# Check a specific device
+./vfio_setup_checker.py 0000:03:00.0
+
+# Interactive mode with guided fixes
+./vfio_setup_checker.py --interactive
+
+# List all devices with VFIO status
+./vfio_setup_checker.py --list-devices
+
+# Generate automated fix script
+./vfio_setup_checker.py --generate-script
+```
+
+Common VFIO issues and solutions:
+
+```bash
+# 1. IOMMU not enabled in BIOS/UEFI
+# Enable VT-d (Intel) or AMD-Vi (AMD) in BIOS settings
+
+# 2. IOMMU not enabled in kernel
+# Add to /etc/default/grub GRUB_CMDLINE_LINUX:
+# For Intel: intel_iommu=on
+# For AMD: amd_iommu=on
+# Then: sudo update-grub && sudo reboot
+
+# 3. VFIO modules not loaded
+sudo modprobe vfio vfio_pci vfio_iommu_type1
+
+# 4. Device not in IOMMU group
+# Check IOMMU groups:
+find /sys/kernel/iommu_groups/ -name '*' -type l | grep YOUR_DEVICE_BDF
+
+# 5. Device selection issues
+# The tool now shows VFIO compatibility when selecting devices
+# Only select devices marked as "VFIO Compatible"
+```
+
 **Command Not Found:**
 
 ```bash

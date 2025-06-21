@@ -55,6 +55,24 @@ def list_pci_devices() -> List[Dict[str, str]]:
         if m:
             d = m.groupdict()
             d["pretty"] = line
+
+            # Check if device has IOMMU group (VFIO compatible)
+            bdf = d["bdf"]
+            try:
+                from .vfio_handler import _get_iommu_group_safe
+
+                group_id = _get_iommu_group_safe(bdf)
+                if group_id:
+                    d["vfio_compatible"] = True
+                    d["iommu_group"] = group_id
+                    d["pretty"] += f" [IOMMU Group: {group_id}]"
+                else:
+                    d["vfio_compatible"] = False
+                    d["pretty"] += " [No IOMMU Group - Not VFIO Compatible]"
+            except Exception:
+                d["vfio_compatible"] = False
+                d["pretty"] += " [VFIO Status Unknown]"
+
             devs.append(d)
     return devs
 
@@ -76,9 +94,52 @@ def choose_device() -> Dict[str, str]:
     devs = list_pci_devices()
     if not devs:
         raise RuntimeError("No PCIe devices found – are you root?")
-    for i, dev in enumerate(devs):
-        print(f" [{i}] {dev['pretty']}")
-    return devs[int(input("Select donor device #: "))]
+
+    # Separate VFIO-compatible and incompatible devices
+    vfio_devs = [dev for dev in devs if dev.get("vfio_compatible", False)]
+    non_vfio_devs = [dev for dev in devs if not dev.get("vfio_compatible", False)]
+
+    print("\n=== VFIO-Compatible Devices (Recommended) ===")
+    if vfio_devs:
+        for i, dev in enumerate(vfio_devs):
+            print(f" [{i}] {dev['pretty']}")
+    else:
+        print(" No VFIO-compatible devices found!")
+        print(" This usually means IOMMU is not enabled in your system.")
+
+    if non_vfio_devs:
+        print(f"\n=== Non-VFIO Devices (Will Cause Errors) ===")
+        start_idx = len(vfio_devs)
+        for i, dev in enumerate(non_vfio_devs):
+            print(f" [{start_idx + i}] {dev['pretty']}")
+        print("\nWARNING: Selecting a non-VFIO device will cause build failures!")
+
+    # Combine lists for selection
+    all_devs = vfio_devs + non_vfio_devs
+
+    while True:
+        try:
+            selection = int(input("\nSelect donor device #: "))
+            if 0 <= selection < len(all_devs):
+                selected_dev = all_devs[selection]
+
+                # Warn if selecting non-VFIO device
+                if not selected_dev.get("vfio_compatible", False):
+                    print(
+                        f"\nWARNING: Device {selected_dev['bdf']} is not VFIO-compatible!"
+                    )
+                    print(
+                        "This will likely cause the build to fail with IOMMU group errors."
+                    )
+                    confirm = input("Continue anyway? (y/N): ").strip().lower()
+                    if confirm not in ["y", "yes"]:
+                        continue
+
+                return selected_dev
+            else:
+                print(f"Invalid selection. Please choose 0-{len(all_devs)-1}")
+        except (ValueError, KeyboardInterrupt):
+            print("Invalid input. Please enter a number.")
 
 
 SUPPORTED_BOARDS = [

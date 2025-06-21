@@ -148,6 +148,34 @@ def run_build(cfg: BuildConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Check if device has IOMMU group before attempting VFIO binding
+        from .vfio_handler import (
+            _get_iommu_group_safe,
+            VFIODeviceNotFoundError,
+            run_diagnostics,
+        )
+
+        # First check if device has IOMMU group
+        group_id = _get_iommu_group_safe(cfg.bdf)
+        if group_id is None:
+            # Run diagnostics to provide helpful error information
+            diag_result = run_diagnostics(cfg.bdf)
+            error_msg = f"Device {cfg.bdf} does not have an IOMMU group and cannot be used with VFIO.\n\n"
+            error_msg += "This usually means:\n"
+            error_msg += "1. IOMMU is not enabled in BIOS/UEFI\n"
+            error_msg += "2. IOMMU is not enabled in kernel (add intel_iommu=on or amd_iommu=on to kernel parameters)\n"
+            error_msg += "3. The device does not support VFIO\n"
+            error_msg += "4. The device is not in a separate IOMMU group\n\n"
+            error_msg += "Please run the following to check your system:\n"
+            error_msg += f"  sudo dmesg | grep -i iommu\n"
+            error_msg += f"  ls -la /sys/bus/pci/devices/{cfg.bdf}/\n"
+            error_msg += f"  find /sys/kernel/iommu_groups/ -name '*' -type l | grep {cfg.bdf}\n\n"
+            error_msg += (
+                "Consider selecting a different device or enabling IOMMU support."
+            )
+
+            raise VFIODeviceNotFoundError(error_msg)
+
         # Bind without keeping the FD (call the context manager only long
         # enough to flip the drivers)
         binder = VFIOBinder(cfg.bdf, attach=False)
@@ -155,10 +183,6 @@ def run_build(cfg: BuildConfig) -> None:
             # enter/exit immediately → binds device
             pass
 
-        # Get the group device path as a string (safe, just a string)
-        from .vfio_handler import _get_iommu_group
-
-        group_id = _get_iommu_group(cfg.bdf)
         group_dev = f"/dev/vfio/{group_id}"
 
         log_info_safe(
