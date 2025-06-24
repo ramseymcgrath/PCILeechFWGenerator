@@ -177,10 +177,13 @@ class FirmwareBuilder:
 
         # TCL scripts (always two‑script flow)
         ctx = res["template_context"]
+
         proj_tcl = self.out_dir / "vivado_project.tcl"
         build_tcl = self.out_dir / "vivado_build.tcl"
+
         proj_tcl.write_text(self.tcl.build_pcileech_project_script(ctx))
         build_tcl.write_text(self.tcl.build_pcileech_build_script(ctx))
+
         log.info("  • Emitted Vivado scripts → %s, %s", proj_tcl.name, build_tcl.name)
 
         # Persist config‑space snapshot for auditing

@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.templating.tcl_builder import BuildContext
+
 # Import string utilities
 from ..exceptions import PCILeechGenerationError
 from ..error_utils import extract_root_cause
@@ -257,6 +259,7 @@ class PCILeechGenerator:
                     interrupt_strategy,
                     interrupt_vectors,
                 )
+                
 
             # VFIO cleanup happens here automatically when exiting the 'with' block
             log_info_safe(

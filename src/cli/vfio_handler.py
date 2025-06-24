@@ -352,6 +352,8 @@ class VFIOBinderImpl:
             logger, "Binding {bdf} to vfio-pci driver", bdf=self.bdf, prefix="BIND"
         )
 
+        time.sleep(1.5)
+
         # Set driver override
         self._write_sysfs_safe(
             self._path_manager.driver_override_path, VFIO_DRIVER_NAME
@@ -623,7 +625,32 @@ class VFIOBinderImpl:
             group_fd = os.open(str(group_path), os.O_RDWR | os.O_CLOEXEC)
 
             # Tie the group to the container
-            fcntl.ioctl(group_fd, VFIO_GROUP_SET_CONTAINER, ctypes.c_int(container_fd))
+            try:
+                fcntl.ioctl(group_fd, VFIO_GROUP_SET_CONTAINER, ctypes.c_int(container_fd))
+                log_debug_safe(
+                    logger, "Successfully linked group to container", prefix="VFIO"
+                )
+            except OSError as e:
+                log_error_safe(
+                    logger,
+                    "Failed to link group {group} to container: {e}",
+                    group=group,
+                    e=str(e),
+                    prefix="VFIO",
+                )
+                if e.errno == errno.EINVAL:
+                    log_error_safe(
+                        logger,
+                        "EINVAL: Invalid argument - group may already be linked or container issue",
+                        prefix="VFIO",
+                    )
+                elif e.errno == errno.EBUSY:
+                    log_error_safe(
+                        logger,
+                        "EBUSY: Group is busy - may be in use by another container",
+                        prefix="VFIO",
+                    )
+                raise OSError(f"Failed to link group {group} to container: {e}")
 
             # Enable the Type-1 IOMMU backend
             fcntl.ioctl(container_fd, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU)
@@ -693,7 +720,17 @@ class VFIOBinderImpl:
 
         # Optionally attach; generators in guests should do this instead
         if self._attach:
-            self._open_vfio_device_fd()
+            try:
+                fd, cont_fd = self._open_vfio_device_fd()
+            finally:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass  # Already closed
+                try:
+                    os.close(cont_fd)
+                except OSError:
+                    pass  # Already closed
 
         return self._path_manager.get_vfio_group_path(self.group_id)
 

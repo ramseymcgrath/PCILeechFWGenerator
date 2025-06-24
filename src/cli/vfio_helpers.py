@@ -305,22 +305,6 @@ def get_device_fd(bdf: str) -> tuple[int, int]:
                 )
                 raise OSError(f"Type1 IOMMU extension required but not supported: {e}")
 
-            # Set the IOMMU type for the container
-            try:
-                fcntl.ioctl(cont_fd, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU)
-                log_debug_safe(
-                    logger, "Set container IOMMU type to Type1", prefix="VFIO"
-                )
-            except OSError as e:
-                log_error_safe(
-                    logger, "Failed to set IOMMU type: {e}", e=str(e), prefix="VFIO"
-                )
-                raise OSError(f"Failed to set IOMMU type to Type1: {e}")
-
-            # Link group to container
-            log_debug_safe(
-                logger, "Linking group {group} to container", group=group, prefix="VFIO"
-            )
             try:
                 fcntl.ioctl(grp_fd, VFIO_GROUP_SET_CONTAINER, ctypes.c_int(cont_fd))
                 log_debug_safe(
@@ -347,6 +331,23 @@ def get_device_fd(bdf: str) -> tuple[int, int]:
                         prefix="VFIO",
                     )
                 raise OSError(f"Failed to link group {group} to container: {e}")
+
+            # Set the IOMMU type for the container
+            try:
+                fcntl.ioctl(cont_fd, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU)
+                log_debug_safe(
+                    logger, "Set container IOMMU type to Type1", prefix="VFIO"
+                )
+            except OSError as e:
+                log_error_safe(
+                    logger, "Failed to set IOMMU type: {e}", e=str(e), prefix="VFIO"
+                )
+                raise OSError(f"Failed to set IOMMU type to Type1: {e}")
+
+            # Link group to container
+            log_debug_safe(
+                logger, "Linking group {group} to container", group=group, prefix="VFIO"
+            )
 
             # Verify group is viable
             status = vfio_group_status()

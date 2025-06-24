@@ -33,6 +33,7 @@ from ..exceptions import ContextError
 from ..error_utils import extract_root_cause
 from .behavior_profiler import BehaviorProfile
 from .fallback_manager import FallbackManager
+from .config_space_manager import BarInfo
 
 logger = logging.getLogger(__name__)
 
@@ -798,15 +799,29 @@ class PCILeechContextBuilder:
                     base_address = bar_data.get("address", 0)
                     prefetchable = bar_data.get("prefetchable", False)
                     bar_type = 1 if bar_data.get("is_64bit", False) else 0
-                else:
+                elif isinstance(bar_data, BarInfo):
+                    # 新增支持 BarInfo 类型
                     log_info_safe(
                         self.logger,
-                        "BAR {index} data (raw): {data}",
+                        "BAR {index} data (BarInfo): {data}",
+                        index=index,
+                        data=str(bar_data),
+                        prefix="BARA",
+                    )
+                    is_memory = bar_data.bar_type == "memory"
+                    is_io = bar_data.bar_type == "io"
+                    base_address = bar_data.address
+                    prefetchable = bar_data.prefetchable
+                    bar_type = 1 if bar_data.is_64bit else 0
+
+                elif isinstance(bar_data, int):
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} data (int raw): {data}",
                         index=index,
                         data=bar_data,
                         prefix="BARA",
                     )
-                    # Handle integer BAR values
                     bar_value = bar_data
                     if bar_value == 0:
                         return None
@@ -822,6 +837,24 @@ class PCILeechContextBuilder:
                         bar_type = 0
                         prefetchable = False
                         base_address = bar_value & 0xFFFFFFFC
+
+                elif hasattr(bar_data, "address") and hasattr(bar_data, "type"):
+                    # Support BarInfo object
+                    log_info_safe(
+                        self.logger,
+                        "BAR {index} data (BarInfo): {data}",
+                        index=index,
+                        data=str(bar_data),
+                        prefix="BARA",
+                    )
+                    is_memory = bar_data.type == "memory"
+                    is_io = not is_memory
+                    base_address = bar_data.address
+                    prefetchable = getattr(bar_data, "prefetchable", False)
+                    bar_type = 1 if getattr(bar_data, "is_64bit", False) else 0
+
+                else:
+                    raise TypeError(f"Unknown BAR data type: {type(bar_data)}")
 
                 # Log detailed BAR analysis results
                 log_info_safe(
