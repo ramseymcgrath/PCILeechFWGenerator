@@ -370,7 +370,7 @@ class TCLBuilder:
     def _init_constants(self):
         """Initialize constants with fallback values."""
         try:
-            import device_clone.constants as constants
+            import src.device_clone.constants as constants
 
             self.BOARD_PARTS = constants.BOARD_PARTS
             self.DEFAULT_FPGA_PART = constants.DEFAULT_FPGA_PART

@@ -26,6 +26,7 @@ from pathlib import Path
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent  # /app/src -> /app
 sys.path.insert(0, str(project_root))
+from src.device_clone import board_config
 from utils.logging import setup_logging, get_logger
 import os
 import sys
@@ -115,8 +116,9 @@ from src.device_clone.pcileech_generator import (
     PCILeechGenerationConfig,
     PCILeechGenerator,
 )
-from src.templating.tcl_builder import TCLBuilder
+from src.templating.tcl_builder import TCLBuilder, BuildContext
 from src.device_clone.behavior_profiler import BehaviorProfiler
+from src.device_clone.board_config import get_pcileech_board_config
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -148,8 +150,10 @@ class FirmwareBuilder:
                 enable_behavior_profiling=enable_profiling,
             )
         )
+
         self.tcl = TCLBuilder(output_dir=self.out_dir)
         self.profiler = BehaviorProfiler(bdf=bdf)
+        self.board = board
 
     # ────────────────────────────────────────────────────────────────────────
     # Public API
@@ -181,14 +185,16 @@ class FirmwareBuilder:
         proj_tcl = self.out_dir / "vivado_project.tcl"
         build_tcl = self.out_dir / "vivado_build.tcl"
 
-        proj_tcl.write_text(self.tcl.build_pcileech_project_script(ctx))
-        build_tcl.write_text(self.tcl.build_pcileech_build_script(ctx))
+        buildContext = self.tcl.create_build_context(board=self.board)
+
+        proj_tcl.write_text(self.tcl.build_pcileech_project_script(buildContext))
+        build_tcl.write_text(self.tcl.build_pcileech_build_script(buildContext))
 
         log.info("  • Emitted Vivado scripts → %s, %s", proj_tcl.name, build_tcl.name)
 
         # Persist config‑space snapshot for auditing
         (self.out_dir / "device_info.json").write_text(
-            json.dumps(res["config_space_data"].get("device_info", {}), indent=2)
+            json.dumps(res["config_space_data"].get("device_info", {}), indent=2, default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o))
         )
 
         artifacts = [str(p.relative_to(self.out_dir)) for p in self.out_dir.rglob("*")]
