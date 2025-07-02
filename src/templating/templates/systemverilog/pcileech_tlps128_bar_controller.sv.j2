@@ -25,7 +25,7 @@ module pcileech_tlps128_bar_controller #(
     parameter BAR_APERTURE_SIZE = {{ bar_config.aperture_size | default(65536) }},
     parameter BAR_INDEX = {{ bar_config.bar_index | default(0) }},
     parameter BAR_TYPE = {{ bar_config.bar_type | default(0) }}, // 0=32-bit, 1=64-bit
-    parameter BAR_PREFETCHABLE = {{ bar_config.prefetchable | default(0) }},
+    parameter BAR_PREFETCHABLE = {{ '1\'b1' if bar_config.prefetchable else '1\'b0' }},
     
     // MSI-X Configuration
     parameter NUM_MSIX = {{ msix_config.num_vectors | default(4) }},
@@ -51,8 +51,8 @@ module pcileech_tlps128_bar_controller #(
     parameter INTER_BURST_GAP = {{ timing_config.inter_burst_gap | default(8) }},
     
     // Performance and Error Handling
-    parameter ENABLE_ERROR_INJECTION = {{ device_config.enable_error_injection | default(0) }},
-    parameter ENABLE_PERFORMANCE_COUNTERS = {{ device_config.enable_perf_counters | default(1) }},
+    parameter ENABLE_ERROR_INJECTION = {{ '1\'b1' if device_config.enable_error_injection else '1\'b0'  }},
+    parameter ENABLE_PERFORMANCE_COUNTERS = {{ '1\'b1' if device_config.enable_perf_counters else '1\'b0' }},
     parameter TIMEOUT_CYCLES = {{ timing_config.timeout_cycles | default(1024) }}
 ) (
     // Clock and Reset

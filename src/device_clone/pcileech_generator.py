@@ -187,6 +187,9 @@ class PCILeechGenerator:
         )
 
         try:
+            # Step 0: Try to preload MSI-X data before any VFIO operations
+            preloaded_msix = self._preload_msix_data_early()
+
             # Use a single VFIO binding session for both config space reading and BAR analysis
             # This prevents the cleanup from happening too early
             from ..cli.vfio_handler import VFIOBinder
@@ -207,11 +210,11 @@ class PCILeechGenerator:
                 # Step 2: Analyze configuration space (with VFIO active)
                 config_space_data = self._analyze_configuration_space_with_vfio()
 
-                # Step 3: Process MSI-X capabilities
-                msix_data = self._process_msix_capabilities(config_space_data)
+                # Step 3: Process MSI-X capabilities (prefer preloaded data)
+                msix_data = preloaded_msix or self._process_msix_capabilities(config_space_data)
 
                 # Step 3a: Handle interrupt strategy fallback if MSI-X not available
-                if msix_data is None:
+                if msix_data is None or msix_data.get("table_size", 0) == 0:
                     log_info_safe(
                         self.logger,
                         "MSI-X not available, checking for MSI capability",
@@ -706,7 +709,7 @@ class PCILeechGenerator:
             behavior_profile = template_context.get("device_config", {}).get(
                 "behavior_profile"
             )
-            modules = self.sv_generator.generate_pcileech_modules(
+            modules = self.sv_generator.generate_systemverilog_modules(
                 template_context=template_context, behavior_profile=behavior_profile
             )
 
@@ -968,3 +971,84 @@ class PCILeechGenerator:
             raise PCILeechGenerationError(
                 f"Failed to save generated firmware: {e}"
             ) from e
+
+    def _preload_msix_data_early(self) -> Optional[Dict[str, Any]]:
+        """
+        Preload MSI-X data from sysfs before VFIO binding to ensure availability.
+        
+        Returns:
+            MSI-X data dictionary if available, None otherwise
+        """
+        try:
+            import os
+            
+            # Try to read config space from sysfs before VFIO binding
+            config_space_path = f"/sys/bus/pci/devices/{self.config.device_bdf}/config"
+            
+            if not os.path.exists(config_space_path):
+                log_info_safe(
+                    self.logger,
+                    "Config space not accessible via sysfs, skipping MSI-X preload",
+                    prefix="MSIX",
+                )
+                return None
+                
+            log_info_safe(
+                self.logger,
+                "Preloading MSI-X data from sysfs before VFIO binding",
+                prefix="MSIX",
+            )
+            
+            with open(config_space_path, "rb") as f:
+                config_space_bytes = f.read()
+                
+            config_space_hex = config_space_bytes.hex()
+            
+            # Parse MSI-X capability
+            msix_info = parse_msix_capability(config_space_hex)
+            
+            if msix_info["table_size"] > 0:
+                log_info_safe(
+                    self.logger,
+                    "Preloaded MSI-X capability: {vectors} vectors, table BIR {bir}, offset 0x{offset:x}",
+                    vectors=msix_info["table_size"],
+                    bir=msix_info["table_bir"],
+                    offset=msix_info["table_offset"],
+                    prefix="MSIX",
+                )
+                
+                # Validate MSI-X configuration
+                is_valid, validation_errors = validate_msix_configuration(msix_info)
+                
+                # Build comprehensive MSI-X data
+                msix_data = {
+                    "capability_info": msix_info,
+                    "table_size": msix_info["table_size"],
+                    "table_bir": msix_info["table_bir"],
+                    "table_offset": msix_info["table_offset"],
+                    "pba_bir": msix_info["pba_bir"],
+                    "pba_offset": msix_info["pba_offset"],
+                    "enabled": msix_info["enabled"],
+                    "function_mask": msix_info["function_mask"],
+                    "validation_errors": validation_errors,
+                    "is_valid": is_valid,
+                    "preloaded": True,
+                }
+                
+                return msix_data
+            else:
+                log_info_safe(
+                    self.logger,
+                    "No MSI-X capability found during preload",
+                    prefix="MSIX",
+                )
+                return None
+                
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "MSI-X preload failed: {error}",
+                error=str(e),
+                prefix="MSIX",
+            )
+            return None

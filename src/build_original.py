@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-PCILeech FPGA Firmware Builder – Unified Edition with MSI-X Fix
-================================================================
+PCILeech FPGA Firmware Builder – Unified Edition
+================================================
 This streamlined script **always** runs the modern unified PCILeech build flow:
-    • PCI configuration‑space capture via VFIO
-    • SystemVerilog + TCL generation through *device_clone.pcileech_generator*
-    • Optional Vivado hand‑off
-    • Fixed MSI-X module generation and file extension handling
+    • PCI configuration‑space capture via VFIO
+    • SystemVerilog + TCL generation through *device_clone.pcileech_generator*
+    • Optional Vivado hand‑off
 
 
 Usage
@@ -14,8 +13,7 @@ Usage
 python3 pcileech_firmware_builder.py \
         --bdf 0000:03:00.0 \
         --board pcileech_35t325_x4 \
-        [--vivado] \
-        [--preload-msix]
+        [--vivado]
 """
 from __future__ import annotations
 
@@ -135,14 +133,13 @@ log = get_logger("pcileech_builder")
 # Helper classes
 # ──────────────────────────────────────────────────────────────────────────────
 class FirmwareBuilder:
-    """Thin wrapper around *PCILeechGenerator* for unified builds with MSI-X fixes."""
+    """Thin wrapper around *PCILeechGenerator* for unified builds."""
 
     def __init__(
-        self, bdf: str, board: str, out_dir: Path, enable_profiling: bool = True, preload_msix: bool = True
+        self, bdf: str, board: str, out_dir: Path, enable_profiling: bool = True
     ):
         self.out_dir = out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        self.preload_msix = preload_msix
 
         self.gen = PCILeechGenerator(
             PCILeechGenerationConfig(
@@ -157,118 +154,30 @@ class FirmwareBuilder:
         self.tcl = TCLBuilder(output_dir=self.out_dir)
         self.profiler = BehaviorProfiler(bdf=bdf)
         self.board = board
-        self.bdf = bdf
-
-    def _preload_msix_data(self) -> Dict[str, Any]:
-        """
-        Preload MSI-X data before VFIO binding to ensure it's available.
-        
-        Returns:
-            Dictionary containing MSI-X data if available
-        """
-        if not self.preload_msix:
-            return {}
-            
-        try:
-            log.info("➤ Preloading MSI-X data before VFIO binding")
-            
-            # Read config space from sysfs before VFIO binding
-            config_space_path = f"/sys/bus/pci/devices/{self.bdf}/config"
-            if not os.path.exists(config_space_path):
-                log.warning("Config space not accessible via sysfs, skipping MSI-X preload")
-                return {}
-                
-            with open(config_space_path, "rb") as f:
-                config_space_bytes = f.read()
-                
-            # Parse MSI-X capability
-            from src.device_clone.msix_capability import parse_msix_capability
-            config_space_hex = config_space_bytes.hex()
-            msix_info = parse_msix_capability(config_space_hex)
-            
-            if msix_info["table_size"] > 0:
-                log.info("  • Found MSI-X capability: %d vectors", msix_info["table_size"])
-                return {
-                    "preloaded": True,
-                    "msix_info": msix_info,
-                    "config_space_hex": config_space_hex,
-                    "config_space_bytes": config_space_bytes
-                }
-            else:
-                log.info("  • No MSI-X capability found")
-                return {"preloaded": True, "msix_info": None}
-                
-        except Exception as e:
-            log.warning("MSI-X preload failed: %s", str(e))
-            return {}
 
     # ────────────────────────────────────────────────────────────────────────
     # Public API
     # ────────────────────────────────────────────────────────────────────────
     def build(self, profile_secs: int = 0) -> List[str]:
-        """Run the full firmware generation flow with MSI-X fixes. Returns list of artifacts."""
-        
-        # Preload MSI-X data if requested
-        preloaded_data = self._preload_msix_data()
-        
+        """Run the full firmware generation flow.  Returns list of artifacts."""
         log.info("➤ Generating PCILeech firmware …")
         res = self.gen.generate_pcileech_firmware()
-        
-        # Inject preloaded MSI-X data if available
-        if preloaded_data.get("preloaded") and preloaded_data.get("msix_info"):
-            log.info("  • Using preloaded MSI-X data")
-            if "msix_data" not in res or not res["msix_data"]:
-                res["msix_data"] = {
-                    "capability_info": preloaded_data["msix_info"],
-                    "table_size": preloaded_data["msix_info"]["table_size"],
-                    "table_bir": preloaded_data["msix_info"]["table_bir"],
-                    "table_offset": preloaded_data["msix_info"]["table_offset"],
-                    "pba_bir": preloaded_data["msix_info"]["pba_bir"],
-                    "pba_offset": preloaded_data["msix_info"]["pba_offset"],
-                    "enabled": preloaded_data["msix_info"]["enabled"],
-                    "function_mask": preloaded_data["msix_info"]["function_mask"],
-                    "is_valid": True,
-                    "validation_errors": []
-                }
-                
-                # Update template context
-                if "template_context" in res and "msix_config" in res["template_context"]:
-                    res["template_context"]["msix_config"].update({
-                        "is_supported": True,
-                        "num_vectors": preloaded_data["msix_info"]["table_size"]
-                    })
 
-        # Write modules with correct file extensions (but keep original directory structure)
+        # Write SV modules
         sv_dir = self.out_dir / "src"
         sv_dir.mkdir(exist_ok=True)
-        
-        # Track generated files by type
-        sv_files = []
-        special_files = []
-        
         for name, content in res["systemverilog_modules"].items():
-            # Handle special file extensions while keeping them in src/ directory
-            if name.endswith(".coe") or name.endswith(".hex"):
-                # Keep original extension for special files
-                file_path = sv_dir / name
-                special_files.append(name)
-            else:
-                # SystemVerilog files get .sv extension
-                file_path = sv_dir / f"{name}.sv"
-                sv_files.append(f"{name}.sv")
-                
-            file_path.write_text(content)
-            
-        log.info("  • Wrote %d SystemVerilog modules: %s", len(sv_files), ", ".join(sv_files))
-        if special_files:
-            log.info("  • Wrote %d special files: %s", len(special_files), ", ".join(special_files))
+            (sv_dir / f"{name}.sv").write_text(content)
+        log.info(
+            "  • Wrote %d SystemVerilog modules", len(res["systemverilog_modules"])
+        )
 
         # Behaviour profile (optional)
         if profile_secs > 0:
             profile = self.profiler.capture_behavior_profile(duration=profile_secs)
             profile_file = self.out_dir / "behavior_profile.json"
             profile_file.write_text(json.dumps(profile, indent=2, default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)))
-            log.info("  • Saved behaviour profile → %s", profile_file.name)
+            log.info("  • Saved behaviour profile → %s", profile_file.name)
 
         # TCL scripts (always two‑script flow)
         ctx = res["template_context"]
@@ -284,7 +193,7 @@ class FirmwareBuilder:
             vendor_id=ctx["device_config"]["vendor_id"],
         )
 
-        log.info("  • Emitted Vivado scripts → %s, %s", proj_tcl.name, build_tcl.name)
+        log.info("  • Emitted Vivado scripts → %s, %s", proj_tcl.name, build_tcl.name)
 
         # Persist config‑space snapshot for auditing
         (self.out_dir / "device_info.json").write_text(
@@ -311,8 +220,8 @@ class FirmwareBuilder:
             build_tcl, self.out_dir, vivado["executable"]
         )
         if rc:
-            raise RuntimeError(f"Vivado failed – see {rpt}")
-        log.info("Vivado implementation finished successfully ✓")
+            raise RuntimeError(f"Vivado failed – see {rpt}")
+        log.info("Vivado implementation finished successfully ✓")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -321,7 +230,7 @@ class FirmwareBuilder:
 
 
 def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser("PCILeech FPGA Firmware Builder (unified with MSI-X fixes)")
+    p = argparse.ArgumentParser("PCILeech FPGA Firmware Builder (unified)")
     p.add_argument("--bdf", required=True, help="PCI address e.g. 0000:03:00.0")
     p.add_argument("--board", required=True, help="Target board key")
     p.add_argument(
@@ -334,10 +243,6 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--vivado", action="store_true", help="Run Vivado after generation")
     p.add_argument(
         "--output", default="output", help="Output directory (default: ./output)"
-    )
-    p.add_argument(
-        "--preload-msix", action="store_true", 
-        help="Preload MSI-X data before VFIO binding to ensure availability"
     )
     return p.parse_args(argv)
 
@@ -355,13 +260,11 @@ def main(argv: List[str] | None = None) -> int:  # noqa: D401
         t0 = time.perf_counter()
         enable_profiling = args.profile > 0
         builder = FirmwareBuilder(
-            args.bdf, args.board, out_dir, 
-            enable_profiling=enable_profiling,
-            preload_msix=getattr(args, 'preload_msix', True)  # 기본값 True
+            args.bdf, args.board, out_dir, enable_profiling=enable_profiling
         )
         artifacts = builder.build(profile_secs=args.profile)
         dt = time.perf_counter() - t0
-        log.info("Build finished in %.1f s ✓", dt)
+        log.info("Build finished in %.1f s ✓", dt)
 
         if args.vivado:
             builder.run_vivado()

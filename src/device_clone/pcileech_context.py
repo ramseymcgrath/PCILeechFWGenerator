@@ -124,6 +124,7 @@ class TimingParameters:
     inter_burst_gap: int
     timeout_cycles: int
     clock_frequency_mhz: float
+    timing_regularity: float
 
     def __post_init__(self):
         """Validate timing parameters."""
@@ -135,6 +136,7 @@ class TimingParameters:
                 self.burst_length,
                 self.inter_burst_gap,
                 self.timeout_cycles,
+                self.timing_regularity
             ]
         ):
             raise ContextError("Timing parameters must be positive")
@@ -552,24 +554,69 @@ class PCILeechContextBuilder:
                 "is_valid": False,
                 "table_size_bytes": 0,
                 "pba_size_bytes": 0,
+                # Template variables
+                "table_size": 0,
+                "table_size_minus_one": 0,
+                "table_offset_bir": 0,
+                "pba_offset_bir": 0,
+                "enabled_val": 0,
+                "function_mask_val": 0,
+                "pba_size": 0,
+                "pba_size_minus_one": 0,
+                "alignment_warning": "",
             }
 
         capability_info = msix_data["capability_info"]
         table_size = capability_info["table_size"]
-
+        table_offset = capability_info["table_offset"]
+        pba_offset = capability_info.get("pba_offset", table_offset + (table_size * 16))
+        
+        # Calculate PBA size in DWORDs
+        pba_size_dwords = (table_size + 31) // 32
+        
+        # Check alignment and generate warning if needed
+        alignment_warning = ""
+        if table_offset % 8 != 0:
+            alignment_warning = f"// WARNING: MSI-X table offset 0x{table_offset:x} is not 8-byte aligned"
+        
         return {
             "num_vectors": table_size,
             "table_bir": capability_info["table_bir"],
-            "table_offset": capability_info["table_offset"],
+            "table_offset": table_offset,
             "pba_bir": capability_info.get("pba_bir", capability_info["table_bir"]),
-            "pba_offset": capability_info.get("pba_offset", 0),
+            "pba_offset": pba_offset,
             "enabled": capability_info.get("enabled", False),
             "function_mask": capability_info.get("function_mask", False),
             "is_supported": table_size > 0,
             "validation_errors": msix_data.get("validation_errors", []),
             "is_valid": msix_data.get("is_valid", True),
             "table_size_bytes": table_size * 16,  # 16 bytes per entry
-            "pba_size_bytes": ((table_size + 31) // 32) * 4,  # PBA size in bytes
+            "pba_size_bytes": pba_size_dwords * 4,  # PBA size in bytes
+            
+            # Template variables for MSI-X templates
+            "table_size": table_size,
+            "table_size_minus_one": table_size - 1,
+            "table_offset_bir": (table_offset & 0xFFFFFFF8) | (capability_info["table_bir"] & 0x7),
+            "pba_offset_bir": (pba_offset & 0xFFFFFFF8) | (capability_info.get("pba_bir", capability_info["table_bir"]) & 0x7),
+            "enabled_val": 1 if capability_info.get("enabled", False) else 0,
+            "function_mask_val": 1 if capability_info.get("function_mask", False) else 0,
+            "pba_size": pba_size_dwords,
+            "pba_size_minus_one": max(0, pba_size_dwords - 1),
+            "alignment_warning": alignment_warning,
+            
+            # SystemVerilog template constants
+            "NUM_MSIX": table_size,
+            "MSIX_TABLE_BIR": capability_info["table_bir"],
+            "MSIX_TABLE_OFFSET": f"32'h{table_offset:08X}",
+            "MSIX_PBA_BIR": capability_info.get("pba_bir", capability_info["table_bir"]),
+            "MSIX_PBA_OFFSET": f"32'h{pba_offset:08X}",
+            
+            # Template control flags
+            "RESET_CLEAR": True,
+            "USE_BYTE_ENABLES": True,
+            "WRITE_PBA_ALLOWED": False,
+            "INIT_TABLE": True,
+            "INIT_PBA": True,
         }
 
     def _build_bar_config(
@@ -1544,6 +1591,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=4,
                 timeout_cycles=512,
                 clock_frequency_mhz=min(200.0, avg_frequency / 1000),
+                timing_regularity=0.92
             )
         elif avg_interval > 1000:  # Slow device
             log_info_safe(
@@ -1560,6 +1608,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=16,
                 timeout_cycles=2048,
                 clock_frequency_mhz=max(50.0, avg_frequency / 1000),
+                timing_regularity=0.85
             )
         else:  # Medium speed device
             log_info_safe(
@@ -1576,6 +1625,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=8,
                 timeout_cycles=1024,
                 clock_frequency_mhz=100.0,
+                timing_regularity=0.90
             )
 
     def _generate_timing_from_device(
@@ -1614,6 +1664,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=4,
                 timeout_cycles=512,
                 clock_frequency_mhz=125.0,
+                timing_regularity=0.92
             )
         # Storage controllers (class 01xxxx)
         elif class_code.startswith("01"):
@@ -1630,6 +1681,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=8,
                 timeout_cycles=1024,
                 clock_frequency_mhz=100.0,
+                timing_regularity=0.92
             )
         # Display controllers (class 03xxxx)
         elif class_code.startswith("03"):
@@ -1646,6 +1698,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=8,
                 timeout_cycles=2048,
                 clock_frequency_mhz=150.0,
+                timing_regularity=0.92
             )
         else:
             log_info_safe(
@@ -1669,6 +1722,7 @@ class PCILeechContextBuilder:
                 inter_burst_gap=4 + (device_hash % 12),  # 4-16
                 timeout_cycles=512 + (device_hash % 1536),  # 512-2048
                 clock_frequency_mhz=75.0 + (device_hash % 125),  # 75-200 MHz
+                timing_regularity=0.85 + (device_hash % 15)/100.0 
             )
 
     def _build_pcileech_config(

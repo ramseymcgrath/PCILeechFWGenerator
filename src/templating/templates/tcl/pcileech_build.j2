@@ -8,12 +8,12 @@
 # Family: {{ fpga_family }}
 
 # Set batch mode for automated builds
-{% if batch_mode %}
+{%- if batch_mode %}
 set_param general.maxThreads {{ build.jobs }}
 set_param synth.maxThreads {{ build.jobs }}
 set_param place.maxThreads {{ build.jobs }}
 set_param route.maxThreads {{ build.jobs }}
-{% endif %}
+{%- endif %}
 
 # Error handling configuration
 set_msg_config -id {Common 17-55} -suppress
@@ -58,15 +58,15 @@ reset_run impl_1
 puts "Configuring synthesis strategy: $synthesis_strategy"
 set_property strategy $synthesis_strategy [get_runs synth_1]
 
-{% if fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
+{%- if fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
 # UltraScale-specific synthesis options
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-mode out_of_context} -objects [get_runs synth_1]
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.FLATTEN_HIERARCHY} -value {rebuilt} -objects [get_runs synth_1]
-{% else %}
+{%- else %}
 # 7-Series synthesis options
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.FLATTEN_HIERARCHY} -value {rebuilt} -objects [get_runs synth_1]
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.GATED_CLOCK_CONVERSION} -value {off} -objects [get_runs synth_1]
-{% endif %}
+{%- endif %}
 
 # Configure implementation strategy
 puts "Configuring implementation strategy: $implementation_strategy"
@@ -76,10 +76,10 @@ set_property strategy $implementation_strategy [get_runs impl_1]
 set_property -name {STEPS.PLACE_DESIGN.ARGS.MORE OPTIONS} -value {-timing_summary} -objects [get_runs impl_1]
 set_property -name {STEPS.ROUTE_DESIGN.ARGS.MORE OPTIONS} -value {-timing_summary} -objects [get_runs impl_1]
 
-{% if batch_mode %}
+{%- if batch_mode %}
 # Batch mode specific settings
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-no_iobuf} -objects [get_runs synth_1]
-{% endif %}
+{%- endif %}
 
 # Start synthesis
 puts "Starting synthesis..."
@@ -167,14 +167,14 @@ set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
 set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
 set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
 
-{% if fpga_family == "7series" %}
+{%- if fpga_family == "7series" %}
 # 7-Series specific bitstream options
 set_property BITSTREAM.CONFIG.SPI_FALL_EDGE YES [current_design]
 set_property BITSTREAM.STARTUP.STARTUPCLK CCLK [current_design]
-{% elif fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
+{%- elif fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
 # UltraScale specific bitstream options
 set_property BITSTREAM.CONFIG.OVERTEMPSHUTDOWN Enable [current_design]
-{% endif %}
+{%- endif %}
 
 launch_runs impl_1 -to_step write_bitstream -jobs {{ build.jobs }}
 wait_on_run impl_1
@@ -225,11 +225,11 @@ if {[llength $ltx_files] > 0} {
 puts "Generating MCS file for flash programming..."
 set mcs_file "${board_name}.mcs"
 
-{% if fpga_family == "7series" %}
+{%- if fpga_family == "7series" %}
 write_cfgmem -format mcs -size 16 -interface SPIx4 -loadbit "up 0x0 $dest_bit" -file $mcs_file
-{% elif fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
+{%- elif fpga_family == "ultrascale" or fpga_family == "ultrascale_plus" %}
 write_cfgmem -format mcs -size 32 -interface SPIx4 -loadbit "up 0x0 $dest_bit" -file $mcs_file
-{% endif %}
+{%- endif %}
 
 if {[file exists $mcs_file]} {
     puts "MCS file generated: $mcs_file"

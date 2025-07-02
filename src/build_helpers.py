@@ -136,6 +136,7 @@ def batch_write_tcl_files(
     tcl_contents: Dict[str, str],
     output_dir: Union[str, Path],
     tcl_files: List[str],
+    logger: logging.Logger,
 ) -> None:
     """Write many TCL files under *output_dir*.
 

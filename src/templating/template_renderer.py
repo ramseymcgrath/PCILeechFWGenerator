@@ -45,8 +45,8 @@ class TemplateRenderer:
         # Initialize Jinja2 environment
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
-            trim_blocks=True,
-            lstrip_blocks=True,
+            trim_blocks=False,
+            lstrip_blocks=False,
             keep_trailing_newline=True,
         )
 

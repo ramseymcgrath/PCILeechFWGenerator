@@ -381,9 +381,37 @@ class AdvancedSVGenerator:
             )
 
             # Generate configuration space COE file
-            modules["pcileech_cfgspace_coe"] = self.renderer.render_template(
+            modules["pcileech_cfgspace.coe"] = self.renderer.render_template(
                 "systemverilog/pcileech_cfgspace.coe.j2", template_context
             )
+
+            # Always generate MSI-X modules if MSI-X is supported
+            msix_config = template_context.get("msix_config", {})
+            if msix_config.get("is_supported", False) or msix_config.get("num_vectors", 0) > 0:
+                log_info_safe(self.logger, "Generating MSI-X modules")
+                
+                # Create MSI-X specific template context
+                msix_template_context = template_context.copy()
+                msix_template_context.update(msix_config)
+                
+                # Generate MSI-X capability registers
+                modules["msix_capability_registers"] = self.renderer.render_template(
+                    "systemverilog/msix_capability_registers.sv.j2", msix_template_context
+                )
+                
+                # Generate MSI-X implementation
+                modules["msix_implementation"] = self.renderer.render_template(
+                    "systemverilog/msix_implementation.sv.j2", msix_template_context
+                )
+                
+                # Generate MSI-X table
+                modules["msix_table"] = self.renderer.render_template(
+                    "systemverilog/msix_table.sv.j2", msix_template_context
+                )
+                
+                # Generate MSI-X initialization files
+                modules["msix_pba_init.hex"] = self._generate_msix_pba_init(template_context)
+                modules["msix_table_init.hex"] = self._generate_msix_table_init(template_context)
 
             # Generate advanced modules if behavior profile is available
             if behavior_profile and template_context.get("device_config", {}).get(
@@ -534,6 +562,58 @@ class AdvancedSVGenerator:
             ]
 
         return registers
+
+    def _generate_msix_pba_init(self, template_context: Dict[str, Any]) -> str:
+        """
+        Generate MSI-X PBA initialization file.
+        
+        Args:
+            template_context: Template context data
+            
+        Returns:
+            Hex file content for MSI-X PBA initialization
+        """
+        msix_config = template_context.get("msix_config", {})
+        num_vectors = msix_config.get("num_vectors", 1)
+        
+        # Calculate PBA size in DWORDs
+        pba_size = (num_vectors + 31) // 32
+        
+        # Generate PBA initialization data (all zeros initially)
+        hex_lines = []
+        for i in range(pba_size):
+            hex_lines.append("00000000")
+            
+        return "\n".join(hex_lines) + "\n"
+    
+    def _generate_msix_table_init(self, template_context: Dict[str, Any]) -> str:
+        """
+        Generate MSI-X table initialization file.
+        
+        Args:
+            template_context: Template context data
+            
+        Returns:
+            Hex file content for MSI-X table initialization
+        """
+        msix_config = template_context.get("msix_config", {})
+        num_vectors = msix_config.get("num_vectors", 1)
+        
+        # Each MSI-X table entry is 4 DWORDs:
+        # - DWORD 0: Message Address Low
+        # - DWORD 1: Message Address High  
+        # - DWORD 2: Message Data
+        # - DWORD 3: Vector Control (bit 0 = mask)
+        
+        hex_lines = []
+        for vector in range(num_vectors):
+            # Default values for each entry
+            hex_lines.append("00000000")  # Message Address Low
+            hex_lines.append("00000000")  # Message Address High
+            hex_lines.append(f"{vector:08X}")  # Message Data (use vector number)
+            hex_lines.append("00000001")  # Vector Control (masked initially)
+            
+        return "\n".join(hex_lines) + "\n"
 
     def generate_pcileech_integration_code(
         self, template_context: Dict[str, Any]
