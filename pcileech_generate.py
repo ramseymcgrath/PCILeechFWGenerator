@@ -20,7 +20,7 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Import and setup proper colored logging
-from utils.logging import setup_logging, get_logger
+from utils.logging import get_logger, setup_logging
 
 # Setup logging with color support
 setup_logging(level=logging.INFO)

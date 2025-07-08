@@ -134,9 +134,11 @@ class TemplateRenderer:
         def log2(value: int) -> int:
             """Calculate log2 (ceiling) of a value for SystemVerilog bit width calculations."""
             import math
+
             if value <= 0:
                 return 0
             return int(math.ceil(math.log2(value)))
+
         def python_list(value) -> str:
             """Format value as Python list literal."""
             if isinstance(value, list):

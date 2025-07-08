@@ -7,49 +7,22 @@ package, importing from the main string_utils module.
 """
 
 # Import all functions from the main string_utils module
-try:
-    # Try relative import first (when used as package)
-    from ..string_utils import (
-        build_device_info_string,
-        build_file_size_string,
-        build_progress_string,
-        generate_sv_header_comment,
-        generate_tcl_header_comment,
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        multiline_format,
-        safe_format,
-        safe_log_format,
-        safe_print_format,
-    )
-except ImportError:
-    # Fallback to absolute import (when used as script)
-    import os
-    import sys
-    from pathlib import Path
-
-    # Add the src directory to the path
-    src_dir = Path(__file__).parent.parent
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-
-    from string_utils import (
-        build_device_info_string,
-        build_file_size_string,
-        build_progress_string,
-        generate_sv_header_comment,
-        generate_tcl_header_comment,
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        multiline_format,
-        safe_format,
-        safe_log_format,
-        safe_print_format,
-    )
+# Import from parent module
+from ..string_utils import (
+    build_device_info_string,
+    build_file_size_string,
+    build_progress_string,
+    generate_sv_header_comment,
+    generate_tcl_header_comment,
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    multiline_format,
+    safe_format,
+    safe_log_format,
+    safe_print_format,
+)
 
 # Re-export all functions for local use
 __all__ = [

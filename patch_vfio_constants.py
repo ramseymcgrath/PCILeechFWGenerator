@@ -14,10 +14,10 @@ The approach switches from dynamic computation to hard-coded constants because:
 - Build-time extraction ensures kernel version compatibility
 """
 
-import subprocess
-import sys
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 

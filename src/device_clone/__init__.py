@@ -70,10 +70,10 @@ from .msix_capability import (
 
 # PCI capability processing
 from .pci_capability import *
-from .variance_manager import VarianceManager
 
 # PCILeech generator
-from .pcileech_generator import PCILeechGenerator, PCILeechGenerationConfig
+from .pcileech_generator import PCILeechGenerationConfig, PCILeechGenerator
+from .variance_manager import VarianceManager
 
 __all__ = [
     # Board configuration

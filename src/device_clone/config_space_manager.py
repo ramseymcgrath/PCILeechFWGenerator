@@ -15,10 +15,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
     from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
         log_info_safe,
         log_warning_safe,
-        log_error_safe,
-        log_debug_safe,
     )
 except ImportError:
     # Fallback for when string_utils is not available

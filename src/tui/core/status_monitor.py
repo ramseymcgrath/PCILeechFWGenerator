@@ -60,7 +60,12 @@ class StatusMonitor:
             # Check if we're in a test environment (mocked)
             # This is a heuristic: if the import path is being mocked
             import sys
-            if any('unittest.mock' in str(module) for module in sys.modules.values() if module):
+
+            if any(
+                "unittest.mock" in str(module)
+                for module in sys.modules.values()
+                if module
+            ):
                 # We're likely in a test, use hardcoded value
                 if os.path.exists("/opt/Xilinx/Vivado"):
                     return {

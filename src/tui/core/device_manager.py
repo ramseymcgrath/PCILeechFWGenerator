@@ -209,28 +209,33 @@ class DeviceManager:
             if os.path.exists(resource_path):
                 with open(resource_path, "r") as f:
                     lines = f.readlines()
-                    
+
                 for i, line in enumerate(lines[:6]):  # Only first 6 BARs
                     line = line.strip()
-                    if (line and 
-                        line != "0x0000000000000000 0x0000000000000000 0x0000000000000000"):
+                    if (
+                        line
+                        and line
+                        != "0x0000000000000000 0x0000000000000000 0x0000000000000000"
+                    ):
                         parts = line.split()
                         if len(parts) >= 3:
                             start = int(parts[0], 16)
                             end = int(parts[1], 16)
                             flags = int(parts[2], 16)
-                            
+
                             # Skip empty/unused BARs
                             if start != 0 or end != 0:
                                 size = end - start + 1 if end > start else 0
-                                bars.append({
-                                    "index": i,
-                                    "start": start,
-                                    "end": end,
-                                    "size": size,
-                                    "flags": flags,
-                                    "type": "memory" if flags & 0x1 == 0 else "io",
-                                })
+                                bars.append(
+                                    {
+                                        "index": i,
+                                        "start": start,
+                                        "end": end,
+                                        "size": size,
+                                        "flags": flags,
+                                        "type": "memory" if flags & 0x1 == 0 else "io",
+                                    }
+                                )
         except Exception:
             pass
         return bars

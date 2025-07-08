@@ -143,6 +143,7 @@ class BuildContext:
             "batch_mode": self.batch_mode,
         }
 
+
 @runtime_checkable
 class DeviceConfigProvider(Protocol):
     """Protocol for device configuration providers."""
@@ -151,12 +152,14 @@ class DeviceConfigProvider(Protocol):
         """Get device configuration for the specified profile."""
         ...
 
+
 def format_hex(val: Union[int, str, None], width: int = 4) -> Optional[str]:
     if val is None:
         return None
     if isinstance(val, str):
         return val if val.startswith("0x") else f"0x{val}"
     return f"0x{val:0{width}x}"
+
 
 class ConstraintManager:
     """Manages XDC constraint file operations."""

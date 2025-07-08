@@ -387,31 +387,39 @@ class AdvancedSVGenerator:
 
             # Always generate MSI-X modules if MSI-X is supported
             msix_config = template_context.get("msix_config", {})
-            if msix_config.get("is_supported", False) or msix_config.get("num_vectors", 0) > 0:
+            if (
+                msix_config.get("is_supported", False)
+                or msix_config.get("num_vectors", 0) > 0
+            ):
                 log_info_safe(self.logger, "Generating MSI-X modules")
-                
+
                 # Create MSI-X specific template context
                 msix_template_context = template_context.copy()
                 msix_template_context.update(msix_config)
-                
+
                 # Generate MSI-X capability registers
                 modules["msix_capability_registers"] = self.renderer.render_template(
-                    "systemverilog/msix_capability_registers.sv.j2", msix_template_context
+                    "systemverilog/msix_capability_registers.sv.j2",
+                    msix_template_context,
                 )
-                
+
                 # Generate MSI-X implementation
                 modules["msix_implementation"] = self.renderer.render_template(
                     "systemverilog/msix_implementation.sv.j2", msix_template_context
                 )
-                
+
                 # Generate MSI-X table
                 modules["msix_table"] = self.renderer.render_template(
                     "systemverilog/msix_table.sv.j2", msix_template_context
                 )
-                
+
                 # Generate MSI-X initialization files
-                modules["msix_pba_init.hex"] = self._generate_msix_pba_init(template_context)
-                modules["msix_table_init.hex"] = self._generate_msix_table_init(template_context)
+                modules["msix_pba_init.hex"] = self._generate_msix_pba_init(
+                    template_context
+                )
+                modules["msix_table_init.hex"] = self._generate_msix_table_init(
+                    template_context
+                )
 
             # Generate advanced modules if behavior profile is available
             if behavior_profile and template_context.get("device_config", {}).get(
@@ -566,39 +574,39 @@ class AdvancedSVGenerator:
     def _generate_msix_pba_init(self, template_context: Dict[str, Any]) -> str:
         """
         Generate MSI-X PBA initialization file.
-        
+
         Args:
             template_context: Template context data
-            
+
         Returns:
             Hex file content for MSI-X PBA initialization
         """
         msix_config = template_context.get("msix_config", {})
         num_vectors = msix_config.get("num_vectors", 1)
-        
+
         # Calculate PBA size in DWORDs
         pba_size = (num_vectors + 31) // 32
-        
+
         # Generate PBA initialization data (all zeros initially)
         hex_lines = []
         for i in range(pba_size):
             hex_lines.append("00000000")
-            
+
         return "\n".join(hex_lines) + "\n"
-    
+
     def _generate_msix_table_init(self, template_context: Dict[str, Any]) -> str:
         """
         Generate MSI-X table initialization file.
-        
+
         Args:
             template_context: Template context data
-            
+
         Returns:
             Hex file content for MSI-X table initialization
         """
         msix_config = template_context.get("msix_config", {})
         num_vectors = msix_config.get("num_vectors", 1)
-        
+
         # Try to read actual MSI-X table from hardware first
         try:
             actual_table_data = self._read_actual_msix_table(template_context)
@@ -606,29 +614,29 @@ class AdvancedSVGenerator:
                 log_info_safe(
                     self.logger,
                     "Using actual MSI-X table data from hardware ({entries} entries)",
-                    entries=len(actual_table_data) // 4
+                    entries=len(actual_table_data) // 4,
                 )
                 return "\n".join(f"{value:08X}" for value in actual_table_data) + "\n"
         except Exception as e:
             log_warning_safe(
                 self.logger,
                 "Failed to read actual MSI-X table, using default values: {error}",
-                error=str(e)
+                error=str(e),
             )
-        
+
         # Fallback to default initialization values
         log_info_safe(
             self.logger,
             "Generating default MSI-X table initialization for {vectors} vectors",
-            vectors=num_vectors
+            vectors=num_vectors,
         )
-        
+
         # Each MSI-X table entry is 4 DWORDs:
         # - DWORD 0: Message Address Low
-        # - DWORD 1: Message Address High  
+        # - DWORD 1: Message Address High
         # - DWORD 2: Message Data
         # - DWORD 3: Vector Control (bit 0 = mask)
-        
+
         hex_lines = []
         for vector in range(num_vectors):
             # Default values for each entry
@@ -636,91 +644,107 @@ class AdvancedSVGenerator:
             hex_lines.append("00000000")  # Message Address High
             hex_lines.append(f"{vector:08X}")  # Message Data (use vector number)
             hex_lines.append("00000001")  # Vector Control (masked initially)
-            
+
         return "\n".join(hex_lines) + "\n"
-    
-    def _read_actual_msix_table(self, template_context: Dict[str, Any]) -> Optional[List[int]]:
+
+    def _read_actual_msix_table(
+        self, template_context: Dict[str, Any]
+    ) -> Optional[List[int]]:
         """
         Read actual MSI-X table data from hardware via VFIO.
-        
+
         Args:
             template_context: Template context data
-            
+
         Returns:
             List of 32-bit values from MSI-X table, or None if failed
         """
         try:
-            from ..cli.vfio_helpers import get_device_fd
-            import os
             import mmap
-            
+            import os
+
+            from ..cli.vfio_helpers import get_device_fd
+
             msix_config = template_context.get("msix_config", {})
             bar_config = template_context.get("bar_config", {})
-            
+
             table_bir = msix_config.get("table_bir", 0)
             table_offset = msix_config.get("table_offset", 0)
             num_vectors = msix_config.get("num_vectors", 0)
-            
+
             if num_vectors == 0:
                 return None
-                
+
             # Find the appropriate BAR
             bars = bar_config.get("bars", [])
-            
+
             # Debug: Log all available BARs
             log_info_safe(
                 self.logger,
                 "Available BARs for MSI-X table lookup: {bars}",
-                bars=[{"index": getattr(bar, 'index', getattr(bar, 'get', lambda x: 'unknown')('index')), 
-                      "size": getattr(bar, 'size', getattr(bar, 'get', lambda x: 'unknown')('size')),
-                      "type": type(bar).__name__} for bar in bars]
+                bars=[
+                    {
+                        "index": getattr(
+                            bar,
+                            "index",
+                            getattr(bar, "get", lambda x: "unknown")("index"),
+                        ),
+                        "size": getattr(
+                            bar,
+                            "size",
+                            getattr(bar, "get", lambda x: "unknown")("size"),
+                        ),
+                        "type": type(bar).__name__,
+                    }
+                    for bar in bars
+                ],
             )
             log_info_safe(
                 self.logger,
                 "Looking for BAR {bir} for MSI-X table access",
-                bir=table_bir
+                bir=table_bir,
             )
-            
+
             target_bar = None
             # First try direct BIR match
             for bar in bars:
-                bar_index = getattr(bar, 'index', None)
-                if bar_index is None and hasattr(bar, 'get'):
-                    bar_index = bar.get('index')
-                    
+                bar_index = getattr(bar, "index", None)
+                if bar_index is None and hasattr(bar, "get"):
+                    bar_index = bar.get("index")
+
                 if bar_index == table_bir:
                     target_bar = bar
                     log_info_safe(
                         self.logger,
                         "Found direct BAR match: BIR {bir} -> BAR {index}",
                         bir=table_bir,
-                        index=bar_index
+                        index=bar_index,
                     )
                     break
-            
+
             # If no direct match, try to find the BAR by analyzing the actual BAR layout
             if not target_bar and bars:
                 # Try to find the actual physical BAR by examining configuration space
                 # Look for a BAR that contains the MSI-X table offset
                 log_info_safe(
                     self.logger,
-                    "No direct BIR match found, analyzing BAR layout for MSI-X table"
+                    "No direct BIR match found, analyzing BAR layout for MSI-X table",
                 )
-                
+
                 # Get the original config space data to understand the real BAR mapping
                 config_space_data = template_context.get("config_space_data", {})
                 original_bars = config_space_data.get("device_info", {}).get("bars", [])
-                
+
                 # Also try the top-level bars if device_info.bars is empty
                 if not original_bars:
                     original_bars = config_space_data.get("bars", [])
-                
+
                 log_info_safe(
                     self.logger,
                     "Original config space BARs: {bars}",
-                    bars=[(i, str(bar)) for i, bar in enumerate(original_bars)]
+                    bars=[(i, str(bar)) for i, bar in enumerate(original_bars)],
                 )
-                
+
                 # Find which original BAR corresponds to our target BIR
                 target_original_bar = None
                 if table_bir < len(original_bars):
@@ -729,21 +753,21 @@ class AdvancedSVGenerator:
                         self.logger,
                         "Target original BAR {bir}: {bar}",
                         bir=table_bir,
-                        bar=str(target_original_bar)
+                        bar=str(target_original_bar),
                     )
-                
+
                 # Try to match by address if we have the original BAR info
                 if target_original_bar:
                     target_address = None
-                    if hasattr(target_original_bar, 'address'):
+                    if hasattr(target_original_bar, "address"):
                         target_address = target_original_bar.address
                     elif isinstance(target_original_bar, dict):
-                        target_address = target_original_bar.get('address')
-                    
+                        target_address = target_original_bar.get("address")
+
                     if target_address:
                         # Find VFIO BAR with matching address
                         for i, bar in enumerate(bars):
-                            bar_address = getattr(bar, 'base_address', None)
+                            bar_address = getattr(bar, "base_address", None)
                             if bar_address == target_address:
                                 target_bar = bar
                                 log_info_safe(
@@ -751,115 +775,122 @@ class AdvancedSVGenerator:
                                     "Matched BAR by address: physical BAR {bir} (0x{addr:x}) -> VFIO region {region}",
                                     bir=table_bir,
                                     addr=target_address,
-                                    region=i
+                                    region=i,
                                 )
                                 break
-                
+
                 # If still no match, try to use the available memory BARs
                 if not target_bar:
                     memory_bars = []
                     for i, bar in enumerate(bars):
-                        is_memory = getattr(bar, 'is_memory', False)
-                        size = getattr(bar, 'size', 0)
+                        is_memory = getattr(bar, "is_memory", False)
+                        size = getattr(bar, "size", 0)
                         if is_memory and size > 0:
                             memory_bars.append((i, bar))
-                    
+
                     if memory_bars:
                         # Use the largest memory BAR as fallback
-                        largest_bar = max(memory_bars, key=lambda x: getattr(x[1], 'size', 0))
+                        largest_bar = max(
+                            memory_bars, key=lambda x: getattr(x[1], "size", 0)
+                        )
                         target_bar = largest_bar[1]
                         log_warning_safe(
                             self.logger,
                             "Using largest memory BAR as fallback for MSI-X table: region {region}, size {size}",
                             region=largest_bar[0],
-                            size=getattr(target_bar, 'size', 0)
+                            size=getattr(target_bar, "size", 0),
                         )
-                    
+
             if not target_bar:
                 log_warning_safe(
                     self.logger,
                     "Could not find BAR {bir} for MSI-X table access",
-                    bir=table_bir
+                    bir=table_bir,
                 )
                 return None
-                
+
             # Get VFIO device file descriptor
-            device_fd, container_fd = get_device_fd(template_context["device_config"]["device_bdf"])
-            
+            device_fd, container_fd = get_device_fd(
+                template_context["device_config"]["device_bdf"]
+            )
+
             try:
                 # Map the BAR region containing MSI-X table
-                bar_size = getattr(target_bar, 'size', None)
-                if bar_size is None and hasattr(target_bar, 'get'):
-                    bar_size = target_bar.get('size', 4096)
+                bar_size = getattr(target_bar, "size", None)
+                if bar_size is None and hasattr(target_bar, "get"):
+                    bar_size = target_bar.get("size", 4096)
                 if bar_size is None:
                     bar_size = 4096  # Default fallback
-                    
+
                 table_size_bytes = num_vectors * 16  # 16 bytes per entry
-                
+
                 if table_offset + table_size_bytes > bar_size:
                     log_warning_safe(
                         self.logger,
                         "MSI-X table extends beyond BAR boundary (offset=0x{offset:x}, size={size}, bar_size={bar_size})",
                         offset=table_offset,
                         size=table_size_bytes,
-                        bar_size=bar_size
+                        bar_size=bar_size,
                     )
                     return None
-                
+
                 # Memory map the BAR region
                 # Use VFIO region index directly instead of calculating offset
                 try:
-                    with mmap.mmap(device_fd, bar_size, 
-                                  mmap.MAP_SHARED, mmap.PROT_READ) as mm:
-                        
+                    with mmap.mmap(
+                        device_fd, bar_size, mmap.MAP_SHARED, mmap.PROT_READ
+                    ) as mm:
+
                         # Read MSI-X table entries
                         table_data = []
                         for i in range(num_vectors * 4):  # 4 DWORDs per entry
                             offset = table_offset + (i * 4)
                             if offset + 4 <= len(mm):
                                 # Read 32-bit value in little-endian format
-                                value = int.from_bytes(mm[offset:offset+4], byteorder='little')
+                                value = int.from_bytes(
+                                    mm[offset : offset + 4], byteorder="little"
+                                )
                                 table_data.append(value)
                             else:
                                 log_warning_safe(
                                     self.logger,
                                     "MSI-X table read beyond mapped region at offset 0x{offset:x}",
-                                    offset=offset
+                                    offset=offset,
                                 )
                                 break
-                                
+
                         log_info_safe(
                             self.logger,
                             "Successfully read {count} DWORDs from actual MSI-X table",
-                            count=len(table_data)
+                            count=len(table_data),
                         )
-                        
+
                         return table_data
-                        
+
                 except OSError as e:
                     if e.errno == 22:  # EINVAL
                         log_warning_safe(
                             self.logger,
-                            "mmap failed with EINVAL - BAR may not be mappable or accessible"
+                            "mmap failed with EINVAL - BAR may not be mappable or accessible",
                         )
                     else:
                         log_warning_safe(
                             self.logger,
                             "mmap failed: [Errno {errno}] {error}",
                             errno=e.errno,
-                            error=str(e)
+                            error=str(e),
                         )
                     return None
-                    
+
             finally:
                 os.close(device_fd)
                 os.close(container_fd)
-                
+
         except Exception as e:
             log_warning_safe(
                 self.logger,
                 "Exception while reading actual MSI-X table: {error}",
-                error=str(e)
+                error=str(e),
             )
             return None
 

@@ -27,21 +27,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
-try:
-    from scripts.kernel_utils import setup_debugfs
+from src.scripts.kernel_utils import setup_debugfs
 
-    from .manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-    )
-except ImportError:
-    # Fallback for direct execution
-    from scripts.kernel_utils import setup_debugfs
-
-    from .manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-    )
+from .manufacturing_variance import (
+    DeviceClass,
+    ManufacturingVarianceSimulator,
+)
 
 
 def is_linux() -> bool:

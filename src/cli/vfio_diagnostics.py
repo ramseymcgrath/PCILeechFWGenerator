@@ -37,19 +37,20 @@ from typing import List, Optional
 
 # Add project root to path for utils imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from utils.logging import setup_logging, get_logger
 from src.string_utils import (
     log_debug_safe,
+    log_error_safe,
     log_info_safe,
     log_warning_safe,
-    log_error_safe,
 )
+from utils.logging import get_logger, setup_logging
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Pretty terminal helpers
 # ──────────────────────────────────────────────────────────────────────────────
 try:
-    from colorama import Fore, Style, init as colorama_init  # type: ignore
+    from colorama import Fore, Style
+    from colorama import init as colorama_init  # type: ignore
 
     colorama_init()
 

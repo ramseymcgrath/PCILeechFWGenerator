@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
 """VFIO helper functions implementing the complete VFIO workflow."""
 
-import os
-import fcntl
 import ctypes
-import logging
 import errno
+import fcntl
+import logging
+import os
+
 from .vfio_constants import (
-    VFIO_GET_API_VERSION,
     VFIO_CHECK_EXTENSION,
-    VFIO_SET_IOMMU,
+    VFIO_GET_API_VERSION,
+    VFIO_GROUP_FLAGS_VIABLE,
+    VFIO_GROUP_GET_DEVICE_FD,
     VFIO_GROUP_GET_STATUS,
     VFIO_GROUP_SET_CONTAINER,
-    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_SET_IOMMU,
     VFIO_TYPE1_IOMMU,
-    VFIO_GROUP_FLAGS_VIABLE,
     vfio_group_status,
 )
 
 # Import safe logging functions
 try:
     from ..string_utils import (
-        log_info_safe,
-        log_error_safe,
-        log_warning_safe,
         log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
     )
 except ImportError:
     # Fallback implementations

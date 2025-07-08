@@ -26,13 +26,14 @@ from pathlib import Path
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent  # /app/src -> /app
 sys.path.insert(0, str(project_root))
-from src.device_clone import board_config
-from utils.logging import setup_logging, get_logger
 import os
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List
+
+from src.device_clone import board_config
+from utils.logging import get_logger, setup_logging
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mandatory project‑local imports – these *must* exist in production images
@@ -112,13 +113,13 @@ for module in REQUIRED_MODULES:
             print(f"✗ Still failed to import {module}: {e}", file=sys.stderr)
             raise SystemExit(2) from err
 
+from src.device_clone.behavior_profiler import BehaviorProfiler
+from src.device_clone.board_config import get_pcileech_board_config
 from src.device_clone.pcileech_generator import (
     PCILeechGenerationConfig,
     PCILeechGenerator,
 )
-from src.templating.tcl_builder import TCLBuilder, BuildContext
-from src.device_clone.behavior_profiler import BehaviorProfiler
-from src.device_clone.board_config import get_pcileech_board_config
+from src.templating.tcl_builder import BuildContext, TCLBuilder
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -176,7 +177,13 @@ class FirmwareBuilder:
         if profile_secs > 0:
             profile = self.profiler.capture_behavior_profile(duration=profile_secs)
             profile_file = self.out_dir / "behavior_profile.json"
-            profile_file.write_text(json.dumps(profile, indent=2, default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)))
+            profile_file.write_text(
+                json.dumps(
+                    profile,
+                    indent=2,
+                    default=lambda o: o.__dict__ if hasattr(o, "__dict__") else str(o),
+                )
+            )
             log.info("  • Saved behaviour profile → %s", profile_file.name)
 
         # TCL scripts (always two‑script flow)
@@ -197,7 +204,11 @@ class FirmwareBuilder:
 
         # Persist config‑space snapshot for auditing
         (self.out_dir / "device_info.json").write_text(
-            json.dumps(res["config_space_data"].get("device_info", {}), indent=2, default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o))
+            json.dumps(
+                res["config_space_data"].get("device_info", {}),
+                indent=2,
+                default=lambda o: o.__dict__ if hasattr(o, "__dict__") else str(o),
+            )
         )
 
         artifacts = [str(p.relative_to(self.out_dir)) for p in self.out_dir.rglob("*")]
@@ -207,8 +218,8 @@ class FirmwareBuilder:
     def run_vivado(self) -> None:  # pragma: no cover – optional utility
         """Hand‑off to Vivado in batch mode using the generated scripts."""
         from vivado_handling import (
-            run_vivado_with_error_reporting,
             find_vivado_installation,
+            run_vivado_with_error_reporting,
         )
 
         vivado = find_vivado_installation()

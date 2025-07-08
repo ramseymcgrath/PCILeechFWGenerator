@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """VFIO module - re-exports the correct implementation from vfio_handler."""
 
+import logging
+import os
+from pathlib import Path
+from typing import Optional
+
 # Re-export the correct, complete VFIO implementation
-from .vfio_handler import VFIOBinder, VFIOBindError, run_diagnostics, render_pretty
+from .vfio_handler import VFIOBinder, VFIOBindError, render_pretty, run_diagnostics
 from .vfio_helpers import get_device_fd
 
 # Legacy compatibility functions - these are kept for backward compatibility
 # but they now use the correct implementation internally
 
-import logging
-import os
-from pathlib import Path
-from typing import Optional
 
 try:
     from ..string_utils import (

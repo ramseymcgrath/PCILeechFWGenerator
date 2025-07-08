@@ -109,7 +109,7 @@ class PCILeechGenerationError(PCILeechError):
         return super().__str__()
 
 
-class ImportError(PCILeechError):
+class ModuleImportError(PCILeechError):
     """Raised when module imports fail."""
 
     pass
@@ -128,5 +128,5 @@ __all__ = [
     "RepositoryError",
     "BuildError",
     "ValidationError",
-    "ImportError",
+    "ModuleImportError",
 ]
