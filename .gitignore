@@ -1,395 +1,54 @@
-# =============================================================================
-# Python-specific ignores
-# =============================================================================
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
+# Temporary and binary files
+*~
 *.py[cod]
-*$py.class
-
-# C extensions
 *.so
+*.cfg
+!.isort.cfg
+!setup.cfg
+*.orig
+*.log
+*.pot
+__pycache__/*
+.cache/*
+.*.swp
+*/.ipynb_checkpoints/*
+.DS_Store
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
+# Project files
+.ropeproject
+.project
+.pydevproject
+.settings
+.idea
+.vscode
+tags
+
+# Package files
 *.egg
-MANIFEST
+*.eggs/
+.installed.cfg
+*.egg-info
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
+# Unittest and coverage
+htmlcov/*
 .coverage
 .coverage.*
-.cache
-nosetests.xml
+.tox
+junit*.xml
 coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
 .pytest_cache/
-cover/
-junit-unit.xml
 
-# Translations
-*.mo
-*.pot
+# Build and docs folder/files
+build/*
+dist/*
+sdist/*
+docs/api/*
+docs/_rst/*
+docs/_build/*
+cover/*
+MANIFEST
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# =============================================================================
-# C/C++ specific ignores (for donor_dump and other C components)
-# =============================================================================
-
-# Prerequisites
-*.d
-
-# Log files
-generate.log
-vivado.log
-
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# =============================================================================
-# IDE and Editor files
-# =============================================================================
-
-# VSCode
-.vscode/
-*.code-workspace
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-.idea/
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
-*.swp
-*.swo
-*~
-
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# =============================================================================
-# OS-specific files
-# =============================================================================
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.tmp
-*.temp
-Desktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# =============================================================================
-# Project-specific files
-# =============================================================================
-
-# Build output and generated files
-output/
-test_output/
-generate.log
-*.bin
-*.bit
-
-# Log files
-*.log
-generate.log
-
-# Benchmarks and performance data
-.benchmarks/
-
-# Temporary files and directories
-tmp/
-temp/
-
-# Configuration files that might contain sensitive data
-config.local.*
-.env.local
-.env.*.local
-
-# =============================================================================
-# Docker and containerization
-# =============================================================================
-
-# Docker
-.dockerignore is handled separately
-
-# =============================================================================
-# Version control and backup files
-# =============================================================================
-
-# Git
-*.orig
-*.rej
-
-# Backup files
-*.bak
-*.backup
-*~
-
-# =============================================================================
-# Documentation build artifacts
-# =============================================================================
-
-# Sphinx
-docs/_build/
-docs/_static/
-docs/_templates/
-
-# =============================================================================
-# Security and secrets
-# =============================================================================
-
-# API keys and secrets
-.secrets
-secrets.json
-*.key
-*.pem
-*.p12
-*.pfx
-
-# =============================================================================
-# Miscellaneous
-# =============================================================================
-
-# Archives
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-
-# Patches
-*.patch
-*.diff
-bandit-report.json
-junit-external.xml
-junit-unit.xml
-external_sv_example.sv
-external_tcl_example.tcl
-junit-unit.xml
-test.tcl
-junit-unit.xml
-generate.log
-junit-unit.xml
-junit-unit.xml
-junit-unit.xml
+# Per-project virtualenvs
+.venv*/
+.conda*/
+.python-version

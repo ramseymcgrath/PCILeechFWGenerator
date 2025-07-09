@@ -43,7 +43,7 @@ from src.string_utils import (
     log_info_safe,
     log_warning_safe,
 )
-from utils.logging import get_logger, setup_logging
+from log_config import get_logger, setup_logging
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Pretty terminal helpers

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0
 
 ## 📑 Table of Contents
 
-- [Version 0.5.0 (2025-06-09)](#020---2025-06-09)
+- [Version 0.5.7 (2025-06-09)](#020---2025-06-09)
 - [Version 0.5.0 (2025-01-02)](#0110---2025-01-02)
 - [Release Notes](#release-notes)
 - [Backward Compatibility](#backward-compatibility)

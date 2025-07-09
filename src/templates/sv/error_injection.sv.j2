@@ -1,0 +1,24 @@
+{#- Error Injection Logic Template (for testing) -#}
+{%- if config.enable_error_injection %}
+    // Error Injection Logic (for testing)
+    logic [15:0] injection_lfsr = 16'hACE1;
+    logic inject_parity_error = 1'b0;
+    logic inject_crc_error = 1'b0;
+
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            injection_lfsr <= 16'hACE1;
+            inject_parity_error <= 1'b0;
+            inject_crc_error <= 1'b0;
+        end else if (error_injection_active) begin
+            injection_lfsr <= {injection_lfsr[14:0], injection_lfsr[15] ^ injection_lfsr[13] ^ injection_lfsr[12] ^ injection_lfsr[10]};
+            inject_parity_error <= injection_lfsr[0];
+            inject_crc_error <= injection_lfsr[1];
+        end else begin
+            inject_parity_error <= 1'b0;
+            inject_crc_error <= 1'b0;
+        end
+    end
+{%- else %}
+    // Error injection disabled
+{%- endif %}

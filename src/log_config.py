@@ -53,10 +53,12 @@ def setup_logging(
     console_handler.setFormatter(console_formatter)
     handlers.append(console_handler)
 
-    # File handler (no colors)
+    # File handler (if specified)
     if log_file:
-        file_handler = logging.FileHandler(log_file, mode="a")
-        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler = logging.FileHandler(log_file, mode="w")
+        file_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         file_handler.setFormatter(file_formatter)
         handlers.append(file_handler)
 
@@ -65,16 +67,40 @@ def setup_logging(
     for handler in handlers:
         root_logger.addHandler(handler)
 
-    # Log the setup
-    logger = logging.getLogger(__name__)
-    if HAS_COLORLOG:
-        logger.debug("Logging setup complete with colorlog support")
-    else:
-        logger.warning("colorlog not available, using basic formatting")
+    # Suppress noisy loggers
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
+
+
+class FallbackColoredFormatter(logging.Formatter):
+    """Fallback formatter with basic ANSI color support when colorlog is not available."""
+
+    COLORS = {
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[31;1m",  # Bright Red
+    }
+    RESET = "\033[0m"
+
+    def format(self, record):
+        # Only colorize if outputting to a terminal
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            levelname = record.levelname
+            if levelname in self.COLORS:
+                record.levelname = f"{self.COLORS[levelname]}{levelname}{self.RESET}"
+                record.msg = f"{self.COLORS[levelname]}{record.msg}{self.RESET}"
+
+        result = super().format(record)
+
+        # Reset the record to avoid affecting other handlers
+        record.levelname = levelname
+        return result
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance.
+    """Get a logger instance with the given name.
 
     Args:
         name: Logger name (typically __name__)
@@ -83,41 +109,3 @@ def get_logger(name: str) -> logging.Logger:
         Logger instance
     """
     return logging.getLogger(name)
-
-
-# Fallback ColoredFormatter for when colorlog is not available
-class FallbackColoredFormatter(logging.Formatter):
-    """A logging formatter that adds ANSI color codes to log messages."""
-
-    # ANSI color codes
-    COLORS = {
-        "RED": "\033[91m",
-        "ORANGE": "\033[38;5;208m",  # Orange color using 256-color mode
-        "YELLOW": "\033[93m",
-        "GREEN": "\033[92m",
-        "CYAN": "\033[96m",
-        "RESET": "\033[0m",
-    }
-
-    def __init__(self, fmt=None, datefmt=None):
-        super().__init__(fmt, datefmt)
-        # Only use colors for TTY outputs
-        self.use_colors = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
-
-    def format(self, record):
-        formatted = super().format(record)
-        if self.use_colors:
-            if record.levelno >= logging.ERROR:
-                return f"{self.COLORS['RED']}{formatted}{self.COLORS['RESET']}"
-            elif record.levelno >= logging.WARNING:
-                return f"{self.COLORS['ORANGE']}{formatted}{self.COLORS['RESET']}"
-            elif record.levelno >= logging.INFO:
-                return f"{self.COLORS['GREEN']}{formatted}{self.COLORS['RESET']}"
-            elif record.levelno >= logging.DEBUG:
-                return f"{self.COLORS['CYAN']}{formatted}{self.COLORS['RESET']}"
-        return formatted
-
-
-# If colorlog is not available, monkey-patch it
-if not HAS_COLORLOG:
-    ColoredFormatter = FallbackColoredFormatter

@@ -38,12 +38,7 @@ from .fallback_manager import FallbackManager
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from cli.vfio_constants import (
+from ..cli.vfio_constants import (
     VFIO_DEVICE_GET_REGION_INFO,
     VFIO_GROUP_GET_DEVICE_FD,
     VFIO_REGION_INFO_FLAG_MMAP,

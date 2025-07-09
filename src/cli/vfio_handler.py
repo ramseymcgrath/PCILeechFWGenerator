@@ -22,8 +22,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, Union
 
-# Import vfio_assist - fail if not available
-import vfio_assist
+# Import vfio_assist - make it optional
+try:
+    import vfio_assist
+
+    HAS_VFIO_ASSIST = True
+except ImportError:
+    vfio_assist = None
+    HAS_VFIO_ASSIST = False
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
 from .vfio_constants import VfioGroupStatus  # legacy alias
@@ -44,7 +50,7 @@ from .vfio_constants import (
 from .vfio_helpers import get_device_fd
 
 # Import safe logging functions
-from ..string_utils import (
+from string_utils import (
     log_debug_safe,
     log_error_safe,
     log_info_safe,
@@ -760,6 +766,14 @@ def run_diagnostics(bdf: Optional[str] = None) -> Dict[str, Any]:
     Returns:
         Dictionary containing diagnostic results
     """
+    if not HAS_VFIO_ASSIST:
+        return {
+            "overall": "skipped",
+            "can_proceed": True,
+            "checks": [],
+            "message": "vfio_assist module not available - diagnostics skipped",
+        }
+
     try:
         diagnostics = vfio_assist.Diagnostics(bdf)
         result = diagnostics.run()

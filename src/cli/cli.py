@@ -24,11 +24,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add project root to path for utils imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from utils.logging import get_logger, setup_logging
-from utils.shell import Shell
+from log_config import get_logger, setup_logging
+from shell import Shell
 
 from .container import BuildConfig, run_build  # new unified runner
 

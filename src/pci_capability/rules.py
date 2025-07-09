@@ -16,13 +16,13 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 
 try:
-    from ...string_utils import safe_format
+    from ..string_utils import safe_format
 except ImportError:
     # Fallback for script execution
     import sys
     from pathlib import Path
 
-    src_dir = Path(__file__).parent.parent.parent
+    src_dir = Path(__file__).parent.parent
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format

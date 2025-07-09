@@ -26,78 +26,101 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union, Callable
 
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent  # /app/src -> /app
-sys.path.insert(0, str(project_root))
-
+# Import from simplified structure
+from src import (
+    get_board_info,
+    validate_board,
+)
+from .string_utils import safe_format
 from src.device_clone import board_config
-from utils.logging import get_logger, setup_logging
+from .log_config import get_logger, setup_logging
+
+# Import msix_capability at the module level to avoid late imports
+from src.device_clone.msix_capability import parse_msix_capability
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mandatory project‑local imports – these *must* exist in production images
 # ──────────────────────────────────────────────────────────────────────────────
+# Constants
 REQUIRED_MODULES = [
     "src.device_clone.pcileech_generator",
     "src.device_clone.behavior_profiler",
     "src.templating.tcl_builder",
 ]
-for module in REQUIRED_MODULES:
-    try:
-        __import__(module)
-    except ImportError as err:  # pragma: no cover
-        print(
-            f"[FATAL] Required module `{module}` is missing. "
-            "Ensure the production container/image is built correctly.",
-            file=sys.stderr,
-        )
+BUFFER_SIZE = 1024 * 1024  # 1MB buffer for file operations
+CONFIG_SPACE_PATH_TEMPLATE = "/sys/bus/pci/devices/{}/config"
 
-        # Add detailed diagnostics
-        print("\n[DIAGNOSTICS] Python module import failure", file=sys.stderr)
-        print(f"Python version: {sys.version}", file=sys.stderr)
-        print(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}", file=sys.stderr)
-        print(f"Current directory: {os.getcwd()}", file=sys.stderr)
 
-        # Check if the file exists
-        module_parts = module.split(".")
-        module_path = os.path.join(*module_parts) + ".py"
-        alt_module_path = os.path.join(*module_parts[1:]) + ".py"
+def check_required_modules() -> None:
+    """
+    Check that all required modules are available.
+    Provides detailed diagnostics on import failure.
+    """
+    for module in REQUIRED_MODULES:
+        try:
+            __import__(module)
+        except ImportError as err:  # pragma: no cover
+            print(
+                f"[FATAL] Required module `{module}` is missing. "
+                "Ensure the production container/image is built correctly.",
+                file=sys.stderr,
+            )
 
-        print(f"Looking for module file at: {module_path}", file=sys.stderr)
-        if os.path.exists(module_path):
-            print(f"✓ File exists at {module_path}", file=sys.stderr)
-        else:
-            print(f"✗ File not found at {module_path}", file=sys.stderr)
+            # Add detailed diagnostics
+            print("\n[DIAGNOSTICS] Python module import failure", file=sys.stderr)
+            print(f"Python version: {sys.version}", file=sys.stderr)
+            print(
+                f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}",
+                file=sys.stderr,
+            )
+            print(f"Current directory: {os.getcwd()}", file=sys.stderr)
 
-        print(f"Looking for module file at: {alt_module_path}", file=sys.stderr)
-        if os.path.exists(alt_module_path):
-            print(f"✓ File exists at {alt_module_path}", file=sys.stderr)
-        else:
-            print(f"✗ File not found at {alt_module_path}", file=sys.stderr)
+            # Check if the file exists
+            module_parts = module.split(".")
+            module_path = os.path.join(*module_parts) + ".py"
+            alt_module_path = os.path.join(*module_parts[1:]) + ".py"
 
-        # Check for __init__.py files
-        module_dir = os.path.dirname(module_path)
-        print(f"Checking for __init__.py files in path: {module_dir}", file=sys.stderr)
-        current_dir = ""
-        for part in module_dir.split(os.path.sep):
-            if not part:
-                continue
-            current_dir = os.path.join(current_dir, part)
-            init_path = os.path.join(current_dir, "__init__.py")
-            if os.path.exists(init_path):
-                print(f"✓ __init__.py exists in {current_dir}", file=sys.stderr)
+            print(f"Looking for module file at: {module_path}", file=sys.stderr)
+            if os.path.exists(module_path):
+                print(f"✓ File exists at {module_path}", file=sys.stderr)
             else:
-                print(f"✗ Missing __init__.py in {current_dir}", file=sys.stderr)
-                # Do not create __init__.py files at runtime
+                print(f"✗ File not found at {module_path}", file=sys.stderr)
 
-        # List sys.path
-        print("\nPython module search path:", file=sys.stderr)
-        for path in sys.path:
-            print(f"  - {path}", file=sys.stderr)
+            print(f"Looking for module file at: {alt_module_path}", file=sys.stderr)
+            if os.path.exists(alt_module_path):
+                print(f"✓ File exists at {alt_module_path}", file=sys.stderr)
+            else:
+                print(f"✗ File not found at {alt_module_path}", file=sys.stderr)
 
-        # Exit immediately on import failure
-        raise SystemExit(2) from err
+            # Check for __init__.py files
+            module_dir = os.path.dirname(module_path)
+            print(
+                f"Checking for __init__.py files in path: {module_dir}", file=sys.stderr
+            )
+            current_dir = ""
+            for part in module_dir.split(os.path.sep):
+                if not part:
+                    continue
+                current_dir = os.path.join(current_dir, part)
+                init_path = os.path.join(current_dir, "__init__.py")
+                if os.path.exists(init_path):
+                    print(f"✓ __init__.py exists in {current_dir}", file=sys.stderr)
+                else:
+                    print(f"✗ Missing __init__.py in {current_dir}", file=sys.stderr)
+
+            # List sys.path
+            print("\nPython module search path:", file=sys.stderr)
+            for path in sys.path:
+                print(f"  - {path}", file=sys.stderr)
+
+            # Exit immediately on import failure
+            raise SystemExit(2) from err
+
+
+# Check required modules before proceeding
+check_required_modules()
 
 from src.device_clone.behavior_profiler import BehaviorProfiler
 from src.device_clone.board_config import get_pcileech_board_config
@@ -120,7 +143,16 @@ log = get_logger("pcileech_builder")
 # Helper classes
 # ──────────────────────────────────────────────────────────────────────────────
 class FirmwareBuilder:
-    """Thin wrapper around *PCILeechGenerator* for unified builds with MSI-X fixes."""
+    """
+    Wrapper around PCILeechGenerator for unified builds with MSI-X fixes.
+
+    This class handles the complete firmware generation process including:
+    - MSI-X capability preloading before VFIO binding
+    - SystemVerilog module generation
+    - TCL script generation for Vivado
+    - Optional behavior profiling
+    - File organization with proper extensions
+    """
 
     def __init__(
         self,
@@ -153,8 +185,14 @@ class FirmwareBuilder:
         """
         Preload MSI-X data before VFIO binding to ensure it's available.
 
+        This method reads the PCI config space directly from sysfs before
+        the device is bound to VFIO, which would make this data inaccessible.
+
         Returns:
-            Dictionary containing MSI-X data if available
+            Dictionary containing MSI-X data if available, empty dict on failure
+
+        Raises:
+            No exceptions - all errors are caught and logged
         """
         if not self.preload_msix:
             return {}
@@ -163,7 +201,7 @@ class FirmwareBuilder:
             log.info("➤ Preloading MSI-X data before VFIO binding")
 
             # Read config space from sysfs before VFIO binding
-            config_space_path = f"/sys/bus/pci/devices/{self.bdf}/config"
+            config_space_path = CONFIG_SPACE_PATH_TEMPLATE.format(self.bdf)
             if not os.path.exists(config_space_path):
                 log.warning(
                     "Config space not accessible via sysfs, skipping MSI-X preload"
@@ -172,9 +210,6 @@ class FirmwareBuilder:
 
             with open(config_space_path, "rb") as f:
                 config_space_bytes = f.read()
-
-            # Parse MSI-X capability
-            from src.device_clone.msix_capability import parse_msix_capability
 
             config_space_hex = config_space_bytes.hex()
             msix_info = parse_msix_capability(config_space_hex)
@@ -195,14 +230,118 @@ class FirmwareBuilder:
 
         except Exception as e:
             log.warning("MSI-X preload failed: %s", str(e))
+            # Log more details in debug mode
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("MSI-X preload exception details:", exc_info=True)
             return {}
 
     # ────────────────────────────────────────────────────────────────────────
     # Public API
     # ────────────────────────────────────────────────────────────────────────
-    def build(self, profile_secs: int = 0) -> List[str]:
-        """Run the full firmware generation flow with MSI-X fixes. Returns list of artifacts."""
+    def _inject_msix_data(
+        self, res: Dict[str, Any], preloaded_data: Dict[str, Any]
+    ) -> None:
+        """
+        Inject preloaded MSI-X data into the generation result if available.
 
+        Args:
+            res: The generation result dictionary to update
+            preloaded_data: The preloaded MSI-X data
+        """
+        if not (
+            preloaded_data.get("preloaded")
+            and "msix_info" in preloaded_data
+            and preloaded_data["msix_info"] is not None
+        ):
+            return
+
+        log.info("  • Using preloaded MSI-X data")
+        if "msix_data" not in res or not res["msix_data"]:
+            msix_info = preloaded_data["msix_info"]
+            res["msix_data"] = {
+                "capability_info": msix_info,
+                "table_size": msix_info["table_size"],
+                "table_bir": msix_info["table_bir"],
+                "table_offset": msix_info["table_offset"],
+                "pba_bir": msix_info["pba_bir"],
+                "pba_offset": msix_info["pba_offset"],
+                "enabled": msix_info["enabled"],
+                "function_mask": msix_info["function_mask"],
+                "is_valid": True,
+                "validation_errors": [],
+            }
+
+            # Update template context
+            if "template_context" in res and "msix_config" in res["template_context"]:
+                res["template_context"]["msix_config"].update(
+                    {
+                        "is_supported": True,
+                        "num_vectors": msix_info["table_size"],
+                    }
+                )
+
+    def _write_systemverilog_modules(
+        self, modules: Dict[str, str]
+    ) -> tuple[list[str], list[str]]:
+        """
+        Write SystemVerilog modules to disk with proper file extensions.
+
+        Args:
+            modules: Dictionary of module names to content
+
+        Returns:
+            Tuple of (sv_files, special_files) lists
+        """
+        sv_dir = self.out_dir / "src"
+        sv_dir.mkdir(exist_ok=True)
+
+        sv_files = []
+        special_files = []
+
+        for name, content in modules.items():
+            # Handle special file extensions while keeping them in src/ directory
+            if name.endswith(".coe") or name.endswith(".hex"):
+                # Keep original extension for special files
+                file_path = sv_dir / name
+                special_files.append(name)
+            else:
+                # SystemVerilog files get .sv extension (avoid double .sv)
+                if name.endswith(".sv"):
+                    file_path = sv_dir / name
+                    sv_files.append(name)
+                else:
+                    file_path = sv_dir / f"{name}.sv"
+                    sv_files.append(f"{name}.sv")
+
+            # Use buffered writing for potentially large files
+            with open(file_path, "w", buffering=BUFFER_SIZE) as f:
+                f.write(content)
+
+        return sv_files, special_files
+
+    def _json_serialize_default(self, obj: Any) -> str:
+        """Default JSON serialization function for complex objects."""
+        return obj.__dict__ if hasattr(obj, "__dict__") else str(obj)
+
+    def build(self, profile_secs: int = 0) -> List[str]:
+        """
+        Run the full firmware generation flow with MSI-X fixes.
+
+        This method orchestrates the complete build process:
+        1. Preload MSI-X data if requested
+        2. Generate PCILeech firmware
+        3. Inject preloaded MSI-X data if available
+        4. Write SystemVerilog modules with correct extensions
+        5. Generate behavior profile if requested
+        6. Build TCL scripts for Vivado
+        7. Save device info for auditing
+
+        Args:
+            profile_secs: Number of seconds to run behavior profiling (0 to disable)
+
+        Returns:
+            List of generated artifact paths (relative to output directory)
+        """
         # Preload MSI-X data if requested
         preloaded_data = self._preload_msix_data()
 
@@ -210,54 +349,12 @@ class FirmwareBuilder:
         res = self.gen.generate_pcileech_firmware()
 
         # Inject preloaded MSI-X data if available
-        if preloaded_data.get("preloaded") and preloaded_data.get("msix_info"):
-            log.info("  • Using preloaded MSI-X data")
-            if "msix_data" not in res or not res["msix_data"]:
-                res["msix_data"] = {
-                    "capability_info": preloaded_data["msix_info"],
-                    "table_size": preloaded_data["msix_info"]["table_size"],
-                    "table_bir": preloaded_data["msix_info"]["table_bir"],
-                    "table_offset": preloaded_data["msix_info"]["table_offset"],
-                    "pba_bir": preloaded_data["msix_info"]["pba_bir"],
-                    "pba_offset": preloaded_data["msix_info"]["pba_offset"],
-                    "enabled": preloaded_data["msix_info"]["enabled"],
-                    "function_mask": preloaded_data["msix_info"]["function_mask"],
-                    "is_valid": True,
-                    "validation_errors": [],
-                }
+        self._inject_msix_data(res, preloaded_data)
 
-                # Update template context
-                if (
-                    "template_context" in res
-                    and "msix_config" in res["template_context"]
-                ):
-                    res["template_context"]["msix_config"].update(
-                        {
-                            "is_supported": True,
-                            "num_vectors": preloaded_data["msix_info"]["table_size"],
-                        }
-                    )
-
-        # Write modules with correct file extensions (but keep original directory structure)
-        sv_dir = self.out_dir / "src"
-        sv_dir.mkdir(exist_ok=True)
-
-        # Track generated files by type
-        sv_files = []
-        special_files = []
-
-        for name, content in res["systemverilog_modules"].items():
-            # Handle special file extensions while keeping them in src/ directory
-            if name.endswith(".coe") or name.endswith(".hex"):
-                # Keep original extension for special files
-                file_path = sv_dir / name
-                special_files.append(name)
-            else:
-                # SystemVerilog files get .sv extension
-                file_path = sv_dir / f"{name}.sv"
-                sv_files.append(f"{name}.sv")
-
-            file_path.write_text(content)
+        # Write modules with correct file extensions
+        sv_files, special_files = self._write_systemverilog_modules(
+            res["systemverilog_modules"]
+        )
 
         log.info(
             "  • Wrote %d SystemVerilog modules: %s", len(sv_files), ", ".join(sv_files)
@@ -269,7 +366,7 @@ class FirmwareBuilder:
                 ", ".join(special_files),
             )
 
-        # Behaviour profile (optional)
+        # Behavior profile (optional)
         if profile_secs > 0:
             profile = self.profiler.capture_behavior_profile(duration=profile_secs)
             profile_file = self.out_dir / "behavior_profile.json"
@@ -277,10 +374,10 @@ class FirmwareBuilder:
                 json.dumps(
                     profile,
                     indent=2,
-                    default=lambda o: o.__dict__ if hasattr(o, "__dict__") else str(o),
+                    default=self._json_serialize_default,
                 )
             )
-            log.info("  • Saved behaviour profile → %s", profile_file.name)
+            log.info("  • Saved behavior profile → %s", profile_file.name)
 
         # TCL scripts (always two‑script flow)
         ctx = res["template_context"]
@@ -298,21 +395,34 @@ class FirmwareBuilder:
 
         log.info("  • Emitted Vivado scripts → %s, %s", proj_tcl.name, build_tcl.name)
 
-        # Persist config‑space snapshot for auditing
+        # Persist config-space snapshot for auditing
         (self.out_dir / "device_info.json").write_text(
             json.dumps(
                 res["config_space_data"].get("device_info", {}),
                 indent=2,
-                default=lambda o: o.__dict__ if hasattr(o, "__dict__") else str(o),
+                default=self._json_serialize_default,
             )
         )
 
-        artifacts = [str(p.relative_to(self.out_dir)) for p in self.out_dir.rglob("*")]
+        # Collect and return only file artifacts (not directories)
+        artifacts = [
+            str(p.relative_to(self.out_dir))
+            for p in self.out_dir.rglob("*")
+            if p.is_file()
+        ]
         return artifacts
 
     # ────────────────────────────────────────────────────────────────────────
     def run_vivado(self) -> None:  # pragma: no cover – optional utility
-        """Hand‑off to Vivado in batch mode using the generated scripts."""
+        """
+        Hand-off to Vivado in batch mode using the generated scripts.
+
+        This method imports vivado_handling modules on demand to avoid
+        dependencies when Vivado integration is not needed.
+
+        Raises:
+            RuntimeError: If Vivado is not found or the build fails
+        """
         from vivado_handling import (
             find_vivado_installation,
             run_vivado_with_error_reporting,
@@ -336,7 +446,16 @@ class FirmwareBuilder:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """
+    Parse command line arguments.
+
+    Args:
+        argv: Command line arguments (uses sys.argv if None)
+
+    Returns:
+        Parsed arguments namespace
+    """
     p = argparse.ArgumentParser(
         "PCILeech FPGA Firmware Builder (unified with MSI-X fixes)"
     )
@@ -347,7 +466,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         type=int,
         default=30,
         metavar="SECONDS",
-        help="Capture behaviour profile",
+        help="Capture behavior profile",
     )
     p.add_argument("--vivado", action="store_true", help="Run Vivado after generation")
     p.add_argument(
@@ -356,7 +475,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--preload-msix",
         action="store_true",
-        help="Preload MSI-X data before VFIO binding to ensure availability",
+        default=True,
+        help="Preload MSI-X data before VFIO binding to ensure availability (default: enabled)",
     )
     return p.parse_args(argv)
 
@@ -366,20 +486,32 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def main(argv: List[str] | None = None) -> int:  # noqa: D401
+def main(argv: Optional[List[str]] = None) -> int:  # noqa: D401
+    """
+    Main entry point for the PCILeech firmware builder.
+
+    Args:
+        argv: Command line arguments (uses sys.argv if None)
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
     args = parse_args(argv)
     out_dir = Path(args.output).resolve()
 
     try:
         t0 = time.perf_counter()
         enable_profiling = args.profile > 0
+
+        # Initialize the builder
         builder = FirmwareBuilder(
-            args.bdf,
-            args.board,
-            out_dir,
+            bdf=args.bdf,
+            board=args.board,
+            out_dir=out_dir,
             enable_profiling=enable_profiling,
-            preload_msix=getattr(args, "preload_msix", True),  # 기본값 True
+            preload_msix=getattr(args, "preload_msix", True),
         )
+
         artifacts = builder.build(profile_secs=args.profile)
         dt = time.perf_counter() - t0
         log.info("Build finished in %.1f s ✓", dt)
@@ -390,7 +522,7 @@ def main(argv: List[str] | None = None) -> int:  # noqa: D401
         # Friendly summary
         print("\nGenerated artifacts (relative to output dir):")
         for art in artifacts:
-            print("  –", art)
+            print("  -", art)
         return 0
 
     except Exception as exc:  # pragma: no cover

@@ -14,24 +14,20 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-# Import string utilities for safe formatting
-from ..string_utils import generate_sv_header_comment
-
+# Import from centralized utils
+from src.utils import generate_sv_header_comment
 
 # Import template renderer
-from templating.template_renderer import TemplateRenderer, TemplateRenderError
-
+from src.templating import TemplateRenderer, TemplateRenderError
 
 # Import device configuration system
-from device_clone.device_config import DeviceConfiguration as NewDeviceConfiguration
-from device_clone.device_config import get_device_config
-
-
-from device_clone.manufacturing_variance import (
-    DeviceClass,
+from src.device_clone import (
+    DeviceConfiguration as NewDeviceConfiguration,
+    get_device_config,
     ManufacturingVarianceSimulator,
     VarianceModel,
 )
+from src.device_clone.manufacturing_variance import DeviceClass
 
 
 class PowerState(Enum):

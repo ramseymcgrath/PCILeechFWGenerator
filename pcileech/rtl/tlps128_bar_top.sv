@@ -9,6 +9,8 @@
 // - Clock and reset distribution
 // - Interface compatibility with existing PCIe infrastructure
 // - Behavioral equivalence with original monolithic design
+// - The future implementation sections just mean later on in the build 
+//   they'll get the values
 //==============================================================================
 
 `include "../tlp_pkg.svh"

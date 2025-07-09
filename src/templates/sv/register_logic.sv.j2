@@ -1,0 +1,59 @@
+{#- Advanced Register Access Logic Template -#}
+    // Advanced Register Access Logic
+    logic [31:0] register_access_timer = 32'h0;
+    logic register_write_pending = 1'b0;
+
+    // Register Declarations
+{%- for reg in registers %}
+    {%- if reg.name == "pcileech_tlps128_cfgspace_shadow_status" %}
+    logic [31:0] {{ reg.name }}_reg = 32'h1;
+    {%- else %}
+    logic [31:0] {{ reg.name }}_reg = {{ reg.value | sv_hex(32) }};
+    {%- endif %}
+    logic {{ reg.name }}_access_pending = 1'b0;
+    logic [7:0] {{ reg.name }}_timing_counter = 8'h0;
+{%- endfor %}
+
+    // Global register access timing
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            register_access_timer <= 32'h0;
+            register_write_pending <= 1'b0;
+        end else begin
+            register_access_timer <= register_access_timer + 1;
+            
+            if (bar_wr_en && !register_write_pending) begin
+                register_write_pending <= 1'b1;
+            end else if (register_write_pending && register_access_timer[3:0] == 4'hF) begin
+                register_write_pending <= 1'b0;
+            end
+        end
+    end
+
+{%- for reg in registers %}
+{%- if reg.rw in ["rw", "wo"] %}
+    // Write logic for {{ reg.name }}
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            {{ reg.name }}_reg <= {{ reg.value | sv_hex(32) }};
+            {{ reg.name }}_timing_counter <= 8'h0;
+            {{ reg.name }}_access_pending <= 1'b0;
+        end else if (bar_wr_en && bar_addr == {{ reg.offset | sv_hex(32) }}) begin
+            {%- if variance_model %}
+            {{ reg.name }}_access_pending <= 1'b1;
+            {{ reg.name }}_timing_counter <= 8'd{{ variance_model.register_timing_jitter_ns // 10 if variance_model.register_timing_jitter_ns else 1 }};
+        end else if ({{ reg.name }}_access_pending) begin
+            if ({{ reg.name }}_timing_counter > 0) begin
+                {{ reg.name }}_timing_counter <= {{ reg.name }}_timing_counter - 1;
+            end else begin
+                {{ reg.name }}_reg <= bar_wr_data;
+                {{ reg.name }}_access_pending <= 1'b0;
+            end
+            {%- else %}
+            {{ reg.name }}_reg <= bar_wr_data;
+            {%- endif %}
+        end
+    end
+
+{%- endif %}
+{%- endfor %}

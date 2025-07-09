@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from utils.logging import get_logger
-from utils.shell import Shell
+from log_config import get_logger
+from shell import Shell
 
 from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 

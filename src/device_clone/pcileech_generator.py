@@ -23,17 +23,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.templating.tcl_builder import BuildContext
-
-from ..error_utils import extract_root_cause
-
-# Import string utilities
-from ..exceptions import PCILeechGenerationError
-from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
-
-# Import templating infrastructure
-from ..templating.systemverilog_generator import AdvancedSVGenerator
-from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
+# Import from centralized locations
+from src.string_utils import (
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
+from src.exceptions import PCILeechGenerationError
+from src.templating import (
+    AdvancedSVGenerator,
+    TemplateRenderer,
+    TemplateRenderError,
+    BuildContext,
+)
 
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler

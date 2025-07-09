@@ -12,13 +12,13 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
-    from ...string_utils import safe_format
+    from ..string_utils import safe_format
 except ImportError:
     # Fallback for script execution
     import sys
     from pathlib import Path
 
-    src_dir = Path(__file__).parent.parent.parent
+    src_dir = Path(__file__).parent.parent
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format
@@ -412,19 +412,93 @@ class CapabilityProcessor:
         return patches_created
 
     def _create_generic_removal_patches(self, cap_info: CapabilityInfo) -> List:
-        """Create generic patches to remove a capability."""
-        # This is a simplified implementation
-        # In a full implementation, this would handle capability chain updates
+        """Create generic patches to remove a capability from the capability chain.
+        1. Finding the previous capability in the chain
+        2. Updating its next pointer to skip the removed capability
+        3. Zeroing out the removed capability's header
+        """
+        from .constants import PCI_CAP_NEXT_PTR_OFFSET, PCI_CAPABILITIES_POINTER
+
         patches = []
 
-        # For now, just zero out the capability ID
-        if self.config_space.has_data(cap_info.offset, 1):
+        # Find the previous capability in the chain
+        prev_offset = None
+        current_offset = None
+
+        # Check if this is the first capability
+        if self.config_space.has_data(PCI_CAPABILITIES_POINTER, 1):
+            first_cap_offset = self.config_space.read_byte(PCI_CAPABILITIES_POINTER)
+            if first_cap_offset == cap_info.offset:
+                # This is the first capability - update the capabilities pointer
+                if self.config_space.has_data(
+                    cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET, 1
+                ):
+                    next_ptr = self.config_space.read_byte(
+                        cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET
+                    )
+                    patch = self.patch_engine.create_byte_patch(
+                        PCI_CAPABILITIES_POINTER,
+                        first_cap_offset,
+                        next_ptr,
+                        f"Update capabilities pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}",
+                    )
+                    if patch:
+                        patches.append(patch)
+            else:
+                # Find the previous capability
+                current_offset = first_cap_offset
+                while current_offset and current_offset != cap_info.offset:
+                    if self.config_space.has_data(
+                        current_offset + PCI_CAP_NEXT_PTR_OFFSET, 1
+                    ):
+                        next_offset = self.config_space.read_byte(
+                            current_offset + PCI_CAP_NEXT_PTR_OFFSET
+                        )
+                        if next_offset == cap_info.offset:
+                            prev_offset = current_offset
+                            break
+                        current_offset = next_offset
+                    else:
+                        break
+
+                # Update the previous capability's next pointer
+                if prev_offset and self.config_space.has_data(
+                    cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET, 1
+                ):
+                    next_ptr = self.config_space.read_byte(
+                        cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET
+                    )
+                    patch = self.patch_engine.create_byte_patch(
+                        prev_offset + PCI_CAP_NEXT_PTR_OFFSET,
+                        cap_info.offset,
+                        next_ptr,
+                        f"Update next pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}",
+                    )
+                    if patch:
+                        patches.append(patch)
+
+        # Zero out the capability header (ID and next pointer)
+        if self.config_space.has_data(cap_info.offset, 2):
+            # Zero the capability ID
             current_id = self.config_space.read_byte(cap_info.offset)
             patch = self.patch_engine.create_byte_patch(
                 cap_info.offset,
                 current_id,
                 0,
-                f"Remove {cap_info.name} capability at 0x{cap_info.offset:02x}",
+                f"Zero out {cap_info.name} capability ID at 0x{cap_info.offset:02x}",
+            )
+            if patch:
+                patches.append(patch)
+
+            # Zero the next pointer
+            current_next = self.config_space.read_byte(
+                cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET
+            )
+            patch = self.patch_engine.create_byte_patch(
+                cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET,
+                current_next,
+                0,
+                f"Zero out {cap_info.name} next pointer at 0x{cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET:02x}",
             )
             if patch:
                 patches.append(patch)

@@ -22,7 +22,7 @@ recursive-include docs *.md *.rst *.txt
 recursive-include src/tui/styles *.tcss
 
 # Include donor dump C code and Makefile
-recursive-include src/donor_dump *.c *.h Makefile
+recursive-include src/donor_dump *.c *.h Makefile*
 
 # Exclude test files from distribution
 # Tests are available in the source repository but not in PyPI packages
@@ -38,12 +38,12 @@ global-exclude *.pyd
 global-exclude __pycache__
 global-exclude .pytest_cache
 global-exclude *.egg-info
-global-exclude .git*
+global-exclude .git/
 global-exclude .DS_Store
 global-exclude *.log
-global-exclude output/*
-global-exclude build/*
-global-exclude dist/*
+global-exclude output/**
+global-exclude build/**
+global-exclude dist/**
 global-exclude .mypy_cache
 global-exclude .coverage
 global-exclude htmlcov

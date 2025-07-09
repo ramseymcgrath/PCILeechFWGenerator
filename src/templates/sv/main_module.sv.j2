@@ -1,0 +1,257 @@
+{#- Advanced SystemVerilog Module Template -#}
+{{ header | safe }}
+
+module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.device_class.value }} #(
+    parameter DEVICE_TYPE = "{{ device_config.device_type.value }}",
+    parameter DEVICE_CLASS = "{{ device_config.device_class.value }}",
+    parameter MAX_PAYLOAD_SIZE = {{ device_config.max_payload_size }},
+    parameter MSI_VECTORS = {{ device_config.msi_vectors }},
+    parameter COUNTER_WIDTH = {{ performance_counters.counter_width if performance_counters else 32 }}
+) (
+    // Clock and reset
+    input  logic        clk,
+    input  logic        reset_n,
+    
+    // Memory clock domain
+    input  logic        mem_clk,
+    input  logic        mem_reset_n,
+    
+    // Auxiliary clock domain  
+    input  logic        aux_clk,
+    input  logic        aux_reset_n,
+
+    // BAR interface
+    input  logic [31:0] bar_addr,
+    input  logic [31:0] bar_wr_data,
+    input  logic        bar_wr_en,
+    input  logic        bar_rd_en,
+    output logic [31:0] bar_rd_data,
+    output logic        bar_rd_valid,
+
+    // Configuration space interface
+    input  logic        cfg_ext_read_received,
+    input  logic        cfg_ext_write_received,
+    input  logic [9:0]  cfg_ext_register_number,
+    input  logic [3:0]  cfg_ext_function_number,
+    input  logic [31:0] cfg_ext_write_data,
+    input  logic [3:0]  cfg_ext_write_byte_enable,
+    output logic [31:0] cfg_ext_read_data,
+    output logic        cfg_ext_read_data_valid,
+
+    // MSI-X interrupt interface
+    output logic        msix_interrupt,
+    output logic [10:0] msix_vector,
+    input  logic        msix_interrupt_ack,
+
+{%- if device_config.device_type.value == 'audio' %}
+    // Audio-specific ports
+    output logic [23:0] audio_data_left,
+    output logic [23:0] audio_data_right,
+    output logic        audio_valid,
+    input  logic        audio_ready,
+    output logic        audio_clk,
+{%- elif device_config.device_type.value == 'network' %}
+    // Network-specific ports
+    output logic [63:0] tx_data,
+    output logic        tx_valid,
+    input  logic        tx_ready,
+    input  logic [63:0] rx_data,
+    input  logic        rx_valid,
+    output logic        rx_ready,
+{%- elif device_config.device_type.value == 'storage' %}
+    // Storage-specific ports
+    output logic [31:0] storage_addr,
+    output logic [31:0] storage_wr_data,
+    output logic        storage_wr_en,
+    output logic        storage_rd_en,
+    input  logic [31:0] storage_rd_data,
+    input  logic        storage_ready,
+{%- elif device_config.device_type.value == 'graphics' %}
+    // Graphics-specific ports
+    output logic [23:0] pixel_data,
+    output logic        pixel_valid,
+    output logic        hsync,
+    output logic        vsync,
+    output logic        display_enable,
+{%- endif %}
+
+    // Power management interface
+    input  logic        power_down_request,
+    input  logic        power_up_request,
+    output logic        power_ready,
+    output logic [1:0]  current_power_state,
+
+    // Debug and status
+    output logic [31:0] debug_status,
+    output logic        device_ready
+);
+
+{%- include 'systemverilog/components/register_declarations.sv.j2' %}
+
+{%- if power_management %}
+{%- include 'systemverilog/advanced/power_management.sv.j2' %}
+{%- endif %}
+
+{%- if error_handling %}
+{%- include 'systemverilog/advanced/error_handling.sv.j2' %}
+{%- endif %}
+
+{%- if performance_counters %}
+{%- include 'systemverilog/advanced/performance_counters.sv.j2' %}
+{%- endif %}
+
+    // Register access logic
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            bar_rd_data <= 32'h0;
+            bar_rd_valid <= 1'b0;
+            cfg_ext_read_data <= 32'h0;
+            cfg_ext_read_data_valid <= 1'b0;
+{%- for reg in registers %}
+            {{ reg.name }}_access_pending <= 1'b0;
+            {{ reg.name }}_timing_counter <= 8'h0;
+{%- endfor %}
+        end else begin
+            // Default assignments
+            bar_rd_valid <= 1'b0;
+            cfg_ext_read_data_valid <= 1'b0;
+            
+            // BAR register access
+            if (bar_rd_en) begin
+                bar_rd_valid <= 1'b1;
+                case (bar_addr[15:2])  // Word-aligned access
+{%- for reg in registers %}
+{%- set reg_addr = (reg.offset | int(base=16)) // 4 %}
+                    14'h{{ "%04X" | format(reg_addr) }}: bar_rd_data <= {{ reg.name }}_reg;
+{%- endfor %}
+{%- if performance_counters %}
+                    14'h1000: bar_rd_data <= perf_counter_data;  // Performance counter data
+                    14'h1001: bar_rd_data <= {28'h0, perf_counter_select};  // Performance counter select
+{%- endif %}
+                    14'h1FFE: bar_rd_data <= error_status;  // Error status
+                    14'h1FFF: bar_rd_data <= debug_status;  // Debug status
+                    default: bar_rd_data <= 32'hDEADBEEF;
+                endcase
+            end
+            
+            if (bar_wr_en) begin
+                case (bar_addr[15:2])  // Word-aligned access
+{%- for reg in registers %}
+{%- set reg_addr = (reg.offset | int(base=16)) // 4 %}
+                    14'h{{ "%04X" | format(reg_addr) }}: {{ reg.name }}_reg <= bar_wr_data;
+{%- endfor %}
+{%- if performance_counters %}
+                    14'h1001: perf_counter_select <= bar_wr_data[3:0];  // Performance counter select
+{%- endif %}
+                    default: ; // Ignore writes to undefined registers
+                endcase
+            end
+            
+            // Configuration space access
+            if (cfg_ext_read_received) begin
+                cfg_ext_read_data_valid <= 1'b1;
+                case (cfg_ext_register_number)
+                    10'h000: cfg_ext_read_data <= {16'h{{ device_config.device_id[2:] }}, 16'h{{ device_config.vendor_id[2:] }}};
+                    10'h001: cfg_ext_read_data <= {16'h0000, 16'h0010};  // Status and Command
+                    10'h002: cfg_ext_read_data <= {8'h{{ device_config.class_code[2:4] }}, 24'h{{ device_config.class_code[4:] }}};  // Class code and revision
+{%- if power_management %}
+                    10'h010: cfg_ext_read_data <= {30'h0, current_power_state};  // Power management
+{%- endif %}
+{%- if performance_counters %}
+                    10'h020: cfg_ext_read_data <= perf_counter_data;  // Performance data
+{%- endif %}
+                    10'h030: cfg_ext_read_data <= error_status;  // Error status
+                    default: cfg_ext_read_data <= 32'h00000000;
+                endcase
+            end
+            
+            if (cfg_ext_write_received) begin
+                case (cfg_ext_register_number)
+                    10'h001: begin  // Command register
+                        // Handle command register writes
+                    end
+{%- if power_management %}
+                    10'h010: begin  // Power management
+                        if (cfg_ext_write_data[1:0] != current_power_state) begin
+                            if (cfg_ext_write_data[1:0] == 2'b01) power_down_request <= 1'b1;
+                            else if (cfg_ext_write_data[1:0] == 2'b00) power_up_request <= 1'b1;
+                        end
+                    end
+{%- endif %}
+{%- if performance_counters %}
+                    10'h020: perf_counter_select <= cfg_ext_write_data[3:0];  // Performance counter select
+{%- endif %}
+                    default: ; // Ignore writes to read-only registers
+                endcase
+            end
+            
+            // Update timing counters for register access simulation
+{%- for reg in registers %}
+            if ({{ reg.name }}_access_pending) begin
+                {{ reg.name }}_timing_counter <= {{ reg.name }}_timing_counter + 1;
+                if ({{ reg.name }}_timing_counter >= 8'h10) begin  // 16 cycle access time
+                    {{ reg.name }}_access_pending <= 1'b0;
+                    {{ reg.name }}_timing_counter <= 8'h0;
+                end
+            end
+{%- endfor %}
+        end
+    end
+
+{%- if device_config.device_type.value == 'audio' %}
+    // Audio-specific logic
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            audio_data_left <= 24'h0;
+            audio_data_right <= 24'h0;
+            audio_valid <= 1'b0;
+        end else if (audio_enable && audio_ready) begin
+            // Generate simple test tone or pass through audio data
+            audio_data_left <= {volume_left, 8'h0};
+            audio_data_right <= {volume_right, 8'h0};
+            audio_valid <= 1'b1;
+        end else begin
+            audio_valid <= 1'b0;
+        end
+    end
+    
+    assign audio_clk = clk;  // Use system clock for audio (simplified)
+{%- endif %}
+
+    // Device ready and debug status
+    assign device_ready = power_ready && !error_recovery_active;
+    assign debug_status = {
+        8'h{{ device_config.vendor_id[2:4] }},  // Vendor ID high byte
+        8'h{{ device_config.device_id[2:4] }},  // Device ID high byte
+        4'h0,
+        current_power_state,
+        error_state[1:0],
+        6'h0,
+        device_ready,
+        power_ready
+    };
+
+    // MSI-X interrupt generation
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            msix_interrupt <= 1'b0;
+            msix_vector <= 11'h0;
+            interrupt_pending <= 1'b0;
+        end else begin
+            if (interrupt_pending && !msix_interrupt) begin
+                msix_interrupt <= 1'b1;
+                msix_vector <= {7'h0, interrupt_priority};
+            end else if (msix_interrupt_ack) begin
+                msix_interrupt <= 1'b0;
+                interrupt_pending <= 1'b0;
+            end
+            
+            // Generate interrupts based on various conditions
+            if (error_recovery_active || performance_overflow) begin
+                interrupt_pending <= 1'b1;
+                interrupt_priority <= error_recovery_active ? 4'hF : 4'h8;
+            end
+        end
+    end
+
+endmodule

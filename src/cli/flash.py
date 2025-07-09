@@ -9,8 +9,8 @@ from typing import List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from utils.logging import get_logger
-from utils.shell import Shell
+from log_config import get_logger
+from shell import Shell
 
 logger = get_logger(__name__)
 

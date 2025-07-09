@@ -69,7 +69,7 @@ from .msix_capability import (
 )
 
 # PCI capability processing
-from .pci_capability import *
+from ..pci_capability import *
 
 # PCILeech generator
 from .pcileech_generator import PCILeechGenerationConfig, PCILeechGenerator

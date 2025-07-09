@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from device_clone.constants import PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT
+from ..device_clone.constants import PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT
 
 logger = logging.getLogger(__name__)
 try:

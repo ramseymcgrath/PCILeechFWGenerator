@@ -1,0 +1,25 @@
+{#
+Common Header Template for TCL Scripts
+
+This template generates standardized headers for all TCL scripts.
+
+Context variables expected:
+- title: Header title
+- device: Device information (optional)
+- board: Board information (optional)
+- meta: Metadata (generated_time, etc.)
+#}
+#==============================================================================
+# {{ title }}
+#==============================================================================
+{% if device %}
+# Device: {{ device.vendor_id }}:{{ device.device_id }}{% if device.class_code %} (Class: {{ device.class_code }}){% endif %}
+{% endif %}
+{% if board %}
+# Board: {{ board.name }}
+# FPGA Part: {{ board.fpga_part }}
+{% endif %}
+{% if meta and meta.generated_time %}
+# Generated: {{ meta.generated_time }}
+{% endif %}
+#==============================================================================

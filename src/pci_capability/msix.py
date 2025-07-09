@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from ...string_utils import safe_format
+    from ..string_utils import safe_format
 except ImportError:
     # Fallback for script execution
     import sys
