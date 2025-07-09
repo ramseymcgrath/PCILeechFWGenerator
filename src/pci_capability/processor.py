@@ -22,17 +22,13 @@ except ImportError:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format
+
 from .core import CapabilityWalker, ConfigSpace
 from .msix import MSIXCapabilityHandler
 from .patches import PatchEngine
 from .rules import RuleEngine
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PatchInfo,
-    PruningAction,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PatchInfo, PruningAction)
 
 logger = logging.getLogger(__name__)
 
@@ -417,7 +413,8 @@ class CapabilityProcessor:
         2. Updating its next pointer to skip the removed capability
         3. Zeroing out the removed capability's header
         """
-        from .constants import PCI_CAP_NEXT_PTR_OFFSET, PCI_CAPABILITIES_POINTER
+        from .constants import (PCI_CAP_NEXT_PTR_OFFSET,
+                                PCI_CAPABILITIES_POINTER)
 
         patches = []
 

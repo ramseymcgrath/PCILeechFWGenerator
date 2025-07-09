@@ -22,20 +22,13 @@ except ImportError:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format
-from .constants import (
-    PCI_CAP_ID_OFFSET,
-    PCI_CAP_NEXT_PTR_OFFSET,
-)
+
+from .constants import PCI_CAP_ID_OFFSET, PCI_CAP_NEXT_PTR_OFFSET
 from .core import CapabilityWalker, ConfigSpace
 from .patches import BinaryPatch, PatchEngine
 from .rules import RuleEngine
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PCICapabilityID,
-    PruningAction,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PCICapabilityID, PruningAction)
 
 logger = logging.getLogger(__name__)
 

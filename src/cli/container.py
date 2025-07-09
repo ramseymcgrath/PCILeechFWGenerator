@@ -18,12 +18,8 @@ from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 
 # Import safe logging functions
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe)
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):

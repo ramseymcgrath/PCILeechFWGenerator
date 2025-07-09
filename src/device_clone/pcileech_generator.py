@@ -23,27 +23,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Import from centralized locations
-from src.string_utils import (
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-)
 from src.exceptions import PCILeechGenerationError
-from src.templating import (
-    AdvancedSVGenerator,
-    TemplateRenderer,
-    TemplateRenderError,
-    BuildContext,
-)
+# Import from centralized locations
+from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+from src.templating import (AdvancedSVGenerator, BuildContext,
+                            TemplateRenderer, TemplateRenderError)
 
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
 from .config_space_manager import ConfigSpaceManager
-from .msix_capability import (
-    parse_msix_capability,
-    validate_msix_configuration,
-)
+from .msix_capability import parse_msix_capability, validate_msix_configuration
 from .pcileech_context import PCILeechContextBuilder
 
 logger = logging.getLogger(__name__)

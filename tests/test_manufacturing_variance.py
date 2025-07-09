@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """Unit tests for manufacturing variance simulation."""
 
-import pytest
 import json
 import statistics
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.device_clone.manufacturing_variance import (
-    ManufacturingVarianceSimulator,
-    VarianceModel,
-    VarianceParameters,
-    DeviceClass,
-    VarianceType,
-    clamp,
-    TimingDatum,
-)
+    DeviceClass, ManufacturingVarianceSimulator, TimingDatum, VarianceModel,
+    VarianceParameters, VarianceType, clamp)
 
 
 class TestHelperFunctions:

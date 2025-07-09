@@ -140,7 +140,8 @@ class AdvancedSVFeatureGenerator:
             return ""
 
         # Import here to avoid circular imports
-        from .advanced_sv_error import ErrorHandlingGenerator, ErrorHandlingConfig
+        from .advanced_sv_error import (ErrorHandlingConfig,
+                                        ErrorHandlingGenerator)
 
         # Create error handling configuration from our config
         error_config = ErrorHandlingConfig(

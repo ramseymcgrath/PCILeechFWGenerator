@@ -1,25 +1,21 @@
 #!/usr/bin/env python3
 """Unit tests for device configuration management."""
 
-import pytest
-import tempfile
 import json
+import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
 
-from src.device_clone.device_config import (
-    DeviceType,
-    DeviceClass,
-    PCIeRegisters,
-    DeviceIdentification,
-    DeviceCapabilities,
-    DeviceConfiguration,
-    DeviceConfigManager,
-    get_config_manager,
-    get_device_config,
-    validate_hex_id,
-    generate_device_state_machine,
-)
+import pytest
+
+from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
+                                            DeviceConfigManager,
+                                            DeviceConfiguration,
+                                            DeviceIdentification, DeviceType,
+                                            PCIeRegisters,
+                                            generate_device_state_machine,
+                                            get_config_manager,
+                                            get_device_config, validate_hex_id)
 
 
 class TestDeviceType:

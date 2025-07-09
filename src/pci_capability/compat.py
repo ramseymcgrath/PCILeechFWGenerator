@@ -221,7 +221,8 @@ def determine_pruning_actions(
         )
         cap_infos[offset] = cap_info
 
-    from .utils import determine_pruning_actions as utils_determine_pruning_actions
+    from .utils import \
+        determine_pruning_actions as utils_determine_pruning_actions
 
     return utils_determine_pruning_actions(cap_infos, categories)
 

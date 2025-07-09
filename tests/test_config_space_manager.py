@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """Unit tests for ConfigSpaceManager."""
 
-import pytest
-from unittest.mock import Mock, patch, mock_open
 from pathlib import Path
+from unittest.mock import Mock, mock_open, patch
 
-from src.device_clone.config_space_manager import (
-    ConfigSpaceManager,
-    ConfigSpaceConstants,
-    BarInfo,
-    ConfigSpaceError,
-    VFIOError,
-    SysfsError,
-)
+import pytest
+
+from src.device_clone.config_space_manager import (BarInfo,
+                                                   ConfigSpaceConstants,
+                                                   ConfigSpaceError,
+                                                   ConfigSpaceManager,
+                                                   SysfsError, VFIOError)
 
 
 class TestBarInfo:

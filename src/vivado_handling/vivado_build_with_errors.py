@@ -15,10 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from .vivado_error_reporter import (
-        VivadoErrorReporter,
-        run_vivado_with_error_reporting,
-    )
+    from .vivado_error_reporter import (VivadoErrorReporter,
+                                        run_vivado_with_error_reporting)
     from .vivado_utils import find_vivado_installation
 except ImportError as e:
     print(f"Error importing modules: {e}")

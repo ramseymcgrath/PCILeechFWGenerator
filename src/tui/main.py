@@ -11,18 +11,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    ProgressBar,
-    Select,
-    Static,
-    Switch,
-)
+from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
+                             ProgressBar, Select, Static, Switch)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager

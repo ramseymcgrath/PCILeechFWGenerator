@@ -74,7 +74,8 @@ PCILeech from accessing PCI devices for firmware generation.
         print()
 
     try:
-        from src.cli.vfio_diagnostics import VFIODiagnostics, run_vfio_diagnostic
+        from src.cli.vfio_diagnostics import (VFIODiagnostics,
+                                              run_vfio_diagnostic)
 
         # Run diagnostics
         result = run_vfio_diagnostic(

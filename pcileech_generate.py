@@ -132,9 +132,7 @@ def run_pcileech_generation(args, allowed_fallbacks, denied_fallbacks):
     try:
         # Import with proper path relative to project root
         from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig,
-            PCILeechGenerator,
-        )
+            PCILeechGenerationConfig, PCILeechGenerator)
 
         logger.info(
             f"Starting PCILeech firmware generation for {args.bdf} on {args.board}"

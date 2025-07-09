@@ -26,18 +26,11 @@ except ImportError:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format
-from .constants import (
-    PCI_DEVICE_ID_OFFSET,
-    PCI_VENDOR_ID_OFFSET,
-)
+
+from .constants import PCI_DEVICE_ID_OFFSET, PCI_VENDOR_ID_OFFSET
 from .core import ConfigSpace
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PCICapabilityID,
-    PCIExtCapabilityID,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PCICapabilityID, PCIExtCapabilityID)
 
 logger = logging.getLogger(__name__)
 

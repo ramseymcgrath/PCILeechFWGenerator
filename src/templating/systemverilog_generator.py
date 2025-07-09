@@ -23,47 +23,29 @@ except ImportError:
 
 # Import string utilities for safe formatting
 try:
-    from ..string_utils import (
-        generate_sv_header_comment,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from ..string_utils import (generate_sv_header_comment, log_error_safe,
+                                log_info_safe, log_warning_safe)
 except ImportError:
-    from string_utils import (
-        generate_sv_header_comment,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from string_utils import (generate_sv_header_comment, log_error_safe,
+                              log_info_safe, log_warning_safe)
 
 # Import advanced components for integration
 try:
     from ..device_clone.manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-        VarianceModel,
-    )
+        DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
     from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
-    from .advanced_sv_perf import (
-        DeviceType,
-        PerformanceCounterConfig,
-        PerformanceCounterGenerator,
-    )
-    from .advanced_sv_power import PowerManagementConfig, PowerManagementGenerator
+    from .advanced_sv_perf import (DeviceType, PerformanceCounterConfig,
+                                   PerformanceCounterGenerator)
+    from .advanced_sv_power import (PowerManagementConfig,
+                                    PowerManagementGenerator)
 except ImportError:
     from ..device_clone.manufacturing_variance import (
-        DeviceClass,
-        ManufacturingVarianceSimulator,
-        VarianceModel,
-    )
+        DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
     from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
-    from .advanced_sv_perf import (
-        DeviceType,
-        PerformanceCounterConfig,
-        PerformanceCounterGenerator,
-    )
-    from .advanced_sv_power import PowerManagementConfig, PowerManagementGenerator
+    from .advanced_sv_perf import (DeviceType, PerformanceCounterConfig,
+                                   PerformanceCounterGenerator)
+    from .advanced_sv_power import (PowerManagementConfig,
+                                    PowerManagementGenerator)
 
 
 @dataclass

@@ -15,13 +15,9 @@ sys.path.insert(0, str(project_root))
 
 # Import the interactive functions from generate.py
 try:
-    from generate import (
-        choose_board,
-        choose_device_type,
-        interactive_configuration,
-        prompt_integer,
-        prompt_yes_no,
-    )
+    from generate import (choose_board, choose_device_type,
+                          interactive_configuration, prompt_integer,
+                          prompt_yes_no)
 
     INTERACTIVE_AVAILABLE = True
 except ImportError:

@@ -26,19 +26,16 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Callable, Dict, List, Optional, Union
 
 # Import from simplified structure
-from src import (
-    get_board_info,
-    validate_board,
-)
-from .string_utils import safe_format
+from src import get_board_info, validate_board
 from src.device_clone import board_config
-from .log_config import get_logger, setup_logging
-
 # Import msix_capability at the module level to avoid late imports
 from src.device_clone.msix_capability import parse_msix_capability
+
+from .log_config import get_logger, setup_logging
+from .string_utils import safe_format
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mandatory project‑local imports – these *must* exist in production images
@@ -124,10 +121,8 @@ check_required_modules()
 
 from src.device_clone.behavior_profiler import BehaviorProfiler
 from src.device_clone.board_config import get_pcileech_board_config
-from src.device_clone.pcileech_generator import (
-    PCILeechGenerationConfig,
-    PCILeechGenerator,
-)
+from src.device_clone.pcileech_generator import (PCILeechGenerationConfig,
+                                                 PCILeechGenerator)
 from src.templating.tcl_builder import BuildContext, TCLBuilder
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -423,10 +418,8 @@ class FirmwareBuilder:
         Raises:
             RuntimeError: If Vivado is not found or the build fails
         """
-        from vivado_handling import (
-            find_vivado_installation,
-            run_vivado_with_error_reporting,
-        )
+        from vivado_handling import (find_vivado_installation,
+                                     run_vivado_with_error_reporting)
 
         vivado = find_vivado_installation()
         if not vivado:

@@ -29,10 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Import manufacturing variance simulation
 from src.scripts.kernel_utils import setup_debugfs
 
-from .manufacturing_variance import (
-    DeviceClass,
-    ManufacturingVarianceSimulator,
-)
+from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
 
 
 def is_linux() -> bool:

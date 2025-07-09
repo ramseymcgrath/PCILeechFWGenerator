@@ -24,11 +24,9 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from device_clone.pcileech_generator import (
-    PCILeechGenerationConfig,
-    PCILeechGenerationError,
-    PCILeechGenerator,
-)
+from device_clone.pcileech_generator import (PCILeechGenerationConfig,
+                                             PCILeechGenerationError,
+                                             PCILeechGenerator)
 
 
 def setup_logging(debug: bool = False) -> None:

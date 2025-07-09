@@ -12,15 +12,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from src.pci_capability import (
-    PCICapabilityID,
-    PCIExtCapabilityID,
-    find_cap,
-    find_ext_cap,
-    get_all_capabilities,
-    get_all_ext_capabilities,
-    prune_capabilities_by_rules,
-)
+from src.pci_capability import (PCICapabilityID, PCIExtCapabilityID, find_cap,
+                                find_ext_cap, get_all_capabilities,
+                                get_all_ext_capabilities,
+                                prune_capabilities_by_rules)
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))

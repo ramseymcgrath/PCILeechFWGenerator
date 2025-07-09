@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Unit tests for template renderer."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 
-from src.templating.template_renderer import (
-    TemplateRenderer,
-    TemplateRenderError,
-)
+import pytest
+
+from src.templating.template_renderer import (TemplateRenderer,
+                                              TemplateRenderError)
 
 
 class TestTemplateRenderer:

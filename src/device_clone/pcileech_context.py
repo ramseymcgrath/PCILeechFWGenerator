@@ -23,14 +23,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..error_utils import extract_root_cause
 from ..exceptions import ContextError
-from ..string_utils import (
-    format_bar_summary_table,
-    format_bar_table,
-    format_raw_bar_table,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-)
+from ..string_utils import (format_bar_summary_table, format_bar_table,
+                            format_raw_bar_table, log_error_safe,
+                            log_info_safe, log_warning_safe)
 from .behavior_profiler import BehaviorProfile
 from .config_space_manager import BarInfo
 from .fallback_manager import FallbackManager
@@ -38,14 +33,11 @@ from .fallback_manager import FallbackManager
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (
-    VFIO_DEVICE_GET_REGION_INFO,
-    VFIO_GROUP_GET_DEVICE_FD,
-    VFIO_REGION_INFO_FLAG_MMAP,
-    VFIO_REGION_INFO_FLAG_READ,
-    VFIO_REGION_INFO_FLAG_WRITE,
-    VfioRegionInfo,
-)
+from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
+                                  VFIO_GROUP_GET_DEVICE_FD,
+                                  VFIO_REGION_INFO_FLAG_MMAP,
+                                  VFIO_REGION_INFO_FLAG_READ,
+                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
 
 
 class ValidationLevel(Enum):
