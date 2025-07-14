@@ -4,10 +4,10 @@
 [![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
 ![](https://dcbadge.limes.pink/api/shield/429866199833247744)
 
-Generate authentic PCIe DMA firmware from real donor hardware with a single command. This tool extracts donor device configurations, builds personalized FPGA bitstreams, and optionally flashes your DMA card over USB-JTAG.
+Generate authentic PCIe DMA firmware from real donor hardware with a single command. This tool extracts donor configurations from a local device and generates unique PCILeech FPGA bitstreams (and optionally flashes a DMA card over USB-JTAG).
 
 > [!WARNING]
-> This tool requires real hardware and generates firmware containing actual device identifiers. It will not produce realistic firmware without a donor card.
+> This tool requires *real* hardware. The templates are built using the device identifiers directly from a donor card and placeholder values are explicitly avoided. Using your own donor device ensures your firmware will be unique.
 
 ## ✨ Key Features
 
@@ -40,7 +40,7 @@ sudo modprobe vfio vfio-pci
 
 ### Requirements
 
-- **Podman** (not Docker - required for proper PCIe device mounting)
+- **Podman** (_not Docker_ - required for proper PCIe device mounting)
 - **Vivado Studio** (2022.2+ for synthesis and bitstream generation)
 - **Python ≥ 3.9**
 - **Donor PCIe card** (any inexpensive NIC, sound, or capture card)
@@ -71,14 +71,16 @@ pcileech-generate flash output/firmware.bin --board pcileech_75t484_x1
 
 # Or use usbloader directly
 usbloader -f output/firmware.bin
-```
 
-> [!WARNING]
-> Avoid using on-board devices (audio, graphics cards) as the VFIO process can lock the bus and cause system reboots.
+```
 
 ## 🔧 Troubleshooting
 
 ### VFIO Setup Issues
+
+> [!WARNING]
+> Avoid using on-board devices (audio, graphics cards) for donor info. The VFIO process can lock the bus during extraction and cause system reboots.
+
 
 The most common issues involve VFIO (Virtual Function I/O) configuration. Use the built-in diagnostic tool:
 
@@ -139,6 +141,10 @@ pip install textual rich psutil watchdog
 podman --version
 podman info | grep rootless
 ```
+
+### Templating issues
+
+If you run into issues with your vivado project file formatting, first clear out all your cached files and rerun. Otherwise try pulling a copy of the pcileech repo directly and then inserting the generator output in. 
 
 ## 📚 Documentation
 
