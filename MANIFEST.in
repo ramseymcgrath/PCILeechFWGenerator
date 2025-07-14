@@ -1,22 +1,27 @@
 # Include documentation and configuration files
 include README.md
-include LICENSE
-include CHANGELOG.md
-include CONTRIBUTING.md
+include LICENSE.txt
+include CHANGELOG.rst
+include CONTRIBUTING.rst
+include AUTHORS.rst
 include pyproject.toml
 include setup.py
+include setup.cfg
 
 # Include requirements files
 include requirements*.txt
 include pytest.ini
+include .coveragerc
+include mypy_dev.ini
 
 # Include installation and build scripts
-include install.sh
+include install-sudo-wrapper.sh
 include Containerfile
 include .dockerignore
+include entrypoint.sh
 
 # Include documentation
-recursive-include docs *.md *.rst *.txt
+recursive-include docs *.md *.rst *.txt *.py Makefile
 
 # Include TUI styles
 recursive-include src/tui/styles *.tcss
@@ -24,12 +29,19 @@ recursive-include src/tui/styles *.tcss
 # Include donor dump C code and Makefile
 recursive-include src/donor_dump *.c *.h Makefile*
 
-# Exclude test files from distribution
-# Tests are available in the source repository but not in PyPI packages
-# recursive-include tests *.py
+# Include templates
+recursive-include src/templates *.j2 *.md
+recursive-include src/templating/templates *.j2
 
 # Include scripts
 recursive-include src/scripts *.py
+
+# Include board and config files
+recursive-include boards *.yaml
+recursive-include configs *.yaml
+
+# Include PCILeech RTL and simulation files
+recursive-include pcileech *.sv *.svh
 
 # Exclude build artifacts and cache
 global-exclude *.pyc

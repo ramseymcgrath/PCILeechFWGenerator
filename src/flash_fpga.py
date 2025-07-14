@@ -20,8 +20,11 @@ def run(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
 
-if __name__ == "__main__":
-    p = argparse.ArgumentParser()
+def main():
+    """Main entry point for pcileech-flash command"""
+    p = argparse.ArgumentParser(
+        description="Flash a LambdaConcept Squirrel/Screamer (Artix-7 75T) with usbloader"
+    )
     p.add_argument("bitfile", help=".bin produced by build.py")
     args = p.parse_args()
 
@@ -36,3 +39,7 @@ if __name__ == "__main__":
     run(f"usbloader --vidpid 1d50:6130 -f {bit}")
 
     print("[✓] Flash complete – power-cycle or warm-reset the card.")
+
+
+if __name__ == "__main__":
+    main()
