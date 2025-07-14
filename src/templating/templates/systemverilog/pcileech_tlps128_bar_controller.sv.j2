@@ -544,37 +544,56 @@ module pcileech_tlps128_bar_controller #(
         end
     end
     
-    // ========================================================================
-    // PCILeech Command Processing
-    // ========================================================================
-    
+    // ---------------------------------------------------------------------------
+    // Unified control / status / error register update
+    // ---------------------------------------------------------------------------
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
             pcileech_ctrl_reg <= '0;
             pcileech_stat_reg <= '0;
+            error_status_reg  <= '0;
             pcileech_addr_reg <= '0;
             pcileech_len_reg <= '0;
             pcileech_data_reg <= '0;
         end else begin
-            // Update PCILeech control registers based on commands
+            // ---------- PCILeech command side ----------
             if (pcileech_enable && current_state == STATE_PCILEECH_EXEC) begin
                 case (pcileech_command[7:0])
-                    PCILEECH_CMD_READ: begin
+                    PCILEECH_CMD_READ, PCILEECH_CMD_WRITE: begin
+                        pcileech_ctrl_reg[0] <= 1'b1;     // Busy
                         pcileech_addr_reg <= pcileech_address;
                         pcileech_len_reg <= pcileech_length;
-                        pcileech_stat_reg[0] <= 1'b1; // Busy
                     end
-                    PCILEECH_CMD_WRITE: begin
-                        pcileech_addr_reg <= pcileech_address;
-                        pcileech_len_reg <= pcileech_length;
-                        pcileech_stat_reg[0] <= 1'b1; // Busy
-                    end
-                    PCILEECH_CMD_PROBE: begin
-                        pcileech_data_reg <= {{ device_config.device_signature | default('32\'hDEADBEEF') }};
+                    PCILEECH_CMD_PROBE:  begin
                         pcileech_stat_reg[1] <= 1'b1; // Ready
+                        pcileech_data_reg <= {{ device_config.device_signature | default('32\'hDEADBEEF') }};
                     end
-                    PCILEECH_CMD_STATUS: begin
-                        pcileech_stat_reg[2] <= 1'b1; // Status available
+                    PCILEECH_CMD_STATUS: pcileech_stat_reg[2] <= 1'b1; // Status avail
+                endcase
+            end
+
+            // ---------- Error/pathology logic ----------
+            if (current_state == STATE_ERROR_HANDLE) error_status_reg[0] <= 1'b1; // Addr err
+            if (tlp_rx_err)                          error_status_reg[1] <= 1'b1; // TLP err
+            if (timeout_counter == TIMEOUT_CYCLES-1) error_status_reg[2] <= 1'b1; // Timeout
+
+            // ---------- Config-space writes (W1C) ----------
+            if (cfg_ext_write_received) begin
+                unique case (cfg_ext_register_number)
+                    10'h040: begin                            // pcileech_ctrl_reg
+                        if (cfg_ext_write_byte_enable[0]) pcileech_ctrl_reg[ 7: 0] <= cfg_ext_write_data[ 7: 0];
+                        if (cfg_ext_write_byte_enable[1]) pcileech_ctrl_reg[15: 8] <= cfg_ext_write_data[15: 8];
+                        if (cfg_ext_write_byte_enable[2]) pcileech_ctrl_reg[23:16] <= cfg_ext_write_data[23:16];
+                        if (cfg_ext_write_byte_enable[3]) pcileech_ctrl_reg[31:24] <= cfg_ext_write_data[31:24];
+                    end
+                    10'h041: begin                            // pcileech_stat_reg (optional)
+                        if (cfg_ext_write_byte_enable[0]) pcileech_stat_reg[ 7: 0] <= cfg_ext_write_data[ 7: 0];
+                    end
+                    10'h042: begin                            // error_status_reg (W1C)
+                        if (cfg_ext_write_byte_enable[0]) error_status_reg[ 7: 0] <= error_status_reg[ 7: 0] & ~cfg_ext_write_data[ 7: 0];
+                        if (cfg_ext_write_byte_enable[1]) error_status_reg[15: 8] <= error_status_reg[15: 8] & ~cfg_ext_write_data[15: 8];
+                        if (cfg_ext_write_byte_enable[2]) error_status_reg[23:16] <= error_status_reg[23:16] & ~cfg_ext_write_data[23:16];
+                        if (cfg_ext_write_byte_enable[3]) error_status_reg[31:24] <= error_status_reg[31:24] & ~cfg_ext_write_data[31:24];
                     end
                 endcase
             end
@@ -624,7 +643,6 @@ module pcileech_tlps128_bar_controller #(
             read_count <= '0;
             write_count <= '0;
             error_count <= '0;
-            error_status_reg <= '0;
             timeout_counter <= '0;
         end else begin
             // Performance counters
@@ -642,11 +660,9 @@ module pcileech_tlps128_bar_controller #(
             // Error detection
             if (current_state == STATE_ERROR_HANDLE) begin
                 error_count <= error_count + 1;
-                error_status_reg[0] <= 1'b1; // Address error
             end
             
             if (tlp_rx_err) begin
-                error_status_reg[1] <= 1'b1; // TLP error
                 error_count <= error_count + 1;
             end
             
@@ -655,18 +671,11 @@ module pcileech_tlps128_bar_controller #(
                 if (timeout_counter < TIMEOUT_CYCLES-1) begin
                     timeout_counter <= timeout_counter + 1;
                 end else begin
-                    error_status_reg[2] <= 1'b1; // Timeout error
                     error_count <= error_count + 1;
                     timeout_counter <= '0;
                 end
             end else begin
                 timeout_counter <= '0;
-            end
-            
-            // Clear errors on write to error status register
-            if (current_state == STATE_WRITE_PROCESS && target_region == REGION_STATUS_REG && 
-                region_offset[7:2] == 6'h01 && tlp_data[31]) begin
-                error_status_reg <= '0;
             end
         end
     end
@@ -714,28 +723,6 @@ module pcileech_tlps128_bar_controller #(
                 10'h041: cfg_ext_read_data = pcileech_stat_reg; // PCILeech status register
                 10'h042: cfg_ext_read_data = error_status_reg;  // Error status register
                 default: cfg_ext_read_data = 32'h00000000;
-            endcase
-        end
-    end
-    
-    // Configuration space write handling
-    always_ff @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            // Initialize configuration space registers
-        end else if (cfg_ext_write_received) begin
-            case (cfg_ext_register_number)
-                10'h040: begin // PCILeech control register
-                    if (cfg_ext_write_byte_enable[0]) pcileech_ctrl_reg[7:0] <= cfg_ext_write_data[7:0];
-                    if (cfg_ext_write_byte_enable[1]) pcileech_ctrl_reg[15:8] <= cfg_ext_write_data[15:8];
-                    if (cfg_ext_write_byte_enable[2]) pcileech_ctrl_reg[23:16] <= cfg_ext_write_data[23:16];
-                    if (cfg_ext_write_byte_enable[3]) pcileech_ctrl_reg[31:24] <= cfg_ext_write_data[31:24];
-                end
-                10'h042: begin // Error status register (write-1-to-clear)
-                    if (cfg_ext_write_byte_enable[0]) error_status_reg[7:0] <= error_status_reg[7:0] & ~cfg_ext_write_data[7:0];
-                    if (cfg_ext_write_byte_enable[1]) error_status_reg[15:8] <= error_status_reg[15:8] & ~cfg_ext_write_data[15:8];
-                    if (cfg_ext_write_byte_enable[2]) error_status_reg[23:16] <= error_status_reg[23:16] & ~cfg_ext_write_data[23:16];
-                    if (cfg_ext_write_byte_enable[3]) error_status_reg[31:24] <= error_status_reg[31:24] & ~cfg_ext_write_data[31:24];
-                end
             endcase
         end
     end
