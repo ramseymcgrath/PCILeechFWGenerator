@@ -18,8 +18,12 @@ from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 
 # Import safe logging functions
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):
@@ -176,7 +180,7 @@ def run_build(cfg: BuildConfig) -> None:
               -v {output_dir}:/app/output \
               -v /lib/modules/$(uname -r)/build:/kernel-headers:ro \
               {cfg.container_image}:{cfg.container_tag} \
-              src/build.py {cmd_args}
+              -m src.build {cmd_args}
             """
         ).strip()
 
