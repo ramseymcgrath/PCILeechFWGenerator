@@ -51,7 +51,6 @@ RUN pip3 install --no-cache-dir -r requirements.txt -r requirements-tui.txt
 
 # Copy only what you need
 COPY src ./src
-COPY utils ./utils
 COPY generate.py .
 
 # Ensure __init__.py files exist in all directories
