@@ -439,6 +439,7 @@ class FileOperationsManager:
     ) -> Tuple[List[str], List[str]]:
         """
         Write SystemVerilog modules to disk with proper file extensions.
+        COE files are excluded from this method to prevent duplication.
 
         Args:
             modules: Dictionary of module names to content
@@ -458,6 +459,11 @@ class FileOperationsManager:
         special_files = []
 
         for name, content in modules.items():
+            # Skip COE files to prevent duplication
+            # COE files are handled separately and saved to systemverilog directory
+            if name.endswith(".coe"):
+                continue
+                
             file_path, category = self._determine_file_path(name, sv_dir)
 
             if category == "sv":

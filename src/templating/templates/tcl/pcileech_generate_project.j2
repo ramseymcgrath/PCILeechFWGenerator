@@ -116,29 +116,26 @@ set_property -dict [list \
 ] [get_ips pcie_ultrascale_bridge]
 
 {% else %}
+# TEMPLATE FILE: /src/templating/templates/tcl/pcileech_generate_project.j2
 # 7-Series PCIe IP (default)
 create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_bridge
 set_property -dict [list \
     CONFIG.Link_Speed {2.5_GT/s} \
-    CONFIG.Max_Link_Width X1 \
-    CONFIG.Device_ID "{{ device.device_id if device.device_id else 0x7021 }}" \
-    CONFIG.Vendor_ID "{{ device.vendor_id if device.vendor_id else 0x10EE }}" \
-    CONFIG.Revision_ID "{{ device.revision_id if device.revision_id else "0x00" }}" \
-    CONFIG.Class_Code_Base "02" \
-    CONFIG.Class_Code_Interface "00" \
-    CONFIG.Class_Code_Sub "00" \
-    CONFIG.Subsystem_ID "{0x0007}" \
-    CONFIG.Subsystem_Vendor_ID "{{ device.vendor_id if device.vendor_id else 0x10EE }}" \
+    CONFIG.Maximum_Link_Width X1 \
+    CONFIG.Device_ID {{ device.device_id if device.device_id else '0x7021' }} \
+    CONFIG.Vendor_ID {{ device.vendor_id if device.vendor_id else '0x10EE' }} \
+    CONFIG.Revision_ID {{ device.revision_id if device.revision_id else '0x00' }} \
+    CONFIG.Class_Code_Base 02 \
+    CONFIG.Class_Code_Interface 00 \
+    CONFIG.Class_Code_Sub 00 \
+    CONFIG.Subsystem_ID 0x0007 \
+    CONFIG.Subsystem_Vendor_ID {{ device.vendor_id if device.vendor_id else '0x10EE' }} \
     CONFIG.Bar0_Enabled {true} \
     CONFIG.Bar0_Type {Memory} \
     CONFIG.Bar0_64bit {true} \
-    CONFIG.Bar0_Size "{1}" \
-{% if supports_msi %}
-    CONFIG.MSI_Enabled {true} \
-{% endif %}
-{% if supports_msix %}
-    CONFIG.MSI-X_Enabled {true} \
-{% endif %}
+    CONFIG.Bar0_Size {1}{% if supports_msi %} \
+    CONFIG.MSI_Enabled {true}{% endif %}{% if supports_msix %} \
+    CONFIG.MSIx_Enabled {true}{% endif %} \
 ] [get_ips pcie_7x_bridge]
 {% endif %}
 
@@ -193,11 +190,16 @@ foreach xdc_file $xdc_files {
 # Try to determine top module from first source file
 set top_module [file rootname [file tail "{{ pcileech.source_files[0] }}"]]
 {% else %}
-set top_module "pcileech_top"
+# Top module will be auto-detected by Vivado
+set top_module ""
 {% endif %}
 
-set_property top $top_module [current_fileset]
-puts "Set top module: $top_module"
+if {$top_module != ""} {
+    set_property top $top_module [current_fileset]
+    puts "Set top module: $top_module"
+} else {
+    puts "Top module will be auto-detected by Vivado"
+}
 
 # Update compile order
 update_compile_order -fileset sources_1
@@ -207,9 +209,8 @@ puts "Generating IP cores..."
 generate_target all [get_files *.xci]
 catch {config_ip_cache -export [get_ips -all]}
 
-# Validate design
-puts "Validating design..."
-validate_design -quiet
+# Skip validation (validate_design is not available in all Vivado versions)
+puts "Skipping design validation..."
 
 puts "PCILeech project generation completed successfully!"
 puts "Project: $project_name"
