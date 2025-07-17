@@ -16,8 +16,11 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **MSI-X Table Replication**: Exact replication of MSI-X tables from donor devices
 - **Deterministic Variance Seeding**: Consistent hardware variance based on device serial number
 - **Advanced SystemVerilog Generation**: Comprehensive PCIe device controller with modular architecture
+- **Active Device**: Interrupts implemented to signal device is active (VGK bypass)
+- **Memory Overlay Mapping**: Memory. Overlayed. Mapped
 - **Interactive TUI**: Modern text-based interface with real-time monitoring and guided workflows
 - **Automated Build Pipeline**: Containerized synthesis and bitstream generation
+- **Automated Testing and Validation**: Build is continually tested to ensure build quality
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards
 
 📚 **[Complete Documentation](../../wiki)** | 🏗️ **[Device Cloning Guide](../../wiki/device-cloning)** | 🔧 **[Development Setup](../../wiki/development)**
@@ -40,24 +43,33 @@ sudo modprobe vfio vfio-pci
 
 ### Requirements
 
-- **Podman** (_not Docker_ - required for proper PCIe device mounting)
-- **Vivado Studio** (2022.2+ for synthesis and bitstream generation)
 - **Python ≥ 3.9**
 - **Donor PCIe card** (any inexpensive NIC, sound, or capture card)
-- **DMA board** (pcileech_75t484_x1, pcileech_35t325_x4, or pcileech_100t484_x1)
+- **Linux OS** (You need this)
+
+### Optional
+
+- **Podman** (_not Docker_ - required for proper PCIe device mounting) You use podman or run the python locally. *You must use linux for either option
+- **DMA board** (pcileech_75t484_x1, pcileech_35t325_x4, or pcileech_100t484_x1) You don't need to flash your firmware with this tooling but you can.
+- **Vivado Studio** (2022.2+ for synthesis and bitstream generation) You can use a locally generated Vivado project or insert the files into an existing one.
+
 
 ### Basic Usage
 
 ```bash
+# Development from repository
+git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
+cd PCILeechFWGenerator
+# or pip install
+pip3 install pcileechfwgenerator
+
 # Interactive TUI (recommended for first-time users)
 pcileech-tui-sudo
 
 # CLI interface
 pcileech-generate build
 
-# Development from repository
-git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
-cd PCILeechFWGenerator
+# Local python build
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 sudo -E python3 generate.py
@@ -171,6 +183,7 @@ For detailed information, please visit our **[Wiki](../../wiki)**:
 - **Xilinx/AMD**: For Vivado synthesis tools
 - **Textual**: For the modern TUI framework
 - **PCILeech Community**: For feedback and contributions
+- @Simonrak for the writemask implementation
 
 ## 📄 License
 

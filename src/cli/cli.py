@@ -110,6 +110,38 @@ def build_sub(parser: argparse._SubParsersAction):
         "--auto-fix", action="store_true", help="Let VFIOBinder auto-remediate issues"
     )
 
+    # Add active device configuration group
+    active_group = p.add_argument_group("Active Device Configuration")
+    active_group.add_argument(
+        "--disable-active-device",
+        action="store_true",
+        help="Disable active device interrupts (enabled by default)",
+    )
+    active_group.add_argument(
+        "--active-timer-period",
+        type=int,
+        default=100000,
+        help="Timer period in clock cycles (default: 100000)",
+    )
+    active_group.add_argument(
+        "--active-interrupt-mode",
+        choices=["msi", "msix", "intx"],
+        default="msi",
+        help="Interrupt mode for active device (default: msi)",
+    )
+    active_group.add_argument(
+        "--active-interrupt-vector",
+        type=int,
+        default=0,
+        help="Interrupt vector to use (default: 0)",
+    )
+    active_group.add_argument(
+        "--active-priority",
+        type=int,
+        default=15,
+        help="Interrupt priority 0-15 (default: 15, highest)",
+    )
+
     # Add fallback control group
     fallback_group = p.add_argument_group("Fallback Control")
     fallback_group.add_argument(
@@ -211,6 +243,11 @@ def main(argv: Optional[List[str]] = None):
             fallback_mode=fallback_mode,
             allowed_fallbacks=allowed_fallbacks,
             denied_fallbacks=denied_fallbacks,
+            disable_active_device=getattr(args, "disable_active_device", False),
+            active_timer_period=getattr(args, "active_timer_period", 100000),
+            active_interrupt_mode=getattr(args, "active_interrupt_mode", "msi"),
+            active_interrupt_vector=getattr(args, "active_interrupt_vector", 0),
+            active_priority=getattr(args, "active_priority", 15),
         )
         run_build(cfg)
 

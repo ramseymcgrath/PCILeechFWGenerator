@@ -5,8 +5,11 @@ This module contains utilities and tools for working with Xilinx Vivado:
 - vivado_utils: Core utilities for finding and running Vivado
 - vivado_error_reporter: Enhanced error reporting and monitoring
 - vivado_build_with_errors: Build script with comprehensive error handling
+- pcileech_build_integration: Integration with pcileech-fpga repository
 """
 
+from .pcileech_build_integration import (PCILeechBuildIntegration,
+                                         integrate_pcileech_build)
 from .vivado_error_reporter import (VivadoErrorReporter,
                                     create_enhanced_vivado_runner,
                                     run_vivado_with_error_reporting)
@@ -25,4 +28,7 @@ __all__ = [
     "VivadoErrorReporter",
     "run_vivado_with_error_reporting",
     "create_enhanced_vivado_runner",
+    # pcileech_build_integration exports
+    "PCILeechBuildIntegration",
+    "integrate_pcileech_build",
 ]

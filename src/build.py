@@ -399,6 +399,16 @@ class FirmwareBuilder:
             )
         )
 
+        # Store device configuration for Vivado integration
+        self._device_config = {
+            "vendor_id": ctx["device_config"]["vendor_id"],
+            "device_id": ctx["device_config"]["device_id"],
+            "revision_id": ctx["device_config"]["revision_id"],
+            "class_code": ctx["device_config"]["class_code"],
+            "requires_msix": bool(res.get("msix_data", {}).get("is_valid", False)),
+            "pcie_lanes": ctx.get("pcie_config", {}).get("max_lanes", 1),
+        }
+
         # Collect and return only file artifacts (not directories)
         artifacts = [
             str(p.relative_to(self.out_dir))
@@ -408,24 +418,48 @@ class FirmwareBuilder:
         return artifacts
 
     # ────────────────────────────────────────────────────────────────────────
-    def run_vivado(self) -> None:  # pragma: no cover – optional utility
+    def run_vivado(
+        self, device_config: Optional[Dict[str, Any]] = None
+    ) -> None:  # pragma: no cover – optional utility
         """
         Hand-off to Vivado in batch mode using the generated scripts.
 
         This method imports vivado_handling modules on demand to avoid
         dependencies when Vivado integration is not needed.
 
+        Args:
+            device_config: Optional device configuration from the build process
+
         Raises:
             RuntimeError: If Vivado is not found or the build fails
         """
         from vivado_handling import (find_vivado_installation,
+                                     integrate_pcileech_build,
                                      run_vivado_with_error_reporting)
 
         vivado = find_vivado_installation()
         if not vivado:
             raise RuntimeError("Vivado not found in PATH")
 
-        build_tcl = self.out_dir / "vivado_build.tcl"
+        # Use the new build integration if available
+        try:
+            # Use provided device config or fall back to stored one
+            config_to_use = device_config or getattr(self, "_device_config", None)
+
+            # Create unified build script using repository templates
+            build_script = integrate_pcileech_build(
+                self.board,
+                self.out_dir,
+                device_config=config_to_use,
+            )
+            log.info(f"Using integrated build script: {build_script}")
+            build_tcl = build_script
+        except Exception as e:
+            log.warning(
+                f"Failed to use integrated build, falling back to generated scripts: {e}"
+            )
+            build_tcl = self.out_dir / "vivado_build.tcl"
+
         rc, rpt = run_vivado_with_error_reporting(
             build_tcl, self.out_dir, vivado["executable"]
         )

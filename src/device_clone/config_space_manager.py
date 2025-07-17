@@ -14,8 +14,12 @@ from enum import IntEnum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -88,6 +92,10 @@ class ConfigSpaceConstants:
     PCIE_CAP_OFFSET = 0x60
     MSIX_TABLE_OFFSET = 0x100
 
+    # Extended configuration space pointers
+    DEFAULT_EXT_CFG_CAP_PTR = 0x100  # Default extended capability pointer
+    DEFAULT_EXT_CFG_XP_CAP_PTR = 0x100  # Default express capability pointer
+
     # BAR type masks
     BAR_TYPE_MASK = 0x1
     BAR_MEMORY_TYPE_MASK = 0x6
@@ -118,6 +126,7 @@ class BarInfo:
     size: int = 0
     prefetchable: bool = False
     is_64bit: bool = False
+    size_encoding: Optional[int] = None  # Encoded size value for shadow config space
 
     @property
     def base_address(self) -> int:
@@ -134,10 +143,21 @@ class BarInfo:
         """Check if this is an I/O BAR."""
         return self.bar_type.lower() == "io"
 
+    def get_size_encoding(self) -> int:
+        """Get the size encoding for this BAR, computing it if necessary."""
+        if self.size_encoding is None:
+            from src.device_clone.bar_size_converter import BarSizeConverter
+
+            self.size_encoding = BarSizeConverter.size_to_encoding(
+                self.size, self.bar_type, self.is_64bit, self.prefetchable
+            )
+        return self.size_encoding
+
     def __str__(self) -> str:
         bitness = "64-bit" if self.is_64bit else "32-bit"
         prefetch = "prefetchable" if self.prefetchable else "non-prefetchable"
-        return f"BAR {self.index}: {self.bar_type} @ 0x{self.address:016x} ({bitness}, {prefetch})"
+        size_str = f", size={self.size:#x}" if self.size > 0 else ""
+        return f"BAR {self.index}: {self.bar_type} @ 0x{self.address:016x} ({bitness}, {prefetch}{size_str})"
 
     def __format__(self, format_spec: str) -> str:
         """Support format operations for template compatibility."""
@@ -185,6 +205,22 @@ class ConfigSpaceManager:
         self.device_config = get_device_config(device_profile)
         self.strict_vfio = strict_vfio
         self._config_path = f"/sys/bus/pci/devices/{self.bdf}/config"
+
+        # Extract extended configuration space pointers from device config
+        if self.device_config and hasattr(self.device_config, "capabilities"):
+            self.ext_cfg_cap_ptr = getattr(
+                self.device_config.capabilities,
+                "ext_cfg_cap_ptr",
+                ConfigSpaceConstants.DEFAULT_EXT_CFG_CAP_PTR,
+            )
+            self.ext_cfg_xp_cap_ptr = getattr(
+                self.device_config.capabilities,
+                "ext_cfg_xp_cap_ptr",
+                ConfigSpaceConstants.DEFAULT_EXT_CFG_XP_CAP_PTR,
+            )
+        else:
+            self.ext_cfg_cap_ptr = ConfigSpaceConstants.DEFAULT_EXT_CFG_CAP_PTR
+            self.ext_cfg_xp_cap_ptr = ConfigSpaceConstants.DEFAULT_EXT_CFG_XP_CAP_PTR
 
     def run_vfio_diagnostics(self) -> None:
         """Run VFIO diagnostics to help troubleshoot issues."""
@@ -975,7 +1011,8 @@ class ConfigSpaceManager:
                     prefix="BARX",
                 )
 
-        return BarInfo(
+        # Create BarInfo with initial values
+        bar_info = BarInfo(
             index=bar_index,
             bar_type=bar_type,
             address=bar_addr,
@@ -983,6 +1020,38 @@ class ConfigSpaceManager:
             prefetchable=bar_prefetchable,
             is_64bit=bar_64bit,
         )
+
+        # Try to determine BAR size from the address pattern
+        # This is a heuristic approach when we can't probe the actual hardware
+        if bar_addr != 0:
+            from src.device_clone.bar_size_converter import BarSizeConverter
+
+            try:
+                # Attempt to infer size from address alignment
+                estimated_size = BarSizeConverter.address_to_size(bar_addr, bar_type)
+                if estimated_size > 0:
+                    bar_info.size = estimated_size
+                    bar_info.size_encoding = BarSizeConverter.size_to_encoding(
+                        estimated_size, bar_type, bar_64bit, bar_prefetchable
+                    )
+                    log_info_safe(
+                        logger,
+                        "BAR {index} estimated size: {size} bytes ({size_str})",
+                        index=bar_index,
+                        size=estimated_size,
+                        size_str=BarSizeConverter.format_size(estimated_size),
+                        prefix="BARX",
+                    )
+            except Exception as e:
+                log_debug_safe(
+                    logger,
+                    "Could not estimate BAR {index} size: {error}",
+                    index=bar_index,
+                    error=str(e),
+                    prefix="BARX",
+                )
+
+        return bar_info
 
     def _log_extracted_device_info(self, device_info: Dict[str, Any]) -> None:
         """Log extracted device information in a structured way."""

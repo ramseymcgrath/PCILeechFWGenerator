@@ -18,25 +18,6 @@ class DeviceManager:
 
     def __init__(self):
         self._device_cache: List[PCIDevice] = []
-        self._vendor_db: Dict[str, str] = {}
-        self._load_vendor_database()
-
-    def _load_vendor_database(self) -> None:
-        """Load PCI vendor database for enhanced device names."""
-        # Basic vendor database - in production this could be loaded from
-        # pci.ids
-        self._vendor_db = {
-            "8086": "Intel Corporation",
-            "10de": "NVIDIA Corporation",
-            "1002": "Advanced Micro Devices",
-            "10ec": "Realtek Semiconductor",
-            "14e4": "Broadcom",
-            "1969": "Qualcomm Atheros",
-            "168c": "Qualcomm Atheros",
-            "15b3": "Mellanox Technologies",
-            "1077": "QLogic Corp.",
-            "19a2": "Emulex Corporation",
-        }
 
     async def scan_devices(self) -> List[PCIDevice]:
         """Enhanced device scanning with detailed information."""
@@ -77,8 +58,8 @@ class DeviceManager:
         device_id = raw_device["dev"]
         device_class = raw_device["class"]
 
-        # Get vendor name from database
-        vendor_name = self._vendor_db.get(vendor_id.lower(), f"Vendor {vendor_id}")
+        # Use vendor ID directly since we don't have a vendor database
+        vendor_name = f"Vendor {vendor_id}"
 
         # Extract device name from pretty string
         device_name = self._extract_device_name(raw_device["pretty"])
@@ -170,10 +151,11 @@ class DeviceManager:
     async def _get_iommu_group(self, bdf: str) -> str:
         """Get IOMMU group for device."""
         try:
-            from src.cli.vfio import get_iommu_group
-
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, get_iommu_group, bdf)
+            iommu_path = Path(f"/sys/bus/pci/devices/{bdf}/iommu_group")
+            if iommu_path.exists():
+                group_num = iommu_path.resolve().name
+                return group_num
+            return "none"
         except Exception:
             return "unknown"
 

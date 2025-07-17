@@ -89,6 +89,11 @@ module pcileech_fifo #(
         rw[1] <= 1'b1;    // Enable DMA operations
         rw[2] <= 1'b{{ '1' if enable_scatter_gather else '0' }};    // Scatter-gather support
         rw[3] <= 1'b{{ '1' if enable_interrupt else '0' }};    // Interrupt support
+        
+        // CFGTLP control bits
+        rw[20] <= 1'b0;   // cfg_a7[0] - Configuration address bit 7, bit 0
+        rw[21] <= 1'b0;   // cfg_a7[1] - Configuration address bit 7, bit 1
+        rw[206] <= 1'b1;  // CFGTLP PCIE WRITE ENABLE (1 = Enable PCIe writes for CFGTLP)
     end
     
     // FIFO instantiation

@@ -37,43 +37,94 @@ memory_initialization_vector=
 
 ; Base Address Register 0 (0x10-0x13) - Memory BAR
 {% if bar_config.bars and bar_config.bars|length > 0 %}
-{{ "%08X" | format(bar_config.bars[0].base_address | default(0xF0000000)) }},
+{% set bar = bar_config.bars[0] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR0: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
-F0000000,
+; BAR0: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0xF0000000)) }},
+{% endif %}
+{% else %}
+; BAR0: Default memory BAR (64KB)
+FFFF0004,
 {% endif %}
 
 ; Base Address Register 1 (0x14-0x17) - Upper 32 bits for 64-bit BAR or second BAR
-{% if bar_config.bars and bar_config.bars|length > 1 %}
-{{ "%08X" | format(bar_config.bars[1].base_address | default(0x00000000)) }},
+{% if bar_config.bars and bar_config.bars|length > 0 and bar_config.bars[0].is_64bit %}
+; BAR1: Upper 32 bits of 64-bit BAR0
+FFFFFFFF,
+{% elif bar_config.bars and bar_config.bars|length > 1 %}
+{% set bar = bar_config.bars[1] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR1: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
+; BAR1: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0x00000000)) }},
+{% endif %}
+{% else %}
+; BAR1: Disabled
 00000000,
 {% endif %}
 
 ; Base Address Register 2 (0x18-0x1B) - I/O BAR or third memory BAR
 {% if bar_config.bars and bar_config.bars|length > 2 %}
-{{ "%08X" | format(bar_config.bars[2].base_address | default(0x0000E001)) }},
+{% set bar = bar_config.bars[2] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR2: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
-0000E001,
+; BAR2: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0x0000E001)) }},
+{% endif %}
+{% else %}
+; BAR2: Default I/O BAR (256 bytes)
+FFFFFF01,
 {% endif %}
 
 ; Base Address Register 3 (0x1C-0x1F) - Fourth BAR
 {% if bar_config.bars and bar_config.bars|length > 3 %}
-{{ "%08X" | format(bar_config.bars[3].base_address | default(0x00000000)) }},
+{% set bar = bar_config.bars[3] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR3: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
+; BAR3: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0x00000000)) }},
+{% endif %}
+{% else %}
+; BAR3: Disabled
 00000000,
 {% endif %}
 
 ; Base Address Register 4 (0x20-0x23) - Fifth BAR
 {% if bar_config.bars and bar_config.bars|length > 4 %}
-{{ "%08X" | format(bar_config.bars[4].base_address | default(0x00000000)) }},
+{% set bar = bar_config.bars[4] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR4: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
+; BAR4: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0x00000000)) }},
+{% endif %}
+{% else %}
+; BAR4: Disabled
 00000000,
 {% endif %}
 
 ; Base Address Register 5 (0x24-0x27) - Sixth BAR
 {% if bar_config.bars and bar_config.bars|length > 5 %}
-{{ "%08X" | format(bar_config.bars[5].base_address | default(0x00000000)) }},
+{% set bar = bar_config.bars[5] %}
+{% if bar.size > 0 and hasattr(bar, 'get_size_encoding') %}
+; BAR5: {{ bar.bar_type }} BAR, Size: {{ "0x%X" | format(bar.size) }} bytes
+{{ "%08X" | format(bar.get_size_encoding()) }},
 {% else %}
+; BAR5: Using base address (no size encoding available)
+{{ "%08X" | format(bar.base_address | default(0x00000000)) }},
+{% endif %}
+{% else %}
+; BAR5: Disabled
 00000000,
 {% endif %}
 

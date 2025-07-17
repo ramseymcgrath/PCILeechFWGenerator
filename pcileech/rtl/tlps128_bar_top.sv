@@ -218,6 +218,47 @@ module tlps128_bar_top
     logic [31:0]                dispatcher_error_count;
     region_select_t             current_region;
     logic [31:0]                current_address;
+    
+    // ========================================================================
+    // Active Device Interrupt Signals
+    // ========================================================================
+    
+    // Interrupt sources and control
+    localparam int NUM_INTERRUPT_SOURCES = 8;
+    logic [NUM_INTERRUPT_SOURCES-1:0] interrupt_sources;
+    logic [3:0]                 source_priority[NUM_INTERRUPT_SOURCES];
+    logic [NUM_INTERRUPT_SOURCES-1:0] interrupt_ack;
+    
+    // Configuration space interface signals for MSI
+    logic                       cfg_interrupt;
+    logic                       cfg_interrupt_assert;
+    logic                       cfg_interrupt_di;
+    logic                       cfg_interrupt_rdy;
+    logic                       cfg_interrupt_mmenable;
+    logic                       cfg_interrupt_msienable;
+    logic                       cfg_interrupt_msixenable;
+    logic                       cfg_interrupt_msixfm;
+    logic [7:0]                 cfg_interrupt_do;
+    logic [7:0]                 cfg_interrupt_di_in;
+    logic                       cfg_interrupt_stat;
+    logic [4:0]                 cfg_pciecap_interrupt_msgnum;
+    
+    // TLP interface for MSI-X from interrupt controller
+    logic                       msix_tlp_tx_valid;
+    logic [127:0]               msix_tlp_tx_data;
+    logic                       msix_tlp_tx_sop;
+    logic                       msix_tlp_tx_eop;
+    logic [3:0]                 msix_tlp_tx_empty;
+    logic                       msix_tlp_tx_ready;
+    
+    // Control and status for interrupt controller
+    logic                       interrupt_enable;
+    logic [31:0]                timer_reload_value;
+    logic                       timer_interrupt_pending;
+    logic [31:0]                interrupt_count;
+    logic [31:0]                interrupt_status;
+    logic [7:0]                 current_vector;
+    logic [3:0]                 interrupt_debug_state;
 
     // ========================================================================
     // TLP Frontend Module
@@ -521,32 +562,174 @@ module tlps128_bar_top
         custom_pio_resp_error = 1'b0;
     end
     
-    // MSI-X Engine (placeholder)
-    always_comb begin
-        msix_req_ready = 1'b1;
-        msix_resp_valid = msix_req_valid;
-        msix_resp_data = 32'h00000000;
-        msix_resp_error = 1'b0;
-    end
-
     // ========================================================================
-    // TLP Completion Generation
+    // Active Device Interrupt Controller
     // ========================================================================
     
-    // Simple completion generation (placeholder for full implementation)
+    // Initialize interrupt sources (example mapping)
     always_comb begin
-        completion_ready = tlp_tx_ready;
+        interrupt_sources = '0;
+        interrupt_sources[0] = buffer_overflow;      // Buffer overflow interrupt
+        interrupt_sources[1] = buffer_underflow;     // Buffer underflow interrupt
+        interrupt_sources[2] = parsed_tlp_error;     // TLP parse error interrupt
+        // Other sources can be added as needed
         
-        tlp_tx_valid = completion_valid;
-        tlp_tx_sop = completion_valid;
-        tlp_tx_eop = completion_valid;
-        tlp_tx_empty = 4'h0;
-        tlp_tx_err = 1'b0;
+        // Set interrupt priorities
+        for (int i = 0; i < NUM_INTERRUPT_SOURCES; i++) begin
+            source_priority[i] = 4'h5;  // Default medium priority
+        end
+        source_priority[0] = 4'h8;  // Higher priority for buffer overflow
+        source_priority[1] = 4'h8;  // Higher priority for buffer underflow
+        source_priority[2] = 4'h7;  // High priority for TLP errors
+    end
+    
+    // Control signals
+    assign interrupt_enable = pcileech_enable_int;
+    assign timer_reload_value = 32'h0001_0000;  // Default timer period
+    
+    // Configuration interface signals (simplified for now)
+    assign cfg_interrupt_rdy = 1'b1;
+    assign cfg_interrupt_mmenable = 3'b000;
+    assign cfg_interrupt_msienable = 1'b0;
+    assign cfg_interrupt_msixenable = 1'b1;  // Enable MSI-X by default
+    assign cfg_interrupt_msixfm = 1'b0;      // Function not masked
+    assign cfg_interrupt_di_in = 8'h00;
+    
+    active_device_interrupt #(
+        .TIMER_PERIOD(32'h0010_0000),           // ~1M cycles between timer interrupts
+        .TIMER_ENABLE(1'b1),                    // Enable periodic timer
+        .MSI_VECTOR_WIDTH(5),                   // 32 MSI vectors
+        .MSI_64BIT_ADDR(1'b0),                  // 32-bit MSI addresses
+        .NUM_MSIX(MSIX_CONFIG.num_vectors),     // From configuration
+        .MSIX_TABLE_BIR(MSIX_CONFIG.table_bir),
+        .MSIX_TABLE_OFFSET(MSIX_CONFIG.table_offset),
+        .MSIX_PBA_BIR(MSIX_CONFIG.pba_bir),
+        .MSIX_PBA_OFFSET(MSIX_CONFIG.pba_offset),
+        .DEVICE_ID(DEVICE_CONFIG.device_id),
+        .VENDOR_ID(DEVICE_CONFIG.vendor_id),
+        .COMPLETER_ID(16'h0000),                // Should be from config
+        .NUM_INTERRUPT_SOURCES(NUM_INTERRUPT_SOURCES),
+        .DEFAULT_PRIORITY(4'h5)
+    ) u_active_device_interrupt (
+        // Clock and Reset
+        .clk(clk),
+        .reset_n(reset_n),
         
-        // Pack completion header into TLP data
-        tlp_tx_data = {completion_header, 32'h00000000};
-        if (completion_has_data) begin
-            tlp_tx_data[31:0] = completion_data[31:0];
+        // Interrupt Source Interface
+        .interrupt_sources(interrupt_sources),
+        .source_priority(source_priority),
+        .interrupt_ack(interrupt_ack),
+        
+        // Configuration Space Interface (for MSI)
+        .cfg_interrupt(cfg_interrupt),
+        .cfg_interrupt_assert(cfg_interrupt_assert),
+        .cfg_interrupt_di(cfg_interrupt_di),
+        .cfg_interrupt_rdy(cfg_interrupt_rdy),
+        .cfg_interrupt_mmenable(cfg_interrupt_mmenable),
+        .cfg_interrupt_msienable(cfg_interrupt_msienable),
+        .cfg_interrupt_msixenable(cfg_interrupt_msixenable),
+        .cfg_interrupt_msixfm(cfg_interrupt_msixfm),
+        .cfg_interrupt_do(cfg_interrupt_do),
+        .cfg_interrupt_di_in(cfg_interrupt_di_in),
+        .cfg_interrupt_stat(cfg_interrupt_stat),
+        .cfg_pciecap_interrupt_msgnum(cfg_pciecap_interrupt_msgnum),
+        
+        // TLP Interface (for MSI-X)
+        .tlp_tx_valid(msix_tlp_tx_valid),
+        .tlp_tx_data(msix_tlp_tx_data),
+        .tlp_tx_sop(msix_tlp_tx_sop),
+        .tlp_tx_eop(msix_tlp_tx_eop),
+        .tlp_tx_empty(msix_tlp_tx_empty),
+        .tlp_tx_ready(msix_tlp_tx_ready),
+        
+        // MSI-X Table Interface
+        .msix_table_addr(msix_req_addr),
+        .msix_table_wr_en(msix_req_write && msix_req_valid),
+        .msix_table_wr_data(msix_req_data),
+        .msix_table_wr_be(msix_req_be),
+        .msix_table_rd_en(!msix_req_write && msix_req_valid),
+        .msix_table_rd_data(msix_resp_data),
+        
+        // Control and Status
+        .interrupt_enable(interrupt_enable),
+        .timer_reload_value(timer_reload_value),
+        .timer_interrupt_pending(timer_interrupt_pending),
+        .interrupt_count(interrupt_count),
+        .interrupt_status(interrupt_status),
+        .current_vector(current_vector),
+        .debug_state(interrupt_debug_state)
+    );
+    
+    // MSI-X table access response
+    always_ff @(posedge clk) begin
+        if (!reset_n) begin
+            msix_resp_valid <= 1'b0;
+            msix_resp_error <= 1'b0;
+        end else begin
+            msix_resp_valid <= msix_req_valid;
+            msix_resp_error <= 1'b0;
+        end
+    end
+    
+    assign msix_req_ready = 1'b1;  // Always ready for MSI-X table access
+    
+    // Map interrupt controller outputs to top-level MSI-X interface
+    assign msix_interrupt = msix_tlp_tx_valid && msix_tlp_tx_sop;
+    assign msix_vector = current_vector;
+
+    // ========================================================================
+    // TLP Completion and MSI-X Arbitration
+    // ========================================================================
+    
+    // Simple arbitration between completion TLPs and MSI-X TLPs
+    // Priority given to completions to avoid blocking memory transactions
+    logic use_msix_tlp;
+    
+    always_comb begin
+        if (completion_valid && !msix_tlp_tx_valid) begin
+            // Only completion is valid
+            use_msix_tlp = 1'b0;
+            completion_ready = tlp_tx_ready;
+            msix_tlp_tx_ready = 1'b0;
+        end else if (!completion_valid && msix_tlp_tx_valid) begin
+            // Only MSI-X is valid
+            use_msix_tlp = 1'b1;
+            completion_ready = 1'b0;
+            msix_tlp_tx_ready = tlp_tx_ready;
+        end else if (completion_valid && msix_tlp_tx_valid) begin
+            // Both valid - prioritize completion
+            use_msix_tlp = 1'b0;
+            completion_ready = tlp_tx_ready;
+            msix_tlp_tx_ready = 1'b0;
+        end else begin
+            // Neither valid
+            use_msix_tlp = 1'b0;
+            completion_ready = 1'b0;
+            msix_tlp_tx_ready = 1'b0;
+        end
+    end
+    
+    // Multiplex TLP output
+    always_comb begin
+        if (use_msix_tlp) begin
+            tlp_tx_valid = msix_tlp_tx_valid;
+            tlp_tx_data = msix_tlp_tx_data;
+            tlp_tx_sop = msix_tlp_tx_sop;
+            tlp_tx_eop = msix_tlp_tx_eop;
+            tlp_tx_empty = msix_tlp_tx_empty;
+            tlp_tx_err = 1'b0;
+        end else begin
+            tlp_tx_valid = completion_valid;
+            tlp_tx_sop = completion_valid;
+            tlp_tx_eop = completion_valid;
+            tlp_tx_empty = 4'h0;
+            tlp_tx_err = 1'b0;
+            
+            // Pack completion header into TLP data
+            tlp_tx_data = {completion_header, 32'h00000000};
+            if (completion_has_data) begin
+                tlp_tx_data[31:0] = completion_data[31:0];
+            end
         end
     end
 
@@ -594,10 +777,6 @@ module tlps128_bar_top
     assign dma_write_addr = 64'h0;
     assign dma_write_len = 32'h0;
     assign dma_write_data = 128'h0;
-    
-    // MSI-X Interface (placeholder)
-    assign msix_interrupt = 1'b0;
-    assign msix_vector = 11'h000;
     
     // Status and Debug
     assign error_status = error_status_int;

@@ -2,168 +2,70 @@
 """
 Board Configuration Module
 
-Centralized board-to-FPGA mapping and configuration to eliminate
-duplication across TCL generation methods.
+Centralized board-to-FPGA mapping and configuration with dynamic discovery
+from the pcileech-fpga repository.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from ..file_management.board_discovery import (BoardDiscovery,
+                                               discover_all_boards)
 
 logger = logging.getLogger(__name__)
 
-# Centralized board-to-FPGA part mapping
-BOARD_FPGA_MAPPING = {
-    # Original boards
-    "35t": "xc7a35tcsg324-2",
-    "75t": "xc7a75tfgg484-2",
-    "100t": "xczu3eg-sbva484-1-e",
-    # CaptainDMA boards
-    "pcileech_75t484_x1": "xc7a75tfgg484-2",
-    "pcileech_35t484_x1": "xc7a35tfgg484-2",
-    "pcileech_35t325_x4": "xc7a35tcsg324-2",
-    "pcileech_35t325_x1": "xc7a35tcsg324-2",
-    "pcileech_100t484_x1": "xczu3eg-sbva484-1-e",
-    # Other boards
-    "pcileech_enigma_x1": "xc7a75tfgg484-2",
-    "pcileech_squirrel": "xc7a35tcsg324-2",
-    "pcileech_pciescreamer_xc7a35": "xc7a35tcsg324-2",
-}
+# Cache for discovered boards
+_board_cache: Optional[Dict[str, Dict]] = None
+_cache_repo_root: Optional[Path] = None
 
-# FPGA family detection patterns
+
+def _ensure_board_cache(repo_root: Optional[Path] = None) -> Dict[str, Dict]:
+    """Ensure board cache is populated from repository."""
+    global _board_cache, _cache_repo_root
+
+    # Invalidate cache if repo_root changed
+    if repo_root != _cache_repo_root:
+        _board_cache = None
+        _cache_repo_root = repo_root
+
+    if _board_cache is None:
+        logger.info("Discovering boards from pcileech-fpga repository...")
+        _board_cache = discover_all_boards(repo_root)
+        logger.info(f"Discovered {len(_board_cache)} boards")
+
+    return _board_cache
+
+
+# FPGA family detection patterns (kept for compatibility)
 FPGA_FAMILY_PATTERNS = {
     "7series": ["xc7a", "xc7k", "xc7v", "xc7z"],
     "ultrascale": ["xcku", "xcvu", "xczu"],
     "ultrascale_plus": ["xcku", "xcvu", "xczu"],  # UltraScale+ uses same prefixes
 }
 
-# Board display information for user interface
-BOARD_DISPLAY_INFO = {
-    "pcileech_75t484_x1": {
-        "display_name": "CaptainDMA 75T",
-        "description": "[RECOMMENDED - CaptainDMA 75T with USB-3]",
-        "is_recommended": True,
-    },
-    "35t": {
-        "display_name": "35T Legacy Board",
-        "description": "",
-        "is_recommended": False,
-    },
-    "75t": {
-        "display_name": "75T Legacy Board",
-        "description": "",
-        "is_recommended": False,
-    },
-    "100t": {
-        "display_name": "100T Legacy Board",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_35t484_x1": {
-        "display_name": "CaptainDMA 35T x1",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_35t325_x4": {
-        "display_name": "CaptainDMA 35T x4",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_35t325_x1": {
-        "display_name": "CaptainDMA 35T x1 (325)",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_100t484_x1": {
-        "display_name": "CaptainDMA 100T",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_enigma_x1": {
-        "display_name": "CaptainDMA Enigma x1",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_squirrel": {
-        "display_name": "CaptainDMA Squirrel",
-        "description": "",
-        "is_recommended": False,
-    },
-    "pcileech_pciescreamer_xc7a35": {
-        "display_name": "PCIeScreamer XC7A35",
-        "description": "",
-        "is_recommended": False,
-    },
-}
 
-# PCILeech-specific board configurations
-PCILEECH_BOARD_CONFIG = {
-    "pcileech_35t325_x4": {
-        "fpga_part": "xc7a35tcsg324-2",
-        "fpga_family": "7series",
-        "pcie_ip_type": "axi_pcie",
-        "max_lanes": 4,
-        "supports_msi": True,
-        "supports_msix": False,
-        "src_files": [
-            "pcileech_top.sv",
-            "bar_controller.sv",
-            "cfg_shadow.sv",
-            "msix_table.sv",
-        ],
-        "ip_files": ["pcie_axi_bridge.xci"],
-        "coefficient_files": [],
-    },
-    "pcileech_75t484_x1": {
-        "fpga_part": "xc7a75tfgg484-2",
-        "fpga_family": "7series",
-        "pcie_ip_type": "pcie_7x",
-        "max_lanes": 1,
-        "supports_msi": True,
-        "supports_msix": True,
-        "src_files": [
-            "pcileech_top.sv",
-            "bar_controller.sv",
-            "cfg_shadow.sv",
-            "msix_table.sv",
-            "msix_capability_registers.sv",
-            "msix_implementation.sv",
-        ],
-        "ip_files": ["pcie_7x_bridge.xci"],
-        "coefficient_files": [],
-    },
-    "pcileech_100t484_x1": {
-        "fpga_part": "xczu3eg-sbva484-1-e",
-        "fpga_family": "ultrascale_plus",
-        "pcie_ip_type": "pcie_ultrascale",
-        "max_lanes": 1,
-        "supports_msi": True,
-        "supports_msix": True,
-        "src_files": [
-            "pcileech_top.sv",
-            "bar_controller.sv",
-            "cfg_shadow.sv",
-            "msix_table.sv",
-            "msix_capability_registers.sv",
-            "msix_implementation.sv",
-            "advanced_controller.sv",
-        ],
-        "ip_files": ["pcie_ultrascale_bridge.xci"],
-        "coefficient_files": [],
-    },
-}
-
-
-def get_fpga_part(board: str) -> str:
+def get_fpga_part(board: str, repo_root: Optional[Path] = None) -> str:
     """
     Get FPGA part number for a given board.
 
     Args:
         board: Board name
+        repo_root: Optional repository root path
 
     Returns:
         FPGA part number string
+
+    Raises:
+        KeyError: If board is not found
     """
-    fpga_part = BOARD_FPGA_MAPPING[board]
+    boards = _ensure_board_cache(repo_root)
+    if board not in boards:
+        raise KeyError(
+            f"Board '{board}' not found. Available boards: {', '.join(boards.keys())}"
+        )
+
+    fpga_part = boards[board]["fpga_part"]
     logger.debug(f"Board {board} mapped to FPGA part {fpga_part}")
     return fpga_part
 
@@ -207,12 +109,15 @@ def get_pcie_ip_type(fpga_part: str) -> str:
         return "pcie_7x"
 
 
-def get_pcileech_board_config(board: str) -> Dict[str, Any]:
+def get_pcileech_board_config(
+    board: str, repo_root: Optional[Path] = None
+) -> Dict[str, Any]:
     """
     Get PCILeech-specific board configuration.
 
     Args:
         board: Board name
+        repo_root: Optional repository root path
 
     Returns:
         PCILeech board configuration dictionary
@@ -220,91 +125,135 @@ def get_pcileech_board_config(board: str) -> Dict[str, Any]:
     Raises:
         KeyError: If board is not found in PCILeech configurations
     """
-    if board not in PCILEECH_BOARD_CONFIG:
+    boards = _ensure_board_cache(repo_root)
+    if board not in boards:
         raise KeyError(f"PCILeech board configuration not found for: {board}")
 
-    return PCILEECH_BOARD_CONFIG[board]
+    return boards[board]
 
 
-def get_board_info(board: str) -> Dict[str, str]:
+def get_board_info(board: str, repo_root: Optional[Path] = None) -> Dict[str, str]:
     """
     Get comprehensive board information.
 
     Args:
         board: Board name
+        repo_root: Optional repository root path
 
     Returns:
         Dictionary with board configuration
     """
-    fpga_part = get_fpga_part(board)
-    fpga_family = get_fpga_family(fpga_part)
-    pcie_ip_type = get_pcie_ip_type(fpga_part)
+    boards = _ensure_board_cache(repo_root)
+    if board not in boards:
+        raise KeyError(f"Board '{board}' not found")
 
+    config = boards[board]
     return {
         "name": board,
-        "fpga_part": fpga_part,
-        "fpga_family": fpga_family,
-        "pcie_ip_type": pcie_ip_type,
+        "fpga_part": config["fpga_part"],
+        "fpga_family": config["fpga_family"],
+        "pcie_ip_type": config["pcie_ip_type"],
     }
 
 
-def validate_board(board: str) -> bool:
+def validate_board(board: str, repo_root: Optional[Path] = None) -> bool:
     """
     Validate if board is supported.
 
     Args:
         board: Board name
+        repo_root: Optional repository root path
 
     Returns:
         True if board is supported
     """
-    return board in BOARD_FPGA_MAPPING
+    boards = _ensure_board_cache(repo_root)
+    return board in boards
 
 
-def list_supported_boards() -> list[str]:
+def list_supported_boards(repo_root: Optional[Path] = None) -> List[str]:
     """
     Get list of all supported boards.
+
+    Args:
+        repo_root: Optional repository root path
 
     Returns:
         List of supported board names
     """
-    return list(BOARD_FPGA_MAPPING.keys())
+    boards = _ensure_board_cache(repo_root)
+    return list(boards.keys())
 
 
-def get_board_display_info(board: str) -> Dict[str, str]:
+def get_board_display_info(
+    board: str, repo_root: Optional[Path] = None
+) -> Dict[str, Any]:
     """
     Get display information for a board.
 
     Args:
         board: Board name
+        repo_root: Optional repository root path
 
     Returns:
         Dictionary with display information (display_name, description, is_recommended)
     """
-    return BOARD_DISPLAY_INFO.get(
-        board,
-        {
-            "display_name": board,
-            "description": "",
-            "is_recommended": False,
-        },
-    )
+    boards = _ensure_board_cache(repo_root)
+    display_info = BoardDiscovery.get_board_display_info(boards)
+
+    for board_name, info in display_info:
+        if board_name == board:
+            return info
+
+    # Fallback for unknown boards
+    return {
+        "display_name": board,
+        "description": "",
+        "is_recommended": False,
+    }
 
 
-def list_boards_with_recommendations() -> list[tuple[str, Dict[str, str]]]:
+def list_boards_with_recommendations(
+    repo_root: Optional[Path] = None,
+) -> List[tuple[str, Dict[str, Any]]]:
     """
     Get list of boards with their display information, ordered by recommendation.
+
+    Args:
+        repo_root: Optional repository root path
 
     Returns:
         List of tuples (board_name, display_info) with recommended boards first
     """
-    boards = list_supported_boards()
+    boards = _ensure_board_cache(repo_root)
+    return BoardDiscovery.get_board_display_info(boards)
 
-    # Sort so recommended boards come first
-    def sort_key(board):
-        display_info = get_board_display_info(board)
-        return (not display_info.get("is_recommended", False), board)
 
-    sorted_boards = sorted(boards, key=sort_key)
+# Compatibility layer for legacy code
+def get_board_fpga_mapping(repo_root: Optional[Path] = None) -> Dict[str, str]:
+    """
+    Get mapping of board names to FPGA parts.
 
-    return [(board, get_board_display_info(board)) for board in sorted_boards]
+    Args:
+        repo_root: Optional repository root path
+
+    Returns:
+        Dictionary mapping board names to FPGA part numbers
+    """
+    boards = _ensure_board_cache(repo_root)
+    return {name: config["fpga_part"] for name, config in boards.items()}
+
+
+# Export discovered boards to static configuration (for debugging/caching)
+def export_discovered_boards(
+    output_file: Path, repo_root: Optional[Path] = None
+) -> None:
+    """
+    Export discovered board configurations to a file.
+
+    Args:
+        output_file: Path to output file
+        repo_root: Optional repository root path
+    """
+    boards = _ensure_board_cache(repo_root)
+    BoardDiscovery.export_board_config(boards, output_file)

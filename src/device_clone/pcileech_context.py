@@ -23,21 +23,30 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..error_utils import extract_root_cause
 from ..exceptions import ContextError
-from ..string_utils import (format_bar_summary_table, format_bar_table,
-                            format_raw_bar_table, log_error_safe,
-                            log_info_safe, log_warning_safe)
+from ..string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .behavior_profiler import BehaviorProfile
 from .config_space_manager import BarInfo
 from .fallback_manager import FallbackManager
+from .overlay_mapper import OverlayMapper
 
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                  VFIO_GROUP_GET_DEVICE_FD,
-                                  VFIO_REGION_INFO_FLAG_MMAP,
-                                  VFIO_REGION_INFO_FLAG_READ,
-                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
+from ..cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 
 
 class ValidationLevel(Enum):
@@ -92,6 +101,8 @@ class BarConfiguration:
     prefetchable: bool
     is_memory: bool
     is_io: bool
+    is_64bit: bool = False
+    size_encoding: Optional[int] = None
 
     def __post_init__(self):
         """Validate BAR configuration."""
@@ -99,6 +110,21 @@ class BarConfiguration:
             raise ContextError(f"Invalid BAR index: {self.index}")
         if self.size < 0:
             raise ContextError(f"Invalid BAR size: {self.size}")
+
+        # Set is_64bit based on bar_type
+        if self.is_memory and self.bar_type == 1:
+            self.is_64bit = True
+
+    def get_size_encoding(self) -> int:
+        """Get the size encoding for this BAR, computing it if necessary."""
+        if self.size_encoding is None:
+            from src.device_clone.bar_size_converter import BarSizeConverter
+
+            bar_type_str = "io" if self.is_io else "memory"
+            self.size_encoding = BarSizeConverter.size_to_encoding(
+                self.size, bar_type_str, self.is_64bit, self.prefetchable
+            )
+        return self.size_encoding
 
 
 @dataclass
@@ -233,6 +259,9 @@ class PCILeechContextBuilder:
             )
             pcileech_config = self._build_pcileech_config(device_identifiers)
 
+            # Generate overlay mapping for configuration space shadow
+            overlay_config = self._build_overlay_config(config_space_data)
+
             # Generate unique device signature
             device_signature = self._generate_unique_device_signature(
                 device_identifiers, behavior_profile, config_space_data
@@ -245,12 +274,18 @@ class PCILeechContextBuilder:
                 "msix_available": msix_data is not None,
             }
 
+            # Build active device configuration
+            active_device_config = self._build_active_device_config(
+                device_identifiers, interrupt_strategy, interrupt_vectors
+            )
+
             # Assemble complete context
             context = {
                 "device_config": device_config,
                 "config_space": config_space,
                 "msix_config": msix_config,
                 "interrupt_config": interrupt_config,
+                "active_device_config": active_device_config,
                 "bar_config": bar_config,
                 "timing_config": timing_config,
                 "pcileech_config": pcileech_config,
@@ -258,6 +293,11 @@ class PCILeechContextBuilder:
                 "generation_metadata": self._build_generation_metadata(
                     device_identifiers
                 ),
+                # Add extended configuration pointers at top level for easy template access
+                "EXT_CFG_CAP_PTR": device_config.get("ext_cfg_cap_ptr", 0x100),
+                "EXT_CFG_XP_CAP_PTR": device_config.get("ext_cfg_xp_cap_ptr", 0x100),
+                # Add overlay mapping for configuration space shadow
+                **overlay_config,  # This adds OVERLAY_MAP and OVERLAY_ENTRIES
             }
 
             # Final validation
@@ -422,6 +462,19 @@ class PCILeechContextBuilder:
                 self.config, "enable_interrupt_coalescing", False
             ),
         }
+
+        # Add extended configuration space pointers if available
+        if hasattr(self.config, "device_config") and self.config.device_config:
+            device_capabilities = getattr(
+                self.config.device_config, "capabilities", None
+            )
+            if device_capabilities:
+                device_config["ext_cfg_cap_ptr"] = getattr(
+                    device_capabilities, "ext_cfg_cap_ptr", 0x100
+                )
+                device_config["ext_cfg_xp_cap_ptr"] = getattr(
+                    device_capabilities, "ext_cfg_xp_cap_ptr", 0x100
+                )
 
         # Add behavior profile data if available
         if behavior_profile:
@@ -916,7 +969,7 @@ class PCILeechContextBuilder:
                         index=index,
                         prefix="BARA",
                     )
-                    return BarConfiguration(
+                    bar_config = BarConfiguration(
                         index=index,
                         base_address=base_address,
                         size=size,
@@ -924,7 +977,47 @@ class PCILeechContextBuilder:
                         prefetchable=prefetchable,
                         is_memory=is_memory,
                         is_io=is_io,
+                        is_64bit=(bar_type == 1),
                     )
+
+                    # Compute and validate size encoding
+                    if size > 0:
+                        from src.device_clone.bar_size_converter import BarSizeConverter
+
+                        try:
+                            bar_type_str = "io" if is_io else "memory"
+                            if BarSizeConverter.validate_bar_size(size, bar_type_str):
+                                bar_config.size_encoding = (
+                                    bar_config.get_size_encoding()
+                                )
+                                log_info_safe(
+                                    self.logger,
+                                    "BAR {index} size encoding: 0x{encoding:08X} for size {size} ({size_str})",
+                                    index=index,
+                                    encoding=bar_config.size_encoding,
+                                    size=size,
+                                    size_str=BarSizeConverter.format_size(size),
+                                    prefix="BARA",
+                                )
+                            else:
+                                log_warning_safe(
+                                    self.logger,
+                                    "BAR {index} has invalid size {size} for {type} BAR",
+                                    index=index,
+                                    size=size,
+                                    type=bar_type_str,
+                                    prefix="BARA",
+                                )
+                        except Exception as e:
+                            log_warning_safe(
+                                self.logger,
+                                "Failed to compute size encoding for BAR {index}: {error}",
+                                index=index,
+                                error=str(e),
+                                prefix="BARA",
+                            )
+
+                    return bar_config
                 else:
                     if is_memory and size == 0:
                         log_info_safe(
@@ -1751,12 +1844,57 @@ class PCILeechContextBuilder:
             prefix="CONF",
         )
 
+        # Get payload size configuration from device config if available
+        max_payload_size = 256  # Default
+        cfg_force_mps = 1  # Default encoding for 256 bytes
+
+        # Try to get from device configuration
+        if hasattr(self.config, "device_config") and hasattr(
+            self.config.device_config, "capabilities"
+        ):
+            try:
+                from .device_config import DeviceCapabilities
+
+                capabilities = self.config.device_config.capabilities
+                if isinstance(capabilities, DeviceCapabilities):
+                    max_payload_size = capabilities.max_payload_size
+                    cfg_force_mps = capabilities.get_cfg_force_mps()
+
+                    # Check for tiny PCIe algo issues
+                    has_issues, warning = capabilities.check_tiny_pcie_issues()
+                    if has_issues:
+                        log_warning_safe(
+                            self.logger,
+                            "Payload size warning for device {bdf}: {warning}",
+                            bdf=self.device_bdf,
+                            warning=warning,
+                            prefix="CONF",
+                        )
+            except Exception as e:
+                log_warning_safe(
+                    self.logger,
+                    "Failed to get payload size config for device {bdf}: {error}",
+                    bdf=self.device_bdf,
+                    error=str(e),
+                    prefix="CONF",
+                )
+
+        log_info_safe(
+            self.logger,
+            "Using max_payload_size={mps} bytes, cfg_force_mps={cfg_mps} for device {bdf}",
+            mps=max_payload_size,
+            cfg_mps=cfg_force_mps,
+            bdf=self.device_bdf,
+            prefix="CONF",
+        )
+
         return {
             "command_timeout": getattr(self.config, "pcileech_command_timeout", 5000),
             "buffer_size": getattr(self.config, "pcileech_buffer_size", 4096),
             "enable_dma": getattr(self.config, "enable_dma_operations", False),
             "enable_scatter_gather": True,
-            "max_payload_size": 256,
+            "max_payload_size": max_payload_size,
+            "cfg_force_mps": cfg_force_mps,
             "max_read_request_size": 512,
             "device_ctrl_base": f"32'h{base_offset:08X}",
             "device_ctrl_size": "32'h00000100",
@@ -1776,6 +1914,189 @@ class PCILeechContextBuilder:
                 "PCILEECH_CMD_STATUS",
             ],
         }
+
+    def _build_active_device_config(
+        self,
+        device_identifiers: DeviceIdentifiers,
+        interrupt_strategy: str,
+        interrupt_vectors: int,
+    ) -> Dict[str, Any]:
+        """
+        Build active device interrupt configuration.
+
+        Args:
+            device_identifiers: Device identifiers
+            interrupt_strategy: Interrupt strategy ("msix", "msi", or "intx")
+            interrupt_vectors: Number of interrupt vectors
+
+        Returns:
+            Active device configuration for templates
+        """
+        log_info_safe(
+            self.logger,
+            "Building active device configuration for {bdf} with {strategy} interrupts",
+            bdf=self.device_bdf,
+            strategy=interrupt_strategy,
+            prefix="ACTDEV",
+        )
+
+        # Get active device config from device capabilities if available
+        active_config = None
+        if hasattr(self.config, "device_config") and hasattr(
+            self.config.device_config, "capabilities"
+        ):
+            try:
+                from .device_config import DeviceCapabilities
+
+                capabilities = self.config.device_config.capabilities
+                if isinstance(capabilities, DeviceCapabilities):
+                    active_config = capabilities.active_device
+                    log_info_safe(
+                        self.logger,
+                        "Using active device config from device capabilities",
+                        prefix="ACTDEV",
+                    )
+            except Exception as e:
+                log_warning_safe(
+                    self.logger,
+                    "Failed to get active device config: {error}",
+                    error=str(e),
+                    prefix="ACTDEV",
+                )
+
+        # Build configuration with defaults if not available
+        if active_config:
+            # Use configuration from device config
+            config = {
+                "enabled": active_config.enabled,
+                "timer_period": active_config.timer_period,
+                "timer_enable": active_config.timer_enable,
+                "interrupt_mode": active_config.interrupt_mode,
+                "interrupt_vector": active_config.interrupt_vector,
+                "priority": active_config.priority,
+                "msi_vector_width": active_config.msi_vector_width,
+                "msi_64bit_addr": 1 if active_config.msi_64bit_addr else 0,
+                "num_sources": active_config.num_interrupt_sources,
+                "default_priority": active_config.default_source_priority,
+            }
+        else:
+            # Use defaults
+            config = {
+                "enabled": False,
+                "timer_period": 100000,
+                "timer_enable": 1,
+                "interrupt_mode": interrupt_strategy,
+                "interrupt_vector": 0,
+                "priority": 15,
+                "msi_vector_width": 5,
+                "msi_64bit_addr": 0,
+                "num_sources": 8,
+                "default_priority": 8,
+            }
+
+        # Add template-specific values
+        config.update(
+            {
+                # MSI-X specific parameters
+                "num_msix": interrupt_vectors if interrupt_strategy == "msix" else 0,
+                "msix_table_bir": 0,  # Will be updated from msix_data if available
+                "msix_table_offset": 0,
+                "msix_pba_bir": 0,
+                "msix_pba_offset": 0,
+                # Device identification for interrupt generation
+                "device_id": f"16'h{int(device_identifiers.device_id, 16):04X}",
+                "vendor_id": f"16'h{int(device_identifiers.vendor_id, 16):04X}",
+                "completer_id": f"16'h0000",  # Bus/Dev/Func - will be set by PCIe core
+            }
+        )
+
+        log_info_safe(
+            self.logger,
+            "Active device config: enabled={enabled}, mode={mode}, timer={timer}",
+            enabled=config["enabled"],
+            mode=config["interrupt_mode"],
+            timer=config["timer_period"],
+            prefix="ACTDEV",
+        )
+
+        return config
+
+    def _build_overlay_config(
+        self, config_space_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build overlay RAM configuration for configuration space shadow.
+
+        This method automatically detects which registers need overlay entries
+        based on PCIe specifications and generates the OVERLAY_MAP.
+
+        Args:
+            config_space_data: Configuration space analysis data
+
+        Returns:
+            Dictionary with OVERLAY_MAP and OVERLAY_ENTRIES
+        """
+        log_info_safe(
+            self.logger,
+            "Building overlay RAM configuration for device {bdf}",
+            bdf=self.device_bdf,
+            prefix="OVERLAY",
+        )
+
+        try:
+            # Initialize overlay mapper
+            overlay_mapper = OverlayMapper()
+
+            # Get configuration space dword map and capabilities
+            dword_map = config_space_data.get("dword_map", {})
+            capabilities = config_space_data.get("capabilities", {})
+
+            if not dword_map:
+                log_warning_safe(
+                    self.logger,
+                    "No configuration space dword map available for overlay generation",
+                    prefix="OVERLAY",
+                )
+                # Return empty overlay map
+                return {
+                    "OVERLAY_MAP": [],
+                    "OVERLAY_ENTRIES": 0,
+                }
+
+            # Generate overlay mapping
+            overlay_config = overlay_mapper.generate_overlay_map(
+                dword_map, capabilities
+            )
+
+            log_info_safe(
+                self.logger,
+                "Generated overlay mapping with {entries} entries for device {bdf}",
+                entries=overlay_config["OVERLAY_ENTRIES"],
+                bdf=self.device_bdf,
+                prefix="OVERLAY",
+            )
+
+            # Log details of overlay entries for debugging
+            if self.logger.isEnabledFor(logging.DEBUG):
+                for reg_num, mask in overlay_config["OVERLAY_MAP"]:
+                    self.logger.debug(
+                        f"[OVERLAY] Overlay entry: Register 0x{reg_num * 4:03X} with mask 0x{mask:08X}"
+                    )
+
+            return overlay_config
+
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                "Failed to generate overlay configuration: {error}",
+                error=str(e),
+                prefix="OVERLAY",
+            )
+            # Return empty overlay map on error
+            return {
+                "OVERLAY_MAP": [],
+                "OVERLAY_ENTRIES": 0,
+            }
 
     def _generate_unique_device_signature(
         self,

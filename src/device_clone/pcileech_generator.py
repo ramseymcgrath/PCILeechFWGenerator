@@ -23,17 +23,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.error_utils import extract_root_cause
 from src.exceptions import PCILeechGenerationError
+
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.templating import (AdvancedSVGenerator, BuildContext,
-                            TemplateRenderer, TemplateRenderError)
+from src.templating import (
+    AdvancedSVGenerator,
+    BuildContext,
+    TemplateRenderer,
+    TemplateRenderError,
+)
 
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
 from .config_space_manager import ConfigSpaceManager
 from .msix_capability import parse_msix_capability, validate_msix_configuration
 from .pcileech_context import PCILeechContextBuilder
+from .writemask_generator import WritemaskGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -787,6 +794,8 @@ class PCILeechGenerator:
             "build_integration": self._generate_build_integration(template_context),
             "constraint_files": self._generate_constraint_files(template_context),
             "tcl_scripts": self._generate_tcl_scripts(template_context),
+            "writemask_coe": self._generate_writemask_coe(template_context),
+            "config_space_hex": self._generate_config_space_hex(template_context),
         }
 
         return components
@@ -849,6 +858,121 @@ class PCILeechGenerator:
             "build_script": "# TCL build script placeholder",
             "synthesis_script": "# TCL synthesis script placeholder",
         }
+
+    def _generate_writemask_coe(
+        self, template_context: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Generate writemask COE file for configuration space.
+
+        Args:
+            template_context: Template context data
+
+        Returns:
+            Writemask COE content or None if generation fails
+        """
+        try:
+            log_info_safe(self.logger, "Generating writemask COE file")
+
+            # Initialize writemask generator
+            writemask_gen = WritemaskGenerator()
+
+            # Get configuration space COE path from src directory (where COE files are saved)
+            cfg_space_coe = (
+                self.config.output_dir / "systemverilog" / "pcileech_cfgspace.coe"
+            )
+            writemask_coe = (
+                self.config.output_dir
+                / "systemverilog"
+                / "pcileech_cfgspace_writemask.coe"
+            )
+
+            # Extract device configuration for MSI/MSI-X settings
+            device_config = {
+                "msi_config": template_context.get("msi_config", {}),
+                "msix_config": template_context.get("msix_config", {}),
+            }
+
+            # Generate writemask
+            writemask_gen.generate_writemask(
+                cfg_space_coe, writemask_coe, device_config
+            )
+
+            # Read generated writemask content
+            if writemask_coe.exists():
+                return writemask_coe.read_text()
+            else:
+                log_warning_safe(
+                    self.logger, "Writemask COE file was not generated", prefix="WRMASK"
+                )
+                return None
+
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Failed to generate writemask COE: {error}",
+                error=str(e),
+                prefix="WRMASK",
+            )
+            return None
+
+    def _generate_config_space_hex(self, template_context: Dict[str, Any]) -> str:
+        """
+        Generate configuration space hex file for FPGA initialization.
+
+        Args:
+            template_context: Template context containing config space data
+
+        Returns:
+            Path to generated hex file as string
+
+        Raises:
+            PCILeechGenerationError: If hex generation fails
+        """
+        log_info_safe(
+            self.logger, "Generating configuration space hex file", prefix="HEX"
+        )
+
+        try:
+            # Import hex formatter
+            from .hex_formatter import ConfigSpaceHexFormatter
+
+            # Get raw config space data from context
+            config_space_data = template_context.get("config_space_data", {})
+            raw_config_space = config_space_data.get("raw_config_space", b"")
+
+            if not raw_config_space:
+                raise ValueError(
+                    "No configuration space data available in template context"
+                )
+
+            # Create hex formatter
+            formatter = ConfigSpaceHexFormatter()
+
+            # Generate hex content
+            hex_content = formatter.format_config_space_to_hex(
+                raw_config_space, include_comments=True
+            )
+
+            log_info_safe(
+                self.logger,
+                "Generated configuration space hex file with {size} bytes",
+                size=len(raw_config_space),
+                prefix="HEX",
+            )
+
+            return hex_content
+
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                "Configuration space hex generation failed: {error}",
+                error=str(e),
+                prefix="HEX",
+            )
+            raise PCILeechGenerationError(
+                f"Config space hex generation failed: {e}"
+            ) from e
 
     def _validate_generated_firmware(
         self, systemverilog_modules: Dict[str, str], firmware_components: Dict[str, Any]
@@ -940,12 +1064,55 @@ class PCILeechGenerator:
             for module_name, module_code in generation_result[
                 "systemverilog_modules"
             ].items():
-                module_file = sv_dir / f"{module_name}.sv"
-                module_file.write_text(module_code)
+                # Handle COE files specially - they go in the src directory for PCILeech
+                if module_name.endswith(".coe"):
+                    # COE files go in the src directory alongside SystemVerilog files
+                    coe_file = sv_dir / module_name
+                    coe_file.write_text(module_code)
+                else:
+                    # Avoid double .sv extension
+                    if module_name.endswith(".sv"):
+                        module_file = sv_dir / module_name
+                    else:
+                        module_file = sv_dir / f"{module_name}.sv"
+                    module_file.write_text(module_code)
 
             # Save firmware components
             components_dir = output_dir / "components"
             components_dir.mkdir(exist_ok=True)
+
+            # Save writemask COE if generated
+            firmware_components = generation_result.get("firmware_components", {})
+            if (
+                "writemask_coe" in firmware_components
+                and firmware_components["writemask_coe"]
+            ):
+                # Writemask COE goes in the src directory alongside other COE files
+                writemask_file = sv_dir / "pcileech_cfgspace_writemask.coe"
+                writemask_file.write_text(firmware_components["writemask_coe"])
+
+                log_info_safe(
+                    self.logger,
+                    "Saved writemask COE to {path}",
+                    path=str(writemask_file),
+                    prefix="WRMASK",
+                )
+
+            # Save config space hex file if generated
+            if (
+                "config_space_hex" in firmware_components
+                and firmware_components["config_space_hex"]
+            ):
+                # Config space hex file goes in the src directory for $readmemh
+                hex_file = sv_dir / "config_space_init.hex"
+                hex_file.write_text(firmware_components["config_space_hex"])
+
+                log_info_safe(
+                    self.logger,
+                    "Saved configuration space hex file to {path}",
+                    path=str(hex_file),
+                    prefix="HEX",
+                )
 
             # Save metadata
             import json

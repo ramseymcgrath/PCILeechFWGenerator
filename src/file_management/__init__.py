@@ -10,8 +10,10 @@ Modules:
 - repo_manager: Manages repository cloning, updates, and queries
 - donor_dump_manager: Manages donor dump kernel module and file operations
 - option_rom_manager: Manages Option-ROM file extraction and preparation
+- board_discovery: Dynamically discovers boards from pcileech-fpga repository
 """
 
+from .board_discovery import *
 from .donor_dump_manager import *
 from .file_manager import *
 from .option_rom_manager import *

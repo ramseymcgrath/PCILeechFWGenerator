@@ -18,7 +18,9 @@
 
 module pcileech_tlps128_cfgspace_shadow #(
     parameter CONFIG_SPACE_SIZE = {{ CONFIG_SPACE_SIZE }},  // {{ CONFIG_SPACE_SIZE }} byte configuration space
-    parameter OVERLAY_ENTRIES = {{ OVERLAY_ENTRIES }}       // Number of overlay RAM entries
+    parameter OVERLAY_ENTRIES = {{ OVERLAY_ENTRIES }},      // Number of overlay RAM entries
+    parameter EXT_CFG_CAP_PTR = {{ EXT_CFG_CAP_PTR | default(256) }},     // Extended capability pointer (default 0x100)
+    parameter EXT_CFG_XP_CAP_PTR = {{ EXT_CFG_XP_CAP_PTR | default(256) }} // Express capability pointer in extended space
 ) (
     // Clock and reset
     input  logic        clk,
@@ -33,6 +35,12 @@ module pcileech_tlps128_cfgspace_shadow #(
     input  logic [3:0]  cfg_ext_write_byte_enable,
     output logic [31:0] cfg_ext_read_data,
     output logic        cfg_ext_read_data_valid,
+    
+    // CFGTLP control inputs
+    input  logic        cfgtlp_wren,
+    input  logic        cfgtlp_zero,
+    input  logic        cfgtlp_pcie_write_en,
+    input  logic [1:0]  cfg_a7,
     
     // Port B - Host access for initialization and monitoring
     input  logic        host_access_en,
@@ -90,6 +98,24 @@ module pcileech_tlps128_cfgspace_shadow #(
         return overlay_masks[reg_num];
     endfunction
     
+    // Function to determine if shadow should take over from hardware
+    function logic use_shadow_cfg(input logic [11:0] addr);
+        // Shadow takes over for extended configuration space based on pointer values
+        if (addr >= EXT_CFG_CAP_PTR) begin
+            return 1'b1;  // Use shadow for all extended config space
+        end else if (addr >= EXT_CFG_XP_CAP_PTR && addr < CONFIG_SPACE_SIZE) begin
+            return 1'b1;  // Use shadow for express capabilities
+        end else begin
+            return 1'b0;  // Use hardware for standard config space below pointers
+        end
+    endfunction
+    
+    // Function to calculate effective register number with cfg_a7
+    function logic [9:0] get_effective_reg_num(input logic [9:0] reg_num, input logic [1:0] cfg_a7);
+        // Modify bit 7 of the register number based on cfg_a7
+        return {reg_num[9:8], cfg_a7[1] ? cfg_a7[0] : reg_num[7], reg_num[6:0]};
+    endfunction
+    
     // PCIe configuration access state machine
     typedef enum logic [1:0] {
         CFG_IDLE,
@@ -100,6 +126,7 @@ module pcileech_tlps128_cfgspace_shadow #(
     
     cfg_state_t cfg_state;
     logic [9:0] current_reg_num;
+    logic [9:0] effective_reg_num;
     logic [31:0] read_data;
     logic read_data_valid;
     
@@ -130,55 +157,73 @@ module pcileech_tlps128_cfgspace_shadow #(
                     if (cfg_ext_read_received) begin
                         cfg_state <= CFG_READ;
                         current_reg_num <= cfg_ext_register_number;
+                        effective_reg_num <= get_effective_reg_num(cfg_ext_register_number, cfg_a7);
                     end else if (cfg_ext_write_received) begin
                         cfg_state <= CFG_WRITE;
                         current_reg_num <= cfg_ext_register_number;
+                        effective_reg_num <= get_effective_reg_num(cfg_ext_register_number, cfg_a7);
                     end
                 end
                 
                 CFG_READ: begin
-                    // Read from configuration space
-                    read_data <= config_space_ram[current_reg_num];
-                    
-                    // Check if this register has an overlay entry
-                    overlay_idx_reg <= overlay_indices[current_reg_num];
-                    overlay_mask_reg <= overlay_masks[current_reg_num];
-                    
-                    if (overlay_indices[current_reg_num] != 32'hFFFFFFFF) begin
-                        // Apply overlay data for writable bits
-                        read_data <= (config_space_ram[current_reg_num] & ~overlay_masks[current_reg_num]) |
-                                     (overlay_ram[overlay_indices[current_reg_num]] & overlay_masks[current_reg_num]);
+                    // Check if we should use shadow configuration
+                    if (use_shadow_cfg({2'b00, effective_reg_num} << 2)) begin
+                        // Read from configuration space shadow using effective register number
+                        read_data <= config_space_ram[effective_reg_num];
+                        
+                        // Check if CFGTLP zero data is enabled
+                        if (cfgtlp_zero) begin
+                            read_data <= 32'h00000000;  // Return zero data when cfgtlp_zero is set
+                        end else begin
+                            // Check if this register has an overlay entry
+                            overlay_idx_reg <= overlay_indices[effective_reg_num];
+                            overlay_mask_reg <= overlay_masks[effective_reg_num];
+                            
+                            if (overlay_indices[effective_reg_num] != 32'hFFFFFFFF) begin
+                                // Apply overlay data for writable bits
+                                read_data <= (config_space_ram[effective_reg_num] & ~overlay_masks[effective_reg_num]) |
+                                             (overlay_ram[overlay_indices[effective_reg_num]] & overlay_masks[effective_reg_num]);
+                            end
+                        end
+                        
+                        read_data_valid <= 1'b1;
+                    end else begin
+                        // For addresses below the pointer, let hardware handle it
+                        read_data_valid <= 1'b0;  // Indicate shadow doesn't handle this
                     end
                     
-                    read_data_valid <= 1'b1;
                     cfg_state <= CFG_COMPLETE;
                 end
                 
                 CFG_WRITE: begin
-                    // Handle write to configuration space
-                    overlay_idx_reg <= overlay_indices[current_reg_num];
-                    overlay_mask_reg <= overlay_masks[current_reg_num];
-                    
-                    if (overlay_indices[current_reg_num] != 32'hFFFFFFFF) begin
-                        // Only update writable bits in the overlay RAM
-                        current_value_reg <= overlay_ram[overlay_indices[current_reg_num]];
+                    // Check if we should use shadow configuration and if PCIe writes are enabled
+                    if (use_shadow_cfg({2'b00, effective_reg_num} << 2) && cfgtlp_pcie_write_en) begin
+                        // Handle write to configuration space shadow
+                        overlay_idx_reg <= overlay_indices[effective_reg_num];
+                        overlay_mask_reg <= overlay_masks[effective_reg_num];
                         
-                        // Apply byte enables - build new value
-                        if (cfg_ext_write_byte_enable[0])
-                            current_value_reg[7:0] <= (cfg_ext_write_data[7:0] & overlay_masks[current_reg_num][7:0]) |
-                                                     (overlay_ram[overlay_indices[current_reg_num]][7:0] & ~overlay_masks[current_reg_num][7:0]);
-                        if (cfg_ext_write_byte_enable[1])
-                            current_value_reg[15:8] <= (cfg_ext_write_data[15:8] & overlay_masks[current_reg_num][15:8]) |
-                                                      (overlay_ram[overlay_indices[current_reg_num]][15:8] & ~overlay_masks[current_reg_num][15:8]);
-                        if (cfg_ext_write_byte_enable[2])
-                            current_value_reg[23:16] <= (cfg_ext_write_data[23:16] & overlay_masks[current_reg_num][23:16]) |
-                                                       (overlay_ram[overlay_indices[current_reg_num]][23:16] & ~overlay_masks[current_reg_num][23:16]);
-                        if (cfg_ext_write_byte_enable[3])
-                            current_value_reg[31:24] <= (cfg_ext_write_data[31:24] & overlay_masks[current_reg_num][31:24]) |
-                                                       (overlay_ram[overlay_indices[current_reg_num]][31:24] & ~overlay_masks[current_reg_num][31:24]);
-                        
-                        overlay_ram[overlay_indices[current_reg_num]] <= current_value_reg;
+                        if (overlay_indices[effective_reg_num] != 32'hFFFFFFFF) begin
+                            // Only update writable bits in the overlay RAM
+                            current_value_reg <= overlay_ram[overlay_indices[effective_reg_num]];
+                            
+                            // Apply byte enables - build new value
+                            if (cfg_ext_write_byte_enable[0])
+                                current_value_reg[7:0] <= (cfg_ext_write_data[7:0] & overlay_masks[effective_reg_num][7:0]) |
+                                                         (overlay_ram[overlay_indices[effective_reg_num]][7:0] & ~overlay_masks[effective_reg_num][7:0]);
+                            if (cfg_ext_write_byte_enable[1])
+                                current_value_reg[15:8] <= (cfg_ext_write_data[15:8] & overlay_masks[effective_reg_num][15:8]) |
+                                                          (overlay_ram[overlay_indices[effective_reg_num]][15:8] & ~overlay_masks[effective_reg_num][15:8]);
+                            if (cfg_ext_write_byte_enable[2])
+                                current_value_reg[23:16] <= (cfg_ext_write_data[23:16] & overlay_masks[effective_reg_num][23:16]) |
+                                                           (overlay_ram[overlay_indices[effective_reg_num]][23:16] & ~overlay_masks[effective_reg_num][23:16]);
+                            if (cfg_ext_write_byte_enable[3])
+                                current_value_reg[31:24] <= (cfg_ext_write_data[31:24] & overlay_masks[effective_reg_num][31:24]) |
+                                                           (overlay_ram[overlay_indices[effective_reg_num]][31:24] & ~overlay_masks[effective_reg_num][31:24]);
+                            
+                            overlay_ram[overlay_indices[effective_reg_num]] <= current_value_reg;
+                        end
                     end
+                    // If not using shadow or PCIe writes disabled, hardware handles the write
                     
                     cfg_state <= CFG_COMPLETE;
                 end

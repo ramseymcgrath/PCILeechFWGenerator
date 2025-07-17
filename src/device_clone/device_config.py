@@ -102,6 +102,45 @@ class DeviceIdentification:
 
 
 @dataclass
+class ActiveDeviceConfig:
+    """Active device interrupt configuration."""
+
+    enabled: bool = True  # Enable active device by default
+    timer_period: int = 100000  # Clock cycles between periodic interrupts
+    timer_enable: bool = True  # Enable periodic timer
+    interrupt_mode: str = "msi"  # "msi", "msix", or "intx"
+    interrupt_vector: int = 0  # Which vector to use for active device interrupts
+    priority: int = 15  # Interrupt priority (0-15, 15 = highest)
+
+    # MSI-specific settings
+    msi_vector_width: int = 5  # Number of MSI vectors (2^WIDTH)
+    msi_64bit_addr: bool = False  # Use 64-bit MSI addresses
+
+    # Advanced settings
+    num_interrupt_sources: int = 8  # Number of interrupt sources to support
+    default_source_priority: int = 8  # Default priority for interrupt sources
+
+    def validate(self) -> None:
+        """Validate active device configuration."""
+        if self.timer_period <= 0:
+            raise ValueError(f"Invalid timer period: {self.timer_period}")
+
+        if self.interrupt_mode not in ["msi", "msix", "intx"]:
+            raise ValueError(f"Invalid interrupt mode: {self.interrupt_mode}")
+
+        if not (0 <= self.priority <= 15):
+            raise ValueError(f"Invalid interrupt priority: {self.priority}")
+
+        if not (0 <= self.msi_vector_width <= 5):
+            raise ValueError(f"Invalid MSI vector width: {self.msi_vector_width}")
+
+        if self.num_interrupt_sources <= 0:
+            raise ValueError(
+                f"Invalid number of interrupt sources: {self.num_interrupt_sources}"
+            )
+
+
+@dataclass
 class DeviceCapabilities:
     """PCIe device capabilities configuration."""
 
@@ -115,11 +154,23 @@ class DeviceCapabilities:
     link_width: int = 1  # x1, x4, x8, x16
     link_speed: str = "2.5GT/s"  # PCIe Gen1
 
+    # Extended Configuration Space Pointer Control
+    ext_cfg_cap_ptr: int = 0x100  # Extended capability pointer (256 by default)
+    ext_cfg_xp_cap_ptr: int = 0x100  # Express capability pointer in extended space
+
+    # Active Device Configuration
+    active_device: ActiveDeviceConfig = field(default_factory=ActiveDeviceConfig)
+
     def validate(self) -> None:
         """Validate capability values."""
-        valid_payload_sizes = [128, 256, 512, 1024, 2048, 4096]
-        if self.max_payload_size not in valid_payload_sizes:
-            raise ValueError(f"Invalid max payload size: {self.max_payload_size}")
+        # Import here to avoid circular dependency
+        from .payload_size_config import PayloadSizeConfig, PayloadSizeError
+
+        # Validate payload size using the new payload size configuration
+        try:
+            payload_config = PayloadSizeConfig(self.max_payload_size)
+        except PayloadSizeError as e:
+            raise ValueError(str(e))
 
         if not (1 <= self.msi_vectors <= 32):
             raise ValueError(f"Invalid MSI vector count: {self.msi_vectors}")
@@ -130,6 +181,55 @@ class DeviceCapabilities:
         valid_link_widths = [1, 2, 4, 8, 16]
         if self.link_width not in valid_link_widths:
             raise ValueError(f"Invalid link width: x{self.link_width}")
+
+        # Validate extended configuration space pointers
+        if not (0x100 <= self.ext_cfg_cap_ptr <= 0xFFC):
+            raise ValueError(
+                f"Invalid extended config capability pointer: 0x{self.ext_cfg_cap_ptr:03X}"
+            )
+
+        if not (0x100 <= self.ext_cfg_xp_cap_ptr <= 0xFFC):
+            raise ValueError(
+                f"Invalid extended config express capability pointer: 0x{self.ext_cfg_xp_cap_ptr:03X}"
+            )
+
+        # Ensure pointers are 4-byte aligned
+        if self.ext_cfg_cap_ptr % 4 != 0:
+            raise ValueError(
+                f"Extended config capability pointer must be 4-byte aligned: 0x{self.ext_cfg_cap_ptr:03X}"
+            )
+
+        if self.ext_cfg_xp_cap_ptr % 4 != 0:
+            raise ValueError(
+                f"Extended config express capability pointer must be 4-byte aligned: 0x{self.ext_cfg_xp_cap_ptr:03X}"
+            )
+
+        # Validate active device configuration
+        self.active_device.validate()
+
+    def get_cfg_force_mps(self) -> int:
+        """
+        Get the cfg_force_mps value for this device's maximum payload size.
+
+        Returns:
+            cfg_force_mps encoding value (0-5)
+        """
+        from .payload_size_config import PayloadSizeConfig
+
+        payload_config = PayloadSizeConfig(self.max_payload_size)
+        return payload_config.get_cfg_force_mps()
+
+    def check_tiny_pcie_issues(self) -> tuple[bool, Optional[str]]:
+        """
+        Check if the payload size might cause tiny PCIe algorithm issues.
+
+        Returns:
+            Tuple of (has_issues, warning_message)
+        """
+        from .payload_size_config import PayloadSizeConfig
+
+        payload_config = PayloadSizeConfig(self.max_payload_size)
+        return payload_config.check_tiny_pcie_algo_issues()
 
 
 @dataclass
@@ -182,6 +282,20 @@ class DeviceConfiguration:
                 "supports_advanced_error_reporting": self.capabilities.supports_advanced_error_reporting,
                 "link_width": self.capabilities.link_width,
                 "link_speed": self.capabilities.link_speed,
+                "ext_cfg_cap_ptr": self.capabilities.ext_cfg_cap_ptr,
+                "ext_cfg_xp_cap_ptr": self.capabilities.ext_cfg_xp_cap_ptr,
+                "active_device": {
+                    "enabled": self.capabilities.active_device.enabled,
+                    "timer_period": self.capabilities.active_device.timer_period,
+                    "timer_enable": self.capabilities.active_device.timer_enable,
+                    "interrupt_mode": self.capabilities.active_device.interrupt_mode,
+                    "interrupt_vector": self.capabilities.active_device.interrupt_vector,
+                    "priority": self.capabilities.active_device.priority,
+                    "msi_vector_width": self.capabilities.active_device.msi_vector_width,
+                    "msi_64bit_addr": self.capabilities.active_device.msi_64bit_addr,
+                    "num_interrupt_sources": self.capabilities.active_device.num_interrupt_sources,
+                    "default_source_priority": self.capabilities.active_device.default_source_priority,
+                },
             },
             "custom_properties": self.custom_properties,
         }
@@ -319,6 +433,23 @@ class DeviceConfigManager:
             bist=data["registers"].get("bist", 0x00),
         )
 
+        # Load active device configuration if present
+        active_device_data = data["capabilities"].get("active_device", {})
+        active_device = ActiveDeviceConfig(
+            enabled=active_device_data.get("enabled", False),
+            timer_period=active_device_data.get("timer_period", 100000),
+            timer_enable=active_device_data.get("timer_enable", True),
+            interrupt_mode=active_device_data.get("interrupt_mode", "msi"),
+            interrupt_vector=active_device_data.get("interrupt_vector", 0),
+            priority=active_device_data.get("priority", 15),
+            msi_vector_width=active_device_data.get("msi_vector_width", 5),
+            msi_64bit_addr=active_device_data.get("msi_64bit_addr", False),
+            num_interrupt_sources=active_device_data.get("num_interrupt_sources", 8),
+            default_source_priority=active_device_data.get(
+                "default_source_priority", 8
+            ),
+        )
+
         capabilities = DeviceCapabilities(
             max_payload_size=data["capabilities"].get("max_payload_size", 256),
             msi_vectors=data["capabilities"].get("msi_vectors", 1),
@@ -333,6 +464,9 @@ class DeviceConfigManager:
             ),
             link_width=data["capabilities"]["link_width"],
             link_speed=data["capabilities"]["link_speed"],
+            ext_cfg_cap_ptr=data["capabilities"].get("ext_cfg_cap_ptr", 0x100),
+            ext_cfg_xp_cap_ptr=data["capabilities"].get("ext_cfg_xp_cap_ptr", 0x100),
+            active_device=active_device,
         )
 
         return DeviceConfiguration(

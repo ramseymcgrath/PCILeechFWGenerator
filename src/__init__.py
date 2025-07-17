@@ -28,8 +28,8 @@ from .import_utils import safe_import
 from .pci_capability import (CapabilityProcessor, CapabilityWalker,
                              ConfigSpace, PCICapabilityID, PCIExtCapabilityID)
 # Utility functions from specific utility modules
-from .string_utils import (generate_sv_header_comment,  # String utilities
-                           log_error_safe, log_info_safe, log_warning_safe,
+from .string_utils import generate_sv_header_comment  # String utilities
+from .string_utils import (log_error_safe, log_info_safe, log_warning_safe,
                            safe_format)
 # Templating functionality
 from .templating import AdvancedSVGenerator, TCLBuilder, TemplateRenderer

@@ -80,6 +80,12 @@ class BuildConfig:
     fallback_mode: str = "none"  # "none", "prompt", or "auto"
     allowed_fallbacks: List[str] = field(default_factory=list)
     denied_fallbacks: List[str] = field(default_factory=list)
+    # active device configuration
+    disable_active_device: bool = False
+    active_timer_period: int = 100000
+    active_interrupt_mode: str = "msi"
+    active_interrupt_vector: int = 0
+    active_priority: int = 15
 
     def cmd_args(self) -> List[str]:
         """Translate config to build.py flags"""
@@ -106,6 +112,18 @@ class BuildConfig:
             args.append(f"--allow-fallbacks {','.join(self.allowed_fallbacks)}")
         if self.denied_fallbacks:
             args.append(f"--deny-fallbacks {','.join(self.denied_fallbacks)}")
+
+        # Add active device configuration arguments
+        if self.disable_active_device:
+            args.append("--disable-active-device")
+        if self.active_timer_period != 100000:
+            args.append(f"--active-timer-period {self.active_timer_period}")
+        if self.active_interrupt_mode != "msi":
+            args.append(f"--active-interrupt-mode {self.active_interrupt_mode}")
+        if self.active_interrupt_vector != 0:
+            args.append(f"--active-interrupt-vector {self.active_interrupt_vector}")
+        if self.active_priority != 15:
+            args.append(f"--active-priority {self.active_priority}")
 
         return args
 
