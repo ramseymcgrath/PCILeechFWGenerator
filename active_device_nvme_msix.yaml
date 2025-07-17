@@ -1,0 +1,62 @@
+name: active_device_nvme_msix
+device_type: nvme
+device_class: storage
+
+identification:
+  vendor_id: 0x144D
+  device_id: 0xA808
+  class_code: 0x010802
+  revision_id: 0x01
+
+registers:
+  command: 0x0407
+  status: 0x02A0
+  revision_id: 0x01
+  cache_line_size: 0x10
+  latency_timer: 0x20
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 512
+  msi_vectors: 0
+  msix_vectors: 16
+  supports_msi: false
+  supports_msix: true
+  supports_power_management: true
+  supports_advanced_error_reporting: true
+  link_width: 4
+  link_speed: "8.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 60000
+    timer_enable: true
+    interrupt_mode: "msix"
+    interrupt_vector: 0
+    priority: 10
+    msi_vector_width: 4   # 16 vectors
+    msi_64bit_addr: true
+    num_interrupt_sources: 16
+    default_source_priority: 8
+
+    num_sources: 16
+    vendor_id: "16'h144D"
+    device_id: "16'hA808"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 16
+    msix_table_bir: 1
+    msix_table_offset: 0x3000
+    msix_pba_bir: 1
+    msix_pba_offset: 0x4000
+
+custom_properties:
+  storage_specific:
+    namespace_size: "2TB"
+    support_smart: true
+    support_ana: true
+    temperature_sensor: true
+    firmware_version: "4B2QEXM7"
+    supports_queued_commands: true

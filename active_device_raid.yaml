@@ -1,0 +1,60 @@
+name: active_device_raid
+device_type: storage
+device_class: raid
+
+identification:
+  vendor_id: 0x1000      # Adaptec
+  device_id: 0x005D      # RAID Controller 6405E
+  class_code: 0x010400
+  revision_id: 0x03
+
+registers:
+  command: 0x0607
+  status: 0x0280
+  revision_id: 0x03
+  cache_line_size: 0x10
+  latency_timer: 0x40
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 256
+  msi_vectors: 8
+  msix_vectors: 4
+  supports_msi: true
+  supports_msix: true
+  supports_power_management: true
+  supports_advanced_error_reporting: true
+  link_width: 8
+  link_speed: "8.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 100000
+    timer_enable: true
+    interrupt_mode: "msix"
+    interrupt_vector: 0
+    priority: 11
+    msi_vector_width: 2  # 4 vectors
+    msi_64bit_addr: true
+    num_interrupt_sources: 4
+    default_source_priority: 8
+
+    num_sources: 4
+    vendor_id: "16'h1000"
+    device_id: "16'h005D"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 4
+    msix_table_bir: 1
+    msix_table_offset: 0x2000
+    msix_pba_bir: 1
+    msix_pba_offset: 0x3000
+
+custom_properties:
+  raid_specific:
+    channels: 4
+    max_disks: 8
+    supports_online_raid: true
+    cache_size: "512MB"

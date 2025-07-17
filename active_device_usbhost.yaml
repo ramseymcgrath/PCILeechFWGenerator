@@ -1,0 +1,60 @@
+name: active_device_usbhost
+device_type: usb
+device_class: usb_controller
+
+identification:
+  vendor_id: 0x8086       # Intel
+  device_id: 0x9D2F       # USB 3.0 eXtensible Host Controller
+  class_code: 0x0C0330
+  revision_id: 0x05
+
+registers:
+  command: 0x0607
+  status: 0x0220
+  revision_id: 0x05
+  cache_line_size: 0x20
+  latency_timer: 0x10
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 256
+  msi_vectors: 8
+  msix_vectors: 8
+  supports_msi: true
+  supports_msix: true
+  supports_power_management: true
+  supports_advanced_error_reporting: false
+  link_width: 4
+  link_speed: "8.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 50000
+    timer_enable: true
+    interrupt_mode: "msix"
+    interrupt_vector: 0
+    priority: 10
+    msi_vector_width: 3     # 8 vectors
+    msi_64bit_addr: true
+    num_interrupt_sources: 8
+    default_source_priority: 8
+
+    num_sources: 8
+    vendor_id: "16'h8086"
+    device_id: "16'h9D2F"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 8
+    msix_table_bir: 1
+    msix_table_offset: 0x3000
+    msix_pba_bir: 1
+    msix_pba_offset: 0x4000
+
+custom_properties:
+  usb_crt_specific:
+    ports: 4
+    max_speed: "10Gbps"
+    supports_uasp: true
+    support_xhci: true

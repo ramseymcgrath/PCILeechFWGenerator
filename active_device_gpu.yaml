@@ -1,0 +1,60 @@
+name: active_device_gpu
+device_type: graphics
+device_class: gpu
+
+identification:
+  vendor_id: 0x10DE       # NVIDIA
+  device_id: 0x1E84       # RTX 3070
+  class_code: 0x030000
+  revision_id: 0xA1
+
+registers:
+  command: 0x0407
+  status: 0x0230
+  revision_id: 0xA1
+  cache_line_size: 0x10
+  latency_timer: 0x40
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 512
+  msi_vectors: 16
+  msix_vectors: 4
+  supports_msi: true
+  supports_msix: true
+  supports_power_management: true
+  supports_advanced_error_reporting: true
+  link_width: 16
+  link_speed: "8.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 10000
+    timer_enable: false
+    interrupt_mode: "msix"
+    interrupt_vector: 0
+    priority: 12
+    msi_vector_width: 2     # 4 MSI-X vectors
+    msi_64bit_addr: true
+    num_interrupt_sources: 4
+    default_source_priority: 8
+
+    num_sources: 4
+    vendor_id: "16'h10DE"
+    device_id: "16'h1E84"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 4
+    msix_table_bir: 1
+    msix_table_offset: 0x1000
+    msix_pba_bir: 1
+    msix_pba_offset: 0x2000
+
+custom_properties:
+  gpu_specific:
+    video_memory: "8GB"
+    pci_express_gen: 4
+    supports_ray_tracing: true
+    shader_cores: 5888

@@ -1,0 +1,60 @@
+name: active_device_audio
+device_type: audio
+device_class: multimedia
+
+identification:
+  vendor_id: 0x10EC      # Realtek
+  device_id: 0x0269      # PCI Audio Device
+  class_code: 0x040100
+  revision_id: 0x02
+
+registers:
+  command: 0x0403
+  status: 0x0230
+  revision_id: 0x02
+  cache_line_size: 0x10
+  latency_timer: 0x20
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 128
+  msi_vectors: 4
+  msix_vectors: 0
+  supports_msi: true
+  supports_msix: false
+  supports_power_management: true
+  supports_advanced_error_reporting: false
+  link_width: 4
+  link_speed: "5.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 200000
+    timer_enable: true
+    interrupt_mode: "msi"
+    interrupt_vector: 0
+    priority: 8
+    msi_vector_width: 2   # 4 vectors
+    msi_64bit_addr: false
+    num_interrupt_sources: 4
+    default_source_priority: 8
+
+    num_sources: 4
+    vendor_id: "16'h10EC"
+    device_id: "16'h0269"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 0
+    msix_table_bir: 0
+    msix_table_offset: 0
+    msix_pba_bir: 0
+    msix_pba_offset: 0
+
+custom_properties:
+  audio_specific:
+    channels: 6
+    sample_rate: "192kHz"
+    supports_spdif: true
+    supports_hd_audio: true
