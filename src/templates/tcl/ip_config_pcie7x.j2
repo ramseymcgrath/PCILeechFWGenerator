@@ -15,8 +15,58 @@ puts "Creating PCIe IP core for device {{ device.vendor_id }}:{{ device.device_i
 puts "FPGA Part: {{ board.fpga_part }}"
 puts "Board: {{ board.name }}"
 
-# Create PCIe 7-series IP core with specific version for reproducible builds
-create_ip -name pcie_7x -vendor xilinx.com -library ip -version 3.3 -module_name pcie_7x_0
+# Update IP catalog to ensure all IP cores are available
+puts "Updating IP catalog..."
+update_ip_catalog
+
+# Check available PCIe IP cores
+puts "Available PCIe IP cores:"
+set available_ips [get_ipdefs -filter {NAME =~ "*pcie*"}]
+foreach ip $available_ips {
+    puts "  [get_property NAME $ip] - [get_property VERSION $ip]"
+}
+
+# Try to create PCIe 7-series IP core (try without version first)
+set pcie_created 0
+if {[catch {
+    create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_bridge
+    set pcie_created 1
+    puts "Successfully created PCIe 7-series IP core (auto version)"
+}]} {
+    puts "Failed to create PCIe IP without version, trying with version 3.3..."
+    if {[catch {
+        create_ip -name pcie_7x -vendor xilinx.com -library ip -version 3.3 -module_name pcie_7x_bridge
+        set pcie_created 1
+        puts "Successfully created PCIe 7-series IP core (version 3.3)"
+    }]} {
+        puts "Failed to create PCIe IP with version 3.3, trying latest available..."
+        # Get the latest available version
+        set pcie_versions [get_ipdefs -filter {NAME == "pcie_7x"}]
+        if {[llength $pcie_versions] > 0} {
+            set latest_version [lindex $pcie_versions 0]
+            set version_str [get_property VERSION $latest_version]
+            puts "Trying latest available version: $version_str"
+            if {[catch {
+                create_ip -name pcie_7x -vendor xilinx.com -library ip -version $version_str -module_name pcie_7x_bridge
+                set pcie_created 1
+                puts "Successfully created PCIe 7-series IP core (version $version_str)"
+            }]} {
+                puts "ERROR: Failed to create PCIe IP core with any available version"
+                puts "This may indicate that PCIe IP is not installed or not available for this FPGA part"
+                exit 1
+            }
+        } else {
+            puts "ERROR: No PCIe 7-series IP cores found in catalog"
+            puts "Please ensure PCIe IP is installed in Vivado"
+            exit 1
+        }
+    }
+}
+
+if {!$pcie_created} {
+    puts "ERROR: Failed to create PCIe IP core"
+    exit 1
+}
 
 # Helper procedure to safely set IP properties
 proc safe_set {ip key val} {
@@ -27,7 +77,7 @@ proc safe_set {ip key val} {
 }
 
 # Get IP instance once for cleaner code
-set ip [get_ips pcie_7x_0]
+set ip [get_ips pcie_7x_bridge]
 
 # Configure PCIe IP core with device-specific settings using safe_set
 # BAR-0 configuration: use plain integer for size, not string with units

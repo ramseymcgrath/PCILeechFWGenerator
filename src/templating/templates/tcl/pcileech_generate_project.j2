@@ -190,11 +190,16 @@ foreach xdc_file $xdc_files {
 # Try to determine top module from first source file
 set top_module [file rootname [file tail "{{ pcileech.source_files[0] }}"]]
 {% else %}
-set top_module "pcileech_top"
+# Top module will be auto-detected by Vivado
+set top_module ""
 {% endif %}
 
-set_property top $top_module [current_fileset]
-puts "Set top module: $top_module"
+if {$top_module != ""} {
+    set_property top $top_module [current_fileset]
+    puts "Set top module: $top_module"
+} else {
+    puts "Top module will be auto-detected by Vivado"
+}
 
 # Update compile order
 update_compile_order -fileset sources_1
@@ -204,9 +209,8 @@ puts "Generating IP cores..."
 generate_target all [get_files *.xci]
 catch {config_ip_cache -export [get_ips -all]}
 
-# Validate design
-puts "Validating design..."
-validate_design -quiet
+# Skip validation (validate_design is not available in all Vivado versions)
+puts "Skipping design validation..."
 
 puts "PCILeech project generation completed successfully!"
 puts "Project: $project_name"

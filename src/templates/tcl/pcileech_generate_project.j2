@@ -190,14 +190,18 @@ foreach xdc_file $xdc_files {
 # Try to determine top module from first source file
 set top_module [file rootname [file tail "{{ pcileech.source_files[0] }}"]]
 {% else %}
-# Use the actual top module from PCILeech
-set top_module "pcileech_tlps128_bar_controller"
+# Top module will be auto-detected by Vivado
+set top_module ""
 {% endif %}
 
 # Set source management mode to manual before setting top
 set_property source_mgmt_mode None [current_project]
-set_property top $top_module [current_fileset]
-puts "Set top module: $top_module"
+if {$top_module != ""} {
+    set_property top $top_module [current_fileset]
+    puts "Set top module: $top_module"
+} else {
+    puts "Top module will be auto-detected by Vivado"
+}
 
 # Update compile order
 update_compile_order -fileset sources_1
