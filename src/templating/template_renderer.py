@@ -205,6 +205,15 @@ class TemplateRenderer:
 
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
+        
+        # Add Python built-in functions that are commonly used in templates
+        self.env.globals["hasattr"] = hasattr
+        self.env.globals["getattr"] = getattr
+        self.env.globals["isinstance"] = isinstance
+        self.env.globals["len"] = len
+        self.env.globals["range"] = range
+        self.env.globals["min"] = min
+        self.env.globals["max"] = max
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """

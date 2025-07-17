@@ -1,0 +1,90 @@
+def build_advanced_sv(
+    regs: list,
+    target_src: pathlib.Path,
+    board_type: str = "75t",
+    enable_variance: bool = True,
+    variance_metadata: Optional[dict] = None,
+    advanced_features: Optional[dict] = None,
+) -> None:
+    """Generate advanced SystemVerilog BAR controller with comprehensive features."""
+
+    # Import classes from this module (they're defined above)
+    # AdvancedSVGenerator, PowerManagementConfig, etc. are already available
+
+    # Configure advanced features based on board type and requirements
+    board_config = BOARD_INFO[board_type]
+    device_class_str = board_config["device_class"]
+    base_freq = board_config["base_frequency_mhz"]
+
+    # Map string to DeviceClass enum
+    device_class_map = {
+        "consumer": DeviceClass.CONSUMER,
+        "enterprise": DeviceClass.ENTERPRISE,
+        "industrial": DeviceClass.INDUSTRIAL,
+        "automotive": DeviceClass.AUTOMOTIVE,
+    }
+    device_class = device_class_map.get(device_class_str, DeviceClass.CONSUMER)
+
+    # Configure advanced features
+    power_config = PowerManagementConfig(
+        enable_clock_gating=True,
+        enable_aspm=True,
+        d0_to_d1_cycles=100,
+        d1_to_d0_cycles=50
+    )
+
+    error_config = ErrorHandlingConfig(
+        enable_ecc=True,
+        enable_parity_check=True,
+        enable_crc_check=True,
+        enable_auto_retry=True,
+        max_retry_count=3
+    )
+
+    perf_config = PerformanceCounterConfig(
+        enable_transaction_counters=True,
+        enable_bandwidth_monitoring=True,
+        enable_latency_measurement=True,
+        enable_error_rate_tracking=True
+    )
+
+    device_config = DeviceSpecificLogic(
+        device_type=DeviceType.GENERIC,
+        device_class=device_class,
+        base_frequency_mhz=base_freq
+    )
+
+    # Override with user-provided advanced features
+    if advanced_features:
+        if "device_type" in advanced_features:
+            device_config.device_type = DeviceType(advanced_features["device_type"])
+        if "enable_power_management" in advanced_features:
+            power_config.enable_clock_gating = advanced_features["enable_power_management"]
+        if "enable_error_handling" in advanced_features:
+            error_config.enable_auto_retry = advanced_features["enable_error_handling"]
+
+    # Initialize variance simulator if enabled
+    variance_model = None
+    if enable_variance:
+        variance_simulator = ManufacturingVarianceSimulator()
+        device_id = variance_metadata.get("device_id", f"board_{board_type}") if variance_metadata else f"board_{board_type}"
+        variance_model = variance_simulator.generate_variance_model(
+            device_id=device_id,
+            device_class=device_class,
+            base_frequency_mhz=base_freq
+        )
+        print(f"[*] Advanced variance simulation enabled for {device_class.value} class device")
+
+    # Generate advanced SystemVerilog
+    generator = AdvancedSVGenerator(power_config, error_config, perf_config, device_config)
+    sv_content = generator.generate_advanced_systemverilog(regs, variance_model)
+
+    # Write to output and target locations
+    (OUT / "advanced_bar_controller.sv").write_text(sv_content)
+    shutil.copyfile(OUT / "advanced_bar_controller.sv", target_src)
+
+    print("[*] Advanced SystemVerilog generation complete!")
+    print(f"    - Power management: {power_config.enable_clock_gating}")
+    print(f"    - Error handling: {error_config.enable_auto_retry}")
+    print(f"    - Performance counters: {perf_config.enable_transaction_counters}")
+    print(f"    - Device type: {device_config.device_type.value}")
