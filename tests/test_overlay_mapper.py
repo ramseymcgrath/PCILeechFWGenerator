@@ -54,8 +54,8 @@ def create_test_config_space():
     config_space[0x18] = (
         0x00002800  # PBA offset/BIR (adjusted to avoid overlap and reflect valid structure)
     )
-    config_space[0x18] = (
-        0x00003000  # PBA offset/BIR (if needed for additional test data)
+    config_space[0x19] = (
+        0x00003000  # Additional PBA offset/BIR for test data
     )
     config_space[0x1B] = 0x00002810  # Device capabilities
     config_space[0x1C] = 0x00000000  # Device control/status
