@@ -38,7 +38,7 @@ def main():
     # Screamer/Squirrel default VID:PID = 1d50:6130
     run(f"usbloader --vidpid 1d50:6130 -f {bit}")
 
-    print("[✓] Flash complete – power-cycle or warm-reset the card.")
+    print("[✓] Flash complete - power-cycle or warm-reset the card.")
 
 
 if __name__ == "__main__":

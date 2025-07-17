@@ -3,22 +3,19 @@
 Unit tests for Extended Configuration Space Pointer Control feature.
 """
 
-import pytest
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.device_clone.device_config import (
-    DeviceCapabilities,
-    DeviceConfiguration,
-    DeviceType,
-    DeviceClass,
-    DeviceIdentification,
-    DeviceConfigManager,
-)
 from src.device_clone.config_space_manager import ConfigSpaceConstants
+from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
+                                            DeviceConfigManager,
+                                            DeviceConfiguration,
+                                            DeviceIdentification, DeviceType)
 
 
 class TestExtendedConfigPointers:

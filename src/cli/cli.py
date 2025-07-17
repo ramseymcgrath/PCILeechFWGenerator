@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cli – one front‑door for the whole tool‑chain.
+"""cli - one front‑door for the whole tool‑chain.
 
 Usage examples
 ~~~~~~~~~~~~~~
@@ -32,7 +32,7 @@ from .container import BuildConfig, run_build  # new unified runner
 logger = get_logger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helpers – PCIe enumeration & interactive pickers
+# Helpers - PCIe enumeration & interactive pickers
 # ──────────────────────────────────────────────────────────────────────────────
 PCI_RE = re.compile(
     r"(?P<bdf>[0-9a-fA-F:.]+) .*?\["
@@ -63,13 +63,13 @@ def pick(lst: list[str], prompt: str) -> str:
         try:
             return lst[int(sel)]
         except Exception:
-            print("  Invalid selection – try again.")
+            print("  Invalid selection - try again.")
 
 
 def choose_device() -> Dict[str, str]:
     devs = list_pci_devices()
     if not devs:
-        raise RuntimeError("No PCIe devices found – are you root?")
+        raise RuntimeError("No PCIe devices found - are you root?")
     for i, dev in enumerate(devs):
         print(f" [{i}] {dev['pretty']}")
     return devs[int(input("Select donor device #: "))]

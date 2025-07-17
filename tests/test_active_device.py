@@ -10,15 +10,16 @@ This test verifies:
 5. MSI/MSI-X TLP construction
 """
 
+import re
 import tempfile
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 import pytest
 import yaml
-import re
 
-from src.templating.template_renderer import TemplateRenderer
 from src.device_clone.device_config import DeviceConfig
+from src.templating.template_renderer import TemplateRenderer
 
 
 class TestActiveDeviceInterrupt:

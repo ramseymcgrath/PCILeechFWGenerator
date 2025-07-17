@@ -81,7 +81,7 @@ def update_vfio_constants_file(constants):
     # Create the new constants section
     new_constants = []
     new_constants.append(
-        "# ───── Ioctl numbers – extracted from kernel headers at build time ──────"
+        "# ───── Ioctl numbers - extracted from kernel headers at build time ──────"
     )
 
     # Add each constant with its extracted value

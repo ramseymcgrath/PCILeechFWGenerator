@@ -1,19 +1,19 @@
-/* donor_dump.c  – expose donor PCI-e device parameters via /proc/donor_dump
+/* donor_dump.c  - expose donor PCI-e device parameters via /proc/donor_dump
  *
  * Build:  make         (in donor_dump directory)
  * Load :  insmod donor_dump.ko bdf=0000:03:00.0
  *
  * Fields exported (one "key:value" per line):
- *   mpc               – 3-bit Max-Payload-Capable  (0-5)
- *   mpr               – 3-bit Max-ReadReq-InEffect (0-5)
+ *   mpc               - 3-bit Max-Payload-Capable  (0-5)
+ *   mpr               - 3-bit Max-ReadReq-InEffect (0-5)
  *   vendor_id, device_id, subvendor_id, subsystem_id, revision_id
- *   class_code        – 24-bit (class<<16 | subclass<<8 | progIF)
- *   bar_size          – byte length of BAR0
- *   dsn_hi / dsn_lo   – 64-bit Device Serial Number (0 if absent)
- *   extended_config   – Full 4KB configuration space (hex encoded)
- *   power_mgmt        – Power management capabilities
- *   aer_caps          – Advanced Error Reporting capabilities
- *   vendor_caps       – Vendor-specific capabilities
+ *   class_code        - 24-bit (class<<16 | subclass<<8 | progIF)
+ *   bar_size          - byte length of BAR0
+ *   dsn_hi / dsn_lo   - 64-bit Device Serial Number (0 if absent)
+ *   extended_config   - Full 4KB configuration space (hex encoded)
+ *   power_mgmt        - Power management capabilities
+ *   aer_caps          - Advanced Error Reporting capabilities
+ *   vendor_caps       - Vendor-specific capabilities
  *
  * Compatible with Linux kernel versions 4.x and 5.x, GPL-compatible.
  */

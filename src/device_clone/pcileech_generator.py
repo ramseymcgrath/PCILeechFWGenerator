@@ -25,15 +25,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.error_utils import extract_root_cause
 from src.exceptions import PCILeechGenerationError
-
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.templating import (
-    AdvancedSVGenerator,
-    BuildContext,
-    TemplateRenderer,
-    TemplateRenderError,
-)
+from src.templating import (AdvancedSVGenerator, BuildContext,
+                            TemplateRenderer, TemplateRenderError)
 
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler

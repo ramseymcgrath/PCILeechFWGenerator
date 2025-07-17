@@ -11,8 +11,8 @@ Based on PCIe specifications and capability structures.
 Thanks @Simonrak
 """
 
-import re
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 

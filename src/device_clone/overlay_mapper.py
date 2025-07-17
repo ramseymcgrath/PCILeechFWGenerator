@@ -12,20 +12,16 @@ Overlay RAM is used for registers that have special write behavior:
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from typing import Any
-
-from ..pci_capability.constants import (
-    PCI_VENDOR_ID_OFFSET,
-    PCI_DEVICE_ID_OFFSET,
-    PCI_STATUS_REGISTER,
-    PCI_CAPABILITIES_POINTER,
-    STANDARD_CAPABILITY_NAMES,
-    EXTENDED_CAPABILITY_NAMES,
-)
+from ..pci_capability.constants import (EXTENDED_CAPABILITY_NAMES,
+                                        PCI_CAPABILITIES_POINTER,
+                                        PCI_DEVICE_ID_OFFSET,
+                                        PCI_STATUS_REGISTER,
+                                        PCI_VENDOR_ID_OFFSET,
+                                        STANDARD_CAPABILITY_NAMES)
 
 logger = logging.getLogger(__name__)
 

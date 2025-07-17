@@ -6,12 +6,13 @@ This script tests the overlay mapper functionality with various register types
 to ensure it correctly identifies registers that need overlay entries.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.device_clone.overlay_mapper import OverlayMapper, PCIeRegisterDefinitions
+from src.device_clone.overlay_mapper import (OverlayMapper,
+                                             PCIeRegisterDefinitions)
 from src.device_clone.writemask_generator import WritemaskGenerator
 
 
@@ -49,14 +50,15 @@ def create_test_config_space():
     # MSI-X capability at 0x50
     config_space[0x14] = 0x60000011  # MSI-X cap header, next at 0x60
     config_space[0x15] = 0x00000801  # Table size 2, enabled
-    config_space[0x16] = 0x00002000  # Table offset/BIR
-    config_space[0x17] = 0x00003000  # PBA offset/BIR
-
-    # PCIe capability at 0x60
-    config_space[0x18] = 0x00000010  # PCIe cap header
-    config_space[0x19] = 0x00000002  # PCIe capabilities
-    config_space[0x1A] = 0x00002810  # Device capabilities
-    config_space[0x1B] = 0x00000000  # Device control/status
+    config_space[0x17] = 0x00002000  # Table offset/BIR
+    config_space[0x18] = (
+        0x00002800  # PBA offset/BIR (adjusted to avoid overlap and reflect valid structure)
+    )
+    config_space[0x18] = (
+        0x00003000  # PBA offset/BIR (if needed for additional test data)
+    )
+    config_space[0x1B] = 0x00002810  # Device capabilities
+    config_space[0x1C] = 0x00000000  # Device control/status
 
     # Extended capabilities at 0x100
     config_space[0x40] = 0x14010001  # AER capability header, next at 0x140

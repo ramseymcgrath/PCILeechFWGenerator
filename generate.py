@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""generate.py – thin shim around the new CLI."""
+"""generate.py - thin shim around the new CLI."""
 from __future__ import annotations
 
 import importlib

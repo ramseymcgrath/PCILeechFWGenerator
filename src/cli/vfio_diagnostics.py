@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VFIO‑Assist – smarter VFIO diagnostics & auto‑fixer
+VFIO‑Assist - smarter VFIO diagnostics & auto‑fixer
 
 Usage (examples)
 ----------------
@@ -50,10 +50,10 @@ try:
 
     colorama_init()
 
-    def colour(txt: str, col: str) -> str:  # noqa: D401 – short lambda‑style fn
+    def colour(txt: str, col: str) -> str:  # noqa: D401 - short lambda‑style fn
         return f"{col}{txt}{Style.RESET_ALL}"
 
-except ImportError:  # colour optional – silently degrade
+except ImportError:  # colour optional - silently degrade
 
     class Fore:  # type: ignore
         RED = ""
@@ -63,7 +63,7 @@ except ImportError:  # colour optional – silently degrade
         MAGENTA = ""
         RESET = ""
 
-    class Style:  # type: ignore – dummy placeholder
+    class Style:  # type: ignore - dummy placeholder
         RESET_ALL = ""
 
     def colour(txt: str, col: str) -> str:  # noqa: D401
@@ -71,7 +71,7 @@ except ImportError:  # colour optional – silently degrade
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Logging setup – verbose by default, override with --quiet
+# Logging setup - verbose by default, override with --quiet
 # ──────────────────────────────────────────────────────────────────────────────
 # Initialize with INFO level by default, will be adjusted based on CLI args
 # Only setup logging if no handlers exist (avoid overriding CLI setup)
@@ -276,7 +276,7 @@ class Diagnostics:
                 self._append(
                     name="IOMMU HW",
                     status=Status.WARNING,
-                    message="CPU flags missing VT‑d/AMD‑Vi – maybe disabled in BIOS",
+                    message="CPU flags missing VT‑d/AMD‑Vi - maybe disabled in BIOS",
                     remediation="Enable IOMMU in firmware setup (VT‑d, AMD‑Vi) or echo 1 > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode if you can't in BIOS (unsafe)",
                 )
         except Exception as e:
@@ -523,7 +523,7 @@ class Diagnostics:
                 self._append(
                     name="IOMMU group",
                     status=Status.ERROR,
-                    message="Device exists but not in an IOMMU group – IOMMU disabled?",
+                    message="Device exists but not in an IOMMU group - IOMMU disabled?",
                     prefix="VFIO",
                 )
             else:
@@ -743,7 +743,7 @@ class Diagnostics:
 def remediation_script(report: Report) -> str:
     lines = [
         "#!/bin/bash",
-        "# Auto‑generated VFIO remediation script – review before running!",
+        "# Auto‑generated VFIO remediation script - review before running!",
         "set -euo pipefail",
         "echo '>> VFIO remediation started'",
     ]
@@ -796,7 +796,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             """\
             Smart VFIO diagnostics & remediation tool.
             --------------------------------------------------------------------
-            Most commands require *root* – either run with sudo or prefix
+            Most commands require *root* - either run with sudo or prefix
             privileged sub‑steps with sudo when prompted.
             """,
         ),
@@ -856,7 +856,7 @@ def main(argv: list[str] | None = None):
     if args.cmd == "fix":
         if report.overall == Status.OK:
             render(report)
-            print(colour("System already VFIO‑ready – nothing to do", Fore.GREEN))
+            print(colour("System already VFIO‑ready - nothing to do", Fore.GREEN))
             return
 
         script_text = remediation_script(report)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------
-# pcileech_build.sh – bind a whole IOMMU group to vfio-pci,
+# pcileech_build.sh - bind a whole IOMMU group to vfio-pci,
 # run PCILeechFWGenerator, then restore everything.
 # ------------------------------------------------------------
 set -euo pipefail
@@ -34,7 +34,7 @@ done
 
 # ---------- discover IOMMU group & devices -----------------------------------
 GROUP_DIR=$(readlink -f /sys/bus/pci/devices/$BDF/iommu_group) \
-  || { echo "❌  Device $BDF has no IOMMU group – is IOMMU on?"; exit 1; }
+  || { echo "❌  Device $BDF has no IOMMU group - is IOMMU on?"; exit 1; }
 
 GROUP=$(basename "$GROUP_DIR")
 mapfile -t GROUP_DEVS < <(basename -a "$GROUP_DIR"/devices/*)
@@ -102,4 +102,4 @@ echo "🚀  Launching PCILeechFWGenerator ..."
 cd "$GEN_PATH"
 sudo -E python3 generate.py build --bdf "$BDF" --board "$BOARD"
 
-echo "✅  Build finished – firmware should be in $GEN_PATH/output"
+echo "✅  Build finished - firmware should be in $GEN_PATH/output"

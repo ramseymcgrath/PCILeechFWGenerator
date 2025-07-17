@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List
 
 ###############################################################################
-# Configuration constants – override with environment vars if desired.
+# Configuration constants - override with environment vars if desired.
 ###############################################################################
 
 DEFAULT_REPO_URL = _os.environ.get(
@@ -69,9 +69,9 @@ def _git_available() -> bool:
 
 
 class RepoManager:
-    """Utility class – no instantiation necessary."""
+    """Utility class - no instantiation necessary."""
 
-    def __new__(cls, *args, **kwargs):  # pragma: no cover – prevent misuse
+    def __new__(cls, *args, **kwargs):  # pragma: no cover - prevent misuse
         raise TypeError("RepoManager may not be instantiated; call class‑methods only")
 
     # ---------------------------------------------------------------------
@@ -220,7 +220,7 @@ class RepoManager:
         _logger.info("Updating repo %s ...", path)
 
         if not _git_available():
-            _logger.warning("git executable not available – skipping update")
+            _logger.warning("git executable not available - skipping update")
             return
 
         try:
@@ -333,7 +333,7 @@ def is_repository_accessible(
 
 
 ###############################################################################
-# CLI helper – "python repo_manager.py" sanity‑checks the repo.
+# CLI helper - "python repo_manager.py" sanity‑checks the repo.
 ###############################################################################
 
 if __name__ == "__main__":
@@ -341,6 +341,6 @@ if __name__ == "__main__":
     try:
         path = RepoManager.ensure_repo()
         _logger.info("Repository ready at %s", path)
-    except Exception as exc:  # pragma: no cover – runtime feedback only
+    except Exception as exc:  # pragma: no cover - runtime feedback only
         _logger.error("%s", exc)
         raise SystemExit(1)

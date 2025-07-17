@@ -76,7 +76,7 @@ if {[file exists $board_xdc_file]} {
     lappend already_added_files $board_xdc_file
     puts "Added board-specific XDC constraints: $board_xdc_file"
 } else {
-    error "Missing required XDC for board {{ board.name }} – aborting build."
+    error "Missing required XDC for board {{ board.name }} - aborting build."
 }
 {% elif board_xdc_content %}
 # Load XDC constraints from PCILeech repository
@@ -91,7 +91,7 @@ add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
 read_xdc $board_auto_xdc_file
 puts "Added auto-generated board XDC: $board_auto_xdc_file"
 {% else %}
-error "Missing required XDC for board {{ board.name }} – aborting build."
+error "Missing required XDC for board {{ board.name }} - aborting build."
 {% endif %}
 {% endif %}
 

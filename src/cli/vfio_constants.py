@@ -108,7 +108,7 @@ VfioRegionInfo = vfio_region_info
 VfioGroupStatus = vfio_group_status
 
 
-# ───── Ioctl numbers – extracted from kernel headers at build time ──────
+# ───── Ioctl numbers - extracted from kernel headers at build time ──────
 VFIO_GET_API_VERSION = 15204
 VFIO_CHECK_EXTENSION = 15205
 VFIO_SET_IOMMU = 15206

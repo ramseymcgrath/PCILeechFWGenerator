@@ -556,8 +556,8 @@ class VFIOBinderImpl:
         """
         Return a (device_fd, container_fd) tuple.
 
-        * Host side (attach=False) – **skip** and raise to prevent double-attach.
-        * Container side (attach=True, the default) – run the normal workflow.
+        * Host side (attach=False) - **skip** and raise to prevent double-attach.
+        * Container side (attach=True, the default) - run the normal workflow.
         """
         if not self._attach:
             raise RuntimeError(

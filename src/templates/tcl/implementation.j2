@@ -17,7 +17,7 @@ wait_on_run  $impl_run
 
 set status [get_property STATUS $impl_run]
 if {![string match "*completed*" $status]} {
-    puts "ERROR: Implementation failed – $status"
+    puts "ERROR: Implementation failed - $status"
     exit 1
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""container_build – unified VFIO‑aware Podman build runner"""
+"""container_build - unified VFIO‑aware Podman build runner"""
 from __future__ import annotations
 
 import shutil
@@ -18,12 +18,8 @@ from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 
 # Import safe logging functions
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe)
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):
@@ -135,7 +131,7 @@ class BuildConfig:
 
 def require_podman() -> None:
     if shutil.which("podman") is None:
-        raise EnvError("Podman not found – install it or adjust PATH")
+        raise EnvError("Podman not found - install it or adjust PATH")
 
 
 def image_exists(name: str) -> bool:
@@ -181,7 +177,7 @@ def run_build(cfg: BuildConfig) -> None:
 
         log_info_safe(
             logger,
-            "Launching build container – board={board}, tag={tag}",
+            "Launching build container - board={board}, tag={tag}",
             board=cfg.board,
             tag=cfg.container_tag,
             prefix="CONT",

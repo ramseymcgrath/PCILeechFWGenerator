@@ -6,14 +6,13 @@ Tests for the hex formatter module to ensure proper little-endian formatting
 and Vivado-compatible hex file generation.
 """
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from src.device_clone.hex_formatter import (
-    ConfigSpaceHexFormatter,
-    create_config_space_hex_file,
-)
+import pytest
+
+from src.device_clone.hex_formatter import (ConfigSpaceHexFormatter,
+                                            create_config_space_hex_file)
 
 
 class TestConfigSpaceHexFormatter:
