@@ -1,0 +1,60 @@
+name: active_device_aiaccel
+device_type: ai_accelerator
+device_class: coprocessor
+
+identification:
+  vendor_id: 0x1DBA      # Habana Labs AI chip
+  device_id: 0x1DBA      # Gaudi Accelerator
+  class_code: 0x088000
+  revision_id: 0x11
+
+registers:
+  command: 0x0407
+  status: 0x0230
+  revision_id: 0x11
+  cache_line_size: 0x10
+  latency_timer: 0x30
+  header_type: 0x00
+  bist: 0x00
+
+capabilities:
+  max_payload_size: 512
+  msi_vectors: 8
+  msix_vectors: 8
+  supports_msi: true
+  supports_msix: true
+  supports_power_management: true
+  supports_advanced_error_reporting: true
+  link_width: 8
+  link_speed: "8.0GT/s"
+
+  active_device:
+    enabled: true
+    timer_period: 50000
+    timer_enable: false
+    interrupt_mode: "msix"
+    interrupt_vector: 0
+    priority: 10
+    msi_vector_width: 3   # 8 vectors
+    msi_64bit_addr: true
+    num_interrupt_sources: 8
+    default_source_priority: 8
+
+    num_sources: 8
+    vendor_id: "16'h1DBA"
+    device_id: "16'h1DBA"
+    completer_id: "16'h0100"
+    default_priority: 8
+
+    num_msix: 8
+    msix_table_bir: 1
+    msix_table_offset: 0x4000
+    msix_pba_bir: 1
+    msix_pba_offset: 0x5000
+
+custom_properties:
+  aiaccel_specific:
+    cores: 32
+    memory_bandwidth: "1TB/s"
+    supports_fp16: true
+    supports_int8: true
