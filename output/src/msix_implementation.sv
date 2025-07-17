@@ -9,6 +9,31 @@
 // PBA offset: 0x800
 //==============================================================================
 
+module msix_implementation (
+    input wire clk,
+    input wire rst,
+    
+    // MSI-X control registers - dynamically connected to configuration space
+    // These signals are properly driven by the actual MSI-X capability registers
+    input wire msix_enabled,        // Connected to MSI-X Message Control Enable bit (bit 15)
+    input wire msix_function_mask,  // Connected to MSI-X Message Control Function Mask bit (bit 14)
+    input wire [10:0] msix_table_size, // Connected to MSI-X Message Control Table Size field (bits 10:0)
+
+    
+    // MSI-X capability register interface for dynamic control
+    input wire        msix_cap_wr,     // Write strobe for MSI-X capability registers
+    input wire [31:0] msix_cap_addr,   // Address within MSI-X capability space
+    input wire [31:0] msix_cap_wdata,  // Write data for MSI-X capability registers
+    input wire [3:0]  msix_cap_be,     // Byte enables for MSI-X capability writes
+    output reg [31:0] msix_cap_rdata,  // Read data from MSI-X capability registers
+
+    // MSI-X interrupt generation interface
+    output reg        msix_interrupt,  // MSI-X interrupt request
+    output reg [10:0] msix_vector,     // MSI-X vector number
+    output reg [63:0] msix_msg_addr,   // MSI-X message address
+    output reg [31:0] msix_msg_data   // MSI-X message data
+);
+
 // MSI-X Table parameters
 localparam NUM_MSIX = 32;
 localparam MSIX_TABLE_BIR = 4;
@@ -19,32 +44,11 @@ localparam MSIX_ENABLED = 0;
 localparam MSIX_FUNCTION_MASK = 0;
 localparam PBA_SIZE = 1;  // Number of 32-bit words needed for PBA
 
-
-
 // MSI-X Table storage
 (* ram_style="block" *) reg [31:0] msix_table[0:NUM_MSIX*4-1];  // 4 DWORDs per entry
 
 // MSI-X PBA storage
 reg [31:0] msix_pba[0:0];
-
-// MSI-X control registers - dynamically connected to configuration space
-// These signals are properly driven by the actual MSI-X capability registers
-input wire msix_enabled;        // Connected to MSI-X Message Control Enable bit (bit 15)
-input wire msix_function_mask;  // Connected to MSI-X Message Control Function Mask bit (bit 14)
-input wire [10:0] msix_table_size; // Connected to MSI-X Message Control Table Size field (bits 10:0)
-
-// MSI-X capability register interface for dynamic control
-input wire        msix_cap_wr;     // Write strobe for MSI-X capability registers
-input wire [31:0] msix_cap_addr;   // Address within MSI-X capability space
-input wire [31:0] msix_cap_wdata;  // Write data for MSI-X capability registers
-input wire [3:0]  msix_cap_be;     // Byte enables for MSI-X capability writes
-output reg [31:0] msix_cap_rdata;  // Read data from MSI-X capability registers
-
-// MSI-X interrupt generation interface
-output reg        msix_interrupt;  // MSI-X interrupt request
-output reg [10:0] msix_vector;     // MSI-X vector number
-output reg [63:0] msix_msg_addr;   // MSI-X message address
-output reg [31:0] msix_msg_data;   // MSI-X message data
 
 // MSI-X Table access logic
 function logic is_msix_table_access(input logic [31:0] addr, input logic [2:0] bar_index);
@@ -108,10 +112,63 @@ task msix_pba_write(input logic [31:0] addr, input logic [31:0] data, input logi
     msix_pba[pba_addr] = current_value;
 endtask
 
-// Legacy MSI-X interrupt delivery logic (deprecated - use msix_deliver_interrupt_validated)
+// MSI-X interrupt delivery logic
 task msix_deliver_interrupt(input logic [10:0] vector);
-    // Redirect to validated version for backward compatibility
-    msix_deliver_interrupt_validated(vector);
+    logic vector_masked;
+    logic [31:0] table_addr;
+    logic [31:0] control_dword;
+    logic [31:0] pba_dword_idx;
+    logic [4:0] pba_bit_idx;
+
+    // Validate vector number
+    if (vector >= NUM_MSIX || !msix_enabled || msix_function_mask) begin
+        $display("MSI-X Error: Invalid vector %0d or MSI-X disabled", vector);
+        return;
+    end
+
+    // Get control DWORD (fourth DWORD in the entry)
+    table_addr = vector * 4 + 3;
+    control_dword = msix_table[table_addr];
+
+    // Check if vector is masked (bit 0 of control DWORD)
+    vector_masked = control_dword[0];
+
+    if (!vector_masked) begin
+        // Vector is enabled and not masked - deliver interrupt
+        logic [63:0] message_address;
+        logic [31:0] message_data;
+
+        // Extract message address from MSI-X table entry
+        message_address[31:0] = msix_table[vector * 4];      // Lower address DWORD
+        message_address[63:32] = msix_table[vector * 4 + 1]; // Upper address DWORD
+
+        // Extract message data from MSI-X table entry
+        message_data = msix_table[vector * 4 + 2];
+
+        // Set interrupt outputs
+        msix_interrupt <= 1'b1;
+        msix_vector <= vector;
+        msix_msg_addr <= message_address;
+        msix_msg_data <= message_data;
+
+        $display("MSI-X Interrupt: vector=%0d, addr=0x%016h, data=0x%08h",
+                 vector, message_address, message_data);
+    end else begin
+        // Vector is masked - set pending bit in PBA
+        pba_dword_idx = vector >> 5;  // Divide by 32 to get DWORD index
+        pba_bit_idx = vector & 5'h1F;  // Modulo 32 to get bit position
+
+        if (pba_dword_idx < PBA_SIZE) begin
+            msix_pba[pba_dword_idx] <= msix_pba[pba_dword_idx] | (32'h1 << pba_bit_idx);
+            $display("MSI-X Pending: vector=%0d set in PBA[%0d][%0d]",
+                     vector, pba_dword_idx, pba_bit_idx);
+        end
+    end
+endtask
+
+// Enhanced MSI-X interrupt delivery with proper validation (alias for backward compatibility)
+task msix_deliver_interrupt_validated(input logic [10:0] vector);
+    msix_deliver_interrupt(vector);
 endtask
 
 // Initialize MSI-X table and PBA
@@ -126,3 +183,5 @@ initial begin
         msix_pba[i] = 32'h0;
     end
 end
+
+endmodule

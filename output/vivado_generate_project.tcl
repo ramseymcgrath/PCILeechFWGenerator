@@ -103,44 +103,16 @@ foreach xdc_file $xdc_files {
 }
 
 
+# Set top-level module
+
+# Use the actual top module from PCILeech
+set top_module "pcileech_tlps128_bar_controller"
+
+
 # Set source management mode to manual before setting top
 set_property source_mgmt_mode None [current_project]
-
-# Try to automatically detect top module from PCIe IP and sources
-set top_module ""
-
-# First, check if there's a top-level wrapper generated
-set pcie_ip_files [get_files -quiet *.xci]
-if {[llength $pcie_ip_files] > 0} {
-    # Try to find the top module from the first IP
-    set ip_name [get_property NAME [get_ips]]
-    if {$ip_name ne ""} {
-        set top_module $ip_name
-        puts "Found IP top module: $top_module"
-    }
-}
-
-# If no IP top found, try to find top module from source files
-if {$top_module eq ""} {
-    set sv_files [get_files -quiet *.sv]
-    if {[llength $sv_files] > 0} {
-        # Use the first SystemVerilog file as top module candidate
-        set first_sv [lindex $sv_files 0]
-        set top_module [file rootname [file tail $first_sv]]
-        puts "Using first SystemVerilog file as top: $top_module"
-    }
-}
-
-# If still no top module found, let Vivado auto-detect
-if {$top_module eq ""} {
-    puts "No specific top module found, letting Vivado auto-detect..."
-    # Don't set top module, let Vivado figure it out
-    set_property source_mgmt_mode All [current_project]
-} else {
-    # Try to set the found top module
-    set_property top $top_module [current_fileset]
-    puts "Set top module: $top_module"
-}
+set_property top $top_module [current_fileset]
+puts "Set top module: $top_module"
 
 # Update compile order
 update_compile_order -fileset sources_1

@@ -5,6 +5,23 @@
 // Handles dynamic configuration and control of MSI-X functionality
 //==============================================================================
 
+module msix_capability_registers (
+    input wire clk,
+    input wire reset_n,
+    
+    // MSI-X capability register interface
+    input wire        msix_cap_wr,     // Write strobe for MSI-X capability registers
+    input wire [31:0] msix_cap_addr,   // Address within MSI-X capability space
+    input wire [31:0] msix_cap_wdata,  // Write data for MSI-X capability registers
+    input wire [3:0]  msix_cap_be,     // Byte enables for MSI-X capability writes
+    output reg [31:0] msix_cap_rdata,  // Read data from MSI-X capability registers
+    
+    // MSI-X control outputs
+    output wire        msix_enabled,
+    output wire        msix_function_mask,
+    output wire [10:0] msix_table_size
+);
+
 // MSI-X Message Control register fields
 reg        msix_enable_reg;           // MSI-X Enable bit
 reg        msix_function_mask_reg;    // Function Mask bit
@@ -62,59 +79,7 @@ assign msix_table_size = msix_table_size_reg;
 
 // MSI-X vector validation
 function logic is_valid_msix_vector(input logic [10:0] vector);
-    return (vector < NUM_MSIX) && msix_enabled && !msix_function_mask;
+    return (vector < 32) && msix_enabled && !msix_function_mask;  // Hardcoded to 32 vectors
 endfunction
 
-// Enhanced MSI-X interrupt delivery with proper validation
-task msix_deliver_interrupt_validated(input logic [10:0] vector);
-    logic vector_masked;
-    logic [31:0] table_addr;
-    logic [31:0] control_dword;
-    logic [31:0] pba_dword_idx;
-    logic [4:0] pba_bit_idx;
-
-    // Validate vector number
-    if (!is_valid_msix_vector(vector)) begin
-        $display("MSI-X Error: Invalid vector %0d or MSI-X disabled", vector);
-        return;
-    end
-
-    // Get control DWORD (fourth DWORD in the entry)
-    table_addr = vector * 4 + 3;
-    control_dword = msix_table[table_addr];
-
-    // Check if vector is masked (bit 0 of control DWORD)
-    vector_masked = control_dword[0];
-
-    if (!vector_masked) begin
-        // Vector is enabled and not masked - deliver interrupt
-        logic [63:0] message_address;
-        logic [31:0] message_data;
-
-        // Extract message address from MSI-X table entry
-        message_address[31:0] = msix_table[vector * 4];      // Lower address DWORD
-        message_address[63:32] = msix_table[vector * 4 + 1]; // Upper address DWORD
-
-        // Extract message data from MSI-X table entry
-        message_data = msix_table[vector * 4 + 2];
-
-        // Set interrupt outputs
-        msix_interrupt <= 1'b1;
-        msix_vector <= vector;
-        msix_msg_addr <= message_address;
-        msix_msg_data <= message_data;
-
-        $display("MSI-X Interrupt: vector=%0d, addr=0x%016h, data=0x%08h",
-                 vector, message_address, message_data);
-    end else begin
-        // Vector is masked - set pending bit in PBA
-        pba_dword_idx = vector >> 5;  // Divide by 32 to get DWORD index
-        pba_bit_idx = vector & 5'h1F;  // Modulo 32 to get bit position
-
-        if (pba_dword_idx < PBA_SIZE) begin
-            msix_pba[pba_dword_idx] <= msix_pba[pba_dword_idx] | (32'h1 << pba_bit_idx);
-            $display("MSI-X Pending: vector=%0d set in PBA[%0d][%0d]",
-                     vector, pba_dword_idx, pba_bit_idx);
-        end
-    end
-endtask
+endmodule

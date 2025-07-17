@@ -1,0 +1,52 @@
+#-----------------------------------------------------------
+# Vivado v2024.2 (64-bit)
+# SW Build 5239630 on Fri Nov 08 22:34:34 MST 2024
+# IP Build 5239520 on Sun Nov 10 16:12:51 MST 2024
+# SharedData Build 5239561 on Fri Nov 08 14:39:27 MST 2024
+# Start of session at: Fri Jul 18 01:31:43 2025
+# Process ID         : 126466
+# Current directory  : /home/muttti/123/output/vivado_project/pcileech_firmware.runs/synth_1
+# Command line       : vivado -log pcileech_tlps128_bar_controller.vds -product Vivado -mode batch -messageDb vivado.pb -notrace -source pcileech_tlps128_bar_controller.tcl
+# Log file           : /home/muttti/123/output/vivado_project/pcileech_firmware.runs/synth_1/pcileech_tlps128_bar_controller.vds
+# Journal file       : /home/muttti/123/output/vivado_project/pcileech_firmware.runs/synth_1/vivado.jou
+# Running On         : muttti-System-Product-Name
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.2 LTS
+# Processor Detail   : AMD Ryzen 7 7800X3D 8-Core Processor
+# CPU Frequency      : 3917.060 MHz
+# CPU Physical cores : 8
+# CPU Logical cores  : 16
+# Host memory        : 33293 MB
+# Swap memory        : 8589 MB
+# Total Virtual      : 41883 MB
+# Available Virtual  : 37041 MB
+#-----------------------------------------------------------
+source pcileech_tlps128_bar_controller.tcl -notrace
+WARNING: [Common 17-1361] You have specified a new message control rule that is equivalent to an existing rule with attributes ' -id {Vivado 12-1387}  -suppress '. The existing rule will be replaced.
+WARNING: [Common 17-1361] You have specified a new message control rule that is equivalent to an existing rule with attributes ' -id {Synth 8-3331}  -suppress '. The existing rule will be replaced.
+WARNING: [Common 17-1361] You have specified a new message control rule that is equivalent to an existing rule with attributes ' -id {Synth 8-3332}  -suppress '. The existing rule will be replaced.
+WARNING: [Common 17-1361] You have specified a new message control rule that is equivalent to an existing rule with attributes ' -id {Common 17-55}  -suppress '. The existing rule will be replaced.
+Command: synth_design -top pcileech_tlps128_bar_controller -part xc7a75tfgg484-2 -no_iobuf
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7a75t'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7a75t'
+INFO: [Device 21-403] Loading part xc7a75tfgg484-2
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 8 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 126504
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:02 ; elapsed = 00:00:02 . Memory (MB): peak = 1927.957 ; gain = 401.859 ; free physical = 22960 ; free virtual = 34224
+---------------------------------------------------------------------------------
+ERROR: [Synth 8-2716] syntax error near 'input' [/home/muttti/123/output/src/msix_implementation.sv:32]
+ERROR: [Synth 8-10307] SystemVerilog keyword 'input' used in incorrect context [/home/muttti/123/output/src/msix_implementation.sv:32]
+INFO: [Synth 8-9084] Verilog file '/home/muttti/123/output/src/msix_implementation.sv' ignored due to errors
+ERROR: [Synth 8-12188] Failed to read verilog '/home/muttti/123/output/src/msix_implementation.sv'
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:02 ; elapsed = 00:00:03 . Memory (MB): peak = 1997.926 ; gain = 471.828 ; free physical = 22879 ; free virtual = 34143
+---------------------------------------------------------------------------------
+RTL Elaboration failed
+INFO: [Common 17-83] Releasing license: Synthesis
+7 Infos, 4 Warnings, 0 Critical Warnings and 4 Errors encountered.
+synth_design failed
+ERROR: [Common 17-69] Command failed: Synthesis failed - please see the console or run log file for details
+INFO: [Common 17-206] Exiting Vivado at Fri Jul 18 01:31:50 2025...

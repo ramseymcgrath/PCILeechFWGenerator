@@ -11,7 +11,7 @@
 ; - Revision ID: 04
 ;
 ; Generation Metadata:
-; - Generated: 2025-07-17T15:50:27.445634
+; - Generated: 2025-07-17T16:26:14.365721
 ; - Device BDF: 0000:01:00.0
 ; - Has Behavior Profile: True
 ; - MSI-X Vectors: 32
@@ -3164,7 +3164,7 @@ FFFFFF01,
 ;
 
 ; Behavior Profile Summary:
-; - Total Register Accesses: 33774
+; - Total Register Accesses: 32790
 ; - Capture Duration: 30.0s
 ; - Timing Patterns: 2
 ; - State Transitions: 3
