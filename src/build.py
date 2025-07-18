@@ -938,13 +938,31 @@ class FirmwareBuilder:
     def _generate_tcl_scripts(self, result: Dict[str, Any]) -> None:
         """Generate TCL scripts for Vivado."""
         ctx = result["template_context"]
+        device_config = ctx["device_config"]
+        
+        # Extract subsystem IDs from template context
+        subsys_vendor_id = device_config.get("subsystem_vendor_id")
+        subsys_device_id = device_config.get("subsystem_device_id")
+        
+        # Convert hex strings to integers if needed
+        if isinstance(subsys_vendor_id, str) and subsys_vendor_id.startswith("0x"):
+            subsys_vendor_id = int(subsys_vendor_id, 16)
+        elif isinstance(subsys_vendor_id, str):
+            subsys_vendor_id = int(subsys_vendor_id, 16)
+            
+        if isinstance(subsys_device_id, str) and subsys_device_id.startswith("0x"):
+            subsys_device_id = int(subsys_device_id, 16)
+        elif isinstance(subsys_device_id, str):
+            subsys_device_id = int(subsys_device_id, 16)
 
         self.tcl.build_all_tcl_scripts(
             board=self.config.board,
-            device_id=ctx["device_config"]["device_id"],
-            class_code=ctx["device_config"]["class_code"],
-            revision_id=ctx["device_config"]["revision_id"],
-            vendor_id=ctx["device_config"]["vendor_id"],
+            device_id=device_config["device_id"],
+            class_code=device_config["class_code"],
+            revision_id=device_config["revision_id"],
+            vendor_id=device_config["vendor_id"],
+            subsys_vendor_id=subsys_vendor_id,
+            subsys_device_id=subsys_device_id,
         )
 
         self.logger.info(

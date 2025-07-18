@@ -81,7 +81,11 @@ F0000000,
 00000000,
 
 ; Subsystem Vendor ID (0x2C-0x2D) and Subsystem ID (0x2E-0x2F)
-{{ config_space.device_id | default("0000") | string }}{{ config_space.vendor_id | default("8086") | string }},
+{% if device.subsys_device_id and device.subsys_vendor_id and device.subsys_device_id != "0000" and device.subsys_vendor_id != "0000" %}
+{{ device.subsys_device_id | string }}{{ device.subsys_vendor_id | string }},
+{% else %}
+00000000,
+{% endif %}
 
 ; Expansion ROM Base Address (0x30-0x33) - Disabled
 00000000,

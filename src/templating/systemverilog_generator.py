@@ -352,19 +352,64 @@ class AdvancedSVGenerator:
         modules = {}
 
         try:
+            # Add missing template variables for PCILeech modules
+            enhanced_context = template_context.copy()
+            
+            # Extract device config for easier access
+            device_config = template_context.get("device_config", {})
+            
+            # Create device object for template compatibility
+            device_info = {
+                "vendor_id": device_config.get("vendor_id", "0000"),
+                "device_id": device_config.get("device_id", "0000"),
+                "subsys_vendor_id": device_config.get("subsystem_vendor_id", "0000"),
+                "subsys_device_id": device_config.get("subsystem_device_id", "0000"),
+                "class_code": device_config.get("class_code", "020000"),
+                "revision_id": device_config.get("revision_id", "01"),
+            }
+            
+            enhanced_context.update({
+                "device": device_info,
+                "config_space": {
+                    "vendor_id": device_config.get("vendor_id", "0000"),
+                    "device_id": device_config.get("device_id", "0000"),
+                    "class_code": device_config.get("class_code", "020000"),
+                    "revision_id": device_config.get("revision_id", "01"),
+                },
+                "enable_custom_config": True,
+                "enable_scatter_gather": getattr(self.device_config, "enable_dma", True),
+                "enable_interrupt": template_context.get("interrupt_config", {}).get("vectors", 0) > 0,
+                "enable_clock_crossing": True,
+                "enable_performance_counters": getattr(self.perf_config, "enable_transaction_counters", True),
+                "enable_error_detection": getattr(self.error_config, "enable_ecc", True),
+                "fifo_type": "block_ram",
+                "fifo_depth": 512,
+                "data_width": 128,
+                "fpga_family": "artix7",
+                "vendor_id": device_config.get("vendor_id", "0000"),
+                "device_id": device_config.get("device_id", "0000"),
+                "vendor_id_hex": device_config.get("vendor_id", "0000"),
+                "device_id_hex": device_config.get("device_id", "0000"),
+                "device_specific_config": {},
+            })
+            
+            # Add enable_advanced_features to device_config section if it doesn't exist
+            if "device_config" in enhanced_context and isinstance(enhanced_context["device_config"], dict):
+                enhanced_context["device_config"]["enable_advanced_features"] = getattr(self.error_config, "enable_ecc", True)
+
             # Generate PCILeech TLP BAR controller
             modules["pcileech_tlps128_bar_controller"] = self.renderer.render_template(
-                "systemverilog/pcileech_tlps128_bar_controller.sv.j2", template_context
+                "systemverilog/pcileech_tlps128_bar_controller.sv.j2", enhanced_context
             )
 
             # Generate PCILeech FIFO controller
             modules["pcileech_fifo"] = self.renderer.render_template(
-                "systemverilog/pcileech_fifo.sv.j2", template_context
+                "systemverilog/pcileech_fifo.sv.j2", enhanced_context
             )
 
             # Generate configuration space COE file
             modules["pcileech_cfgspace.coe"] = self.renderer.render_template(
-                "systemverilog/pcileech_cfgspace.coe.j2", template_context
+                "systemverilog/pcileech_cfgspace.coe.j2", enhanced_context
             )
 
             # Always generate MSI-X modules if MSI-X is supported
@@ -376,7 +421,7 @@ class AdvancedSVGenerator:
                 log_info_safe(self.logger, "Generating MSI-X modules")
 
                 # Create MSI-X specific template context
-                msix_template_context = template_context.copy()
+                msix_template_context = enhanced_context.copy()
                 msix_template_context.update(msix_config)
 
                 # Generate MSI-X capability registers
@@ -397,10 +442,10 @@ class AdvancedSVGenerator:
 
                 # Generate MSI-X initialization files
                 modules["msix_pba_init.hex"] = self._generate_msix_pba_init(
-                    template_context
+                    enhanced_context
                 )
                 modules["msix_table_init.hex"] = self._generate_msix_table_init(
-                    template_context
+                    enhanced_context
                 )
 
             # Generate advanced modules if behavior profile is available

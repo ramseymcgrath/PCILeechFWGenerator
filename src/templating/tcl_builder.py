@@ -52,6 +52,8 @@ class BuildContext:
     device_id: Optional[int] = None
     revision_id: Optional[int] = None
     class_code: Optional[int] = None
+    subsys_vendor_id: Optional[int] = None
+    subsys_device_id: Optional[int] = None
     project_name: str = "pcileech_firmware"
     project_dir: str = "./vivado_project"
     output_dir: str = "."
@@ -77,7 +79,12 @@ class BuildContext:
             raise ValueError("board_name is required and cannot be empty")
 
     def to_template_context(self) -> Dict[str, Any]:
-        """Convert build context to template context dictionary."""
+        """Convert build context to template context dictionary with enhanced subsystem ID handling."""
+        # Enhanced subsystem ID handling
+        subsys_vendor_id = getattr(self, 'subsys_vendor_id', None) or self.vendor_id
+        subsys_device_id = getattr(self, 'subsys_device_id', None) or self.device_id
+        
+        # TCL에서는 hex 값을 0x 없이 사용해야 함
         return {
             # Nested device information
             "device": {
@@ -85,6 +92,8 @@ class BuildContext:
                 "device_id": format_hex(self.device_id, 4),
                 "class_code": format_hex(self.class_code, 6),
                 "revision_id": format_hex(self.revision_id, 2),
+                "subsys_vendor_id": format_hex(subsys_vendor_id, 4),
+                "subsys_device_id": format_hex(subsys_device_id, 4),
             },
             # Nested board information
             "board": {
@@ -138,6 +147,7 @@ class BuildContext:
             "pcileech_src_dir": self.pcileech_src_dir,
             "pcileech_ip_dir": self.pcileech_ip_dir,
             "batch_mode": self.batch_mode,
+            "constraint_files": [],  # Add empty constraint files list
         }
 
 
@@ -154,8 +164,9 @@ def format_hex(val: Union[int, str, None], width: int = 4) -> Optional[str]:
     if val is None:
         return None
     if isinstance(val, str):
-        return val if val.startswith("0x") else f"0x{val}"
-    return f"0x{val:0{width}x}"
+        # Remove 0x prefix if present and return just the hex digits
+        return val.replace('0x', '').replace('0X', '').upper()
+    return f"{val:0{width}X}"
 
 
 class ConstraintManager:
@@ -454,6 +465,8 @@ class TCLBuilder:
         vendor_id: Optional[int] = None,
         device_id: Optional[int] = None,
         revision_id: Optional[int] = None,
+        subsys_vendor_id: Optional[int] = None,
+        subsys_device_id: Optional[int] = None,
         **kwargs,
     ) -> BuildContext:
         """
@@ -509,6 +522,12 @@ class TCLBuilder:
         config_class_code = self._safe_getattr(
             self.device_config, "identification.class_code"
         )
+        config_subsys_vendor_id = self._safe_getattr(
+            self.device_config, "identification.subsystem_vendor_id"
+        )
+        config_subsys_device_id = self._safe_getattr(
+            self.device_config, "identification.subsystem_device_id"
+        )
 
         return BuildContext(
             board_name=board,
@@ -522,6 +541,8 @@ class TCLBuilder:
             device_id=device_id or config_device_id,
             revision_id=revision_id or config_revision_id,
             class_code=config_class_code,
+            subsys_vendor_id=subsys_vendor_id or config_subsys_vendor_id,
+            subsys_device_id=subsys_device_id or config_subsys_device_id,
             synthesis_strategy=kwargs.get(
                 "synthesis_strategy", self.SYNTHESIS_STRATEGY
             ),
@@ -641,6 +662,8 @@ class TCLBuilder:
         vendor_id: Optional[int] = None,
         device_id: Optional[int] = None,
         revision_id: Optional[int] = None,
+        subsys_vendor_id: Optional[int] = None,
+        subsys_device_id: Optional[int] = None,
         source_files: Optional[List[str]] = None,
         constraint_files: Optional[List[str]] = None,
         use_pcileech: bool = True,
@@ -670,6 +693,8 @@ class TCLBuilder:
         pcileech_kwargs = {
             "source_file_list": source_files,
             "constraint_files": constraint_files,
+            "subsys_vendor_id": subsys_vendor_id,
+            "subsys_device_id": subsys_device_id,
             **kwargs,
         }
 
@@ -730,6 +755,8 @@ class TCLBuilder:
         vendor_id: Optional[int] = None,
         device_id: Optional[int] = None,
         revision_id: Optional[int] = None,
+        subsys_vendor_id: Optional[int] = None,
+        subsys_device_id: Optional[int] = None,
         source_files: Optional[List[str]] = None,
         constraint_files: Optional[List[str]] = None,
         **kwargs,
@@ -759,6 +786,8 @@ class TCLBuilder:
             vendor_id=vendor_id,
             device_id=device_id,
             revision_id=revision_id,
+            subsys_vendor_id=subsys_vendor_id,
+            subsys_device_id=subsys_device_id,
             source_files=source_files,
             constraint_files=constraint_files,
             use_pcileech=True,
