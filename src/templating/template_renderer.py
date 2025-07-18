@@ -244,15 +244,6 @@ class TemplateRenderer:
         self.env.globals["range"] = range
         self.env.globals["min"] = min
         self.env.globals["max"] = max
-
-        # Add Python built-in functions that are commonly used in templates
-        self.env.globals["hasattr"] = hasattr
-        self.env.globals["getattr"] = getattr
-        self.env.globals["isinstance"] = isinstance
-        self.env.globals["len"] = len
-        self.env.globals["range"] = range
-        self.env.globals["min"] = min
-        self.env.globals["max"] = max
         self.env.globals["hex"] = hex
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:

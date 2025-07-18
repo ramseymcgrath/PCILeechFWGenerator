@@ -93,8 +93,8 @@ set_property -dict [list \
     CONFIG.Class_Code_Interface "0" \
     CONFIG.Class_Code_Sub "0" \
     CONFIG.REV_ID "{{ device.revision_id if device.revision_id else 0x00 }}" \
-    CONFIG.SUBSYSTEM_ID {{ "0x%04X" | format((device.subsys_device_id | int) if device.subsys_device_id and device.subsys_device_id != "0000" else 0) }} \
-    CONFIG.SUBSYSTEM_VENDOR_ID {{ "0x%04X" | format((device.subsys_vendor_id | int) if device.subsys_vendor_id and device.subsys_vendor_id != "0000" else 0) }} \
+    CONFIG.SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
+    CONFIG.SUBSYSTEM_VENDOR_ID {{ device.subsys_vendor_id if device.subsys_vendor_id else "0000" }} \
 ] [get_ips pcie_axi_bridge]
 
 {% elif pcie_ip_type == "pcie_ultrascale" %}
@@ -108,8 +108,8 @@ set_property -dict [list \
     CONFIG.PF0_VENDOR_ID {{ device.vendor_id if device.vendor_id else "0x10EE" }} \
     CONFIG.PF0_CLASS_CODE {{ device.class_code if device.class_code else "0x058000" }} \
     CONFIG.PF0_REVISION_ID {{ device.revision_id if device.revision_id else "0x00" }} \
-    CONFIG.PF0_SUBSYSTEM_ID {{ "0x%04X" | format((device.subsys_device_id | int) if device.subsys_device_id and device.subsys_device_id != "0000" else 0) }} \
-    CONFIG.PF0_SUBSYSTEM_VENDOR_ID {{ "0x%04X" | format((device.subsys_vendor_id | int) if device.subsys_vendor_id and device.subsys_vendor_id != "0000" else 0) }} \
+    CONFIG.PF0_SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
+    CONFIG.PF0_SUBSYSTEM_VENDOR_ID {{ device.subsys_vendor_id if device.subsys_vendor_id else "0000" }} \
     CONFIG.PF0_BAR0_ENABLED {true} \
     CONFIG.PF0_BAR0_64BIT {true} \
     CONFIG.PF0_BAR0_SIZE {1} \
@@ -128,8 +128,8 @@ set_property -dict [list \
     CONFIG.Class_Code_Base 02 \
     CONFIG.Class_Code_Interface 00 \
     CONFIG.Class_Code_Sub 00 \
-    CONFIG.Subsystem_ID {{ "0x%04X" | format((device.subsys_device_id | int) if device.subsys_device_id and device.subsys_device_id != "0000" else 0) }} \
-    CONFIG.Subsystem_Vendor_ID {{ "0x%04X" | format((device.subsys_vendor_id | int) if device.subsys_vendor_id and device.subsys_vendor_id != "0000" else 0) }} \
+    CONFIG.SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
+    CONFIG.SUBSYSTEM_VENDOR_ID {{ device.subsys_vendor_id if device.subsys_vendor_id else "0000" }} \
     CONFIG.Bar0_Enabled {true} \
     CONFIG.Bar0_Type {Memory} \
     CONFIG.Bar0_64bit {true} \
