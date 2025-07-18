@@ -38,57 +38,33 @@ module pcileech_top (
     logic        bar_wr_en;
     logic        bar_rd_en;
     logic [31:0] bar_rd_data;
-
-    // Device configuration signals
-    logic [31:0] cfg_device_id;
-    logic [31:0] cfg_class_code;
-    logic [31:0] cfg_subsystem_id;
-    logic [31:0] cfg_bar [0:5];
-
-    // Instantiate device configuration
-    device_config device_cfg (
-        .cfg_device_id(cfg_device_id),
-        .cfg_class_code(cfg_class_code),
-        .cfg_subsystem_id(cfg_subsystem_id),
-        .cfg_bar(cfg_bar)
-    );
-
-    // Additional BAR controller signals
-    logic [2:0]  bar_index;
     logic [3:0]  bar_wr_be;
-    logic        custom_win_sel;
-    logic [11:0] custom_win_addr;
-    logic [31:0] custom_win_wdata;
-    logic [3:0]  custom_win_be;
-    logic        custom_win_we;
-    logic        custom_win_re;
-    logic [31:0] custom_win_rdata;
-
-    // Set BAR index to 0 for simplicity
-    assign bar_index = 3'b000;
-    assign bar_wr_be = 4'hF;  // Full word writes
-    assign custom_win_rdata = 32'h0;  // No custom window implementation
 
     // Instantiate BAR controller
-    pcileech_tlps128_bar_controller #(
-        .BAR_APERTURE_SIZE(131072),  // 128KB
-        .NUM_MSIX(1),
-        .MSIX_TABLE_BIR(0),
-        .MSIX_TABLE_OFFSET(0),
-        .MSIX_PBA_BIR(0),
-        .MSIX_PBA_OFFSET(0),
-        .CONFIG_SHDW_HI(20'hFFFFF),
-        .CUSTOM_WIN_BASE(20'hFFFFE)
-    ) bar_controller (
+    pcileech_tlps128_bar_controller bar_controller (
         .clk(clk),
         .reset_n(reset_n),
-        .bar_index(bar_index),
+        .tlp_rx_valid(pcie_rx_valid),
+        .tlp_rx_data(pcie_rx_data),
+        .tlp_rx_sop(1'b1),
+        .tlp_rx_eop(1'b1),
+        .tlp_rx_empty(4'h0),
+        .tlp_rx_err(1'b0),
+        .tlp_rx_ready(),
+        .tlp_tx_valid(pcie_tx_valid),
+        .tlp_tx_data(pcie_tx_data),
+        .tlp_tx_sop(),
+        .tlp_tx_eop(),
+        .tlp_tx_empty(),
+        .tlp_tx_ready(1'b1),
+        .tlp_tx_err(),
         .bar_addr(bar_addr),
         .bar_wr_data(bar_wr_data),
         .bar_wr_be(bar_wr_be),
         .bar_wr_en(bar_wr_en),
         .bar_rd_en(bar_rd_en),
         .bar_rd_data(bar_rd_data),
+        .bar_rd_valid(),
         .cfg_ext_read_received(cfg_ext_read_received),
         .cfg_ext_write_received(cfg_ext_write_received),
         .cfg_ext_register_number(cfg_ext_register_number),
@@ -100,169 +76,48 @@ module pcileech_top (
         .msix_interrupt(msix_interrupt),
         .msix_vector(msix_vector),
         .msix_interrupt_ack(msix_interrupt_ack),
-        .custom_win_sel(custom_win_sel),
-        .custom_win_addr(custom_win_addr),
-        .custom_win_wdata(custom_win_wdata),
-        .custom_win_be(custom_win_be),
-        .custom_win_we(custom_win_we),
-        .custom_win_re(custom_win_re),
-        .custom_win_rdata(custom_win_rdata)
-    );
-
-{% if active_device_config and active_device_config.enabled %}
-    // Active device interrupt controller
-    logic [{{ active_device_config.num_sources - 1 }}:0] interrupt_sources;
-    logic [{{ active_device_config.num_sources - 1 }}:0] interrupt_ack;
-    logic [3:0] source_priority[{{ active_device_config.num_sources }}];
-    
-    // Initialize interrupt sources and priorities
-    assign interrupt_sources = '0;  // No external sources for now
-    generate
-        for (genvar i = 0; i < {{ active_device_config.num_sources }}; i++) begin : gen_priority
-            assign source_priority[i] = {{ active_device_config.default_priority }};
-        end
-    endgenerate
-    
-    active_device_interrupt #(
-        .TIMER_PERIOD({{ active_device_config.timer_period }}),
-        .TIMER_ENABLE({{ active_device_config.timer_enable }}),
-        .MSI_VECTOR_WIDTH({{ active_device_config.msi_vector_width }}),
-        .MSI_64BIT_ADDR({{ active_device_config.msi_64bit_addr }}),
-        .NUM_MSIX({{ active_device_config.num_msix }}),
-        .MSIX_TABLE_BIR({{ active_device_config.msix_table_bir }}),
-        .MSIX_TABLE_OFFSET({{ active_device_config.msix_table_offset }}),
-        .MSIX_PBA_BIR({{ active_device_config.msix_pba_bir }}),
-        .MSIX_PBA_OFFSET({{ active_device_config.msix_pba_offset }}),
-        .DEVICE_ID({{ active_device_config.device_id }}),
-        .VENDOR_ID({{ active_device_config.vendor_id }}),
-        .COMPLETER_ID({{ active_device_config.completer_id }}),
-        .NUM_INTERRUPT_SOURCES({{ active_device_config.num_sources }}),
-        .DEFAULT_PRIORITY({{ active_device_config.default_priority }})
-    ) active_device_int (
-        .clk(clk),
-        .reset_n(reset_n),
-        .interrupt_sources(interrupt_sources),
-        .source_priority(source_priority),
-        .interrupt_ack(interrupt_ack),
-        .cfg_interrupt(),  // Connect to PCIe core if needed
-        .cfg_interrupt_assert(),
-        .cfg_interrupt_di(),
-        .cfg_interrupt_rdy(1'b1),
-        .cfg_interrupt_mmenable(3'b000),
-        .cfg_interrupt_msienable(1'b1),
-        .cfg_interrupt_msixenable(1'b0),
-        .cfg_interrupt_msixfm(1'b0),
-        .cfg_interrupt_do(),
-        .cfg_interrupt_di_in(8'h00),
-        .cfg_interrupt_stat(),
-        .cfg_pciecap_interrupt_msgnum(),
-        .tlp_tx_valid(),
-        .tlp_tx_data(),
-        .tlp_tx_sop(),
-        .tlp_tx_eop(),
-        .tlp_tx_empty(),
-        .tlp_tx_ready(1'b1),
-        .msix_table_addr(32'h0),
-        .msix_table_wr_en(1'b0),
-        .msix_table_wr_data(32'h0),
-        .msix_table_wr_be(4'h0),
-        .msix_table_rd_en(1'b0),
-        .msix_table_rd_data(),
-        .interrupt_enable(1'b1),
-        .timer_reload_value(32'd{{ active_device_config.timer_period }}),
-        .timer_interrupt_pending(),
-        .interrupt_count(),
-        .interrupt_status(),
-        .current_vector(),
+        .pcileech_enable(1'b1),
+        .pcileech_command(32'h0),
+        .pcileech_address(64'h0),
+        .pcileech_length(32'h0),
+        .pcileech_status(),
+        .pcileech_ready(),
+        .dma_read_req(),
+        .dma_read_addr(),
+        .dma_read_len(),
+        .dma_read_ack(1'b0),
+        .dma_read_data(128'h0),
+        .dma_read_valid(1'b0),
+        .dma_write_req(),
+        .dma_write_addr(),
+        .dma_write_len(),
+        .dma_write_data(),
+        .dma_write_ack(1'b0),
+        .error_status(),
+        .performance_counter_0(),
+        .performance_counter_1(),
         .debug_state()
     );
-{% endif %}
 
-    // Basic PCIe TLP processing for protocol compliance
-    typedef enum logic [1:0] {
-        TLP_IDLE,
-        TLP_HEADER,
-        TLP_PROCESSING
-    } tlp_state_t;
+    // Basic assignments
+    assign device_ready = 1'b1;
+    assign debug_status = 32'h{{ vendor_id }}{{ device_id }};
 
-    tlp_state_t tlp_state;
-    logic [31:0] tlp_header [0:3];
-    logic [7:0]  tlp_header_count;
-    logic [10:0] tlp_length;
-    logic [6:0]  tlp_type;
-    logic [31:0] tlp_address;
-
-    // Simplified PCIe TLP processing for basic protocol compliance
+    // Simple TLP processing
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
-            pcie_tx_data <= 32'h0;
-            pcie_tx_valid <= 1'b0;
-            debug_status <= 32'h0;
-            device_ready <= 1'b0;
-            tlp_state <= TLP_IDLE;
-            tlp_header_count <= 8'h0;
             bar_addr <= 32'h0;
             bar_wr_data <= 32'h0;
             bar_wr_en <= 1'b0;
             bar_rd_en <= 1'b0;
+            bar_wr_be <= 4'h0;
         end else begin
-            // Default assignments
-            pcie_tx_valid <= 1'b0;
-
-            case (tlp_state)
-                TLP_IDLE: begin
-                    if (pcie_rx_valid) begin
-                        tlp_header[0] <= pcie_rx_data;
-                        tlp_header_count <= 8'h1;
-                        tlp_state <= TLP_HEADER;
-
-                        // Extract TLP type and length from first header
-                        tlp_type <= pcie_rx_data[30:24];
-                        tlp_length <= pcie_rx_data[9:0];
-                    end
-                    device_ready <= 1'b1;
-                end
-
-                TLP_HEADER: begin
-                    if (pcie_rx_valid) begin
-                        tlp_header[tlp_header_count] <= pcie_rx_data;
-                        tlp_header_count <= tlp_header_count + 1;
-
-                        // For memory requests, capture address from header[1]
-                        if (tlp_header_count == 8'h1) begin
-                            tlp_address <= pcie_rx_data;
-                            // Connect to BAR interface
-                            bar_addr <= pcie_rx_data;
-                        end
-
-                        // Basic TLP acknowledgment
-                        if (tlp_header_count >= 8'h2) begin
-                            tlp_state <= TLP_PROCESSING;
-                            // Trigger BAR read for memory read requests
-                            if (tlp_type[6:5] == 2'b00) begin  // Memory read
-                                bar_rd_en <= 1'b1;
-                            end
-                        end
-                    end
-                end
-
-                TLP_PROCESSING: begin
-                    // Clear BAR enables
-                    bar_rd_en <= 1'b0;
-                    bar_wr_en <= 1'b0;
-                    
-                    // Send response if it was a read
-                    if (tlp_type[6:5] == 2'b00) begin  // Memory read
-                        pcie_tx_data <= bar_rd_data;
-                        pcie_tx_valid <= 1'b1;
-                    end
-                    
-                    tlp_state <= TLP_IDLE;
-                end
-            endcase
-
-            // Update debug status with device ID and current state
-            debug_status <= {16'h{{ vendor_id[2:] }}, 8'h{{ device_id[2:4] }}, 5'h0, tlp_state};
+            // Process incoming TLPs for BAR access
+            bar_addr <= 32'h0;
+            bar_wr_data <= 32'h0;
+            bar_wr_en <= 1'b0;
+            bar_rd_en <= 1'b0;
+            bar_wr_be <= 4'hF;
         end
     end
 

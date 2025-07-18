@@ -74,6 +74,36 @@ if {[file exists $src_dir]} {
 }
 {% endif %}
 
+# Add HEX initialization files from src directory
+puts "Adding HEX initialization files..."
+if {[file exists $src_dir]} {
+    set hex_files [glob -nocomplain [file join $src_dir "*.hex"]]
+    foreach hex_file $hex_files {
+        add_files -norecurse $hex_file
+        puts "  Added HEX file: [file tail $hex_file]"
+    }
+    
+    if {[llength $hex_files] == 0} {
+        puts "  No HEX files found in $src_dir"
+    }
+}
+
+# Add COE (Coefficient) files from systemverilog directory
+puts "Adding COE coefficient files..."
+if {[file exists "systemverilog"]} {
+    set coe_files [glob -nocomplain [file join "systemverilog" "*.coe"]]
+    foreach coe_file $coe_files {
+        add_files -norecurse $coe_file
+        puts "  Added COE file: [file tail $coe_file]"
+    }
+    
+    if {[llength $coe_files] == 0} {
+        puts "  No COE files found in systemverilog directory"
+    }
+} else {
+    puts "  systemverilog directory not found"
+}
+
 # Configure PCIe IP Core based on FPGA family
 puts "Configuring PCIe IP Core for {{ pcie_ip_type }}..."
 
@@ -116,20 +146,19 @@ set_property -dict [list \
 ] [get_ips pcie_ultrascale_bridge]
 
 {% else %}
-# TEMPLATE FILE: /src/templates/tcl/pcileech_generate_project.j2
 # 7-Series PCIe IP (default)
 create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_bridge
 set_property -dict [list \
     CONFIG.Link_Speed {2.5_GT/s} \
     CONFIG.Maximum_Link_Width X1 \
-    CONFIG.Device_ID {{ device_id if device_id else 28705 }} \
-    CONFIG.Vendor_ID {{ vendor_id if vendor_id else 4332 }} \
-    CONFIG.Revision_ID {{ revision_id if revision_id else 0 }} \
+    CONFIG.Device_ID {{ device_id }} \
+    CONFIG.Vendor_ID {{ vendor_id }} \
+    CONFIG.Revision_ID {{ revision_id | default(4) }} \
     CONFIG.Class_Code_Base {02} \
     CONFIG.Class_Code_Interface {00} \
     CONFIG.Class_Code_Sub {00} \
-    CONFIG.Subsystem_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
-    CONFIG.Subsystem_Vendor_ID {{ device.subsys_vendor_id if device.subsys_vendor_id else "0000" }} \
+    CONFIG.Subsystem_ID {{ subsystem_device_id | default(device_id) }} \
+    CONFIG.Subsystem_Vendor_ID {{ subsystem_vendor_id | default(vendor_id) }} \
     CONFIG.Bar0_Enabled {true} \
     CONFIG.Bar0_Type {Memory} \
     CONFIG.Bar0_64bit {true} \
@@ -152,7 +181,7 @@ if {[file exists "{{ ip_file }}"]} {
 {% endfor %}
 {% endif %}
 
-# Add coefficient files if present
+# Add coefficient files if present (legacy support)
 {% if pcileech.coefficient_files %}
 puts "Adding coefficient files..."
 {% for coeff_file in pcileech.coefficient_files %}
@@ -167,6 +196,17 @@ if {[file exists "{{ coeff_file }}"]} {
 
 # Add constraint files
 puts "Adding constraint files..."
+
+# First, add the specific board XDC file for PCILeech
+set board_xdc_file "{{ board_name }}_captaindma_75t.xdc"
+if {[file exists $board_xdc_file]} {
+    add_files -fileset constrs_1 -norecurse $board_xdc_file
+    puts "  Added board constraint: $board_xdc_file"
+} else {
+    puts "  Warning: Board constraint file not found: $board_xdc_file"
+}
+
+# Then add any additional constraint files specified
 {% if constraint_files %}
 {% for constraint_file in constraint_files %}
 if {[file exists "{{ constraint_file }}"]} {
@@ -177,11 +217,14 @@ if {[file exists "{{ constraint_file }}"]} {
 }
 {% endfor %}
 {% else %}
-# Add all XDC files from current directory
+# Add all other XDC files from current directory
 set xdc_files [glob -nocomplain "*.xdc"]
 foreach xdc_file $xdc_files {
-    add_files -fileset constrs_1 -norecurse $xdc_file
-    puts "  Added constraint: [file tail $xdc_file]"
+    # Skip the board XDC file if we already added it
+    if {$xdc_file != $board_xdc_file} {
+        add_files -fileset constrs_1 -norecurse $xdc_file
+        puts "  Added constraint: [file tail $xdc_file]"
+    }
 }
 {% endif %}
 

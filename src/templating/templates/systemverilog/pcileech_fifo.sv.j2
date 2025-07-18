@@ -16,7 +16,7 @@
 `define ENABLE_STARTUPE2
 
 module pcileech_fifo #(
-    parameter               PARAM_DEVICE_ID = {{ device_id | default('0') }},
+    parameter               PARAM_DEVICE_ID = {{ device_id | default('16\'h0000') }},
     parameter               PARAM_VERSION_NUMBER_MAJOR = {{ version_major | default('4') }},
     parameter               PARAM_VERSION_NUMBER_MINOR = {{ version_minor | default('14') }},
     parameter               PARAM_CUSTOM_VALUE = {{ custom_value | default('32\'hffffffff') }}

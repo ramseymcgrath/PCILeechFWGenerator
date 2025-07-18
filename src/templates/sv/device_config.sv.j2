@@ -2,13 +2,17 @@
 {{ header | safe }}
 
 module device_config #(
-    parameter VENDOR_ID = {{ vendor_id | sv_hex(16) }},
-    parameter DEVICE_ID = {{ device_id | sv_hex(16) }},
-    parameter CLASS_CODE = {{ class_code | sv_hex(24) }},
-    parameter SUBSYSTEM_VENDOR_ID = {{ vendor_id | sv_hex(16) }},
-    parameter SUBSYSTEM_DEVICE_ID = {{ device_id | sv_hex(16) }},
+    parameter VENDOR_ID = 16'h{{ "%04x" | format(vendor_id) }},
+    parameter DEVICE_ID = 16'h{{ "%04x" | format(device_id) }},
+    parameter CLASS_CODE = 24'h{{ "%06x" | format(class_code) }},
+    parameter SUBSYSTEM_VENDOR_ID = 16'h{{ "%04x" | format(subsystem_vendor_id | default(vendor_id)) }},
+    parameter SUBSYSTEM_DEVICE_ID = 16'h{{ "%04x" | format(subsystem_device_id | default(device_id)) }},
 {%- for i in range(6) %}
-    parameter BAR{{ i }}_APERTURE = {{ bars[i] | sv_hex(32) }}{{ "," if not loop.last else "" }}
+    {%- if bars and bars[i] is defined %}
+    parameter BAR{{ i }}_APERTURE = 32'h{{ "%08x" | format(bars[i].size if bars[i].size else 0) }}{{ "," if not loop.last else "" }}
+    {%- else %}
+    parameter BAR{{ i }}_APERTURE = 32'h00000000{{ "," if not loop.last else "" }}
+    {%- endif %}
 {%- endfor %}
 ) (
     // Configuration space interface
