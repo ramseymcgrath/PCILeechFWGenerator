@@ -710,8 +710,11 @@ def test_file_operations_manager_write_json(temp_dir, mock_logger):
     # Test data
     data = {"key": "value", "nested": {"key": "value"}}
 
-    # Mock open to avoid actual file operations
-    with mock.patch("builtins.open", mock.mock_open()) as mock_file:
+    # Mock both open and json.dump
+    with mock.patch("builtins.open", mock.mock_open()) as mock_file, mock.patch(
+        "json.dump"
+    ) as mock_json_dump:
+
         manager.write_json("test.json", data)
 
         # Check that file was opened correctly
@@ -721,8 +724,8 @@ def test_file_operations_manager_write_json(temp_dir, mock_logger):
 
         # Check that json.dump was called with correct arguments
         handle = mock_file()
-        json.dump.assert_called_once()
-        args, kwargs = json.dump.call_args
+        mock_json_dump.assert_called_once()
+        args, kwargs = mock_json_dump.call_args
         assert args[0] == data  # First arg is data
         assert args[1] == handle  # Second arg is file handle
         assert kwargs["indent"] == 2

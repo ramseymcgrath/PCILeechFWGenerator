@@ -11,11 +11,16 @@ import os
 import subprocess
 from dataclasses import dataclass
 from enum import IntEnum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -200,7 +205,7 @@ class ConfigSpaceManager:
         self.bdf = bdf
         self.device_config = get_device_config(device_profile)
         self.strict_vfio = strict_vfio
-        self._config_path = f"/sys/bus/pci/devices/{self.bdf}/config"
+        self._config_path = Path(f"/sys/bus/pci/devices/{self.bdf}/config")
 
         # Extract extended configuration space pointers from device config
         if self.device_config and hasattr(self.device_config, "capabilities"):
@@ -529,11 +534,12 @@ class ConfigSpaceManager:
                 continue
 
             parts = line.split("|")[0].strip().split()
-            if not parts or not parts[0].endswith(":"):
+            if not parts:
                 continue
 
             try:
-                offset = int(parts[0][:-1], 16)
+                # Try to parse the first part as a hex offset
+                offset = int(parts[0], 16)
                 hex_values = parts[1:17]  # Up to 16 hex values per line
 
                 for i, hex_val in enumerate(hex_values):
@@ -751,7 +757,7 @@ class ConfigSpaceManager:
         self._validate_config_space_size(config_space)
 
         device_info = self._extract_basic_device_info(config_space)
-        device_info["subsys_vendor_id"], device_info["subsys_device_id"] = (
+        device_info["subsystem_vendor_id"], device_info["subsystem_device_id"] = (
             self._extract_subsystem_info(config_space)
         )
         device_info["bars"] = self._extract_bar_info(config_space)
@@ -1058,8 +1064,8 @@ class ConfigSpaceManager:
         command = device_info["command"]
         status = device_info["status"]
         header_type = device_info["header_type"]
-        subsys_vendor_id = device_info["subsys_vendor_id"]
-        subsys_device_id = device_info["subsys_device_id"]
+        subsys_vendor_id = device_info["subsystem_vendor_id"]
+        subsys_device_id = device_info["subsystem_device_id"]
         cache_line_size = device_info["cache_line_size"]
         latency_timer = device_info["latency_timer"]
         bist = device_info["bist"]

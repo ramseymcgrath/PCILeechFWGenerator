@@ -109,7 +109,7 @@ module pcileech_top (
         .custom_win_rdata(custom_win_rdata)
     );
 
-{% if active_device_config.enabled %}
+{% if active_device_config and active_device_config.enabled %}
     // Active device interrupt controller
     logic [{{ active_device_config.num_sources - 1 }}:0] interrupt_sources;
     logic [{{ active_device_config.num_sources - 1 }}:0] interrupt_ack;

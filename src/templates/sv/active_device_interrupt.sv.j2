@@ -25,11 +25,11 @@ module active_device_interrupt
 #(
     // Timer Configuration
     parameter TIMER_PERIOD = {{ active_device_config.timer_period }},      // Clock cycles between periodic interrupts
-    parameter TIMER_ENABLE = {{ active_device_config.timer_enable }},      // Enable periodic timer
+    parameter TIMER_ENABLE = {{ active_device_config.timer_enable | sv_bool }},      // Enable periodic timer
     
     // MSI Configuration
     parameter MSI_VECTOR_WIDTH = {{ active_device_config.msi_vector_width }},   // Number of MSI vectors (2^WIDTH)
-    parameter MSI_64BIT_ADDR = {{ active_device_config.msi_64bit_addr }},       // Use 64-bit MSI addresses
+    parameter MSI_64BIT_ADDR = {{ active_device_config.msi_64bit_addr | sv_bool }},       // Use 64-bit MSI addresses
     
     // MSI-X Configuration
     parameter NUM_MSIX = {{ active_device_config.num_msix }},                    // Number of MSI-X vectors

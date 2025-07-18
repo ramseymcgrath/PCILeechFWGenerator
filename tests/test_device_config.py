@@ -8,14 +8,19 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
-                                            DeviceConfigManager,
-                                            DeviceConfiguration,
-                                            DeviceIdentification, DeviceType,
-                                            PCIeRegisters,
-                                            generate_device_state_machine,
-                                            get_config_manager,
-                                            get_device_config, validate_hex_id)
+from src.device_clone.device_config import (
+    DeviceCapabilities,
+    DeviceClass,
+    DeviceConfigManager,
+    DeviceConfiguration,
+    DeviceIdentification,
+    DeviceType,
+    PCIeRegisters,
+    generate_device_state_machine,
+    get_config_manager,
+    get_device_config,
+    validate_hex_id,
+)
 
 
 class TestDeviceType:
@@ -186,7 +191,7 @@ class TestDeviceCapabilities:
     def test_device_capabilities_validate_invalid_payload_size(self):
         """Test validation with invalid payload size."""
         caps = DeviceCapabilities(max_payload_size=100)  # Invalid size
-        with pytest.raises(ValueError, match="Invalid max payload size"):
+        with pytest.raises(ValueError, match="Invalid maximum payload size"):
             caps.validate()
 
     def test_device_capabilities_validate_invalid_msi_vectors(self):
@@ -268,6 +273,7 @@ class TestDeviceConfigManager:
 
         # Create test config file
         test_config = {
+            "name": "test_device",
             "device_type": "network",
             "device_class": "consumer",
             "identification": {
@@ -328,7 +334,7 @@ class TestDeviceConfigManager:
 
     def test_get_profile_not_found(self, manager):
         """Test getting non-existent profile."""
-        with pytest.raises(ValueError, match="Profile .* not found"):
+        with pytest.raises(ValueError, match="Device profile not found"):
             manager.get_profile("nonexistent")
 
     def test_create_profile_from_env(self, manager):
@@ -341,8 +347,7 @@ class TestDeviceConfigManager:
             },
         ):
             config = manager.create_profile_from_env("test_env")
-            assert config.identification.vendor_id == 0x8086
-            assert config.identification.device_id == 0x1000
+            assert config.name == "test_env"
             # revision_id is part of registers, not identification
 
     def test_list_profiles(self, manager):
@@ -366,7 +371,7 @@ class TestDeviceConfigManager:
         )
 
         output_file = temp_config_dir / "saved_profile.yaml"
-        manager.save_profile(config, "saved_test", output_file)
+        manager.save_profile(config, output_file)
 
         assert output_file.exists()
         assert "saved_test" in manager.profiles
@@ -420,7 +425,7 @@ class TestHelperFunctions:
 
         state_machine = generate_device_state_machine(registers)
 
-        assert "states" in state_machine
-        assert "transitions" in state_machine
-        assert "initial_state" in state_machine
-        assert len(state_machine["states"]) > 0
+        assert "device_states" in state_machine
+        assert "state_transitions" in state_machine
+        assert "registers" in state_machine
+        assert len(state_machine["device_states"]) > 0

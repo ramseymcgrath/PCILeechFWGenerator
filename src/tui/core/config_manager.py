@@ -14,16 +14,27 @@ from typing import Dict, List, Optional
 from ..models.config import BuildConfiguration
 from ..models.error import ErrorSeverity, TUIError
 
+# Default cache directory for PCILeech
+CACHE_DIR = Path(
+    os.environ.get(
+        "PCILEECH_CACHE_DIR", os.path.expanduser("~/.cache/pcileech-fw-generator")
+    )
+)
+
 
 class ConfigManager:
     """Manages build configuration and profiles."""
 
     def __init__(self):
         self._current_config: Optional[BuildConfiguration] = None
-        self.config_dir = Path.home() / ".pcileech" / "profiles"
+        self.config_dir = CACHE_DIR / "profiles"
+        self.old_config_dir = Path.home() / ".pcileech" / "profiles"
         try:
             # Create directory with appropriate permissions if it doesn't exist
             self._ensure_config_directory()
+
+            # Migrate profiles from old directory if needed
+            self._migrate_old_profiles()
         except Exception as e:
             # Log the error but continue - we'll handle file operations
             # gracefully later
@@ -66,6 +77,48 @@ class ConfigManager:
         except Exception as e:
             raise Exception(f"Failed to create config directory: {str(e)}")
 
+    def _migrate_old_profiles(self) -> None:
+        """
+        Migrate profiles from old ~/.pcileech/profiles directory to new cache location.
+        This ensures users don't lose their profiles when upgrading.
+        """
+        if not self.old_config_dir.exists():
+            return
+
+        try:
+            # Check if old directory exists and has profiles
+            if not self.old_config_dir.is_dir():
+                return
+
+            old_profiles = list(self.old_config_dir.glob("*.json"))
+            if not old_profiles:
+                return
+
+            print(
+                f"Migrating {len(old_profiles)} profiles from {self.old_config_dir} to {self.config_dir}"
+            )
+
+            # Copy each profile to the new location
+            for profile_path in old_profiles:
+                try:
+                    # Read the old profile
+                    with open(profile_path, "r") as f:
+                        profile_data = json.load(f)
+
+                    # Create a BuildConfiguration from the data
+                    config = BuildConfiguration(**profile_data)
+
+                    # Save to new location
+                    profile_name = profile_path.stem
+                    self.save_profile(profile_name, config)
+                    print(f"Migrated profile: {profile_name}")
+                except Exception as e:
+                    print(f"Failed to migrate profile {profile_path.name}: {e}")
+
+        except Exception as e:
+            print(f"Warning: Profile migration failed: {e}")
+            # Continue even if migration fails - this is just a convenience feature
+
     def save_profile(self, name: str, config: BuildConfiguration) -> bool:
         """
         Save configuration profile to ~/.pcileech/profiles/.
@@ -97,7 +150,7 @@ class ConfigManager:
                 details=str(e),
                 suggested_actions=[
                     "Check if your disk has sufficient space",
-                    "Verify that the ~/.pcileech directory is accessible",
+                    "Verify that the cache directory is accessible",
                 ],
             )
             print(f"Error saving profile: {error.message}")
@@ -150,7 +203,7 @@ class ConfigManager:
                 message=f"Permission denied when loading profile '{name}'",
                 details=str(e),
                 suggested_actions=[
-                    "Check file permissions in ~/.pcileech/profiles/",
+                    f"Check file permissions in {CACHE_DIR}/profiles/",
                     "Ensure you have read access to your home directory",
                 ],
             )
@@ -247,7 +300,7 @@ class ConfigManager:
                 message="Permission denied when listing profiles",
                 details=str(e),
                 suggested_actions=[
-                    "Check permissions for ~/.pcileech/profiles/ directory",
+                    f"Check permissions for {CACHE_DIR}/profiles/ directory",
                     "Ensure you have read access to your home directory",
                 ],
             )
@@ -260,7 +313,7 @@ class ConfigManager:
                 message="Failed to list profiles",
                 details=str(e),
                 suggested_actions=[
-                    "Check if the ~/.pcileech directory exists and is accessible"
+                    f"Check if the {CACHE_DIR} directory exists and is accessible"
                 ],
             )
             print(f"Error listing profiles: {error.message}")
@@ -287,7 +340,7 @@ class ConfigManager:
                 message=f"Permission denied when deleting profile '{name}'",
                 details=str(e),
                 suggested_actions=[
-                    "Check file permissions in ~/.pcileech/profiles/",
+                    f"Check file permissions in {CACHE_DIR}/profiles/",
                     "Ensure you have write access to your home directory",
                 ],
             )
@@ -301,7 +354,7 @@ class ConfigManager:
                 details=str(e),
                 suggested_actions=[
                     "Check if the file is being used by another process",
-                    "Verify that the ~/.pcileech directory is accessible",
+                    f"Verify that the {CACHE_DIR} directory is accessible",
                 ],
             )
             print(f"Error deleting profile: {error.message}")
@@ -541,7 +594,7 @@ class ConfigManager:
                 details=str(e),
                 suggested_actions=[
                     "Check if you have read permissions for the source file",
-                    "Ensure you have write access to ~/.pcileech/profiles/",
+                    f"Ensure you have write access to {CACHE_DIR}/profiles/",
                 ],
             )
             print(f"Permission denied when importing profile: {e}")

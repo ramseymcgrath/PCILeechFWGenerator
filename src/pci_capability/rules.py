@@ -29,8 +29,13 @@ except ImportError:
 
 from .constants import PCI_DEVICE_ID_OFFSET, PCI_VENDOR_ID_OFFSET
 from .core import ConfigSpace
-from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
-                    PCICapabilityID, PCIExtCapabilityID)
+from .types import (
+    CapabilityInfo,
+    CapabilityType,
+    EmulationCategory,
+    PCICapabilityID,
+    PCIExtCapabilityID,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -424,15 +429,79 @@ class RuleEngine:
         logger.info(f"Loaded {len(self.rules)} default rules")
 
     def _extract_device_context(self, config_space: ConfigSpace) -> Dict[str, Any]:
-        """Extract device context from configuration space."""
+        """
+        Extract device context from configuration space.
+
+        This method analyzes the configuration space to extract device information
+        and features that can be used for capability categorization and processing.
+        """
         context = {}
 
         try:
+            # Extract basic device identification
             if config_space.has_data(PCI_VENDOR_ID_OFFSET, 2):
                 context["vendor_id"] = config_space.read_word(PCI_VENDOR_ID_OFFSET)
 
             if config_space.has_data(PCI_DEVICE_ID_OFFSET, 2):
                 context["device_id"] = config_space.read_word(PCI_DEVICE_ID_OFFSET)
+
+            # Extract device class information
+            if config_space.has_data(0x0B, 1):  # Class code (base)
+                context["class_code"] = config_space.read_byte(0x0B)
+
+            if config_space.has_data(0x0A, 1):  # Class code (sub)
+                context["subclass_code"] = config_space.read_byte(0x0A)
+
+            if config_space.has_data(0x09, 1):  # Class code (prog IF)
+                context["prog_if"] = config_space.read_byte(0x09)
+
+            # Extract revision ID
+            if config_space.has_data(0x08, 1):
+                context["revision_id"] = config_space.read_byte(0x08)
+
+            # Extract header type (multi-function, etc.)
+            if config_space.has_data(0x0E, 1):
+                header_type = config_space.read_byte(0x0E)
+                context["header_type"] = header_type & 0x7F
+                context["multi_function"] = bool(header_type & 0x80)
+
+            # Extract command register settings
+            if config_space.has_data(0x04, 2):
+                command = config_space.read_word(0x04)
+                context["io_space_enabled"] = bool(command & 0x0001)
+                context["memory_space_enabled"] = bool(command & 0x0002)
+                context["bus_master_enabled"] = bool(command & 0x0004)
+                context["parity_error_response"] = bool(command & 0x0040)
+                context["serr_enabled"] = bool(command & 0x0100)
+                context["interrupt_disable"] = bool(command & 0x0400)
+
+            # Extract status register information
+            if config_space.has_data(0x06, 2):
+                status = config_space.read_word(0x06)
+                context["capabilities_supported"] = bool(status & 0x0010)
+                context["pci_x_capable"] = bool(status & 0x0080)
+                context["master_data_parity_error"] = bool(status & 0x0100)
+                context["signaled_target_abort"] = bool(status & 0x0800)
+                context["received_target_abort"] = bool(status & 0x1000)
+                context["received_master_abort"] = bool(status & 0x2000)
+                context["signaled_system_error"] = bool(status & 0x4000)
+                context["detected_parity_error"] = bool(status & 0x8000)
+
+            # Default feature settings (will be updated by capability processor)
+            context["enable_msi"] = True
+            context["enable_msix"] = True
+            context["enable_pcie"] = True
+            context["enable_power_management"] = True
+            context["enable_relaxed_ordering"] = True
+            context["enable_no_snoop"] = True
+            context["enable_extended_tag"] = True
+            context["enable_d1_power_state"] = False
+            context["enable_d2_power_state"] = False
+            context["enable_d3hot_power_state"] = True
+            context["enable_pme"] = True
+            context["aspm_control"] = 0  # 0=disabled, 1=L0s, 2=L1, 3=both
+            context["msi_address"] = 0xFEE00000  # Default MSI address
+            context["msi_vector"] = 0x0020  # Default MSI vector
 
         except (IndexError, ValueError) as e:
             logger.warning(f"Failed to extract device context: {e}")

@@ -23,15 +23,24 @@ except ImportError:
         sys.path.insert(0, str(src_dir))
     from string_utils import safe_format
 
-from .constants import (EXTENDED_CAPABILITY_NAMES, PCI_CAPABILITIES_POINTER,
-                        PCI_CONFIG_SPACE_MIN_HEX_CHARS,
-                        PCI_CONFIG_SPACE_MIN_SIZE, PCI_EXT_CAP_ALIGNMENT,
-                        PCI_EXT_CAP_ID_MASK, PCI_EXT_CAP_NEXT_PTR_MASK,
-                        PCI_EXT_CAP_NEXT_PTR_SHIFT, PCI_EXT_CAP_START,
-                        PCI_EXT_CAP_VERSION_MASK, PCI_EXT_CAP_VERSION_SHIFT,
-                        PCI_EXT_CONFIG_SPACE_END, PCI_STATUS_CAP_LIST,
-                        PCI_STATUS_REGISTER, STANDARD_CAPABILITY_NAMES,
-                        TWO_BYTE_HEADER_CAPABILITIES)
+from .constants import (
+    EXTENDED_CAPABILITY_NAMES,
+    PCI_CAPABILITIES_POINTER,
+    PCI_CONFIG_SPACE_MIN_HEX_CHARS,
+    PCI_CONFIG_SPACE_MIN_SIZE,
+    PCI_EXT_CAP_ALIGNMENT,
+    PCI_EXT_CAP_ID_MASK,
+    PCI_EXT_CAP_NEXT_PTR_MASK,
+    PCI_EXT_CAP_NEXT_PTR_SHIFT,
+    PCI_EXT_CAP_START,
+    PCI_EXT_CAP_VERSION_MASK,
+    PCI_EXT_CAP_VERSION_SHIFT,
+    PCI_EXT_CONFIG_SPACE_END,
+    PCI_STATUS_CAP_LIST,
+    PCI_STATUS_REGISTER,
+    STANDARD_CAPABILITY_NAMES,
+    TWO_BYTE_HEADER_CAPABILITIES,
+)
 from .types import CapabilityInfo, CapabilityType
 
 logger = logging.getLogger(__name__)

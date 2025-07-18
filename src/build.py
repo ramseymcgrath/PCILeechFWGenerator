@@ -24,9 +24,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 # Import board functions from the correct module
-from src.device_clone.board_config import (get_board_info,
-                                           get_pcileech_board_config,
-                                           validate_board)
+from src.device_clone.board_config import (
+    get_board_info,
+    get_pcileech_board_config,
+    validate_board,
+)
+
 # Import msix_capability at the module level to avoid late imports
 from src.device_clone.msix_capability import parse_msix_capability
 from src.log_config import get_logger, setup_logging
@@ -220,7 +223,10 @@ class ModuleChecker:
         # Check module file existence
         module_parts = module.split(".")
         module_path = os.path.join(*module_parts) + ".py"
-        alt_module_path = os.path.join(*module_parts[1:]) + ".py"
+        # Handle case where module_parts[1:] is empty
+        alt_module_path = (
+            os.path.join(*module_parts[1:]) + ".py" if len(module_parts) > 1 else ""
+        )
 
         lines.extend(
             [
@@ -230,14 +236,21 @@ class ModuleChecker:
                     if os.path.exists(module_path)
                     else f"✗ File not found at {module_path}"
                 ),
-                f"Looking for module file at: {alt_module_path}",
-                (
-                    f"✓ File exists at {alt_module_path}"
-                    if os.path.exists(alt_module_path)
-                    else f"✗ File not found at {alt_module_path}"
-                ),
             ]
         )
+
+        # Only check alternative path if it exists
+        if alt_module_path:
+            lines.extend(
+                [
+                    f"Looking for module file at: {alt_module_path}",
+                    (
+                        f"✓ File exists at {alt_module_path}"
+                        if os.path.exists(alt_module_path)
+                        else f"✗ File not found at {alt_module_path}"
+                    ),
+                ]
+            )
 
         # Check for __init__.py files
         module_dir = os.path.dirname(module_path)
@@ -439,7 +452,6 @@ class FileOperationsManager:
     ) -> Tuple[List[str], List[str]]:
         """
         Write SystemVerilog modules to disk with proper file extensions.
-        COE files are excluded from this method to prevent duplication.
 
         Args:
             modules: Dictionary of module names to content
@@ -459,11 +471,6 @@ class FileOperationsManager:
         special_files = []
 
         for name, content in modules.items():
-            # Skip COE files to prevent duplication
-            # COE files are handled separately and saved to systemverilog directory
-            if name.endswith(".coe"):
-                continue
-                
             file_path, category = self._determine_file_path(name, sv_dir)
 
             if category == "sv":
@@ -817,9 +824,11 @@ class FirmwareBuilder:
             VivadoIntegrationError: If Vivado integration fails
         """
         try:
-            from src.vivado_handling import (find_vivado_installation,
-                                             integrate_pcileech_build,
-                                             run_vivado_with_error_reporting)
+            from src.vivado_handling import (
+                find_vivado_installation,
+                integrate_pcileech_build,
+                run_vivado_with_error_reporting,
+            )
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
@@ -860,7 +869,9 @@ class FirmwareBuilder:
         from src.device_clone.behavior_profiler import BehaviorProfiler
         from src.device_clone.board_config import get_pcileech_board_config
         from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig, PCILeechGenerator)
+            PCILeechGenerationConfig,
+            PCILeechGenerator,
+        )
         from src.templating.tcl_builder import BuildContext, TCLBuilder
 
         self.gen = PCILeechGenerator(

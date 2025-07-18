@@ -8,8 +8,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.device_clone.manufacturing_variance import (
-    DeviceClass, ManufacturingVarianceSimulator, TimingDatum, VarianceModel,
-    VarianceParameters, VarianceType, clamp)
+    DeviceClass,
+    ManufacturingVarianceSimulator,
+    TimingDatum,
+    VarianceModel,
+    VarianceParameters,
+    VarianceType,
+    clamp,
+)
 
 
 class TestHelperFunctions:
@@ -71,17 +77,6 @@ class TestVarianceParameters:
         params = VarianceParameters(device_class=DeviceClass.CONSUMER)
         # Validation happens in __post_init__
         assert params.clock_jitter_percent_min <= params.clock_jitter_percent_max
-
-    def test_variance_parameters_invalid_ranges(self):
-        """Test VarianceParameters with invalid ranges."""
-        # Since the __post_init__ method has empty implementations,
-        # these won't raise exceptions in the current implementation
-        params = VarianceParameters(
-            device_class=DeviceClass.CONSUMER,
-            clock_jitter_percent_min=10.0,
-            clock_jitter_percent_max=5.0,  # Invalid: min > max
-        )
-        # Test passes because validation is not implemented
 
 
 class TestVarianceModel:
@@ -515,7 +510,7 @@ class TestIntegration:
             device_class=DeviceClass.ENTERPRISE,
             base_frequency_mhz=150.0,
             dsn=98765,
-            revision="abc123def456",
+            revision="abc123def456abcdef12",
         )
 
         # Apply variance to timing
@@ -552,7 +547,7 @@ class TestIntegration:
             device_class=DeviceClass.CONSUMER,
             base_frequency_mhz=100.0,
             dsn=11111,
-            revision="reproducible123",
+            revision="abcdef123456789012345678",
         )
 
         # Second run with same parameters
@@ -562,7 +557,7 @@ class TestIntegration:
             device_class=DeviceClass.CONSUMER,
             base_frequency_mhz=100.0,
             dsn=11111,
-            revision="reproducible123",
+            revision="abcdef123456789012345678",
         )
 
         # Results should be identical
@@ -654,9 +649,9 @@ class TestVarianceModel:
             supply_voltage_v=3.3,
         )
         # Check that timing adjustments were calculated
-        assert hasattr(model, "effective_clock_period_ns")
-        assert hasattr(model, "setup_time_adjustment_ns")
-        assert hasattr(model, "hold_time_adjustment_ns")
+        assert "base_period_ns" in model.timing_adjustments
+        assert "jitter_ns" in model.timing_adjustments
+        assert "combined_timing_factor" in model.timing_adjustments
 
     def test_variance_model_to_json(self):
         """Test serializing VarianceModel to JSON."""
@@ -676,14 +671,14 @@ class TestVarianceModel:
         json_str = model.to_json()
         data = json.loads(json_str)
         assert data["device_id"] == "test_device"
-        assert data["device_class"] == "CONSUMER"
+        assert data["device_class"] == "consumer"
         assert data["base_frequency_mhz"] == 100.0
 
     def test_variance_model_from_json(self):
         """Test deserializing VarianceModel from JSON."""
         json_data = {
             "device_id": "test_device",
-            "device_class": "CONSUMER",
+            "device_class": "consumer",
             "base_frequency_mhz": 100.0,
             "clock_jitter_percent": 0.1,
             "register_timing_jitter_ns": 0.5,
@@ -693,9 +688,6 @@ class TestVarianceModel:
             "propagation_delay_ps": 100.0,
             "operating_temp_c": 25.0,
             "supply_voltage_v": 3.3,
-            "effective_clock_period_ns": 10.0,
-            "setup_time_adjustment_ns": 0.1,
-            "hold_time_adjustment_ns": 0.1,
         }
         json_str = json.dumps(json_data)
         model = VarianceModel.from_json(json_str)
@@ -726,9 +718,15 @@ class TestManufacturingVarianceSimulator:
 
     def test_deterministic_seed_generation(self, simulator):
         """Test deterministic seed generation from DSN and revision."""
-        seed1 = simulator.deterministic_seed(dsn=12345, revision="v1.0")
-        seed2 = simulator.deterministic_seed(dsn=12345, revision="v1.0")
-        seed3 = simulator.deterministic_seed(dsn=12346, revision="v1.0")
+        seed1 = simulator.deterministic_seed(
+            dsn=12345, revision="abcdef123456789012345678"
+        )
+        seed2 = simulator.deterministic_seed(
+            dsn=12345, revision="abcdef123456789012345678"
+        )
+        seed3 = simulator.deterministic_seed(
+            dsn=12346, revision="abcdef123456789012345678"
+        )
 
         assert seed1 == seed2  # Same inputs should produce same seed
         assert seed1 != seed3  # Different DSN should produce different seed
@@ -782,7 +780,7 @@ class TestManufacturingVarianceSimulator:
             device_class=DeviceClass.CONSUMER,
             base_frequency_mhz=100.0,
             dsn=12345,
-            revision="v1.0",
+            revision="abcdef123456789012345678",
         )
 
         # Reset simulator with same seed
@@ -792,7 +790,7 @@ class TestManufacturingVarianceSimulator:
             device_class=DeviceClass.CONSUMER,
             base_frequency_mhz=100.0,
             dsn=12345,
-            revision="v1.0",
+            revision="abcdef123456789012345678",
         )
 
         # Models should be identical when using same DSN and revision
@@ -810,25 +808,21 @@ class TestManufacturingVarianceSimulator:
 
     def test_analyze_timing_patterns(self, simulator):
         """Test timing pattern analysis."""
-        # Create mock timing data
-        from collections import namedtuple
-
-        TimingDatum = namedtuple("TimingDatum", ["timestamp", "duration", "register"])
-
+        # Create timing data that matches TimingDatum structure
         timing_data = [
-            TimingDatum(timestamp=0.0, duration=0.001, register=0x10),
-            TimingDatum(timestamp=0.1, duration=0.0012, register=0x10),
-            TimingDatum(timestamp=0.2, duration=0.0011, register=0x10),
-            TimingDatum(timestamp=0.3, duration=0.0009, register=0x20),
-            TimingDatum(timestamp=0.4, duration=0.0008, register=0x20),
+            {"interval_us": 0.001},
+            {"interval_us": 0.0012},
+            {"interval_us": 0.0011},
+            {"interval_us": 0.0009},
+            {"interval_us": 0.0008},
         ]
 
         analysis = simulator.analyze_timing_patterns(timing_data)
 
-        assert "register_patterns" in analysis
-        assert 0x10 in analysis["register_patterns"]
-        assert 0x20 in analysis["register_patterns"]
-        assert "overall_stats" in analysis
+        assert "variance_detected" in analysis
+        assert "mean_interval_us" in analysis
+        assert "std_deviation_us" in analysis
+        assert "recommendations" in analysis
 
     def test_apply_variance_to_timing(self, simulator):
         """Test applying variance to timing value."""
@@ -842,7 +836,7 @@ class TestManufacturingVarianceSimulator:
         varied_timing = simulator.apply_variance_to_timing(
             base_timing_ns=base_timing_ns,
             variance_model=model,
-            timing_type=VarianceType.REGISTER_TIMING,
+            operation_type="register_access",
         )
 
         # Varied timing should be different from base (with very high probability)
@@ -858,13 +852,15 @@ class TestManufacturingVarianceSimulator:
         )
 
         sv_code = simulator.generate_systemverilog_timing_code(
+            register_name="test_reg",
+            base_delay_cycles=10,
             variance_model=model,
-            module_name="test_module",
+            offset=0x1000,
         )
 
-        assert "module test_module" in sv_code
-        assert "parameter" in sv_code
-        assert "CLOCK_PERIOD" in sv_code
+        assert "test_reg" in sv_code
+        assert "variance-aware" in sv_code
+        assert "LFSR" in sv_code
 
     def test_get_variance_metadata(self, simulator):
         """Test variance metadata generation."""
@@ -878,9 +874,9 @@ class TestManufacturingVarianceSimulator:
 
         assert "device_id" in metadata
         assert "device_class" in metadata
-        assert "variance_summary" in metadata
-        assert "timing_parameters" in metadata
-        assert "environmental_conditions" in metadata
+        assert "variance_parameters" in metadata
+        assert "timing_adjustments" in metadata
+        assert "operating_conditions" in metadata
 
 
 class TestDeviceClass:

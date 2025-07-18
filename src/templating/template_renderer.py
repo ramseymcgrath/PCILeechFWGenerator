@@ -19,7 +19,13 @@ except ImportError:
 
 
 try:
-    from jinja2 import Environment, FileSystemLoader, Template, TemplateError
+    from jinja2 import (
+        Environment,
+        FileSystemLoader,
+        Template,
+        TemplateError,
+        StrictUndefined,
+    )
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"
@@ -63,6 +69,7 @@ class TemplateRenderer:
             trim_blocks=False,
             lstrip_blocks=False,
             keep_trailing_newline=True,
+            undefined=StrictUndefined,  # This will raise errors for undefined variables
         )
 
         # Add custom filters if needed
@@ -90,7 +97,7 @@ class TemplateRenderer:
         def tcl_list_format(items: list) -> str:
             """Format Python list as TCL list."""
             escaped_items = [tcl_string_escape(str(item)) for item in items]
-            return " ".join(f'"{item}"' for item in escaped_items)
+            return " ".join(f"{{{item}}}" for item in escaped_items)
 
         # SystemVerilog-specific filters
         def sv_hex(value, width: int = 32) -> str:
@@ -125,17 +132,28 @@ class TemplateRenderer:
 
         def sv_signal(name: str, width: Optional[int] = None, initial=None) -> str:
             """Format SystemVerilog signal declaration."""
-            width_str = f"[{width-1}:0] " if width and width > 1 else ""
-            init_str = f" = {initial}" if initial is not None else ""
+            width_str = f"[{width-1}:0] " if width and width >= 1 else ""
+            if initial is not None:
+                if width:
+                    init_str = f" = {sv_hex(initial, width)}"
+                else:
+                    init_str = f" = {initial}"
+            else:
+                init_str = ""
             return f"logic {width_str}{name}{init_str};"
 
         def sv_identifier(name: str) -> str:
-            """Validate and return SystemVerilog identifier."""
+            """Convert to valid SystemVerilog identifier."""
             import re
 
-            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
-                raise ValueError(f"Invalid SystemVerilog identifier: {name}")
-            return name
+            # Replace invalid characters with underscores
+            sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+
+            # Ensure it starts with a letter or underscore
+            if not re.match(r"^[a-zA-Z_]", sanitized):
+                sanitized = "_" + sanitized
+
+            return sanitized
 
         def sv_comment(text: str, style: str = "//") -> str:
             """Format SystemVerilog comment."""
@@ -145,6 +163,12 @@ class TemplateRenderer:
                 return f"/* {text} */"
             else:
                 return f"// {text}"
+
+        def sv_bool(value) -> str:
+            """Convert Python boolean to SystemVerilog boolean."""
+            if isinstance(value, bool):
+                return "1" if value else "0"
+            return str(value)
 
         def log2(value: int) -> int:
             """Calculate log2 (ceiling) of a value for SystemVerilog bit width calculations."""
@@ -157,11 +181,16 @@ class TemplateRenderer:
         def python_list(value) -> str:
             """Format value as Python list literal."""
             if isinstance(value, list):
-                # Safely format as Python list with proper string escaping
-                escaped_items = [repr(str(item)) for item in value]
-                return "[" + ", ".join(escaped_items) + "]"
+                # Format as Python list with integers/numbers as-is
+                formatted_items = []
+                for item in value:
+                    if isinstance(item, (int, float)):
+                        formatted_items.append(str(item))
+                    else:
+                        formatted_items.append(repr(str(item)))
+                return "[" + ", ".join(formatted_items) + "]"
             elif isinstance(value, (str, int, float)):
-                return repr([str(value)])
+                return repr([value])
             else:
                 return "[]"
 
@@ -177,8 +206,8 @@ class TemplateRenderer:
 
         # Register filters
         self.env.filters["hex"] = hex_format
-        self.env.filters["tcl_escape"] = tcl_string_escape
-        self.env.filters["tcl_list"] = tcl_list_format
+        self.env.filters["tcl_string_escape"] = tcl_string_escape
+        self.env.filters["tcl_list_format"] = tcl_list_format
 
         # Python code generation filters
         self.env.filters["python_list"] = python_list
@@ -194,6 +223,7 @@ class TemplateRenderer:
         self.env.filters["sv_signal"] = sv_signal
         self.env.filters["sv_identifier"] = sv_identifier
         self.env.filters["sv_comment"] = sv_comment
+        self.env.filters["sv_bool"] = sv_bool
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
@@ -205,7 +235,7 @@ class TemplateRenderer:
 
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
-        
+
         # Add Python built-in functions that are commonly used in templates
         self.env.globals["hasattr"] = hasattr
         self.env.globals["getattr"] = getattr
@@ -214,6 +244,7 @@ class TemplateRenderer:
         self.env.globals["range"] = range
         self.env.globals["min"] = min
         self.env.globals["max"] = max
+        self.env.globals["hex"] = hex
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """
@@ -243,7 +274,7 @@ class TemplateRenderer:
         """
         try:
             # Validate and sanitize context before rendering
-            validated_context = self._validate_template_context(template_name, context)
+            validated_context = self._validate_template_context(context, template_name)
 
             template = self.env.get_template(template_name)
             rendered = template.render(**validated_context)
@@ -332,14 +363,20 @@ class TemplateRenderer:
         return self.template_dir / template_name
 
     def _validate_template_context(
-        self, template_name: str, context: Dict[str, Any]
+        self,
+        context: Dict[str, Any],
+        template_name: Optional[str] = None,
+        required_fields: Optional[list] = None,
+        optional_fields: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Validate and sanitize template context to prevent rendering errors.
 
         Args:
-            template_name: Name of the template being rendered
             context: Original template context
+            template_name: Name of the template being rendered (optional)
+            required_fields: List of required fields (optional)
+            optional_fields: List of optional fields (optional)
 
         Returns:
             Validated and sanitized context
@@ -348,6 +385,19 @@ class TemplateRenderer:
             TemplateRenderError: If context validation fails
         """
         validated_context = context.copy()
+
+        # Check for required fields if specified
+        if required_fields:
+            missing_fields = []
+            for field in required_fields:
+                if field not in validated_context or validated_context[field] is None:
+                    missing_fields.append(field)
+
+            if missing_fields:
+                error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+                if template_name:
+                    error_msg = f"Template '{template_name}' {error_msg}"
+                raise TemplateRenderError(error_msg)
 
         # Special validation for PCILeech build integration template
         if template_name == "python/pcileech_build_integration.py.j2":
@@ -382,9 +432,11 @@ class TemplateRenderer:
                     logger.debug(f"Set default value for {key}: {default_value}")
 
         # General validation for all templates
-        # Ensure no None values that could cause template errors
+        # Only replace None values with empty strings for basic string fields
+        # Complex objects like configs should be left as None if that's their intended value
+        string_fields = ["header", "title", "description", "comment"]
         for key, value in validated_context.items():
-            if value is None:
+            if value is None and key in string_fields:
                 logger.warning(
                     f"Template context key '{key}' is None, replacing with empty string"
                 )

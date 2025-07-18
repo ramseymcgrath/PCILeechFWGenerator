@@ -18,7 +18,6 @@ from typing import Any, Dict
 import pytest
 import yaml
 
-from src.device_clone.device_config import DeviceConfig
 from src.templating.template_renderer import TemplateRenderer
 
 
@@ -130,6 +129,8 @@ class TestActiveDeviceInterrupt:
         context = {
             "header": "// Test header",
             "active_device_config": None,  # No active device config
+            "vendor_id": hex(basic_device_config["identification"]["vendor_id"]),
+            "device_id": hex(basic_device_config["identification"]["device_id"]),
         }
 
         result = template_renderer.render_template(
@@ -161,7 +162,10 @@ class TestActiveDeviceInterrupt:
 
         # Verify parameters
         assert f"parameter TIMER_PERIOD = {active_config['timer_period']}" in result
-        assert f"parameter TIMER_ENABLE = {active_config['timer_enable']}" in result
+        assert (
+            f"parameter TIMER_ENABLE = {1 if active_config['timer_enable'] else 0}"
+            in result
+        )
         assert (
             f"parameter MSI_VECTOR_WIDTH = {active_config['msi_vector_width']}"
             in result
@@ -236,6 +240,8 @@ class TestActiveDeviceInterrupt:
         context = {
             "header": "// Top-level wrapper test",
             "active_device_config": active_config,
+            "vendor_id": hex(active_device_config_msi["identification"]["vendor_id"]),
+            "device_id": hex(active_device_config_msi["identification"]["device_id"]),
         }
 
         # Render top-level wrapper
@@ -329,14 +335,24 @@ class TestActiveDeviceInterrupt:
 
     def verify_sv_syntax(self, sv_content: str) -> bool:
         """Basic SystemVerilog syntax verification."""
+        import re
+
+        # More precise regex for SystemVerilog begin/end
+        begin_pattern = r"\bbegin\b"
+        end_pattern = r"\bend\b"
+
         # Check for balanced begin/end
-        begin_count = sv_content.count("begin")
-        end_count = sv_content.count("end")
+        begin_count = len(re.findall(begin_pattern, sv_content))
+        end_count = len(re.findall(end_pattern, sv_content))
         if begin_count != end_count:
             return False
 
-        # Check for module/endmodule
-        if "module" in sv_content and "endmodule" not in sv_content:
+        # Check for module/endmodule (more precise)
+        module_pattern = r"^\s*module\s+\w+"
+        endmodule_pattern = r"^\s*endmodule\s*$"
+        module_count = len(re.findall(module_pattern, sv_content, re.MULTILINE))
+        endmodule_count = len(re.findall(endmodule_pattern, sv_content, re.MULTILINE))
+        if module_count != endmodule_count:
             return False
 
         # Check for balanced parentheses
@@ -391,7 +407,7 @@ def test_example_configurations():
         Path(__file__).parent.parent
         / "configs"
         / "devices"
-        / "active_device_example.yaml"
+        / "active_device_minimal.yaml"
     )
 
     # Verify example file exists

@@ -80,7 +80,7 @@ class DeviceIdentification:
         """Validate device identification values."""
         if not (0x0001 <= self.vendor_id <= 0xFFFE):
             raise ValueError(f"Invalid vendor ID: 0x{self.vendor_id:04X}")
-        if not (0x0000 <= self.device_id <= 0xFFFF):
+        if not (0x0001 <= self.device_id <= 0xFFFF):
             raise ValueError(f"Invalid device ID: 0x{self.device_id:04X}")
         if not (0x000000 <= self.class_code <= 0xFFFFFF):
             raise ValueError(f"Invalid class code: 0x{self.class_code:06X}")
@@ -420,7 +420,7 @@ class DeviceConfigManager:
             subsystem_device_id=data["identification"].get(
                 "subsystem_device_id", 0x0000
             ),
-            class_code=data["identification"]["class_code"],
+            class_code=data["identification"].get("class_code", 0x040300),
         )
 
         registers = PCIeRegisters(
@@ -462,8 +462,8 @@ class DeviceConfigManager:
             supports_advanced_error_reporting=data["capabilities"].get(
                 "supports_advanced_error_reporting", False
             ),
-            link_width=data["capabilities"]["link_width"],
-            link_speed=data["capabilities"]["link_speed"],
+            link_width=data["capabilities"].get("link_width", 1),
+            link_speed=data["capabilities"].get("link_speed", "2.5GT/s"),
             ext_cfg_cap_ptr=data["capabilities"].get("ext_cfg_cap_ptr", 0x100),
             ext_cfg_xp_cap_ptr=data["capabilities"].get("ext_cfg_xp_cap_ptr", 0x100),
             active_device=active_device,
@@ -558,6 +558,9 @@ class DeviceConfigManager:
                         "PyYAML is required for YAML file support. Install with: pip install PyYAML"
                     )
                 yaml.dump(config.to_dict(), f, default_flow_style=False, indent=2)  # type: ignore
+
+            # Add the profile to the in-memory profiles dictionary
+            self.profiles[config.name] = config
 
             logger.info(f"Saved device configuration to {file_path}")
 
