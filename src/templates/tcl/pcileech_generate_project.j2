@@ -190,8 +190,8 @@ foreach xdc_file $xdc_files {
 # Try to determine top module from first source file
 set top_module [file rootname [file tail "{{ pcileech.source_files[0] }}"]]
 {% else %}
-# Top module will be auto-detected by Vivado
-set top_module ""
+# Use PCILeech top-level wrapper as default
+set top_module "pcileech_top"
 {% endif %}
 
 # Set source management mode to manual before setting top
