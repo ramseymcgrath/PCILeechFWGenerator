@@ -26,45 +26,78 @@ The donor info template is a structured JSON file that captures:
 Generate a donor info template using the command line:
 
 ```bash
-# Generate with default settings (pretty-printed JSON)
-python3 pcileech.py donor-template
+# Generate comprehensive template with all fields
+python3 -c "
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+DonorInfoTemplateGenerator.save_template(Path('donor_info_template.json'))
+"
 
 # Generate minimal template with only essential fields
-python3 pcileech.py donor-template --blank -o minimal.json
-
-# Generate compact JSON (no formatting)
-python3 pcileech.py donor-template --compact
-
-# Specify custom output path
-python3 pcileech.py donor-template -o /path/to/my_device_template.json
+python3 -c "
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+template = DonorInfoTemplateGenerator.generate_minimal_template()
+DonorInfoTemplateGenerator.save_template_dict(template, Path('minimal_template.json'))
+"
 
 # Pre-fill template with device information (requires sudo and valid device)
-sudo python3 pcileech.py donor-template --bdf 0000:03:00.0 -o my_device.json
+python3 -c "
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+generator = DonorInfoTemplateGenerator()
+template = generator.generate_template_from_device('0000:03:00.0')
+DonorInfoTemplateGenerator.save_template_dict(template, Path('device_template.json'))
+"
 
 # Validate an existing donor info file
-python3 pcileech.py donor-template --validate my_device.json
+python3 -c "
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+generator = DonorInfoTemplateGenerator()
+is_valid, errors = generator.validate_template_file('my_device.json')
+if not is_valid:
+    for error in errors:
+        print(f'Error: {error}')
+else:
+    print('Template is valid')
+"
 ```
 
 ### Generating Template During Build
 
-You can also generate a pre-filled donor info template as part of the build process:
+Currently, template generation is handled separately from the build process. To integrate behavioral profiling data:
 
 ```bash
-# Build firmware and output a donor template with extracted device info
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --output-template device_template.json
+# First generate the template from device discovery
+python3 -c "
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+generator = DonorInfoTemplateGenerator()
+template = generator.generate_template_from_device('0000:03:00.0')
+DonorInfoTemplateGenerator.save_template_dict(template, Path('device_template.json'))
+"
+
+# Then use existing behavioral profiling during build
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --enable-behavioral-profiling
 ```
 
-This is particularly useful because:
-- The template is automatically populated with actual device values extracted during the build
-- You get both the firmware and a template for future customization in one step
-- The template includes all discovered device capabilities and configuration
+This approach allows you to:
+
+- Get detailed device information from lspci and sysfs
+- Capture behavioral data during the build process
+- Maintain separate templates for different device configurations
+- Combine discovered and behavioral data for optimal firmware generation
 
 ### Using the TUI
 
-In the TUI interface:
-1. Navigate to the "Quick Actions" panel
-2. Click "📝 Generate Donor Template"
-3. The template will be saved as `donor_info_template.json` in the current directory
+Currently, template generation through the TUI would need to be implemented. For now, use the programmatic approach:
+
+```python
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+
+# Generate and save template
+DonorInfoTemplateGenerator.save_template(Path("donor_info_template.json"))
+```
 
 ### Programmatic Usage
 
@@ -84,7 +117,9 @@ DonorInfoTemplateGenerator.save_template("my_template.json", pretty=True)
 ## Template Types
 
 ### Full Template
+
 The default template includes comprehensive sections for:
+
 - Complete device identification and capabilities
 - Behavioral profiling and timing characteristics
 - Access patterns and interrupt configurations
@@ -94,18 +129,22 @@ The default template includes comprehensive sections for:
 - Manufacturing variance data
 
 Use the full template when you need:
+
 - Detailed behavioral profiling
 - Advanced performance tuning
 - Complete device emulation
 - Manufacturing variance simulation
 
 ### Minimal Template
-The minimal template (generated with `--blank` flag) includes only essential fields:
+
+The minimal template (generated with `generate_minimal_template()`) includes only essential fields:
+
 - Basic device identification (vendor/device IDs, class code)
 - Core PCIe capabilities (version, link width/speed)
 - BAR configuration
 
 Use the minimal template when you need:
+
 - Quick device cloning without advanced features
 - Simple device identification
 - Basic functionality testing
@@ -160,17 +199,18 @@ Comprehensive device identification and configuration:
       "msix_vectors": null,
       // ... more capabilities
     },
-    "bars": {
-      "bar0": {
-        "enabled": null,
-        "size": null,
+    "bars": [
+      {
+        "bar_number": 0,
         "type": "",  // "memory" or "io"
-        "prefetchable": null,
-        "64bit": null,
-        "purpose": ""  // Description of BAR usage
-      },
-      // ... bar1 through bar5 and expansion_rom
-    }
+        "size": null,  // size in bytes
+        "prefetchable": null,  // true/false
+        "64bit": null,  // true/false
+        "purpose": "",  // Description of BAR usage
+        "typical_access_pattern": ""  // "sequential", "random", etc.
+      }
+      // User should duplicate this structure for each BAR (1-5)
+    ]
   }
 }
 ```
@@ -286,6 +326,7 @@ Support for virtualization, security, and performance features:
 ### Step 1: Basic Device Information
 
 Start by filling in the device identification:
+
 - Use `lspci -nn` to get vendor/device IDs
 - Use `lspci -vvv` for detailed capability information
 - Check `/sys/bus/pci/devices/[BDF]/` for additional details
@@ -296,12 +337,13 @@ Run behavioral profiling to capture timing and access patterns:
 
 ```bash
 # Enable behavioral profiling in your build
-./cli build --bdf 0000:03:00.0 --behavior-profiling
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --enable-behavioral-profiling
 ```
 
 ### Step 3: Manual Testing
 
 For advanced features:
+
 - Test interrupt behavior under load
 - Measure DMA transfer characteristics
 - Profile register access patterns
@@ -310,6 +352,7 @@ For advanced features:
 ### Step 4: Validation
 
 Validate your completed template:
+
 - Ensure all critical fields are filled
 - Test with actual device cloning
 - Verify timing parameters are realistic
@@ -326,29 +369,32 @@ Once filled out, the donor info template can be used for:
 
 ### Using Templates During Build
 
-You can use a donor template to override discovered values during the build process:
+Currently, templates can be used for override and merge operations using the programmatic interface:
 
-```bash
-# Use donor template during build
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --donor-template my_device_profile.json
+```python
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+
+# Load template and merge with discovered values
+template = DonorInfoTemplateGenerator.load_template("my_device_profile.json")
+# Use template during build process for value overrides
 ```
 
-When using `--donor-template`:
+When using templates during build:
+
 - Template values override any discovered values when there's a conflict
 - Null values in the template are ignored (discovered values are used)
 - This allows you to selectively override specific device characteristics
-- The template is only used for new builds, not for existing firmware
+- The template provides additional behavioral and configuration data
 
 Example scenarios:
+
 ```bash
 # Override device IDs while keeping discovered BAR configuration
 # (set device IDs in template, leave BARs as null)
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --donor-template custom_ids.json
+# Implementation would be in the build system integration
 
 # Use template and also output a new template with merged values
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t \
-    --donor-template input_template.json \
-    --output-template merged_template.json
+# This functionality would be added to the build orchestrator
 ```
 
 ## Best Practices
@@ -362,6 +408,7 @@ sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t \
 ## Template Examples
 
 Example templates for common devices can be found in:
+
 - `configs/donor_templates/` directory
 - Community contributions on GitHub
 - Device manufacturer documentation
@@ -378,7 +425,7 @@ Example templates for common devices can be found in:
 ### Getting Help
 
 - Check existing templates for examples
-- Use `--with-comments` flag for field explanations
+- Use the template validation methods for field explanations
 - Consult device datasheets for capability details
 - Ask in community forums for device-specific guidance
 
