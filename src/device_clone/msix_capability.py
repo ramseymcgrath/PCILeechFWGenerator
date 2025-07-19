@@ -12,15 +12,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import (TemplateRenderer,
-                                                TemplateRenderError)
+    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     try:
-        from templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+        from templating.template_renderer import TemplateRenderer, TemplateRenderError
     except ImportError:
-        from src.templating.template_renderer import (TemplateRenderer,
-                                                      TemplateRenderError)
+        from src.templating.template_renderer import (
+            TemplateRenderer,
+            TemplateRenderError,
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -106,22 +106,6 @@ def is_valid_offset(data: bytearray, offset: int, size: int) -> bool:
     return offset + size <= len(data)
 
 
-def _bytes_from_cfg(cfg: str) -> bytearray:
-    """
-    Convert hex string to bytes for efficient processing.
-    Helper function to avoid redundant hex decoding.
-
-    Args:
-        cfg: Configuration space as a hex string
-
-    Returns:
-        bytearray representation of the hex string
-    """
-    if len(cfg) % 2 != 0:
-        raise ValueError("Hex string must have even length")
-    return bytearray.fromhex(cfg)
-
-
 # TODO: Add support for PCIe extended capabilities (offset >= 0x100)
 
 
@@ -146,7 +130,7 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = _bytes_from_cfg(cfg)
+        cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return None
@@ -228,7 +212,7 @@ def msix_size(cfg: str) -> int:
 
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = _bytes_from_cfg(cfg)
+        cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return 0
@@ -289,7 +273,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
     logger.debug(f"MSI-X capability found at offset 0x{cap:02x}")
     try:
         # Convert hex string to bytes for efficient processing
-        cfg_bytes = _bytes_from_cfg(cfg)
+        cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
         logger.error(f"Invalid hex string in configuration space: {e}")
         return result

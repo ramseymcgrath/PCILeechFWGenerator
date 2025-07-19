@@ -63,38 +63,7 @@ module pcileech_fifo #(
     logic [DATA_WIDTH-1:0] rx_data_sync, tx_data_sync;
     logic rx_valid_sync, tx_valid_sync;
     
-    // Initialize configuration
-    initial begin
-        // Set all registers to default values
-        rw = 256'h0;
-        
-        {% if enable_custom_config %}
-        // CRITICAL: Enable custom configuration space
-        // Change from 1'b1 to 1'b0 to enable custom configuration space
-        rw[203] <= 1'b0;  // CFGTLP ZERO DATA (0 = CUSTOM CONFIGURATION SPACE ENABLED)
-        {% else %}
-        // Use standard configuration space
-        rw[203] <= 1'b1;  // CFGTLP ZERO DATA (1 = STANDARD CONFIGURATION SPACE)
-        {% endif %}
-        
-        // Device-specific configuration
-        {% if device_specific_config %}
-        {% for config_bit, value in device_specific_config.items() %}
-        rw[{{ config_bit }}] <= 1'b{{ value }};  // {{ config_bit }} configuration
-        {% endfor %}
-        {% endif %}
-        
-        // PCILeech specific settings
-        rw[0] <= 1'b1;    // Enable PCILeech functionality
-        rw[1] <= 1'b1;    // Enable DMA operations
-        rw[2] <= 1'b{{ '1' if enable_scatter_gather else '0' }};    // Scatter-gather support
-        rw[3] <= 1'b{{ '1' if enable_interrupt else '0' }};    // Interrupt support
-        
-        // CFGTLP control bits
-        rw[20] <= 1'b0;   // cfg_a7[0] - Configuration address bit 7, bit 0
-        rw[21] <= 1'b0;   // cfg_a7[1] - Configuration address bit 7, bit 1
-        rw[206] <= 1'b1;  // CFGTLP PCIE WRITE ENABLE (1 = Enable PCIe writes for CFGTLP)
-    end
+    // Configuration initialization is handled in reset logic below
     
     // FIFO instantiation
     {% if fifo_type == 'block_ram' %}
@@ -198,6 +167,36 @@ module pcileech_fifo #(
         if (rst) begin
             cfg_rdata <= 32'h0;
             cfg_ready <= 1'b0;
+            
+            // Initialize all registers
+            rw <= 256'h0;
+            
+            {% if enable_custom_config %}
+            // CRITICAL: Enable custom configuration space
+            // Change from 1'b1 to 1'b0 to enable custom configuration space
+            rw[203] <= 1'b0;  // CFGTLP ZERO DATA (0 = CUSTOM CONFIGURATION SPACE ENABLED)
+            {% else %}
+            // Use standard configuration space
+            rw[203] <= 1'b1;  // CFGTLP ZERO DATA (1 = STANDARD CONFIGURATION SPACE)
+            {% endif %}
+            
+            // Device-specific configuration
+            {% if device_specific_config %}
+            {% for config_bit, value in device_specific_config.items() %}
+            rw[{{ config_bit }}] <= 1'b{{ value }};  // {{ config_bit }} configuration
+            {% endfor %}
+            {% endif %}
+            
+            // PCILeech specific settings
+            rw[0] <= 1'b1;    // Enable PCILeech functionality
+            rw[1] <= 1'b1;    // Enable DMA operations
+            rw[2] <= 1'b{{ '1' if enable_scatter_gather else '0' }};    // Scatter-gather support
+            rw[3] <= 1'b{{ '1' if enable_interrupt else '0' }};    // Interrupt support
+            
+            // CFGTLP control bits
+            rw[20] <= 1'b0;   // cfg_a7[0] - Configuration address bit 7, bit 0
+            rw[21] <= 1'b0;   // cfg_a7[1] - Configuration address bit 7, bit 1
+            rw[206] <= 1'b1;  // CFGTLP PCIE WRITE ENABLE (1 = Enable PCIe writes for CFGTLP)
         end else begin
             cfg_ready <= cfg_rd_en || cfg_wr_en;
             

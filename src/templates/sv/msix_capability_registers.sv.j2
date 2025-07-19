@@ -14,20 +14,17 @@ reg [10:0] msix_table_size_reg;       // Table Size field (read-only)
 reg [31:0] msix_table_offset_bir;
 reg [31:0] msix_pba_offset_bir;
 
-// Initialize MSI-X capability registers
-initial begin
-    msix_enable_reg = 1'b0;
-    msix_function_mask_reg = 1'b0;
-    msix_table_size_reg = {{ table_size_minus_one }};  // Table size - 1
-    msix_table_offset_bir = {{ table_offset_bir }};
-    msix_pba_offset_bir = {{ pba_offset_bir }};
-end
+// MSI-X capability register initialization is handled in the reset logic below
+// Table size and offset/BIR registers are read-only and set in the always_ff block
 
 // MSI-X capability register read/write logic
 always_ff @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         msix_enable_reg <= 1'b0;
         msix_function_mask_reg <= 1'b0;
+        msix_table_size_reg <= {{ table_size_minus_one }};  // Table size - 1 (read-only)
+        msix_table_offset_bir <= {{ table_offset_bir }};    // Read-only
+        msix_pba_offset_bir <= {{ pba_offset_bir }};        // Read-only
     end else if (msix_cap_wr) begin
         // Handle writes to MSI-X Message Control register
         case (msix_cap_addr[3:0])

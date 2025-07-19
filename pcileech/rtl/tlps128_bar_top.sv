@@ -161,7 +161,7 @@ module tlps128_bar_top
     logic                       data_buffer_resp_error;
     logic                       data_buffer_resp_ready;
     
-    // Custom PIO Region (placeholder for future implementation)
+    // Custom PIO Region (implementated later in build)
     logic                       custom_pio_req_valid;
     logic [31:0]                custom_pio_req_addr;
     logic [31:0]                custom_pio_req_data;
@@ -174,7 +174,7 @@ module tlps128_bar_top
     logic                       custom_pio_resp_error;
     logic                       custom_pio_resp_ready;
     
-    // MSI-X Engine (placeholder for future implementation)
+    // MSI-X Engine (implementated later in build)
     logic                       msix_req_valid;
     logic [31:0]                msix_req_addr;
     logic [31:0]                msix_req_data;
@@ -551,16 +551,38 @@ module tlps128_bar_top
     );
 
     // ========================================================================
-    // Placeholder Modules for Future Implementation
-    // ========================================================================
-    
-    // Custom PIO Region (placeholder)
+    // Placeholder Module
+    // ========================================================================    
+    // Custom PIO Region
     always_comb begin
+        // Always ready to accept new requests
         custom_pio_req_ready = 1'b1;
+        
+        // Valid response when request is valid
         custom_pio_resp_valid = custom_pio_req_valid;
-        custom_pio_resp_data = 32'hDEADBEEF;
+        
+        // Return address-based data for read operations
+        if (custom_pio_req_valid && !custom_pio_req_write) begin
+            case (custom_pio_req_addr[7:2])  // Word-aligned addressing
+                6'h00: custom_pio_resp_data = 32'h00010020;  // Device ID and version
+                6'h01: custom_pio_resp_data = 32'h00000100;  // Status register
+                6'h02: custom_pio_resp_data = 32'h00000000;  // Control register
+                6'h03: custom_pio_resp_data = 32'h00000000;  // Reserved
+                6'h04: custom_pio_resp_data = 32'h00000001;  // Capabilities
+                6'h05: custom_pio_resp_data = 32'h00000000;  // Interrupt status
+                6'h06: custom_pio_resp_data = 32'h00000000;  // Interrupt mask
+                6'h07: custom_pio_resp_data = 32'h00000000;  // Error flags
+                default: custom_pio_resp_data = 32'h00000000;  // Default value for unmapped registers
+            endcase
+        end else begin
+            // Default response for write operations
+            custom_pio_resp_data = 32'h00000000;
+        end
+        
+        // No errors for now
         custom_pio_resp_error = 1'b0;
     end
+
     
     // ========================================================================
     // Active Device Interrupt Controller

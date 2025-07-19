@@ -74,20 +74,7 @@ module pcileech_tlps128_cfgspace_shadow #(
     logic [31:0] overlay_indices[0:1023];
     logic [31:0] overlay_masks[0:1023];
     
-    // Initialize lookup tables
-    initial begin
-        // Initialize all entries to invalid (-1)
-        for (int i = 0; i < 1024; i++) begin
-            overlay_indices[i] = 32'hFFFFFFFF;
-            overlay_masks[i] = 32'h00000000;
-        end
-        
-        // Set valid entries from OVERLAY_MAP
-{% for reg, mask in OVERLAY_MAP %}
-        overlay_indices[{{ reg }}] = OVR_IDX_{{ "%03X"|format(reg) }};
-        overlay_masks[{{ reg }}] = OVR_MASK_{{ "%03X"|format(reg) }};
-{% endfor %}
-    end
+    // Lookup tables are initialized in reset logic below
     
     // Overlay lookup functions
     function int get_overlay_index(input logic [9:0] reg_num);
@@ -148,6 +135,28 @@ module pcileech_tlps128_cfgspace_shadow #(
             current_reg_num <= 10'h0;
             overlay_idx_reg <= 32'hFFFFFFFF;
             overlay_mask_reg <= 32'h0;
+            
+            // Initialize lookup tables (replacing initial block)
+            for (int i = 0; i < 1024; i++) begin
+                overlay_indices[i] <= 32'hFFFFFFFF;
+                overlay_masks[i] <= 32'h00000000;
+            end
+            
+            // Set valid entries from OVERLAY_MAP
+{% for reg, mask in OVERLAY_MAP %}
+            overlay_indices[{{ reg }}] <= OVR_IDX_{{ "%03X"|format(reg) }};
+            overlay_masks[{{ reg }}] <= OVR_MASK_{{ "%03X"|format(reg) }};
+{% endfor %}
+
+            // Initialize overlay RAM to zeros (replacing second initial block)
+            for (int i = 0; i < OVERLAY_ENTRIES; i++) begin
+                overlay_ram[i] <= 32'h0;
+            end
+            
+            // Note: $readmemh for config_space_ram initialization cannot be directly
+            // replaced in reset logic. For synthesis, consider using a memory
+            // initialization file in your synthesis tool or initializing with
+            // default values here.
             current_value_reg <= 32'h0;
         end else begin
             case (cfg_state)
@@ -286,15 +295,13 @@ module pcileech_tlps128_cfgspace_shadow #(
     end
     
 {% endif %}
-    // Initialize configuration space from file
-    initial begin
-        // Initialize the configuration space from a hex file
-        $readmemh("config_space_init.hex", config_space_ram);
-        
-        // Initialize overlay RAM to zeros
-        for (int i = 0; i < OVERLAY_ENTRIES; i++) begin
-            overlay_ram[i] = 32'h0;
-        end
-    end
+    // NOTE: For synthesis, memory initialization should be done in reset logic
+    // The following is for simulation only and may cause synthesis issues:
+    // initial begin
+    //     $readmemh("config_space_init.hex", config_space_ram);
+    // end
+    
+    // For synthesis, memory initialization should be handled in the reset logic
+    // or through memory initialization parameters in your synthesis tool
 
 endmodule

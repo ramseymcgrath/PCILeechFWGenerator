@@ -514,7 +514,8 @@ module option_rom_spi_flash #(
     assign legacy_rom_data = flash_data;
 
 {% if SIGNATURE_CHECK %}
-    // ROM signature check
+    // ROM signature check - simulation only
+`ifdef SIMULATION
     initial begin
         // Check for valid ROM signature after some delay
         #1000;
@@ -522,6 +523,7 @@ module option_rom_spi_flash #(
             $display("Warning: Option-ROM signature not found (expected 0x55AA)");
         end
     end
+`endif
 {% endif %}
 
 endmodule

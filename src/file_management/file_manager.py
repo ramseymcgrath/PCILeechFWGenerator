@@ -14,8 +14,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ..device_clone.constants import (PCILEECH_BUILD_SCRIPT,
-                                      PCILEECH_PROJECT_SCRIPT)
+from ..device_clone.constants import PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT
 
 logger = logging.getLogger(__name__)
 try:
@@ -522,6 +521,13 @@ class FileManager:
             elif file_path.suffix == ".json":
                 manifest["files"]["generated"].append(file_path.name)
 
+        # Validate required files
+        required_files = ["device_config.sv", "pcileech_top.sv"]
+        manifest["validation"]["required_files_present"] = all(
+            f.lower() in [file.lower() for file in manifest["files"]["systemverilog"]]
+            for f in required_files
+        )
+
         return manifest
 
     def copy_pcileech_sources(self, board: str) -> Dict[str, List[str]]:
@@ -660,15 +666,6 @@ class FileManager:
                     file_lists["ip_files"].append(f"ip/{ip_file.name}")
 
         return file_lists
-
-        # Validate required files
-        required_files = ["device_config.sv", "pcileech_top.sv"]
-        manifest["validation"]["required_files_present"] = all(
-            f.lower() in [file.lower() for file in manifest["files"]["systemverilog"]]
-            for f in required_files
-        )
-
-        return manifest
 
     def print_final_output_info(self, validation_results: Dict[str, Any]):
         """Print detailed information about final output files."""

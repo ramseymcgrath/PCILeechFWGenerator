@@ -226,17 +226,31 @@ module msix_table #(
     endfunction
 
 {% if INIT_TABLE %}
-    // Initialize MSI-X table from provided values
-    initial begin
-        $readmemh("msix_table_init.hex", msix_table_mem);
-    end
+    // NOTE: For synthesis, memory initialization should be done in reset logic
+    // The following is for simulation only and may cause synthesis issues:
+    // initial begin
+    //     $readmemh("msix_table_init.hex", msix_table_mem);
+    // end
+    
+    // For synthesis, add initialization in the reset section of the always_ff block above
+    // For example, in the reset section at line ~105:
+    // for (int i = 0; i < {{ NUM_MSIX }} * 4; i++) begin
+    //     msix_table_mem[i] <= 32'h0;
+    // end
 {% endif %}
 
 {% if INIT_PBA %}
-    // Initialize MSI-X PBA from provided values
-    initial begin
-        $readmemh("msix_pba_init.hex", msix_pba_mem);
-    end
+    // NOTE: For synthesis, memory initialization should be done in reset logic
+    // The following is for simulation only and may cause synthesis issues:
+    // initial begin
+    //     $readmemh("msix_pba_init.hex", msix_pba_mem);
+    // end
+    
+    // For synthesis, add initialization in the reset section of the always_ff block above
+    // For example, in the reset section at line ~109:
+    // for (int i = 0; i < PBA_SIZE; i++) begin
+    //     msix_pba_mem[i] <= 32'h0;
+    // end
 {% endif %}
 
 endmodule

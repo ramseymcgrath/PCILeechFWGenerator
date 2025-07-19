@@ -116,15 +116,5 @@ task msix_deliver_interrupt(input logic [10:0] vector);
     msix_deliver_interrupt_validated(vector);
 endtask
 
-// Initialize MSI-X table and PBA
-initial begin
-    // Initialize MSI-X table to zeros
-    for (int i = 0; i < NUM_MSIX * 4; i++) begin
-        msix_table[i] = 32'h0;
-    end
-
-    // Initialize MSI-X PBA to zeros
-    for (int i = 0; i < {{ pba_size }}; i++) begin
-        msix_pba[i] = 32'h0;
-    end
-end
+// MSI-X table and PBA initialization is handled in reset logic
+// Add this to an always_ff block with reset handling

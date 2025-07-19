@@ -31,20 +31,24 @@ except ImportError:
     HAS_VFIO_ASSIST = False
 
 # Import safe logging functions
-from string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                          log_warning_safe)
+from string_utils import log_debug_safe, log_error_safe, log_info_safe, log_warning_safe
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
 from .vfio_constants import VfioGroupStatus  # legacy alias
 from .vfio_constants import VfioRegionInfo  # legacy alias
-from .vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                             VFIO_GROUP_GET_DEVICE_FD, VFIO_GROUP_GET_STATUS,
-                             VFIO_GROUP_SET_CONTAINER,
-                             VFIO_REGION_INFO_FLAG_MMAP,
-                             VFIO_REGION_INFO_FLAG_READ,
-                             VFIO_REGION_INFO_FLAG_WRITE, VFIO_SET_IOMMU,
-                             VFIO_TYPE1_IOMMU, vfio_group_status,
-                             vfio_region_info)
+from .vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_GROUP_GET_STATUS,
+    VFIO_GROUP_SET_CONTAINER,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VFIO_SET_IOMMU,
+    VFIO_TYPE1_IOMMU,
+    vfio_group_status,
+    vfio_region_info,
+)
 from .vfio_helpers import get_device_fd
 
 # Configure global logger
@@ -296,7 +300,7 @@ class VFIOBinderImpl:
                 prefix="BIND",
             )
 
-    def _bind_to_vfio_driver(self) -> None:
+    def _perform_vfio_binding(self) -> None:
         """Bind device to vfio-pci using driver_override workflow."""
         log_info_safe(
             logger, "Binding {bdf} to vfio-pci driver", bdf=self.bdf, prefix="BIND"
@@ -366,7 +370,7 @@ class VFIOBinderImpl:
         self._unbind_current_driver(device_info)
 
         # Bind to vfio-pci
-        self._bind_to_vfio_driver()
+        self._perform_vfio_binding()
 
         # Verify binding
         final_device_info = self._get_device_info(refresh=True)

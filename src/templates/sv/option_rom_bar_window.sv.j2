@@ -81,7 +81,13 @@ module option_rom_bar_window #(
     // But we implement write for completeness and potential future use
     always_ff @(posedge clk) begin
         if (!reset_n) begin
-            // No reset needed for ROM
+            // Initialize ROM in reset logic
+{% if INIT_ROM %}
+            // Initialize ROM from provided data
+{% for word in INIT_ROM %}
+            rom_memory[{{ loop.index0 }}] <= 32'h{{ "%08X"|format(word) }};
+{% endfor %}
+{% endif %}
         end else if (bar_wr_en && is_rom_bar_access && (rom_addr < ROM_WORDS)) begin
             // Allow writes to ROM for debugging/testing
             rom_memory[rom_addr] <= bar_wr_data;
@@ -105,24 +111,25 @@ module option_rom_bar_window #(
         end
     end
     
-    // Initialize Option-ROM from file or data
-    initial begin
+    // NOTE: For synthesis, ROM initialization should be done in reset logic above
+    // The following is for simulation only and may cause synthesis issues:
+    // initial begin
 {% if INIT_ROM %}
-        // Initialize ROM from provided data
+    //     // Initialize ROM from provided data
 {% for word in INIT_ROM %}
-        rom_memory[{{ loop.index0 }}] = 32'h{{ "%08X"|format(word) }};
+    //     rom_memory[{{ loop.index0 }}] = 32'h{{ "%08X"|format(word) }};
 {% endfor %}
 {% else %}
-        // Initialize the Option-ROM from a hex file
-        $readmemh("{{ ROM_HEX_FILE }}", rom_memory);
+    //     // Initialize the Option-ROM from a hex file
+    //     $readmemh("{{ ROM_HEX_FILE }}", rom_memory);
 {% endif %}
-        
+    //
 {% if ENABLE_SIGNATURE_CHECK %}
-        // Ensure ROM signature is valid (0x55AA at offset 0)
-        if ((rom_memory[0] & 16'hFFFF) != 16'hAA55) begin
-            $display("Warning: Option-ROM signature not found (expected 0x55AA)");
-        end
+    //     // Ensure ROM signature is valid (0x55AA at offset 0)
+    //     if ((rom_memory[0] & 16'hFFFF) != 16'hAA55) begin
+    //         $display("Warning: Option-ROM signature not found (expected 0x55AA)");
+    //     end
 {% endif %}
-    end
+    // end
 
 endmodule
