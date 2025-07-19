@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from log_config import get_logger
-from shell import Shell
+from ..log_config import get_logger
+from ..shell import Shell
 
 from .vfio_handler import VFIOBinder  # auto‑fix & diagnostics baked in
 
@@ -84,43 +84,21 @@ class BuildConfig:
     active_priority: int = 15
 
     def cmd_args(self) -> List[str]:
-        """Translate config to build.py flags"""
+        """Translate config to build.py flags - only include supported arguments"""
         args = [f"--bdf {self.bdf}", f"--board {self.board}"]
-        if self.advanced_sv:
-            args.append("--advanced-sv")
-        if self.device_type != "generic":
-            args.append(f"--device-type {self.device_type}")
-        if self.enable_variance:
-            args.append("--enable-variance")
-        if self.disable_power_management:
-            args.append("--disable-power-management")
-        if self.disable_error_handling:
-            args.append("--disable-error-handling")
-        if self.disable_performance_counters:
-            args.append("--disable-performance-counters")
+        
+        # Profile duration mapping (build.py uses --profile, not --behavior-profile-duration)
         if self.behavior_profile_duration != 30:
-            args.append(f"--behavior-profile-duration {self.behavior_profile_duration}")
-
-        # Add fallback control arguments
-        if self.fallback_mode != "none":
-            args.append(f"--fallback-mode {self.fallback_mode}")
-        if self.allowed_fallbacks:
-            args.append(f"--allow-fallbacks {','.join(self.allowed_fallbacks)}")
-        if self.denied_fallbacks:
-            args.append(f"--deny-fallbacks {','.join(self.denied_fallbacks)}")
-
-        # Add active device configuration arguments
-        if self.disable_active_device:
-            args.append("--disable-active-device")
-        if self.active_timer_period != 100000:
-            args.append(f"--active-timer-period {self.active_timer_period}")
-        if self.active_interrupt_mode != "msi":
-            args.append(f"--active-interrupt-mode {self.active_interrupt_mode}")
-        if self.active_interrupt_vector != 0:
-            args.append(f"--active-interrupt-vector {self.active_interrupt_vector}")
-        if self.active_priority != 15:
-            args.append(f"--active-priority {self.active_priority}")
-
+            args.append(f"--profile {self.behavior_profile_duration}")
+        
+        # MSI-X preloading control
+        if not getattr(self, 'preload_msix', True):
+            args.append("--no-preload-msix")
+        
+        # Note: The following arguments are not supported by build.py and are removed:
+        # --device-type, --advanced-sv, --enable-variance, --disable-*, --fallback-*, --active-*
+        # These features would need to be implemented in build.py if needed
+        
         return args
 
 

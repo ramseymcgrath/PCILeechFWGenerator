@@ -37,8 +37,8 @@ from typing import List, Optional
 
 # Add project root to path for utils imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from log_config import get_logger, setup_logging
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+from ..log_config import get_logger, setup_logging
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
                               log_warning_safe)
 
 # ──────────────────────────────────────────────────────────────────────────────

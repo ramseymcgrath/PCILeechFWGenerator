@@ -31,7 +31,7 @@ except ImportError:
     HAS_VFIO_ASSIST = False
 
 # Import safe logging functions
-from string_utils import log_debug_safe, log_error_safe, log_info_safe, log_warning_safe
+from ..string_utils import log_debug_safe, log_error_safe, log_info_safe, log_warning_safe
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
 from .vfio_constants import VfioGroupStatus  # legacy alias

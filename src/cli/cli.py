@@ -24,8 +24,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from log_config import get_logger, setup_logging
-from shell import Shell
+from ..log_config import get_logger, setup_logging
+from ..shell import Shell
 
 from .container import BuildConfig, run_build  # new unified runner
 

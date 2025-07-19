@@ -48,9 +48,12 @@ int main(void) {
     /* Container/API level ioctls */
     printf("VFIO_GET_API_VERSION=%lu\n", (unsigned long)VFIO_GET_API_VERSION);
     printf("VFIO_CHECK_EXTENSION=%lu\n", (unsigned long)VFIO_CHECK_EXTENSION);
+    printf("VFIO_SET_IOMMU=%lu\n", (unsigned long)VFIO_SET_IOMMU);
     
     /* Group management ioctls */
     printf("VFIO_GROUP_GET_STATUS=%lu\n", (unsigned long)VFIO_GROUP_GET_STATUS);
+    printf("VFIO_GROUP_SET_CONTAINER=%lu\n", (unsigned long)VFIO_GROUP_SET_CONTAINER);
+    printf("VFIO_GROUP_UNSET_CONTAINER=%lu\n", (unsigned long)VFIO_GROUP_UNSET_CONTAINER);
     printf("VFIO_GROUP_GET_DEVICE_FD=%lu\n", (unsigned long)VFIO_GROUP_GET_DEVICE_FD);
     
     /* Device-level ioctls */
