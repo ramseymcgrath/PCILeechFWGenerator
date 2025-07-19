@@ -415,11 +415,11 @@ class PCILeechContextBuilder:
             device_id = config_space_data["device_id"]
             class_code = config_space_data["class_code"]
             revision_id = config_space_data["revision_id"]
-            
+
             # Extract subsystem identifiers with enhanced fallback logic
             subsystem_vendor_id = config_space_data.get("subsystem_vendor_id")
             subsystem_device_id = config_space_data.get("subsystem_device_id")
-            
+
             # Log raw extraction for debugging
             log_info_safe(
                 self.logger,
@@ -428,9 +428,9 @@ class PCILeechContextBuilder:
                 device=device_id,
                 subsys_vendor=subsystem_vendor_id,
                 subsys_device=subsystem_device_id,
-                prefix="IDENT"
+                prefix="IDENT",
             )
-            
+
             # Convert to hex strings for consistency
             if isinstance(vendor_id, int):
                 vendor_id = f"{vendor_id:04x}"
@@ -440,30 +440,30 @@ class PCILeechContextBuilder:
                 class_code = f"{class_code:06x}"
             if isinstance(revision_id, int):
                 revision_id = f"{revision_id:02x}"
-                
+
             # Enhanced subsystem ID handling
             if subsystem_vendor_id is None or subsystem_vendor_id == 0:
                 log_warning_safe(
                     self.logger,
                     "Subsystem vendor ID is None or 0, using main vendor ID {vendor}",
                     vendor=vendor_id,
-                    prefix="IDENT"
+                    prefix="IDENT",
                 )
                 subsystem_vendor_id = vendor_id
             elif isinstance(subsystem_vendor_id, int):
                 subsystem_vendor_id = f"{subsystem_vendor_id:04x}"
-                
+
             if subsystem_device_id is None or subsystem_device_id == 0:
                 log_warning_safe(
                     self.logger,
                     "Subsystem device ID is None or 0, using main device ID {device}",
                     device=device_id,
-                    prefix="IDENT"
+                    prefix="IDENT",
                 )
                 subsystem_device_id = device_id
             elif isinstance(subsystem_device_id, int):
                 subsystem_device_id = f"{subsystem_device_id:04x}"
-            
+
             # Final validation
             if not subsystem_vendor_id or subsystem_vendor_id == "0000":
                 subsystem_vendor_id = vendor_id
@@ -471,18 +471,18 @@ class PCILeechContextBuilder:
                     self.logger,
                     "Final fallback: subsystem vendor ID -> {vendor}",
                     vendor=vendor_id,
-                    prefix="IDENT"
+                    prefix="IDENT",
                 )
-                
+
             if not subsystem_device_id or subsystem_device_id == "0000":
                 subsystem_device_id = device_id
                 log_info_safe(
                     self.logger,
                     "Final fallback: subsystem device ID -> {device}",
                     device=device_id,
-                    prefix="IDENT"
+                    prefix="IDENT",
                 )
-            
+
             # Log final extraction result
             log_info_safe(
                 self.logger,
@@ -491,9 +491,9 @@ class PCILeechContextBuilder:
                 device=device_id,
                 subsys_vendor=subsystem_vendor_id,
                 subsys_device=subsystem_device_id,
-                prefix="IDENT"
+                prefix="IDENT",
             )
-            
+
             return DeviceIdentifiers(
                 vendor_id=vendor_id,
                 device_id=device_id,
@@ -538,13 +538,17 @@ class PCILeechContextBuilder:
                 self.config, "enable_interrupt_coalescing", False
             ),
         }
-        
+
         # Ensure subsystem IDs are available as hex strings for templates
         if device_identifiers.subsystem_vendor_id:
-            device_config["subsystem_vendor_id_hex"] = f"0x{int(device_identifiers.subsystem_vendor_id, 16):04X}"
+            device_config["subsystem_vendor_id_hex"] = (
+                f"0x{int(device_identifiers.subsystem_vendor_id, 16):04X}"
+            )
         if device_identifiers.subsystem_device_id:
-            device_config["subsystem_device_id_hex"] = f"0x{int(device_identifiers.subsystem_device_id, 16):04X}"
-        
+            device_config["subsystem_device_id_hex"] = (
+                f"0x{int(device_identifiers.subsystem_device_id, 16):04X}"
+            )
+
         # Add extended configuration space pointers if available
         if hasattr(self.config, "device_config") and self.config.device_config:
             device_capabilities = getattr(

@@ -31,7 +31,6 @@ recursive-include src/donor_dump *.c *.h Makefile*
 
 # Include templates
 recursive-include src/templates *.j2 *.md
-recursive-include src/templating/templates *.j2
 
 # Include scripts
 recursive-include src/scripts *.py

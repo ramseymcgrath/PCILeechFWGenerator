@@ -760,10 +760,9 @@ class BuildOrchestrator:
                 sys.path.append(str(project_root))
 
             # Import the module
-            from file_management.donor_dump_manager import DonorDumpManager
-
             # Return the module
             import file_management.donor_dump_manager as donor_dump_manager
+            from file_management.donor_dump_manager import DonorDumpManager
 
             return donor_dump_manager
 

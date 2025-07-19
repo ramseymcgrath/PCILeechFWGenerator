@@ -6,20 +6,12 @@
 
 This document provides instructions for setting up a development environment for the PCILeech Firmware Generator project.
 
----
-
-## 📑 Table of Contents
-
-- [🚀 Development Setup](#-development-setup)
-- [📦 Building from Source](#-building-from-source)
-- [🤝 Contributing](#-contributing)
-- [🧪 Testing](#-testing)
-- [📝 Code Style](#-code-style)
-- [⚠️ Disclaimer](#️-disclaimer)
 
 ---
 
 ## 🚀 Development Setup
+
+The code needs to run on linux but can be developed anywhere with a python vers >3.9
 
 ```bash
 # Clone repository
@@ -49,9 +41,12 @@ python -m build
 # Install locally
 pip install dist/*.whl
 
-# Test installation
-pcileech-generate --help
 ```
+
+## Unit testing
+
+TUI Tests are next to the code in the tui dir, app tests are in the tests/ dir.
+`make test` in the repo is the easiest way to run unit tests locally. The github action will run them in CI.
 
 ## 🤝 Contributing
 

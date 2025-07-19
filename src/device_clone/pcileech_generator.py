@@ -794,7 +794,7 @@ class PCILeechGenerator:
             "tcl_scripts": self._generate_tcl_scripts(template_context),
             "config_space_hex": self._generate_config_space_hex(template_context),
         }
-        
+
         # Generate writemask COE after config space COE is available
         # This requires the config space COE to be saved to disk first
         components["writemask_coe"] = self._generate_writemask_coe(template_context)
@@ -896,26 +896,34 @@ class PCILeechGenerator:
                 log_info_safe(
                     self.logger,
                     "Config space COE not found, generating it first",
-                    prefix="WRMASK"
+                    prefix="WRMASK",
                 )
-                
+
                 # First check if it exists in the already generated systemverilog modules
                 # This avoids regenerating what was already created
-                systemverilog_modules = getattr(self, '_cached_systemverilog_modules', {})
-                
+                systemverilog_modules = getattr(
+                    self, "_cached_systemverilog_modules", {}
+                )
+
                 if "pcileech_cfgspace.coe" in systemverilog_modules:
                     # Use the already generated content
-                    cfg_space_coe.write_text(systemverilog_modules["pcileech_cfgspace.coe"])
+                    cfg_space_coe.write_text(
+                        systemverilog_modules["pcileech_cfgspace.coe"]
+                    )
                     log_info_safe(
                         self.logger,
                         "Used cached config space COE content at {path}",
                         path=str(cfg_space_coe),
-                        prefix="WRMASK"
+                        prefix="WRMASK",
                     )
                 else:
                     # Check if COE file already exists in systemverilog directory
                     # This prevents regenerating files that were already saved
-                    systemverilog_coe_path = self.config.output_dir / "systemverilog" / "pcileech_cfgspace.coe"
+                    systemverilog_coe_path = (
+                        self.config.output_dir
+                        / "systemverilog"
+                        / "pcileech_cfgspace.coe"
+                    )
                     if systemverilog_coe_path.exists():
                         # Copy from systemverilog directory to avoid regeneration
                         cfg_space_coe.write_text(systemverilog_coe_path.read_text())
@@ -923,28 +931,31 @@ class PCILeechGenerator:
                             self.logger,
                             "Copied existing COE from systemverilog directory to {path}",
                             path=str(cfg_space_coe),
-                            prefix="WRMASK"
+                            prefix="WRMASK",
                         )
                     else:
                         # Generate new content as last resort
-                        from ..templating.systemverilog_generator import AdvancedSVGenerator
-                        
-                        sv_gen = AdvancedSVGenerator(template_dir=self.config.template_dir)
+                        from ..templating.systemverilog_generator import \
+                            AdvancedSVGenerator
+
+                        sv_gen = AdvancedSVGenerator(
+                            template_dir=self.config.template_dir
+                        )
                         modules = sv_gen.generate_pcileech_modules(template_context)
-                        
+
                         if "pcileech_cfgspace.coe" in modules:
                             cfg_space_coe.write_text(modules["pcileech_cfgspace.coe"])
                             log_info_safe(
                                 self.logger,
                                 "Generated config space COE file at {path}",
                                 path=str(cfg_space_coe),
-                                prefix="WRMASK"
+                                prefix="WRMASK",
                             )
                         else:
                             log_warning_safe(
                                 self.logger,
                                 "Config space COE module not found in generated modules",
-                                prefix="WRMASK"
+                                prefix="WRMASK",
                             )
                             return None
 
@@ -1001,12 +1012,12 @@ class PCILeechGenerator:
             # Try multiple possible locations for config space data
             config_space_data = None
             raw_config_space = None
-            
+
             # First try the direct key
             if "config_space_data" in template_context:
                 config_space_data = template_context["config_space_data"]
                 raw_config_space = config_space_data.get("raw_config_space", b"")
-            
+
             # If not found, try alternative locations
             if not raw_config_space:
                 # Try the config_space key directly
@@ -1037,7 +1048,7 @@ class PCILeechGenerator:
                                 raw_config_space = bytes.fromhex(config_space_hex)
                             except ValueError:
                                 pass
-            
+
             # If still not found, try device_config or other locations
             if not raw_config_space:
                 device_config = template_context.get("device_config", {})
@@ -1051,20 +1062,26 @@ class PCILeechGenerator:
                     self.logger,
                     "Configuration space data not found. Available template context keys: {keys}",
                     keys=list(template_context.keys()),
-                    prefix="HEX"
+                    prefix="HEX",
                 )
-                
+
                 # Try to examine nested structure
                 for key, value in template_context.items():
-                    if isinstance(value, dict) and ("config_space" in str(key).lower() or "raw" in str(key).lower()):
+                    if isinstance(value, dict) and (
+                        "config_space" in str(key).lower() or "raw" in str(key).lower()
+                    ):
                         log_info_safe(
                             self.logger,
                             "Found potential config space key '{key}' with subkeys: {subkeys}",
                             key=key,
-                            subkeys=list(value.keys()) if isinstance(value, dict) else type(value),
-                            prefix="HEX"
+                            subkeys=(
+                                list(value.keys())
+                                if isinstance(value, dict)
+                                else type(value)
+                            ),
+                            prefix="HEX",
                         )
-                
+
                 raise ValueError(
                     "No configuration space data available in template context"
                 )

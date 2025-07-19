@@ -1,9 +1,12 @@
 import asyncio
 import os
+from typing import Any, Dict, List
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock, mock_open
-from typing import Dict, List, Any
-from src.tui.core.device_manager import DeviceManager, BAR_TYPE_MEMORY, BAR_TYPE_IO
+
+from src.tui.core.device_manager import (BAR_TYPE_IO, BAR_TYPE_MEMORY,
+                                         DeviceManager)
 from src.tui.models.device import PCIDevice
 
 

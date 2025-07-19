@@ -19,13 +19,8 @@ except ImportError:
 
 
 try:
-    from jinja2 import (
-        Environment,
-        FileSystemLoader,
-        Template,
-        TemplateError,
-        StrictUndefined,
-    )
+    from jinja2 import (Environment, FileSystemLoader, StrictUndefined,
+                        Template, TemplateError)
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"
@@ -51,16 +46,10 @@ class TemplateRenderer:
                          defaults to src/templates/
         """
         if template_dir is None:
-            # Default to the new flattened templates directory
+            # Default to the templates directory
             template_dir = Path(__file__).parent.parent / "templates"
 
         self.template_dir = Path(template_dir)
-        if not self.template_dir.exists():
-            # Fallback to old location for backward compatibility
-            old_dir = Path(__file__).parent / "templates"
-            if old_dir.exists():
-                self.template_dir = old_dir
-
         self.template_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize Jinja2 environment
@@ -235,7 +224,7 @@ class TemplateRenderer:
 
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
-        
+
         # Add Python built-in functions that are commonly used in templates
         self.env.globals["hasattr"] = hasattr
         self.env.globals["getattr"] = getattr

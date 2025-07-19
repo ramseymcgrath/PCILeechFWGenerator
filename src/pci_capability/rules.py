@@ -29,13 +29,8 @@ except ImportError:
 
 from .constants import PCI_DEVICE_ID_OFFSET, PCI_VENDOR_ID_OFFSET
 from .core import ConfigSpace
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PCICapabilityID,
-    PCIExtCapabilityID,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PCICapabilityID, PCIExtCapabilityID)
 
 logger = logging.getLogger(__name__)
 

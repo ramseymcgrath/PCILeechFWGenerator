@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from textual.app import App
-from textual.widgets import Button, DataTable, Select, Static, Switch, Input
+from textual.widgets import Button, DataTable, Input, Select, Static, Switch
+
 from tui.main import ConfigurationDialog, ConfirmationDialog, PCILeechTUI
 from tui.models.config import BuildConfiguration
 from tui.models.device import PCIDevice

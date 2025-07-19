@@ -24,12 +24,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 # Import board functions from the correct module
-from src.device_clone.board_config import (
-    get_board_info,
-    get_pcileech_board_config,
-    validate_board,
-)
-
+from src.device_clone.board_config import (get_board_info,
+                                           get_pcileech_board_config,
+                                           validate_board)
 # Import msix_capability at the module level to avoid late imports
 from src.device_clone.msix_capability import parse_msix_capability
 from src.log_config import get_logger, setup_logging
@@ -476,7 +473,7 @@ class FileOperationsManager:
             # COE files are handled separately and saved to systemverilog directory
             if name.endswith(".coe"):
                 continue
-                
+
             file_path, category = self._determine_file_path(name, sv_dir)
 
             if category == "sv":
@@ -830,11 +827,9 @@ class FirmwareBuilder:
             VivadoIntegrationError: If Vivado integration fails
         """
         try:
-            from src.vivado_handling import (
-                find_vivado_installation,
-                integrate_pcileech_build,
-                run_vivado_with_error_reporting,
-            )
+            from src.vivado_handling import (find_vivado_installation,
+                                             integrate_pcileech_build,
+                                             run_vivado_with_error_reporting)
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
@@ -875,9 +870,7 @@ class FirmwareBuilder:
         from src.device_clone.behavior_profiler import BehaviorProfiler
         from src.device_clone.board_config import get_pcileech_board_config
         from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig,
-            PCILeechGenerator,
-        )
+            PCILeechGenerationConfig, PCILeechGenerator)
         from src.templating.tcl_builder import BuildContext, TCLBuilder
 
         self.gen = PCILeechGenerator(
@@ -939,17 +932,17 @@ class FirmwareBuilder:
         """Generate TCL scripts for Vivado."""
         ctx = result["template_context"]
         device_config = ctx["device_config"]
-        
+
         # Extract subsystem IDs from template context
         subsys_vendor_id = device_config.get("subsystem_vendor_id")
         subsys_device_id = device_config.get("subsystem_device_id")
-        
+
         # Convert hex strings to integers if needed
         if isinstance(subsys_vendor_id, str) and subsys_vendor_id.startswith("0x"):
             subsys_vendor_id = int(subsys_vendor_id, 16)
         elif isinstance(subsys_vendor_id, str):
             subsys_vendor_id = int(subsys_vendor_id, 16)
-            
+
         if isinstance(subsys_device_id, str) and subsys_device_id.startswith("0x"):
             subsys_device_id = int(subsys_device_id, 16)
         elif isinstance(subsys_device_id, str):

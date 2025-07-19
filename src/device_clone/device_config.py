@@ -487,6 +487,16 @@ class DeviceConfigManager:
         # Try to load from file
         config_file = self.config_dir / f"{name}.yaml"
         if config_file.exists():
+            logger.warning("=" * 80)
+            logger.warning("⚠️  WARNING: USING PRECONFIGURED YAML DEVICE CONFIGURATION")
+            logger.warning(f"   Loading device profile from: {config_file}")
+            logger.warning(
+                "   This uses hardcoded vendor/device IDs that may not be unique!"
+            )
+            logger.warning(
+                "   Consider using live device detection instead of YAML configs."
+            )
+            logger.warning("=" * 80)
             config = self.load_config_file(config_file)
             self.profiles[name] = config
             return config
@@ -494,6 +504,16 @@ class DeviceConfigManager:
         # Try JSON file
         config_file = self.config_dir / f"{name}.json"
         if config_file.exists():
+            logger.warning("=" * 80)
+            logger.warning("⚠️  WARNING: USING PRECONFIGURED JSON DEVICE CONFIGURATION")
+            logger.warning(f"   Loading device profile from: {config_file}")
+            logger.warning(
+                "   This uses hardcoded vendor/device IDs that may not be unique!"
+            )
+            logger.warning(
+                "   Consider using live device detection instead of JSON configs."
+            )
+            logger.warning("=" * 80)
             config = self.load_config_file(config_file)
             self.profiles[name] = config
             return config

@@ -6,8 +6,8 @@
 FROM ubuntu:22.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC \
+    PIP_BREAK_SYSTEM_PACKAGES=1
 
 # ── base build deps ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,7 +25,7 @@ RUN mkdir -p src/cli && \
     chmod +x build_vfio_constants.sh && \
     (./build_vfio_constants.sh && cp src/cli/vfio_constants.py vfio_constants_patched.py) || \
     (echo "⚠ VFIO constants build failed, using original" && cp src/cli/vfio_constants.py vfio_constants_patched.py) && \
-    echo "Content of patched file:" && cat vfio_constants_patched.py | grep -A 10 "Ioctl numbers"
+    echo "Content of patched file:" && head -20 vfio_constants_patched.py | grep -A 10 "Ioctl numbers" || echo "No ioctl numbers section found"
 
 # ---------- runtime ----------
 FROM ubuntu:22.04 AS runtime
@@ -46,27 +46,34 @@ RUN useradd -m -r appuser && \
     echo "Defaults !requiretty" >> /etc/sudoers
 
 WORKDIR /app
+
+# Copy requirements and install Python dependencies
 COPY requirements.txt requirements-tui.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt -r requirements-tui.txt
 
-# Copy only what you need
+# Copy application files
 COPY src ./src
 COPY boards ./boards
 COPY configs ./configs
-COPY generate.py .
+COPY pcileech.py .
+
+# Copy the patched VFIO constants from build stage
+COPY --from=build /src/vfio_constants_patched.py ./src/cli/vfio_constants.py
 
 # Ensure __init__.py files exist in all directories
 RUN find ./src -type d -exec touch {}/__init__.py \; 2>/dev/null || true
+
+# Copy and setup entrypoint
 COPY entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod 755 /usr/local/bin/entrypoint
 
-# Copy the patched VFIO constants file (commented out to use our pre-patched version)
-# COPY --from=build /src/vfio_constants_patched.py ./src/cli/vfio_constants.py
-
+# Set up environment and permissions
 ENV PYTHONPATH=/app:/app/src
 RUN mkdir -p /app/output && chown appuser /app/output
 
-HEALTHCHECK CMD python3 - <<'PY'\nimport psutil, pydantic, sys; sys.exit(0)\nPY
+# Health check to verify essential dependencies
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3 -c "import psutil, pydantic, sys; sys.exit(0)" || exit 1
 
 USER appuser
 ENTRYPOINT ["entrypoint"]

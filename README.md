@@ -11,19 +11,19 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 
 ## ✨ Key Features
 
-- **Donor Hardware Analysis**: Extract real PCIe device configurations and register maps
-- **Full 4KB Config-Space Shadow**: Complete configuration space emulation with overlay RAM
-- **MSI-X Table Replication**: Exact replication of MSI-X tables from donor devices
-- **Deterministic Variance Seeding**: Consistent hardware variance based on device serial number
-- **Advanced SystemVerilog Generation**: Comprehensive PCIe device controller with modular architecture
-- **Active Device**: Interrupts implemented to signal device is active (VGK bypass)
-- **Memory Overlay Mapping**: Memory. Overlayed. Mapped
-- **Interactive TUI**: Modern text-based interface with real-time monitoring and guided workflows
-- **Automated Build Pipeline**: Containerized synthesis and bitstream generation
-- **Automated Testing and Validation**: Build is continually tested to ensure build quality
-- **USB-JTAG Flashing**: Direct firmware deployment to DMA boards
+- **Donor Hardware Analysis**: Extract real PCIe device configurations and register maps from live hardware via VFIO
+- **Full 4KB Config-Space Shadow**: Complete configuration space emulation with BRAM-based overlay memory
+- **MSI-X Table Replication**: Exact replication of MSI-X tables from donor devices with interrupt delivery logic
+- **Deterministic Variance Seeding**: Consistent hardware variance based on device serial number for unique firmware
+- **Advanced SystemVerilog Generation**: Comprehensive PCIe device controller with modular template architecture
+- **Active Device Interrupts**: MSI-X interrupt controller with timer-based and event-driven interrupt generation
+- **Memory Overlay Mapping**: BAR dispatcher with configurable memory regions and custom PIO windows
+- **Interactive TUI**: Modern Textual-based interface with real-time device monitoring and guided workflows
+- **Containerized Build Pipeline**: Podman-based synthesis environment with automated VFIO setup
+- **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
+- **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](../../wiki)** | 🏗️ **[Device Cloning Guide](../../wiki/device-cloning)** | 🔧 **[Development Setup](../../wiki/development)**
+📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🏗️ **[Device Cloning Guide](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** | 🔧 **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)**
 
 ## 🚀 Quick Start
 
@@ -32,10 +32,6 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 ```bash
 # Install with TUI support (recommended)
 pip install pcileechfwgenerator[tui]
-
-# Install sudo wrapper scripts for easier usage
-wget https://raw.githubusercontent.com/ramseymcgrath/PCILeechFWGenerator/refs/heads/main/install-sudo-wrapper.sh
-./install-sudo-wrapper.sh
 
 # Load required kernel modules
 sudo modprobe vfio vfio-pci
@@ -47,7 +43,7 @@ sudo modprobe vfio vfio-pci
 - **Donor PCIe card** (any inexpensive NIC, sound, or capture card)
 - **Linux OS** (You need this)
 
-### Optional
+### Optional Requirements
 
 - **Podman** (_not Docker_ - required for proper PCIe device mounting) You use podman or run the python locally. *You must use linux for either option
 - **DMA board** (pcileech_75t484_x1, pcileech_35t325_x4, or pcileech_100t484_x1) You don't need to flash your firmware with this tooling but you can.
@@ -57,33 +53,30 @@ sudo modprobe vfio vfio-pci
 ### Basic Usage
 
 ```bash
-# Development from repository
-git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
-cd PCILeechFWGenerator
-# or pip install
-pip3 install pcileechfwgenerator
-
 # Interactive TUI (recommended for first-time users)
-pcileech-tui-sudo
+sudo python3 pcileech.py tui
 
-# CLI interface
-pcileech-generate build
+# CLI interface for scripted builds
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t
 
-# Local python build
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-sudo -E python3 generate.py
+# Check VFIO configuration
+sudo python3 pcileech.py check --device 0000:03:00.0
+
+# Flash firmware to device
+sudo python3 pcileech.py flash output/firmware.bin
 ```
 
-### Flashing Firmware
+> [!NOTE]
+> The legacy entrypoint has been removed, please see the steps above and update your scripts accordingly
+
+### Development from Repository
 
 ```bash
-# Flash to DMA board
-pcileech-generate flash output/firmware.bin --board pcileech_75t484_x1
-
-# Or use usbloader directly
-usbloader -f output/firmware.bin
-
+git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
+cd PCILeechFWGenerator
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+sudo -E python3 pcileech.py tui
 ```
 
 ## 🔧 Troubleshooting
@@ -98,16 +91,16 @@ The most common issues involve VFIO (Virtual Function I/O) configuration. Use th
 
 ```bash
 # Check VFIO setup and device compatibility
-./vfio_setup_checker.py
+sudo python3 pcileech.py check
 
 # Check a specific device
-./vfio_setup_checker.py 0000:03:00.0
+sudo python3 pcileech.py check --device 0000:03:00.0
 
 # Interactive mode with guided fixes
-./vfio_setup_checker.py --interactive
+sudo python3 pcileech.py check --interactive
 
-# Generate automated fix script
-./vfio_setup_checker.py --generate-script
+# Attempt automatic fixes
+sudo python3 pcileech.py check --fix
 ```
 
 ### Common VFIO Problems
@@ -154,19 +147,19 @@ podman --version
 podman info | grep rootless
 ```
 
-### Templating issues
-
-If you run into issues with your vivado project file formatting, first clear out all your cached files and rerun. Otherwise try pulling a copy of the pcileech repo directly and then inserting the generator output in. 
+> [!NOTE]
+> If you run into issues with your vivado project file formatting, first clear out all your cached files and rerun. Otherwise try pulling a copy of the pcileech repo directly and then inserting the generator output in. 
 
 ## 📚 Documentation
 
-For detailed information, please visit our **[Wiki](../../wiki)**:
+For detailed information, please visit our **[Documentation Site](https://pcileechfwgenerator.ramseymcgrath.com)**:
 
-- **[Device Cloning Process](../../wiki/device-cloning)** - Complete guide to the cloning workflow
-- **[Firmware Uniqueness](../../wiki/firmware-uniqueness)** - How authenticity is achieved
-- **[Manual Donor Dump](../../wiki/manual-donor-dump)** - Step-by-step manual extraction
-- **[Development Setup](../../wiki/development)** - Contributing and development guide
-- **[TUI Documentation](docs/TUI_README.md)** - Interactive interface guide
+- **[Device Cloning Process](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** - Complete guide to the cloning workflow
+- **[Firmware Uniqueness](https://pcileechfwgenerator.ramseymcgrath.com/firmware-uniqueness)** - How authenticity is achieved
+- **[Manual Donor Dump](https://pcileechfwgenerator.ramseymcgrath.com/manual-donor-dump)** - Step-by-step manual extraction
+- **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)** - Contributing and development guide
+- **[TUI Documentation](https://pcileechfwgenerator.ramseymcgrath.com/tui-readme)** - Interactive interface guide
+- **[Config space info](https://pcileechfwgenerator.ramseymcgrath.com/config-space-shadow)** - Config space shadow info
 
 ## 🧹 Cleanup & Safety
 
@@ -180,8 +173,6 @@ For detailed information, please visit our **[Wiki](../../wiki)**:
 
 ## 🏆 Acknowledgments
 
-- **Xilinx/AMD**: For Vivado synthesis tools
-- **Textual**: For the modern TUI framework
 - **PCILeech Community**: For feedback and contributions
 - @Simonrak for the writemask implementation
 

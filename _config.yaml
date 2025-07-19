@@ -1,0 +1,15 @@
+remote_theme: pages-themes/minimal@v0.2.0
+plugins:
+  - jekyll-remote-theme 
+  - jekyll-readme-index
+  - "jekyll-github-metadata"
+title: "PCILeech Firmware Generator"
+description: "Generate custom PCIe firmware for PCILeech"
+url: https://pcileechfwgenerator.ramseymcgrath.com  # the base hostname and protocol for your site, e.g. http://example.com
+readme_index:
+  enabled:          true
+  remove_originals: false
+  with_frontmatter: false
+source: ./site
+include:
+  - "api"

@@ -15,12 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe)
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -807,19 +803,19 @@ class ConfigSpaceManager:
         if len(config_space) >= 48:
             subsys_vendor_id = int.from_bytes(config_space[44:46], "little")
             subsys_device_id = int.from_bytes(config_space[46:48], "little")
-            
+
             # Extract main vendor/device IDs for comparison
             vendor_id = int.from_bytes(config_space[0:2], "little")
             device_id = int.from_bytes(config_space[2:4], "little")
-            
+
             log_info_safe(
                 logger,
                 "Subsystem ID extraction - Vendor: 0x{subsys_vendor:04x}, Device: 0x{subsys_device:04x}",
                 subsys_vendor=subsys_vendor_id,
                 subsys_device=subsys_device_id,
-                prefix="SUBS"
+                prefix="SUBS",
             )
-            
+
             # Validate subsystem IDs - detect clearly invalid values
             if subsys_vendor_id == 0x0000 or subsys_vendor_id == 0xFFFF:
                 log_warning_safe(
@@ -827,20 +823,20 @@ class ConfigSpaceManager:
                     "Invalid subsystem vendor ID 0x{subsys_vendor:04x}, using main vendor ID 0x{vendor:04x}",
                     subsys_vendor=subsys_vendor_id,
                     vendor=vendor_id,
-                    prefix="SUBS"
+                    prefix="SUBS",
                 )
                 subsys_vendor_id = vendor_id
-                
+
             if subsys_device_id == 0x0000 or subsys_device_id == 0xFFFF:
                 log_warning_safe(
                     logger,
                     "Invalid subsystem device ID 0x{subsys_device:04x}, using main device ID 0x{device:04x}",
                     subsys_device=subsys_device_id,
                     device=device_id,
-                    prefix="SUBS"
+                    prefix="SUBS",
                 )
                 subsys_device_id = device_id
-            
+
             # Log if subsystem IDs match main IDs (this might be normal for some devices)
             if subsys_vendor_id == vendor_id and subsys_device_id == device_id:
                 log_info_safe(
@@ -848,7 +844,7 @@ class ConfigSpaceManager:
                     "Subsystem IDs match main IDs (0x{vendor:04x}:0x{device:04x}) - this may be normal for this device type",
                     vendor=vendor_id,
                     device=device_id,
-                    prefix="SUBS"
+                    prefix="SUBS",
                 )
             else:
                 log_info_safe(
@@ -858,16 +854,16 @@ class ConfigSpaceManager:
                     device=device_id,
                     subsys_vendor=subsys_vendor_id,
                     subsys_device=subsys_device_id,
-                    prefix="SUBS"
+                    prefix="SUBS",
                 )
-            
+
             return subsys_vendor_id, subsys_device_id
-        
+
         log_warning_safe(
             logger,
             "Config space too short ({length} bytes) for subsystem ID extraction, returning 0",
             length=len(config_space),
-            prefix="SUBS"
+            prefix="SUBS",
         )
         return 0, 0
 

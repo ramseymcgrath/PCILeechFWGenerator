@@ -11,6 +11,7 @@ docs/
 CHANGELOG*
 CONTRIBUTING*
 AUTHORS*
+site/
 
 # Build artifacts and output
 output/
@@ -134,4 +135,3 @@ flash_fpga.py
 !vfio_helper.c
 !patch_vfio_constants.py
 !build_vfio_constants.sh
-!VFIO_CONSTANTS_README.md

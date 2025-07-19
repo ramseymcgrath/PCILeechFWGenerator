@@ -81,9 +81,9 @@ class BuildContext:
     def to_template_context(self) -> Dict[str, Any]:
         """Convert build context to template context dictionary with enhanced subsystem ID handling."""
         # Enhanced subsystem ID handling
-        subsys_vendor_id = getattr(self, 'subsys_vendor_id', None) or self.vendor_id
-        subsys_device_id = getattr(self, 'subsys_device_id', None) or self.device_id
-        
+        subsys_vendor_id = getattr(self, "subsys_vendor_id", None) or self.vendor_id
+        subsys_device_id = getattr(self, "subsys_device_id", None) or self.device_id
+
         # TCL에서는 hex 값을 0x 없이 사용해야 함
         return {
             # Nested device information
@@ -165,7 +165,7 @@ def format_hex(val: Union[int, str, None], width: int = 4) -> Optional[str]:
         return None
     if isinstance(val, str):
         # Remove 0x prefix if present and return just the hex digits
-        return val.replace('0x', '').replace('0X', '').upper()
+        return val.replace("0x", "").replace("0X", "").upper()
     return f"{val:0{width}X}"
 
 

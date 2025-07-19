@@ -4,11 +4,13 @@ import os
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
 import pytest
+
 from ..models.config import BuildConfiguration
 from ..models.device import PCIDevice
 from ..models.progress import BuildProgress, BuildStage
-from .build_orchestrator import BuildOrchestrator, RESOURCE_MONITOR_INTERVAL
+from .build_orchestrator import RESOURCE_MONITOR_INTERVAL, BuildOrchestrator
 
 
 class TestBuildOrchestrator(unittest.TestCase):

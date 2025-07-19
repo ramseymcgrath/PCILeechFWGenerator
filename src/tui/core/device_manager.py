@@ -13,12 +13,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.cli.cli import list_pci_devices
 from src.cli.vfio import get_current_driver
-from src.cli.vfio_helpers import check_vfio_prerequisites, check_iommu_group_binding
-from src.error_utils import log_error_with_root_cause, format_concise_error
+from src.cli.vfio_helpers import (check_iommu_group_binding,
+                                  check_vfio_prerequisites)
+from src.error_utils import format_concise_error, log_error_with_root_cause
 from src.log_config import get_logger
 
 from ..models.device import PCIDevice
-
 
 # Constants for device assessment
 DEVICE_CLASS_SCORES = {

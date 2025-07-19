@@ -98,7 +98,7 @@ sudo python3 -m src.tui.main
 pcileech-tui-sudo
 ```
 
-> **Note**: Many TUI operations require root privileges. The sudo wrapper script preserves the Python environment when running with sudo, preventing module import errors.
+> **Note**: UI operations require root privileges. The sudo wrapper script preserves the Python environment when running with sudo, preventing module import errors.
 
 ### TUI Interface Overview
 

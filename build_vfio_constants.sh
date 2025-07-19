@@ -70,8 +70,22 @@ install_kernel_headers() {
                 log_error "Failed to install kernel headers via apt-get"
                 return 1
             }
+        elif command -v pacman >/dev/null 2>&1; then
+            # Arch Linux
+            log_info "Using pacman to install kernel headers"
+            pacman -Sy --noconfirm "linux-headers" || {
+                log_error "Failed to install kernel headers via pacman"
+                return 1
+            }
+        elif command -v zypper >/dev/null 2>&1; then
+            # openSUSE
+            log_info "Using zypper to install kernel headers"
+            zypper install -y "kernel-devel" || {
+                log_error "Failed to install kernel headers via zypper"
+                return 1
+            }
         else
-            log_error "No supported package manager found (dnf, yum, apt-get)"
+            log_error "No supported package manager found (dnf, yum, apt-get, pacman, zypper)"
             return 1
         fi
     else
@@ -97,6 +111,8 @@ install_kernel_headers() {
             log_error "Kernel headers not found. Please install them:"
             log_error "  Fedora/RHEL: sudo dnf install kernel-headers-\$(uname -r)"
             log_error "  Ubuntu/Debian: sudo apt-get install linux-headers-\$(uname -r)"
+            log_error "  Arch Linux: sudo pacman -S linux-headers"
+            log_error "  openSUSE: sudo zypper install kernel-devel"
             return 1
         fi
     fi
@@ -140,12 +156,32 @@ build_and_patch() {
         fi
     done
     
+    # Check if gcc is available
+    if ! command -v gcc >/dev/null 2>&1; then
+        log_error "gcc compiler not found - please install build tools"
+        if command -v dnf >/dev/null 2>&1; then
+            log_error "  Fedora/RHEL: sudo dnf install gcc"
+        elif command -v apt-get >/dev/null 2>&1; then
+            log_error "  Ubuntu/Debian: sudo apt-get install build-essential"
+        fi
+        return 1
+    fi
+    
+    # Check if Python 3 is available
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_error "python3 not found - please install Python 3.8 or later"
+        return 1
+    fi
+    
     # Make the patcher executable
     chmod +x patch_vfio_constants.py
     
     # Run the patcher (it handles compilation internally)
     log_info "Running Python patcher..."
-    python3 patch_vfio_constants.py
+    if ! python3 patch_vfio_constants.py; then
+        log_error "VFIO constants patching failed"
+        return 1
+    fi
     
     log_success "VFIO constants patched successfully!"
 }
@@ -201,7 +237,7 @@ Environment Support:
 
 Requirements:
   - gcc compiler
-  - Python 3.10+
+  - Python 3.8+
   - Kernel headers matching running kernel
   - Access to /dev/vfio/vfio (for verification)
 

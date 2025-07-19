@@ -24,39 +24,14 @@ project_root = Path(__file__).parent.parent.resolve()
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.build import (
-    # Exception classes
-    PCILeechBuildError,
-    ModuleImportError,
-    MSIXPreloadError,
-    FileOperationError,
-    VivadoIntegrationError,
-    ConfigurationError,
-    # Data classes
-    BuildConfiguration,
-    MSIXData,
-    DeviceConfiguration,
-    # Manager classes
-    ModuleChecker,
-    MSIXManager,
-    FileOperationsManager,
-    ConfigurationManager,
-    # Main class
-    FirmwareBuilder,
-    # CLI functions
-    parse_args,
-    main,
-    _display_summary,
-    # Constants
-    BUFFER_SIZE,
-    CONFIG_SPACE_PATH_TEMPLATE,
-    DEFAULT_OUTPUT_DIR,
-    DEFAULT_PROFILE_DURATION,
-    MAX_PARALLEL_FILE_WRITES,
-    FILE_WRITE_TIMEOUT,
-    REQUIRED_MODULES,
-)
-
+from src.build import (  # Exception classes; Data classes; Manager classes; Main class; CLI functions; Constants
+    BUFFER_SIZE, CONFIG_SPACE_PATH_TEMPLATE, DEFAULT_OUTPUT_DIR,
+    DEFAULT_PROFILE_DURATION, FILE_WRITE_TIMEOUT, MAX_PARALLEL_FILE_WRITES,
+    REQUIRED_MODULES, BuildConfiguration, ConfigurationError,
+    ConfigurationManager, DeviceConfiguration, FileOperationError,
+    FileOperationsManager, FirmwareBuilder, ModuleChecker, ModuleImportError,
+    MSIXData, MSIXManager, MSIXPreloadError, PCILeechBuildError,
+    VivadoIntegrationError, _display_summary, main, parse_args)
 
 # ============================================================================
 # Fixtures
