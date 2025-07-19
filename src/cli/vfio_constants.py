@@ -51,7 +51,7 @@ def _IOWR(type, nr, size):
 VFIO_TYPE = ord(";")
 
 # VFIO constants
-VFIO_DEVICE_NAME_MAX_LENGTH = 256  # Maximum device name length in VFIO
+VFIO_DEVICE_NAME_MAX_LENGTH = 256  # Maximum device name length in VFIO, defined in Linux kernel headers (e.g., include/uapi/linux/vfio.h)
 VFIO_TYPE1_IOMMU = 1
 
 
