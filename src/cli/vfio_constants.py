@@ -50,35 +50,12 @@ def _IOWR(type, nr, size):
 # VFIO magic number
 VFIO_TYPE = ord(";")
 
-# VFIO IOMMU constants
+# VFIO constants
+VFIO_DEVICE_NAME_MAX_LENGTH = 256  # Maximum device name length in VFIO
 VFIO_TYPE1_IOMMU = 1
 
-# VFIO API and extension IOCTLs
-VFIO_GET_API_VERSION = _IO(VFIO_TYPE, 0)
-VFIO_CHECK_EXTENSION = _IOW(VFIO_TYPE, 1, ctypes.sizeof(ctypes.c_int))
 
-# VFIO Container IOCTLs
-VFIO_SET_IOMMU = _IOW(VFIO_TYPE, 2, ctypes.sizeof(ctypes.c_int))
-
-# VFIO Group IOCTLs
-VFIO_GROUP_GET_STATUS = _IOR(VFIO_TYPE, 3, ctypes.sizeof(ctypes.c_uint32))
-VFIO_GROUP_SET_CONTAINER = _IOW(VFIO_TYPE, 4, ctypes.sizeof(ctypes.c_int))
-VFIO_GROUP_GET_DEVICE_FD = _IOW(VFIO_TYPE, 6, VFIO_DEVICE_NAME_MAX_LENGTH)  # Device name max 40 chars
-
-# VFIO Device IOCTLs
-VFIO_DEVICE_GET_REGION_INFO = _IOWR(VFIO_TYPE, 8, ctypes.sizeof(vfio_region_info))  # vfio_region_info size
-
-# VFIO Region flags
-VFIO_REGION_INFO_FLAG_READ = 1 << 0
-VFIO_REGION_INFO_FLAG_WRITE = 1 << 1
-VFIO_REGION_INFO_FLAG_MMAP = 1 << 2
-
-# VFIO Group flags
-VFIO_GROUP_FLAGS_VIABLE = 1 << 0
-VFIO_GROUP_FLAGS_CONTAINER_SET = 1 << 1
-
-
-# VFIO structures
+# VFIO structures (defined early to avoid forward reference issues)
 class vfio_group_status(ctypes.Structure):
     _fields_ = [
         ("argsz", ctypes.c_uint32),
@@ -97,6 +74,35 @@ class vfio_region_info(ctypes.Structure):
     ]
 
 
+# VFIO API and extension IOCTLs
+VFIO_GET_API_VERSION = _IO(VFIO_TYPE, 0)
+VFIO_CHECK_EXTENSION = _IOW(VFIO_TYPE, 1, ctypes.sizeof(ctypes.c_int))
+
+# VFIO Container IOCTLs
+VFIO_SET_IOMMU = _IOW(VFIO_TYPE, 2, ctypes.sizeof(ctypes.c_int))
+
+# VFIO Group IOCTLs
+VFIO_GROUP_GET_STATUS = _IOR(VFIO_TYPE, 3, ctypes.sizeof(ctypes.c_uint32))
+VFIO_GROUP_SET_CONTAINER = _IOW(VFIO_TYPE, 4, ctypes.sizeof(ctypes.c_int))
+VFIO_GROUP_GET_DEVICE_FD = _IOW(
+    VFIO_TYPE, 6, VFIO_DEVICE_NAME_MAX_LENGTH
+)  # Device name max 256 chars
+
+# VFIO Device IOCTLs
+VFIO_DEVICE_GET_REGION_INFO = _IOWR(
+    VFIO_TYPE, 8, ctypes.sizeof(vfio_region_info)
+)  # vfio_region_info size
+
+# VFIO Region flags
+VFIO_REGION_INFO_FLAG_READ = 1 << 0
+VFIO_REGION_INFO_FLAG_WRITE = 1 << 1
+VFIO_REGION_INFO_FLAG_MMAP = 1 << 2
+
+# VFIO Group flags
+VFIO_GROUP_FLAGS_VIABLE = 1 << 0
+VFIO_GROUP_FLAGS_CONTAINER_SET = 1 << 1
+
+
 # Legacy aliases for compatibility with existing code
 VfioGroupStatus = vfio_group_status
 VfioRegionInfo = vfio_region_info
@@ -111,6 +117,7 @@ __all__ = [
     "VFIO_SET_IOMMU",
     "VFIO_DEVICE_GET_REGION_INFO",
     "VFIO_TYPE1_IOMMU",
+    "VFIO_DEVICE_NAME_MAX_LENGTH",
     "VFIO_REGION_INFO_FLAG_READ",
     "VFIO_REGION_INFO_FLAG_WRITE",
     "VFIO_REGION_INFO_FLAG_MMAP",
