@@ -63,7 +63,7 @@ VFIO_SET_IOMMU = _IOW(VFIO_TYPE, 2, ctypes.sizeof(ctypes.c_int))
 # VFIO Group IOCTLs
 VFIO_GROUP_GET_STATUS = _IOR(VFIO_TYPE, 3, ctypes.sizeof(ctypes.c_uint32))
 VFIO_GROUP_SET_CONTAINER = _IOW(VFIO_TYPE, 4, ctypes.sizeof(ctypes.c_int))
-VFIO_GROUP_GET_DEVICE_FD = _IOW(VFIO_TYPE, 6, 40)  # Device name max 40 chars
+VFIO_GROUP_GET_DEVICE_FD = _IOW(VFIO_TYPE, 6, VFIO_DEVICE_NAME_MAX_LENGTH)  # Device name max 40 chars
 
 # VFIO Device IOCTLs
 VFIO_DEVICE_GET_REGION_INFO = _IOWR(VFIO_TYPE, 8, 32)  # vfio_region_info size
