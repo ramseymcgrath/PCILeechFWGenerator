@@ -31,20 +31,24 @@ except ImportError:
     HAS_VFIO_ASSIST = False
 
 # Import safe logging functions
-from string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                          log_warning_safe)
+from string_utils import log_debug_safe, log_error_safe, log_info_safe, log_warning_safe
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
 from .vfio_constants import VfioGroupStatus  # legacy alias
 from .vfio_constants import VfioRegionInfo  # legacy alias
-from .vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                             VFIO_GROUP_GET_DEVICE_FD, VFIO_GROUP_GET_STATUS,
-                             VFIO_GROUP_SET_CONTAINER,
-                             VFIO_REGION_INFO_FLAG_MMAP,
-                             VFIO_REGION_INFO_FLAG_READ,
-                             VFIO_REGION_INFO_FLAG_WRITE, VFIO_SET_IOMMU,
-                             VFIO_TYPE1_IOMMU, vfio_group_status,
-                             vfio_region_info)
+from .vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_GROUP_GET_STATUS,
+    VFIO_GROUP_SET_CONTAINER,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VFIO_SET_IOMMU,
+    VFIO_TYPE1_IOMMU,
+    vfio_group_status,
+    vfio_region_info,
+)
 from .vfio_helpers import get_device_fd
 
 # Configure global logger
@@ -52,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 VFIO_REGION_INFO_STRUCT_FORMAT = (
-    "I I I I Q Q"  # argsz, flags, index, cap_off, size, offset
+    "I I I I Q Q"  # argsz, flags, index, cap_offset, size, offset
 )
 VFIO_REGION_INFO_STRUCT_SIZE = struct.calcsize(VFIO_REGION_INFO_STRUCT_FORMAT)
 VFIO_DRIVER_NAME = "vfio-pci"
