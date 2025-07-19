@@ -66,7 +66,7 @@ VFIO_GROUP_SET_CONTAINER = _IOW(VFIO_TYPE, 4, ctypes.sizeof(ctypes.c_int))
 VFIO_GROUP_GET_DEVICE_FD = _IOW(VFIO_TYPE, 6, VFIO_DEVICE_NAME_MAX_LENGTH)  # Device name max 40 chars
 
 # VFIO Device IOCTLs
-VFIO_DEVICE_GET_REGION_INFO = _IOWR(VFIO_TYPE, 8, 32)  # vfio_region_info size
+VFIO_DEVICE_GET_REGION_INFO = _IOWR(VFIO_TYPE, 8, ctypes.sizeof(vfio_region_info))  # vfio_region_info size
 
 # VFIO Region flags
 VFIO_REGION_INFO_FLAG_READ = 1 << 0
