@@ -9,8 +9,9 @@ Last Updated: 2025-07-18
 ## 📋 Quick Navigation
 
 * [🏠 Home](/ "Return to homepage")
-* [📝 Report Issue](https://github.com/ramsey/PCILeechFWGenerator/issues/new "Report a documentation issue")
-* [🔍 Search](/#search "Search documentation")
+* [�️ Site Map](sitemap "Complete index of all pages")
+* [🔍 Search](search "Search documentation")
+* [�📝 Report Issue](https://github.com/ramsey/PCILeechFWGenerator/issues/new "Report a documentation issue")
 
 ## 🏠 Overview
 

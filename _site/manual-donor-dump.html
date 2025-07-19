@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Overview | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Overview" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/manual-donor-dump.html" />
+<meta property="og:url" content="http://localhost:4000/manual-donor-dump.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Overview" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Overview","url":"http://localhost:4000/manual-donor-dump.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">Overview</h1>
+  </header>
+
+  <div class="post-content">
+    <h2 id="overview">Overview</h2>
+
+<h3 id="what-is-a-donor-dump">What is a Donor Dump?</h3>
+
+<p>A donor dump is a comprehensive snapshot of a physical PCI device’s configuration and capabilities. The PCILeech Firmware Generator uses this information to create firmware that accurately emulates the donor device’s behavior.</p>
+
+<p><strong>Key Information Captured:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Component</th>
+      <th>Description</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Device Identity</strong></td>
+      <td>Vendor/Device IDs, Subsystem IDs, Revision</td>
+      <td>Device identification and driver matching</td>
+    </tr>
+    <tr>
+      <td><strong>Configuration Space</strong></td>
+      <td>Full 4KB extended PCI configuration</td>
+      <td>Complete device state and capabilities</td>
+    </tr>
+    <tr>
+      <td><strong>Power Management</strong></td>
+      <td>MPC/MPR values, power states</td>
+      <td>Power efficiency and compatibility</td>
+    </tr>
+    <tr>
+      <td><strong>Capabilities</strong></td>
+      <td>AER, MSI/MSI-X, vendor-specific</td>
+      <td>Advanced PCI features</td>
+    </tr>
+    <tr>
+      <td><strong>Memory Layout</strong></td>
+      <td>BAR sizes, Device Serial Number (DSN)</td>
+      <td>Memory mapping and addressing</td>
+    </tr>
+    <tr>
+      <td><strong>Class Information</strong></td>
+      <td>24-bit class code</td>
+      <td>Device type classification</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="when-to-use-manual-process">When to Use Manual Process</h3>
+
+<ul>
+  <li><strong>Debugging</strong>: When automated tools fail or produce unexpected results</li>
+  <li><strong>Custom Workflows</strong>: Integration with existing automation or CI/CD pipelines</li>
+  <li><strong>Research</strong>: Understanding the donor extraction process in detail</li>
+  <li><strong>Troubleshooting</strong>: Isolating issues in the firmware generation pipeline</li>
+</ul>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<h3 id="system-requirements">System Requirements</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Requirement</th>
+      <th>Linux</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>OS Version</strong></td>
+      <td>Any modern distribution</td>
+    </tr>
+    <tr>
+      <td><strong>Privileges</strong></td>
+      <td>Root access (<code class="language-plaintext highlighter-rouge">sudo</code>)</td>
+    </tr>
+    <tr>
+      <td><strong>Shell</strong></td>
+      <td>Bash/Zsh</td>
+    </tr>
+    <tr>
+      <td><strong>Build Tools</strong></td>
+      <td>GCC, Make, Kernel Headers</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="quick-prerequisite-check">Quick Prerequisite Check</h3>
+
+<p><strong>Linux:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check if all prerequisites are available</span>
+<span class="nb">echo</span> <span class="s2">"Checking prerequisites..."</span>
+<span class="nb">command</span> <span class="nt">-v</span> gcc <span class="o">&gt;</span>/dev/null 2&gt;&amp;1 <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"✓ GCC available"</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"✗ GCC missing"</span>
+<span class="nb">command</span> <span class="nt">-v</span> make <span class="o">&gt;</span>/dev/null 2&gt;&amp;1 <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"✓ Make available"</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"✗ Make missing"</span>
+<span class="o">[</span> <span class="nt">-d</span> <span class="s2">"/lib/modules/</span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span><span class="s2">/build"</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"✓ Kernel headers available"</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"✗ Kernel headers missing"</span>
+<span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"✓ Running as root"</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"✗ Need root privileges"</span>
+</code></pre></div></div>
+
+<h3 id="installing-prerequisites">Installing Prerequisites</h3>
+
+<h4 id="debianubuntu">Debian/Ubuntu</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt-get update <span class="o">&amp;&amp;</span> <span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> <span class="se">\</span>
+    linux-headers-<span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span> <span class="se">\</span>
+    build-essential <span class="se">\</span>
+    dkms
+</code></pre></div></div>
+
+<h4 id="fedoracentosrhel">Fedora/CentOS/RHEL</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>dnf <span class="nb">install</span> <span class="nt">-y</span> <span class="se">\</span>
+    kernel-devel-<span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span> <span class="se">\</span>
+    gcc <span class="se">\</span>
+    make <span class="se">\</span>
+    dkms
+</code></pre></div></div>
+
+<h4 id="arch-linuxmanjaro">Arch Linux/Manjaro</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>pacman <span class="nt">-S</span> <span class="nt">--needed</span> <span class="se">\</span>
+    linux-headers <span class="se">\</span>
+    base-devel <span class="se">\</span>
+    dkms
+</code></pre></div></div>
+
+<h4 id="opensuse">openSUSE</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>zypper <span class="nb">install</span> <span class="nt">-y</span> <span class="se">\</span>
+    kernel-devel-<span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span> <span class="se">\</span>
+    gcc <span class="se">\</span>
+    make <span class="se">\</span>
+    dkms
+</code></pre></div></div>
+
+<h2 id="linux-manual-process">Linux Manual Process</h2>
+
+<h3 id="step-1-device-discovery-and-validation">Step 1: Device Discovery and Validation</h3>
+
+<h4 id="find-your-donor-device">Find Your Donor Device</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># List all PCI devices with detailed information</span>
+lspci <span class="nt">-vv</span>
+
+<span class="c"># Filter by device type (example: network controllers)</span>
+lspci <span class="nt">-vv</span> | <span class="nb">grep</span> <span class="nt">-A</span> 20 <span class="s2">"Ethernet controller"</span>
+
+<span class="c"># Get specific device information</span>
+lspci <span class="nt">-s</span> 03:00.0 <span class="nt">-vv</span>
+</code></pre></div></div>
+
+<h4 id="validate-device-accessibility">Validate Device Accessibility</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check if device is bound to a driver</span>
+lspci <span class="nt">-k</span> <span class="nt">-s</span> 03:00.0
+
+<span class="c"># Verify device is not in use by critical services</span>
+systemctl status NetworkManager  <span class="c"># For network devices</span>
+systemctl status display-manager <span class="c"># For graphics devices</span>
+</code></pre></div></div>
+
+<h4 id="extract-bdf-information">Extract BDF Information</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Get BDF with domain information</span>
+<span class="nv">DEVICE_BDF</span><span class="o">=</span><span class="si">$(</span>lspci | <span class="nb">grep</span> <span class="s2">"Ethernet controller"</span> | <span class="nb">head</span> <span class="nt">-1</span> | <span class="nb">cut</span> <span class="nt">-d</span><span class="s1">' '</span> <span class="nt">-f1</span><span class="si">)</span>
+<span class="nv">FULL_BDF</span><span class="o">=</span><span class="s2">"0000:</span><span class="k">${</span><span class="nv">DEVICE_BDF</span><span class="k">}</span><span class="s2">"</span>
+<span class="nb">echo</span> <span class="s2">"Using device: </span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h3 id="step-2-build-environment-setup">Step 2: Build Environment Setup</h3>
+
+<h4 id="navigate-to-build-directory">Navigate to Build Directory</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Ensure we're in the correct directory</span>
+<span class="nb">cd</span> <span class="s2">"</span><span class="si">$(</span><span class="nb">dirname</span> <span class="s2">"</span><span class="nv">$0</span><span class="s2">"</span><span class="si">)</span><span class="s2">/../PCILeechFWGenerator/src/donor_dump"</span> <span class="o">||</span> <span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"Error: Cannot find donor_dump directory"</span>
+    <span class="nb">exit </span>1
+<span class="o">}</span>
+
+<span class="c"># Verify required files exist</span>
+<span class="o">[</span> <span class="nt">-f</span> <span class="s2">"Makefile"</span> <span class="o">]</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="s2">"Error: Makefile not found"</span><span class="p">;</span> <span class="nb">exit </span>1<span class="p">;</span> <span class="o">}</span>
+<span class="o">[</span> <span class="nt">-f</span> <span class="s2">"donor_dump.c"</span> <span class="o">]</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="s2">"Error: Source file not found"</span><span class="p">;</span> <span class="nb">exit </span>1<span class="p">;</span> <span class="o">}</span>
+</code></pre></div></div>
+
+<h4 id="clean-build-environment">Clean Build Environment</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Clean any previous builds</span>
+make clean
+
+<span class="c"># Verify kernel build environment</span>
+make <span class="nt">-n</span> 2&gt;&amp;1 | <span class="nb">grep</span> <span class="nt">-q</span> <span class="s2">"No rule to make target"</span> <span class="o">&amp;&amp;</span> <span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"Error: Kernel build environment not properly configured"</span>
+    <span class="nb">exit </span>1
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h4 id="build-with-error-handling">Build with Error Handling</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Build the kernel module with verbose output</span>
+<span class="k">if</span> <span class="o">!</span> make <span class="nv">V</span><span class="o">=</span>1<span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Build failed. Common issues:"</span>
+    <span class="nb">echo</span> <span class="s2">"1. Kernel headers mismatch: </span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span><span class="s2"> vs </span><span class="si">$(</span><span class="nb">ls</span> /lib/modules/<span class="si">)</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"2. Missing dependencies: gcc, make, kernel-devel"</span>
+    <span class="nb">echo</span> <span class="s2">"3. Insufficient permissions"</span>
+    <span class="nb">exit </span>1
+<span class="k">fi</span>
+
+<span class="c"># Verify build artifacts</span>
+<span class="o">[</span> <span class="nt">-f</span> <span class="s2">"donor_dump.ko"</span> <span class="o">]</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="s2">"Error: Module not built"</span><span class="p">;</span> <span class="nb">exit </span>1<span class="p">;</span> <span class="o">}</span>
+<span class="nb">echo</span> <span class="s2">"✓ Module built successfully: </span><span class="si">$(</span><span class="nb">ls</span> <span class="nt">-lh</span> donor_dump.ko<span class="si">)</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h3 id="step-3-module-loading-and-device-binding">Step 3: Module Loading and Device Binding</h3>
+
+<h4 id="pre-load-validation">Pre-load Validation</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check if module is already loaded</span>
+<span class="k">if </span>lsmod | <span class="nb">grep</span> <span class="nt">-q</span> donor_dump<span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Warning: donor_dump module already loaded"</span>
+    <span class="nb">sudo </span>rmmod donor_dump <span class="o">||</span> <span class="o">{</span>
+        <span class="nb">echo</span> <span class="s2">"Error: Cannot unload existing module"</span>
+        <span class="nb">exit </span>1
+    <span class="o">}</span>
+<span class="k">fi</span>
+
+<span class="c"># Verify device exists and is accessible</span>
+<span class="k">if</span> <span class="o">!</span> lspci <span class="nt">-s</span> <span class="s2">"</span><span class="k">${</span><span class="nv">DEVICE_BDF</span><span class="k">}</span><span class="s2">"</span> <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Error: Device </span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="s2"> not found"</span>
+    <span class="nb">exit </span>1
+<span class="k">fi</span>
+</code></pre></div></div>
+
+<h4 id="load-module-with-comprehensive-error-handling">Load Module with Comprehensive Error Handling</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Load module with device binding</span>
+<span class="k">if</span> <span class="o">!</span> <span class="nb">sudo </span>insmod donor_dump.ko <span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="s2">"</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Module load failed. Checking kernel logs..."</span>
+    dmesg | <span class="nb">tail</span> <span class="nt">-20</span> | <span class="nb">grep </span>donor_dump
+    <span class="nb">exit </span>1
+<span class="k">fi</span>
+
+<span class="c"># Verify module loaded successfully</span>
+<span class="k">if</span> <span class="o">!</span> lsmod | <span class="nb">grep</span> <span class="nt">-q</span> donor_dump<span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Error: Module not loaded despite successful insmod"</span>
+    <span class="nb">exit </span>1
+<span class="k">fi
+
+</span><span class="nb">echo</span> <span class="s2">"✓ Module loaded successfully for device </span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h4 id="verify-proc-interface">Verify Proc Interface</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check if proc file is created and accessible</span>
+<span class="k">if</span> <span class="o">[</span> <span class="o">!</span> <span class="nt">-r</span> <span class="s2">"/proc/donor_dump"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Error: /proc/donor_dump not accessible"</span>
+    <span class="nb">echo</span> <span class="s2">"Module may have loaded but device binding failed"</span>
+    <span class="nb">sudo </span>rmmod donor_dump
+    <span class="nb">exit </span>1
+<span class="k">fi
+
+</span><span class="nb">echo</span> <span class="s2">"✓ Proc interface available"</span>
+</code></pre></div></div>
+
+<h3 id="step-4-data-extraction-and-validation">Step 4: Data Extraction and Validation</h3>
+
+<h4 id="extract-raw-data">Extract Raw Data</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Read donor information with error checking</span>
+<span class="k">if</span> <span class="o">!</span> <span class="nv">DONOR_DATA</span><span class="o">=</span><span class="si">$(</span><span class="nb">cat</span> /proc/donor_dump 2&gt;/dev/null<span class="si">)</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Error: Cannot read donor information"</span>
+    <span class="nb">sudo </span>rmmod donor_dump
+    <span class="nb">exit </span>1
+<span class="k">fi</span>
+
+<span class="c"># Validate data completeness</span>
+<span class="k">if</span> <span class="o">[</span> <span class="nt">-z</span> <span class="s2">"</span><span class="nv">$DONOR_DATA</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"Error: No donor data extracted"</span>
+    <span class="nb">sudo </span>rmmod donor_dump
+    <span class="nb">exit </span>1
+<span class="k">fi
+
+</span><span class="nb">echo</span> <span class="s2">"✓ Donor data extracted (</span><span class="si">$(</span><span class="nb">echo</span> <span class="s2">"</span><span class="nv">$DONOR_DATA</span><span class="s2">"</span> | <span class="nb">wc</span> <span class="nt">-l</span><span class="si">)</span><span class="s2"> lines)"</span>
+</code></pre></div></div>
+
+<h4 id="save-raw-data-with-metadata">Save Raw Data with Metadata</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create output directory with timestamp</span>
+<span class="nv">OUTPUT_DIR</span><span class="o">=</span><span class="s2">"donor_dumps/</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d_%H%M%S<span class="si">)</span><span class="s2">_</span><span class="k">${</span><span class="nv">DEVICE_BDF</span><span class="p">//</span>:/_<span class="k">}</span><span class="s2">"</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$OUTPUT_DIR</span><span class="s2">"</span>
+
+<span class="c"># Save raw data with metadata</span>
+<span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"# Donor dump generated on </span><span class="si">$(</span><span class="nb">date</span><span class="si">)</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"# Device: </span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"# Kernel: </span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"# System: </span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-a</span><span class="si">)</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">""</span>
+    <span class="nb">echo</span> <span class="s2">"</span><span class="nv">$DONOR_DATA</span><span class="s2">"</span>
+<span class="o">}</span> <span class="o">&gt;</span> <span class="s2">"</span><span class="k">${</span><span class="nv">OUTPUT_DIR</span><span class="k">}</span><span class="s2">/donor_info.txt"</span>
+
+<span class="nb">echo</span> <span class="s2">"✓ Raw data saved to </span><span class="k">${</span><span class="nv">OUTPUT_DIR</span><span class="k">}</span><span class="s2">/donor_info.txt"</span>
+</code></pre></div></div>
+
+<h4 id="convert-to-json-with-validation">Convert to JSON with Validation</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enhanced JSON conversion with validation</span>
+convert_to_json<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">input_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">output_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$2</span><span class="s2">"</span>
+    
+    <span class="c"># Create JSON with proper escaping and validation</span>
+    <span class="o">{</span>
+        <span class="nb">echo</span> <span class="s2">"{"</span>
+        <span class="nb">echo</span> <span class="s2">"  </span><span class="se">\"</span><span class="s2">metadata</span><span class="se">\"</span><span class="s2">: {"</span>
+        <span class="nb">echo</span> <span class="s2">"    </span><span class="se">\"</span><span class="s2">generated_at</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="si">$(</span><span class="nb">date</span> <span class="nt">-Iseconds</span><span class="si">)</span><span class="se">\"</span><span class="s2">,"</span>
+        <span class="nb">echo</span> <span class="s2">"    </span><span class="se">\"</span><span class="s2">device_bdf</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="k">${</span><span class="nv">FULL_BDF</span><span class="k">}</span><span class="se">\"</span><span class="s2">,"</span>
+        <span class="nb">echo</span> <span class="s2">"    </span><span class="se">\"</span><span class="s2">kernel_version</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span><span class="se">\"</span><span class="s2">,"</span>
+        <span class="nb">echo</span> <span class="s2">"    </span><span class="se">\"</span><span class="s2">generator_version</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">manual-v1.0</span><span class="se">\"</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">"  },"</span>
+        <span class="nb">echo</span> <span class="s2">"  </span><span class="se">\"</span><span class="s2">device_info</span><span class="se">\"</span><span class="s2">: {"</span>
+        
+        <span class="c"># Process each line, handling special characters</span>
+        <span class="nb">grep</span> <span class="nt">-v</span> <span class="s1">'^#'</span> <span class="s2">"</span><span class="nv">$input_file</span><span class="s2">"</span> | <span class="k">while </span><span class="nv">IFS</span><span class="o">=</span><span class="s1">':'</span> <span class="nb">read</span> <span class="nt">-r</span> key value<span class="p">;</span> <span class="k">do
+            if</span> <span class="o">[</span> <span class="nt">-n</span> <span class="s2">"</span><span class="nv">$key</span><span class="s2">"</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="o">[</span> <span class="nt">-n</span> <span class="s2">"</span><span class="nv">$value</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+                <span class="c"># Escape special characters in JSON</span>
+                <span class="nv">key</span><span class="o">=</span><span class="si">$(</span><span class="nb">echo</span> <span class="s2">"</span><span class="nv">$key</span><span class="s2">"</span> | <span class="nb">sed</span> <span class="s1">'s/"/\\"/g'</span> | xargs<span class="si">)</span>
+                <span class="nv">value</span><span class="o">=</span><span class="si">$(</span><span class="nb">echo</span> <span class="s2">"</span><span class="nv">$value</span><span class="s2">"</span> | <span class="nb">sed</span> <span class="s1">'s/"/\\"/g'</span> | xargs<span class="si">)</span>
+                <span class="nb">echo</span> <span class="s2">"    </span><span class="se">\"</span><span class="nv">$key</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="nv">$value</span><span class="se">\"</span><span class="s2">,"</span>
+            <span class="k">fi
+        done</span> | <span class="nb">sed</span> <span class="s1">'$ s/,$//'</span>  <span class="c"># Remove trailing comma</span>
+        
+        <span class="nb">echo</span> <span class="s2">"  }"</span>
+        <span class="nb">echo</span> <span class="s2">"}"</span>
+    <span class="o">}</span> <span class="o">&gt;</span> <span class="s2">"</span><span class="nv">$output_file</span><span class="s2">"</span>
+    
+    <span class="c"># Validate JSON syntax</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> python3 <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        if</span> <span class="o">!</span> python3 <span class="nt">-m</span> json.tool <span class="s2">"</span><span class="nv">$output_file</span><span class="s2">"</span> <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"Warning: Generated JSON may be invalid"</span>
+            <span class="k">return </span>1
+        <span class="k">fi
+    fi
+    
+    return </span>0
+<span class="o">}</span>
+
+<span class="c"># Convert to JSON</span>
+<span class="nv">JSON_FILE</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">OUTPUT_DIR</span><span class="k">}</span><span class="s2">/donor_info.json"</span>
+<span class="k">if </span>convert_to_json <span class="s2">"</span><span class="k">${</span><span class="nv">OUTPUT_DIR</span><span class="k">}</span><span class="s2">/donor_info.txt"</span> <span class="s2">"</span><span class="nv">$JSON_FILE</span><span class="s2">"</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"✓ JSON file created: </span><span class="nv">$JSON_FILE</span><span class="s2">"</span>
+<span class="k">else
+    </span><span class="nb">echo</span> <span class="s2">"⚠ JSON conversion completed with warnings"</span>
+<span class="k">fi</span>
+</code></pre></div></div>
+
+<h3 id="step-5-cleanup-and-verification">Step 5: Cleanup and Verification</h3>
+
+<h4 id="safe-module-unloading">Safe Module Unloading</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Unload module with verification</span>
+cleanup_module<span class="o">()</span> <span class="o">{</span>
+    <span class="k">if </span>lsmod | <span class="nb">grep</span> <span class="nt">-q</span> donor_dump<span class="p">;</span> <span class="k">then
+        if </span><span class="nb">sudo </span>rmmod donor_dump<span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"✓ Module unloaded successfully"</span>
+        <span class="k">else
+            </span><span class="nb">echo</span> <span class="s2">"Warning: Module unload failed"</span>
+            <span class="nb">echo</span> <span class="s2">"Check: lsmod | grep donor_dump"</span>
+            <span class="nb">echo</span> <span class="s2">"Force remove: sudo rmmod -f donor_dump"</span>
+        <span class="k">fi
+    fi</span>
+<span class="o">}</span>
+
+<span class="c"># Set trap for cleanup on script exit</span>
+<span class="nb">trap </span>cleanup_module EXIT
+</code></pre></div></div>
+
+<h4 id="verify-output-quality">Verify Output Quality</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Comprehensive output validation</span>
+validate_donor_dump<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">json_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    
+    <span class="nb">echo</span> <span class="s2">"Validating donor dump quality..."</span>
+    
+    <span class="c"># Check required fields</span>
+    <span class="nb">local </span><span class="nv">required_fields</span><span class="o">=(</span><span class="s2">"vendor_id"</span> <span class="s2">"device_id"</span> <span class="s2">"class_code"</span><span class="o">)</span>
+    <span class="k">for </span>field <span class="k">in</span> <span class="s2">"</span><span class="k">${</span><span class="nv">required_fields</span><span class="p">[@]</span><span class="k">}</span><span class="s2">"</span><span class="p">;</span> <span class="k">do
+        if</span> <span class="o">!</span> <span class="nb">grep</span> <span class="nt">-q</span> <span class="s2">"</span><span class="se">\"</span><span class="nv">$field</span><span class="se">\"</span><span class="s2">"</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"Warning: Missing required field: </span><span class="nv">$field</span><span class="s2">"</span>
+        <span class="k">fi
+    done</span>
+    
+    <span class="c"># Check file size (should be reasonable)</span>
+    <span class="nb">local </span><span class="nv">file_size</span><span class="o">=</span><span class="si">$(</span><span class="nb">stat</span> <span class="nt">-f</span>%z <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> 2&gt;/dev/null <span class="o">||</span> <span class="nb">stat</span> <span class="nt">-c</span>%s <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> 2&gt;/dev/null<span class="si">)</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$file_size</span><span class="s2">"</span> <span class="nt">-lt</span> 100 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Warning: Donor dump seems too small (</span><span class="nv">$file_size</span><span class="s2"> bytes)"</span>
+    <span class="k">elif</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$file_size</span><span class="s2">"</span> <span class="nt">-gt</span> 10000 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Warning: Donor dump seems unusually large (</span><span class="nv">$file_size</span><span class="s2"> bytes)"</span>
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"✓ Donor dump size looks reasonable (</span><span class="nv">$file_size</span><span class="s2"> bytes)"</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+validate_donor_dump <span class="s2">"</span><span class="nv">$JSON_FILE</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h2 id="validation-and-testing">Validation and Testing</h2>
+
+<h3 id="donor-dump-quality-validation">Donor Dump Quality Validation</h3>
+
+<h4 id="comprehensive-validation-script">Comprehensive Validation Script</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># validate_donor_dump.sh - Comprehensive donor dump validation</span>
+
+validate_donor_dump<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">json_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">errors</span><span class="o">=</span>0
+    <span class="nb">local </span><span class="nv">warnings</span><span class="o">=</span>0
+    
+    <span class="nb">echo</span> <span class="s2">"=== Donor Dump Validation Report ==="</span>
+    <span class="nb">echo</span> <span class="s2">"File: </span><span class="nv">$json_file</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"Generated: </span><span class="si">$(</span><span class="nb">date</span><span class="si">)</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">""</span>
+    
+    <span class="c"># Check file existence and readability</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="o">!</span> <span class="nt">-f</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: File does not exist"</span>
+        <span class="k">return </span>1
+    <span class="k">fi
+    
+    if</span> <span class="o">[</span> <span class="o">!</span> <span class="nt">-r</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: File is not readable"</span>
+        <span class="k">return </span>1
+    <span class="k">fi</span>
+    
+    <span class="c"># Validate JSON syntax</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> jq <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        if</span> <span class="o">!</span> jq empty <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> 2&gt;/dev/null<span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: Invalid JSON syntax"</span>
+            <span class="o">((</span>errors++<span class="o">))</span>
+        <span class="k">else
+            </span><span class="nb">echo</span> <span class="s2">"✓ JSON syntax valid"</span>
+        <span class="k">fi
+    else
+        </span><span class="nb">echo</span> <span class="s2">"⚠ WARNING: jq not available, skipping JSON validation"</span>
+        <span class="o">((</span>warnings++<span class="o">))</span>
+    <span class="k">fi</span>
+    
+    <span class="c"># Check required fields</span>
+    <span class="nb">local </span><span class="nv">required_fields</span><span class="o">=(</span>
+        <span class="s2">".device_info.vendor_id"</span>
+        <span class="s2">".device_info.device_id"</span>
+        <span class="s2">".metadata.device_bdf"</span>
+    <span class="o">)</span>
+    
+    <span class="k">for </span>field <span class="k">in</span> <span class="s2">"</span><span class="k">${</span><span class="nv">required_fields</span><span class="p">[@]</span><span class="k">}</span><span class="s2">"</span><span class="p">;</span> <span class="k">do
+        if </span><span class="nb">command</span> <span class="nt">-v</span> jq <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+            if</span> <span class="o">[</span> <span class="s2">"</span><span class="si">$(</span>jq <span class="nt">-r</span> <span class="s2">"</span><span class="nv">$field</span><span class="s2"> // empty"</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span><span class="si">)</span><span class="s2">"</span> <span class="o">=</span> <span class="s2">""</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+                </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: Missing required field: </span><span class="nv">$field</span><span class="s2">"</span>
+                <span class="o">((</span>errors++<span class="o">))</span>
+            <span class="k">else
+                </span><span class="nb">echo</span> <span class="s2">"✓ Required field present: </span><span class="nv">$field</span><span class="s2">"</span>
+            <span class="k">fi
+        fi
+    done</span>
+    
+    <span class="c"># Validate field formats</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> jq <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then</span>
+        <span class="c"># Check vendor_id format (4 hex digits)</span>
+        <span class="nv">vendor_id</span><span class="o">=</span><span class="si">$(</span>jq <span class="nt">-r</span> <span class="s1">'.device_info.vendor_id // empty'</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span><span class="si">)</span>
+        <span class="k">if</span> <span class="o">[[</span> <span class="o">!</span> <span class="s2">"</span><span class="nv">$vendor_id</span><span class="s2">"</span> <span class="o">=</span>~ ^[0-9A-Fa-f]<span class="o">{</span>4<span class="o">}</span><span class="nv">$ </span><span class="o">]]</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: Invalid vendor_id format: </span><span class="nv">$vendor_id</span><span class="s2">"</span>
+            <span class="o">((</span>errors++<span class="o">))</span>
+        <span class="k">fi</span>
+        
+        <span class="c"># Check device_id format (4 hex digits)</span>
+        <span class="nv">device_id</span><span class="o">=</span><span class="si">$(</span>jq <span class="nt">-r</span> <span class="s1">'.device_info.device_id // empty'</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span><span class="si">)</span>
+        <span class="k">if</span> <span class="o">[[</span> <span class="o">!</span> <span class="s2">"</span><span class="nv">$device_id</span><span class="s2">"</span> <span class="o">=</span>~ ^[0-9A-Fa-f]<span class="o">{</span>4<span class="o">}</span><span class="nv">$ </span><span class="o">]]</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"❌ ERROR: Invalid device_id format: </span><span class="nv">$device_id</span><span class="s2">"</span>
+            <span class="o">((</span>errors++<span class="o">))</span>
+        <span class="k">fi</span>
+        
+        <span class="c"># Check BDF format</span>
+        <span class="nv">bdf</span><span class="o">=</span><span class="si">$(</span>jq <span class="nt">-r</span> <span class="s1">'.metadata.device_bdf // empty'</span> <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span><span class="si">)</span>
+        <span class="k">if</span> <span class="o">[[</span> <span class="o">!</span> <span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="o">=</span>~ ^[0-9A-Fa-f]<span class="o">{</span>4<span class="o">}</span>:[0-9A-Fa-f]<span class="o">{</span>2<span class="o">}</span>:[0-9A-Fa-f]<span class="o">{</span>2<span class="o">}</span><span class="se">\.</span><span class="o">[</span>0-9A-Fa-f]<span class="nv">$ </span><span class="o">]]</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"⚠ WARNING: Unusual BDF format: </span><span class="nv">$bdf</span><span class="s2">"</span>
+            <span class="o">((</span>warnings++<span class="o">))</span>
+        <span class="k">fi
+    fi</span>
+    
+    <span class="c"># File size checks</span>
+    <span class="nb">local </span><span class="nv">file_size</span><span class="o">=</span><span class="si">$(</span><span class="nb">stat</span> <span class="nt">-f</span>%z <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> 2&gt;/dev/null <span class="o">||</span> <span class="nb">stat</span> <span class="nt">-c</span>%s <span class="s2">"</span><span class="nv">$json_file</span><span class="s2">"</span> 2&gt;/dev/null<span class="si">)</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$file_size</span><span class="s2">"</span> <span class="nt">-lt</span> 200 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"⚠ WARNING: File seems small (</span><span class="nv">$file_size</span><span class="s2"> bytes) - may be incomplete"</span>
+        <span class="o">((</span>warnings++<span class="o">))</span>
+    <span class="k">elif</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$file_size</span><span class="s2">"</span> <span class="nt">-gt</span> 50000 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"⚠ WARNING: File seems large (</span><span class="nv">$file_size</span><span class="s2"> bytes) - may contain unexpected data"</span>
+        <span class="o">((</span>warnings++<span class="o">))</span>
+    <span class="k">fi
+    
+    </span><span class="nb">echo</span> <span class="s2">""</span>
+    <span class="nb">echo</span> <span class="s2">"=== Validation Summary ==="</span>
+    <span class="nb">echo</span> <span class="s2">"Errors: </span><span class="nv">$errors</span><span class="s2">"</span>
+    <span class="nb">echo</span> <span class="s2">"Warnings: </span><span class="nv">$warnings</span><span class="s2">"</span>
+    
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$errors</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"✅ Validation PASSED"</span>
+        <span class="k">return </span>0
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"❌ Validation FAILED"</span>
+        <span class="k">return </span>1
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+<span class="c"># Usage: validate_donor_dump "path/to/donor_info.json"</span>
+</code></pre></div></div>
+
+<h3 id="integration-testing">Integration Testing</h3>
+
+<h4 id="test-with-pcileech-generator">Test with PCILeech Generator</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># test_donor_integration.sh - Test donor dump with PCILeech</span>
+
+test_donor_integration<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">donor_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">test_board</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">2</span><span class="k">:-</span><span class="nv">75t</span><span class="k">}</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">test_bdf</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">3</span><span class="k">:-</span><span class="nv">0000</span>:03:00.0<span class="k">}</span><span class="s2">"</span>
+    
+    <span class="nb">echo</span> <span class="s2">"Testing donor dump integration..."</span>
+    
+    <span class="c"># Validate donor file first</span>
+    <span class="k">if</span> <span class="o">!</span> validate_donor_dump <span class="s2">"</span><span class="nv">$donor_file</span><span class="s2">"</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"❌ Donor dump validation failed"</span>
+        <span class="k">return </span>1
+    <span class="k">fi</span>
+    
+    <span class="c"># Test dry-run with PCILeech generator</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> pcileech-generate <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Testing with PCILeech generator (dry-run)..."</span>
+        <span class="k">if </span>pcileech-generate <span class="se">\</span>
+            <span class="nt">--bdf</span> <span class="s2">"</span><span class="nv">$test_bdf</span><span class="s2">"</span> <span class="se">\</span>
+            <span class="nt">--board</span> <span class="s2">"</span><span class="nv">$test_board</span><span class="s2">"</span> <span class="se">\</span>
+            <span class="nt">--donor-info-file</span> <span class="s2">"</span><span class="nv">$donor_file</span><span class="s2">"</span> <span class="se">\</span>
+            <span class="nt">--dry-run</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"✅ Integration test PASSED"</span>
+            <span class="k">return </span>0
+        <span class="k">else
+            </span><span class="nb">echo</span> <span class="s2">"❌ Integration test FAILED"</span>
+            <span class="k">return </span>1
+        <span class="k">fi
+    else
+        </span><span class="nb">echo</span> <span class="s2">"⚠ PCILeech generator not available, skipping integration test"</span>
+        <span class="k">return </span>0
+    <span class="k">fi</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues-and-solutions">Common Issues and Solutions</h3>
+
+<h4 id="linux-specific-issues">Linux-Specific Issues</h4>
+
+<p><strong>1. Kernel Headers Mismatch</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Problem: Headers don't match running kernel</span>
+<span class="c"># Solution: Install correct headers or use DKMS</span>
+
+<span class="c"># Check current kernel vs available headers</span>
+<span class="nb">echo</span> <span class="s2">"Running kernel: </span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span><span class="s2">"</span>
+<span class="nb">echo</span> <span class="s2">"Available headers:"</span>
+<span class="nb">ls</span> /lib/modules/<span class="k">*</span>/build 2&gt;/dev/null <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"No headers found"</span>
+
+<span class="c"># Fix with DKMS (recommended)</span>
+<span class="nb">sudo </span>apt-get <span class="nb">install </span>dkms
+<span class="nb">sudo </span>dkms add ./donor_dump
+<span class="nb">sudo </span>dkms build donor_dump/1.0
+<span class="nb">sudo </span>dkms <span class="nb">install </span>donor_dump/1.0
+</code></pre></div></div>
+
+<p><strong>2. Module Loading Failures</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Comprehensive module debugging</span>
+debug_module_load<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">module_path</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$2</span><span class="s2">"</span>
+    
+    <span class="nb">echo</span> <span class="s2">"Debugging module load for </span><span class="nv">$module_path</span><span class="s2"> with BDF </span><span class="nv">$bdf</span><span class="s2">"</span>
+    
+    <span class="c"># Check module dependencies</span>
+    <span class="nb">echo</span> <span class="s2">"Module info:"</span>
+    modinfo <span class="s2">"</span><span class="nv">$module_path</span><span class="s2">"</span>
+    
+    <span class="c"># Check for conflicting modules</span>
+    <span class="nb">echo</span> <span class="s2">"Checking for conflicts:"</span>
+    lsmod | <span class="nb">grep</span> <span class="nt">-E</span> <span class="s2">"(pci|donor)"</span>
+    
+    <span class="c"># Attempt load with verbose logging</span>
+    <span class="nb">echo</span> <span class="s2">"Loading with verbose logging:"</span>
+    <span class="nb">sudo </span>insmod <span class="s2">"</span><span class="nv">$module_path</span><span class="s2">"</span> <span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="nv">debug</span><span class="o">=</span>1
+    
+    <span class="c"># Check kernel logs</span>
+    <span class="nb">echo</span> <span class="s2">"Recent kernel messages:"</span>
+    dmesg | <span class="nb">tail</span> <span class="nt">-20</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p><strong>3. Device Access Issues</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check device binding and driver conflicts</span>
+check_device_binding<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    
+    <span class="nb">echo</span> <span class="s2">"Device binding status for </span><span class="nv">$bdf</span><span class="s2">:"</span>
+    
+    <span class="c"># Check current driver</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="nt">-d</span> <span class="s2">"/sys/bus/pci/devices/</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Device exists in sysfs"</span>
+        
+        <span class="k">if</span> <span class="o">[</span> <span class="nt">-L</span> <span class="s2">"/sys/bus/pci/devices/</span><span class="nv">$bdf</span><span class="s2">/driver"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+            </span><span class="nv">current_driver</span><span class="o">=</span><span class="si">$(</span><span class="nb">readlink</span> <span class="s2">"/sys/bus/pci/devices/</span><span class="nv">$bdf</span><span class="s2">/driver"</span> | xargs <span class="nb">basename</span><span class="si">)</span>
+            <span class="nb">echo</span> <span class="s2">"Current driver: </span><span class="nv">$current_driver</span><span class="s2">"</span>
+            
+            <span class="c"># Suggest unbinding if necessary</span>
+            <span class="nb">echo</span> <span class="s2">"To unbind: echo '</span><span class="nv">$bdf</span><span class="s2">' | sudo tee /sys/bus/pci/devices/</span><span class="nv">$bdf</span><span class="s2">/driver/unbind"</span>
+        <span class="k">else
+            </span><span class="nb">echo</span> <span class="s2">"No driver bound"</span>
+        <span class="k">fi
+    else
+        </span><span class="nb">echo</span> <span class="s2">"❌ Device not found in sysfs"</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+
+<h4 id="batch-processing-multiple-devices">Batch Processing Multiple Devices</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># batch_donor_dump.sh - Process multiple devices efficiently</span>
+
+batch_donor_dump<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">device_list</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>  <span class="c"># File with one BDF per line</span>
+    <span class="nb">local </span><span class="nv">output_dir</span><span class="o">=</span><span class="s2">"</span><span class="nv">$2</span><span class="s2">"</span>
+    
+    <span class="nb">mkdir</span> <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$output_dir</span><span class="s2">"</span>
+    
+    <span class="c"># Build module once</span>
+    <span class="nb">echo</span> <span class="s2">"Building donor_dump module..."</span>
+    <span class="k">if</span> <span class="o">!</span> make <span class="nt">-C</span> src/donor_dump<span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"❌ Module build failed"</span>
+        <span class="k">return </span>1
+    <span class="k">fi</span>
+    
+    <span class="c"># Process each device</span>
+    <span class="k">while </span><span class="nv">IFS</span><span class="o">=</span> <span class="nb">read</span> <span class="nt">-r</span> bdf<span class="p">;</span> <span class="k">do</span>
+        <span class="o">[</span> <span class="nt">-z</span> <span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="k">continue</span>
+        <span class="o">[[</span> <span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="o">=</span>~ ^#.<span class="k">*</span><span class="nv">$ </span><span class="o">]]</span> <span class="o">&amp;&amp;</span> <span class="k">continue</span>  <span class="c"># Skip comments</span>
+        
+        <span class="nb">echo</span> <span class="s2">"Processing device: </span><span class="nv">$bdf</span><span class="s2">"</span>
+        
+        <span class="c"># Create device-specific output directory</span>
+        <span class="nv">device_dir</span><span class="o">=</span><span class="s2">"</span><span class="nv">$output_dir</span><span class="s2">/</span><span class="k">${</span><span class="nv">bdf</span><span class="p">//</span>:/_<span class="k">}</span><span class="s2">"</span>
+        <span class="nb">mkdir</span> <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$device_dir</span><span class="s2">"</span>
+        
+        <span class="c"># Load module for this device</span>
+        <span class="k">if </span><span class="nb">sudo </span>insmod src/donor_dump/donor_dump.ko <span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span><span class="p">;</span> <span class="k">then</span>
+            <span class="c"># Extract data</span>
+            <span class="nb">cat</span> /proc/donor_dump <span class="o">&gt;</span> <span class="s2">"</span><span class="nv">$device_dir</span><span class="s2">/donor_info.txt"</span>
+            
+            <span class="c"># Convert to JSON</span>
+            convert_to_json <span class="s2">"</span><span class="nv">$device_dir</span><span class="s2">/donor_info.txt"</span> <span class="s2">"</span><span class="nv">$device_dir</span><span class="s2">/donor_info.json"</span>
+            
+            <span class="c"># Unload module</span>
+            <span class="nb">sudo </span>rmmod donor_dump
+            
+            <span class="nb">echo</span> <span class="s2">"✓ Completed: </span><span class="nv">$bdf</span><span class="s2">"</span>
+        <span class="k">else
+            </span><span class="nb">echo</span> <span class="s2">"❌ Failed: </span><span class="nv">$bdf</span><span class="s2">"</span>
+        <span class="k">fi</span>
+        
+        <span class="c"># Brief pause to avoid overwhelming the system</span>
+        <span class="nb">sleep </span>1
+    <span class="k">done</span> &lt; <span class="s2">"</span><span class="nv">$device_list</span><span class="s2">"</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="advanced-usage">Advanced Usage</h2>
+
+<h3 id="custom-data-extraction">Custom Data Extraction</h3>
+
+<h4 id="extended-information-gathering">Extended Information Gathering</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enhanced donor dump with additional system context</span>
+create_extended_donor_dump<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">output_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$2</span><span class="s2">"</span>
+    
+    <span class="c"># Standard donor dump</span>
+    <span class="nb">cat</span> /proc/donor_dump <span class="o">&gt;</span> <span class="s2">"</span><span class="k">${</span><span class="nv">output_file</span><span class="k">}</span><span class="s2">.raw"</span>
+    
+    <span class="c"># Add system context</span>
+    <span class="o">{</span>
+        <span class="nb">echo</span> <span class="s2">"=== EXTENDED DONOR DUMP ==="</span>
+        <span class="nb">echo</span> <span class="s2">"Generated: </span><span class="si">$(</span><span class="nb">date</span> <span class="nt">-Iseconds</span><span class="si">)</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">"System: </span><span class="si">$(</span><span class="nb">uname</span> <span class="nt">-a</span><span class="si">)</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">"BDF: </span><span class="nv">$bdf</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">""</span>
+        
+        <span class="nb">echo</span> <span class="s2">"=== DEVICE INFORMATION ==="</span>
+        lspci <span class="nt">-vvv</span> <span class="nt">-s</span> <span class="s2">"</span><span class="k">${</span><span class="nv">bdf</span><span class="p">#0000</span>:<span class="k">}</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">""</span>
+        
+        <span class="nb">echo</span> <span class="s2">"=== SYSTEM PCI TREE ==="</span>
+        lspci <span class="nt">-tv</span>
+        <span class="nb">echo</span> <span class="s2">""</span>
+        
+        <span class="nb">echo</span> <span class="s2">"=== IOMMU GROUPS ==="</span>
+        find /sys/kernel/iommu_groups/ <span class="nt">-name</span> <span class="s2">"*"</span> <span class="nt">-type</span> l | <span class="se">\</span>
+            xargs <span class="nt">-I</span> <span class="o">{}</span> sh <span class="nt">-c</span> <span class="s1">'echo "Group $(basename $(dirname {})): $(basename $(readlink {}))"'</span> | <span class="se">\</span>
+            <span class="nb">grep</span> <span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"No IOMMU group found"</span>
+        <span class="nb">echo</span> <span class="s2">""</span>
+        
+        <span class="nb">echo</span> <span class="s2">"=== DONOR DUMP DATA ==="</span>
+        <span class="nb">cat</span> <span class="s2">"</span><span class="k">${</span><span class="nv">output_file</span><span class="k">}</span><span class="s2">.raw"</span>
+        
+    <span class="o">}</span> <span class="o">&gt;</span> <span class="s2">"</span><span class="nv">$output_file</span><span class="s2">"</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="automation-integration">Automation Integration</h3>
+
+<h4 id="cicd-pipeline-integration">CI/CD Pipeline Integration</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># .github/workflows/donor-dump-validation.yml</span>
+<span class="na">name</span><span class="pi">:</span> <span class="s">Donor Dump Validation</span>
+
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">paths</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">donor_dumps/**'</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">src/donor_dump/**'</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">validate</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v3</span>
+      
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Install dependencies</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">sudo apt-get update</span>
+          <span class="s">sudo apt-get install -y jq</span>
+          
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Validate donor dumps</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">for dump in donor_dumps/*.json; do</span>
+            <span class="s">echo "Validating $dump"</span>
+            <span class="s">./scripts/validate_donor_dump.sh "$dump"</span>
+          <span class="s">done</span>
+</code></pre></div></div>
+
+<h3 id="security-considerations">Security Considerations</h3>
+
+<h4 id="safe-module-handling">Safe Module Handling</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Secure module loading with verification</span>
+secure_module_load<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">module_path</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">
+</span></code></pre></div></div>
+
+<h3 id="automation-integration-1">Automation Integration</h3>
+
+<h4 id="cicd-pipeline-integration-1">CI/CD Pipeline Integration</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># .github/workflows/donor-dump-validation.yml</span>
+<span class="na">name</span><span class="pi">:</span> <span class="s">Donor Dump Validation</span>
+
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">paths</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">donor_dumps/**'</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">src/donor_dump/**'</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">validate</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v3</span>
+      
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Install dependencies</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">sudo apt-get update</span>
+          <span class="s">sudo apt-get install -y jq</span>
+          
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Validate donor dumps</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">for dump in donor_dumps/*.json; do</span>
+            <span class="s">echo "Validating $dump"</span>
+            <span class="s">./scripts/validate_donor_dump.sh "$dump"</span>
+          <span class="s">done</span>
+</code></pre></div></div>
+
+<h3 id="security-considerations-1">Security Considerations</h3>
+
+<h4 id="safe-module-handling-1">Safe Module Handling</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Secure module loading with verification</span>
+secure_module_load<span class="o">()</span> <span class="o">{</span>
+    <span class="nb">local </span><span class="nv">module_path</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$2</span><span class="s2">"</span>
+    
+    <span class="c"># Verify module signature (if available)</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> modinfo <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        </span>modinfo <span class="s2">"</span><span class="nv">$module_path</span><span class="s2">"</span> | <span class="nb">grep</span> <span class="nt">-q</span> <span class="s2">"signature"</span> <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">"✓ Module is signed"</span>
+    <span class="k">fi</span>
+    
+    <span class="c"># Check module for suspicious content</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> strings <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        if </span>strings <span class="s2">"</span><span class="nv">$module_path</span><span class="s2">"</span> | <span class="nb">grep</span> <span class="nt">-qE</span> <span class="s2">"(rm -rf|format|delete)"</span><span class="p">;</span> <span class="k">then
+            </span><span class="nb">echo</span> <span class="s2">"⚠ WARNING: Module contains potentially dangerous strings"</span>
+            <span class="nb">read</span> <span class="nt">-p</span> <span class="s2">"Continue anyway? (y/N): "</span> <span class="nt">-n</span> 1 <span class="nt">-r</span>
+            <span class="nb">echo</span>
+            <span class="o">[[</span> <span class="o">!</span> <span class="nv">$REPLY</span> <span class="o">=</span>~ ^[Yy]<span class="nv">$ </span><span class="o">]]</span> <span class="o">&amp;&amp;</span> <span class="k">return </span>1
+        <span class="k">fi
+    fi</span>
+    
+    <span class="c"># Load with restricted permissions</span>
+    <span class="nb">sudo </span>insmod <span class="s2">"</span><span class="nv">$module_path</span><span class="s2">"</span> <span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$bdf</span><span class="s2">"</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h4 id="privilege-management">Privilege Management</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check and minimize required privileges</span>
+check_privileges<span class="o">()</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-ne</span> 0 <span class="o">]</span><span class="p">;</span> <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"This script requires root privileges for:"</span>
+        <span class="nb">echo</span> <span class="s2">"- Loading kernel modules"</span>
+        <span class="nb">echo</span> <span class="s2">"- Accessing PCI configuration space"</span>
+        <span class="nb">echo</span> <span class="s2">"- Reading /proc interfaces"</span>
+        <span class="nb">echo</span> <span class="s2">""</span>
+        <span class="nb">echo</span> <span class="s2">"Run with: sudo </span><span class="nv">$0</span><span class="s2">"</span>
+        <span class="nb">exit </span>1
+    <span class="k">fi</span>
+    
+    <span class="c"># Drop privileges where possible</span>
+    <span class="k">if </span><span class="nb">command</span> <span class="nt">-v</span> <span class="nb">sudo</span> <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="p">;</span> <span class="k">then
+        </span><span class="nv">ORIGINAL_USER</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">SUDO_USER</span><span class="k">:-</span><span class="nv">$USER</span><span class="k">}</span><span class="s2">"</span>
+        <span class="nb">echo</span> <span class="s2">"Running as root, will drop privileges where possible"</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="best-practices-summary">Best Practices Summary</h2>
+
+<h3 id="development-workflow">Development Workflow</h3>
+<ol>
+  <li><strong>Always validate prerequisites</strong> before starting</li>
+  <li><strong>Use version control</strong> for donor dump files</li>
+  <li><strong>Document device-specific quirks</strong> in metadata</li>
+  <li><strong>Test with multiple board types</strong> when possible</li>
+  <li><strong>Maintain backup copies</strong> of working donor dumps</li>
+</ol>
+
+<h3 id="production-deployment">Production Deployment</h3>
+<ol>
+  <li><strong>Automate validation</strong> in CI/CD pipelines</li>
+  <li><strong>Use secure module signing</strong> in production</li>
+  <li><strong>Monitor for kernel compatibility</strong> issues</li>
+  <li><strong>Implement rollback procedures</strong> for failed dumps</li>
+  <li><strong>Log all operations</strong> for audit trails</li>
+</ol>
+
+<h3 id="performance-optimization-1">Performance Optimization</h3>
+<ol>
+  <li><strong>Batch process multiple devices</strong> when possible</li>
+  <li><strong>Cache build artifacts</strong> to avoid rebuilds</li>
+  <li><strong>Use parallel processing</strong> for validation</li>
+  <li><strong>Minimize module load/unload cycles</strong></li>
+  <li><strong>Implement smart retry logic</strong> for transient failures</li>
+</ol>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>This enhanced manual donor dump generation guide provides:</p>
+
+<ul>
+  <li><strong>Comprehensive error handling</strong> for robust operation</li>
+  <li><strong>Cross-platform support</strong> for Linux and Windows</li>
+  <li><strong>Validation and testing frameworks</strong> for quality assurance</li>
+  <li><strong>Performance optimizations</strong> for batch processing</li>
+  <li><strong>Security considerations</strong> for safe operation</li>
+  <li><strong>Integration examples</strong> for automation workflows</li>
+</ul>
+
+<p>The manual process gives you complete control over donor dump generation, making it ideal for:</p>
+<ul>
+  <li><strong>Debugging</strong> automated tool failures</li>
+  <li><strong>Research and development</strong> of new features</li>
+  <li><strong>Custom integration</strong> with existing workflows</li>
+  <li><strong>Educational purposes</strong> to understand the process</li>
+</ul>
+
+<p>For most users, the automated <a href="../PCILeechFWGenerator/pcileech_generate.py"><code class="language-plaintext highlighter-rouge">pcileech-generate</code></a> command or <a href="/tui-readme.html">TUI interface</a> remains the recommended approach, but this manual process provides a powerful alternative when needed.</p>
+
+<h2 id="quick-reference">Quick Reference</h2>
+
+<h3 id="essential-commands">Essential Commands</h3>
+
+<p><strong>Linux:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Quick donor dump</span>
+<span class="nb">cd </span>PCILeechFWGenerator/src/donor_dump
+make <span class="o">&amp;&amp;</span> <span class="nb">sudo </span>insmod donor_dump.ko <span class="nv">bdf</span><span class="o">=</span>0000:03:00.0
+<span class="nb">cat</span> /proc/donor_dump <span class="o">&gt;</span> donor_info.txt
+<span class="nb">sudo </span>rmmod donor_dump
+</code></pre></div></div>
+
+<h3 id="file-locations">File Locations</h3>
+<ul>
+  <li><strong>Linux module source</strong>: <a href="../PCILeechFWGenerator/src/donor_dump/"><code class="language-plaintext highlighter-rouge">src/donor_dump/</code></a></li>
+  <li><strong>Validation tools</strong>: <a href="../PCILeechFWGenerator/scripts/validate_donor_dump.sh"><code class="language-plaintext highlighter-rouge">scripts/validate_donor_dump.sh</code></a></li>
+  <li><strong>Output directory</strong>: <code class="language-plaintext highlighter-rouge">donor_dumps/YYYYMMDD_HHMMSS_BDF/</code></li>
+</ul>
+
+<h3 id="support-resources">Support Resources</h3>
+<ul>
+  <li><strong>Main documentation</strong>: <a href="Home.md">Home</a></li>
+  <li><strong>TUI guide</strong>: <a href="/tui-readme.html">TUI README</a></li>
+  <li><strong>Development guide</strong>: <a href="Development.md">Development</a></li>
+  <li><strong>Firmware uniqueness</strong>: <a href="/firmware-uniqueness.html">Firmware Uniqueness</a></li>
+</ul>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

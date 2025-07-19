@@ -1,0 +1,62 @@
+title: "PCILeech Firmware Generator"
+description: "Generate custom PCIe firmware for PCILeech"
+url: "https://pcileechfwgenerator.ramseymcgrath.com"
+baseurl: ""
+
+# Build settings
+source: ./site
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+  - jekyll-redirect-from
+
+# Exclude from processing
+exclude:
+  - .git/
+  - .gitignore
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - docs/
+  - tests/
+  - src/
+  - "*.py"
+  - "*.pyc"
+  - __pycache__/
+  - requirements*.txt
+  - setup.py
+  - setup.cfg
+  - pyproject.toml
+  - tox.ini
+  - .pytest_cache/
+  - .coverage
+  - htmlcov/
+
+# Collections
+collections:
+  pages:
+    output: true
+    permalink: /:name/
+
+# Default layouts
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "page"
+
+

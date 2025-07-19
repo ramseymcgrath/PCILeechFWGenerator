@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Configuration Space Shadow BRAM Implementation | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Configuration Space Shadow BRAM Implementation" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/config-space-shadow.html" />
+<meta property="og:url" content="http://localhost:4000/config-space-shadow.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Configuration Space Shadow BRAM Implementation" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Configuration Space Shadow BRAM Implementation","url":"http://localhost:4000/config-space-shadow.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">Configuration Space Shadow BRAM Implementation</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="configuration-space-shadow-bram-implementation">Configuration Space Shadow BRAM Implementation</h1>
+
+<p>This document describes the implementation of the full 4 KB configuration space shadow in BRAM for the PCILeech FPGA firmware generator.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The configuration space shadow BRAM implementation provides a complete 4 KB PCI Express configuration space in block RAM (BRAM) on the FPGA. This is a critical component for PCIe device emulation, as it allows the PCILeech firmware to accurately respond to configuration space accesses from the host system.</p>
+
+<p>Key features:</p>
+<ul>
+  <li>Full 4 KB configuration space shadow in BRAM</li>
+  <li>Dual-port access for simultaneous read/write operations</li>
+  <li>Overlay RAM for writable fields (Command/Status registers)</li>
+  <li>Initialization from device configuration data or synthetic generation</li>
+  <li>Little-endian format compatible with PCIe specification</li>
+  <li>Automatic overlay mapping for writable registers</li>
+</ul>
+
+<h2 id="architecture">Architecture</h2>
+
+<p>The implementation consists of the following components:</p>
+
+<ol>
+  <li><strong>Configuration Space BRAM</strong>: A 4 KB block RAM that stores the entire configuration space of the emulated PCIe device.</li>
+  <li><strong>Overlay RAM</strong>: A smaller RAM that stores writable fields, allowing the host to modify certain configuration registers.</li>
+  <li><strong>State Machine</strong>: Handles PCIe configuration space access requests (reads and writes).</li>
+  <li><strong>Overlay Mapper</strong>: Automatically detects which registers need overlay entries based on PCIe specifications.</li>
+</ol>
+
+<h3 id="systemverilog-modules">SystemVerilog Modules</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">pcileech_tlps128_cfgspace_shadow.sv</code>: The main module implementing the configuration space shadow.</li>
+  <li><code class="language-plaintext highlighter-rouge">pcileech_tlps128_bar_controller.sv</code>: The BAR controller that interfaces with the configuration space shadow.</li>
+</ul>
+
+<h2 id="configuration-space-generation">Configuration Space Generation</h2>
+
+<p>The configuration space is generated through multiple methods depending on the available data:</p>
+
+<h3 id="1-vfio-based-configuration-space-reading">1. VFIO-based Configuration Space Reading</h3>
+
+<p>For devices bound to VFIO drivers, the system reads the actual configuration space:</p>
+
+<ol>
+  <li>The <code class="language-plaintext highlighter-rouge">ConfigSpaceManager</code> class handles VFIO device binding and configuration space access.</li>
+  <li>Configuration space is read via VFIO region info queries or sysfs fallback.</li>
+  <li>The raw configuration space data is extracted and validated.</li>
+  <li>Extended configuration space (up to 4 KB) is supported when available.</li>
+</ol>
+
+<h3 id="2-synthetic-configuration-space-generation">2. Synthetic Configuration Space Generation</h3>
+
+<p>When VFIO data is not available, the system generates synthetic configuration space:</p>
+
+<ol>
+  <li>The <code class="language-plaintext highlighter-rouge">ConfigSpaceManager.generate_synthetic_config_space()</code> method creates a complete 4 KB configuration space.</li>
+  <li>Device identification data is populated from device profiles.</li>
+  <li>Standard PCI header fields are generated with appropriate defaults.</li>
+  <li>Capability structures (MSI, MSI-X, PCIe) are added based on device requirements.</li>
+  <li>BAR configurations are populated based on device analysis.</li>
+</ol>
+
+<h3 id="3-configuration-space-initialization">3. Configuration Space Initialization</h3>
+
+<p>The generated configuration space is converted to FPGA-compatible format:</p>
+
+<ol>
+  <li>The <code class="language-plaintext highlighter-rouge">ConfigSpaceHexFormatter</code> class converts binary data to hex format.</li>
+  <li>Data is formatted as 32-bit words in little-endian format.</li>
+  <li>A <code class="language-plaintext highlighter-rouge">config_space_init.hex</code> file is generated for SystemVerilog <code class="language-plaintext highlighter-rouge">$readmemh</code> initialization.</li>
+  <li>Comments are added for debugging and register identification.</li>
+</ol>
+
+<h2 id="overlay-ram-for-writable-fields">Overlay RAM for Writable Fields</h2>
+
+<p>The overlay RAM provides a mechanism for handling writable fields in the configuration space. The <code class="language-plaintext highlighter-rouge">OverlayMapper</code> class automatically detects which registers need overlay entries based on PCIe specifications:</p>
+
+<h3 id="automatic-overlay-detection">Automatic Overlay Detection</h3>
+
+<p>The system automatically identifies writable registers:</p>
+
+<ul>
+  <li><strong>Standard PCI registers</strong>: Command, Status, Cache Line Size, Latency Timer, BIST</li>
+  <li><strong>BAR registers</strong>: Detected as special handling type with size-based masks</li>
+  <li><strong>Capability registers</strong>: MSI, MSI-X, PCIe capability registers with mixed read/write fields</li>
+  <li><strong>Extended capabilities</strong>: AER, Power Management, and other extended capabilities</li>
+</ul>
+
+<h3 id="overlay-operation">Overlay Operation</h3>
+
+<p>When reading from a register with writable fields:</p>
+
+<ol>
+  <li>The base value is read from the main configuration space BRAM</li>
+  <li>The overlay mask determines which bits come from overlay RAM</li>
+  <li>The final value combines: <code class="language-plaintext highlighter-rouge">(base_value &amp; ~mask) | (overlay_value &amp; mask)</code></li>
+</ol>
+
+<p>When writing to a register with writable fields:</p>
+
+<ol>
+  <li>Only the writable bits (defined by the mask) are updated in overlay RAM</li>
+  <li>Read-only bits remain unchanged in the base configuration space</li>
+</ol>
+
+<h2 id="integration-with-build-process">Integration with Build Process</h2>
+
+<p>The configuration space shadow is integrated into the build process through the <code class="language-plaintext highlighter-rouge">PCILeechGenerator</code> and template system:</p>
+
+<h3 id="template-based-generation">Template-based Generation</h3>
+
+<ol>
+  <li><strong>Template Context Building</strong>: The <code class="language-plaintext highlighter-rouge">PCILeechContextBuilder</code> creates a comprehensive template context containing:
+    <ul>
+      <li>Device configuration data from VFIO or synthetic generation</li>
+      <li>Overlay mapping automatically generated by <code class="language-plaintext highlighter-rouge">OverlayMapper</code></li>
+      <li>Extended configuration space pointers</li>
+      <li>MSI-X and capability configurations</li>
+    </ul>
+  </li>
+  <li><strong>SystemVerilog Generation</strong>: The <code class="language-plaintext highlighter-rouge">AdvancedSVGenerator</code> processes templates to create:
+    <ul>
+      <li>Configuration space shadow module (<code class="language-plaintext highlighter-rouge">cfg_shadow.sv</code>)</li>
+      <li>Configuration space initialization file (<code class="language-plaintext highlighter-rouge">config_space_init.hex</code>)</li>
+      <li>Overlay constants and lookup tables</li>
+    </ul>
+  </li>
+  <li><strong>Hex File Generation</strong>: The <code class="language-plaintext highlighter-rouge">ConfigSpaceHexFormatter</code> converts configuration space data to:
+    <ul>
+      <li>Little-endian 32-bit words</li>
+      <li>Vivado-compatible hex format</li>
+      <li>Debug comments for register identification</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="build-integration">Build Integration</h3>
+
+<ol>
+  <li>The configuration space shadow module is automatically included in the generated TCL script.</li>
+  <li>The <code class="language-plaintext highlighter-rouge">config_space_init.hex</code> file is included in the project for BRAM initialization.</li>
+  <li>Overlay constants are generated as SystemVerilog parameters for efficient lookup.</li>
+</ol>
+
+<h2 id="systemverilog-implementation-details">SystemVerilog Implementation Details</h2>
+
+<h3 id="configuration-space-shadow-module">Configuration Space Shadow Module</h3>
+
+<p>The main module (<code class="language-plaintext highlighter-rouge">pcileech_tlps128_cfgspace_shadow</code>) implements:</p>
+
+<ul>
+  <li><strong>Dual-port BRAM</strong>: Main configuration space storage with parameterized size</li>
+  <li><strong>Overlay RAM</strong>: Separate storage for writable fields with automatic indexing</li>
+  <li><strong>State Machine</strong>: Handles PCIe configuration reads/writes with overlay logic</li>
+  <li><strong>Shadow Control</strong>: Determines when to use shadow vs. hardware based on address ranges</li>
+</ul>
+
+<h3 id="key-features">Key Features</h3>
+
+<ul>
+  <li><strong>Automatic Overlay Mapping</strong>: Lookup tables generated from <code class="language-plaintext highlighter-rouge">OVERLAY_MAP</code> template data</li>
+  <li><strong>Byte-enable Support</strong>: Proper handling of partial register writes</li>
+  <li><strong>Extended Configuration Space</strong>: Support for capabilities beyond standard 256 bytes</li>
+  <li><strong>CFGTLP Integration</strong>: Proper integration with PCIe configuration TLP handling</li>
+</ul>
+
+<h2 id="testing">Testing</h2>
+
+<p>The implementation includes comprehensive testing:</p>
+
+<ol>
+  <li><strong>Python Unit Tests</strong>:
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">test_config_space_manager.py</code>: Tests for configuration space reading and generation</li>
+      <li><code class="language-plaintext highlighter-rouge">test_overlay_mapper.py</code>: Tests for overlay detection and mapping</li>
+      <li><code class="language-plaintext highlighter-rouge">test_hex_formatter.py</code>: Tests for hex file generation and formatting</li>
+    </ul>
+  </li>
+  <li><strong>Integration Tests</strong>:
+    <ul>
+      <li>VFIO binding and configuration space access</li>
+      <li>Synthetic configuration space generation</li>
+      <li>Template rendering and context building</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="usage">Usage</h2>
+
+<p>The configuration space shadow is automatically included in the build process. The system:</p>
+
+<ol>
+  <li><strong>Detects Device Configuration</strong>: Automatically reads from VFIO or generates synthetic data</li>
+  <li><strong>Maps Overlay Requirements</strong>: Automatically detects which registers need overlay entries</li>
+  <li><strong>Generates SystemVerilog</strong>: Creates the shadow module with proper initialization</li>
+  <li><strong>Integrates with Build</strong>: Includes all necessary files in the FPGA project</li>
+</ol>
+
+<h3 id="configuration-options">Configuration Options</h3>
+
+<p>The system supports various configuration options:</p>
+
+<ul>
+  <li><strong>CONFIG_SPACE_SIZE</strong>: Parameterized size (256 bytes to 4 KB)</li>
+  <li><strong>OVERLAY_ENTRIES</strong>: Number of overlay RAM entries (automatically calculated)</li>
+  <li><strong>EXT_CFG_CAP_PTR</strong>: Extended capability pointer offset</li>
+  <li><strong>DUAL_PORT</strong>: Optional dual-port BRAM configuration</li>
+</ul>
+
+<h2 id="limitations">Limitations</h2>
+
+<ul>
+  <li>The current implementation supports a single PCIe function (function 0).</li>
+  <li>Overlay RAM has a practical limit based on FPGA resources.</li>
+  <li>Extended capabilities are limited to commonly used types.</li>
+</ul>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<p>Possible future enhancements include:</p>
+
+<ul>
+  <li>Support for multiple PCIe functions</li>
+  <li>Dynamic reconfiguration of the configuration space</li>
+  <li>Enhanced error handling and reporting</li>
+  <li>Support for device-specific extended capabilities</li>
+</ul>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

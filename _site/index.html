@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>PCILeech Firmware Generator | Generate custom PCIe firmware for PCILeech</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="PCILeech Firmware Generator" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/" />
+<meta property="og:url" content="http://localhost:4000/" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="PCILeech Firmware Generator" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","description":"Generate custom PCIe firmware for PCILeech","headline":"PCILeech Firmware Generator","name":"PCILeech Firmware Generator","url":"http://localhost:4000/"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">PCILeech Firmware Generator</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="pcileech-firmware-generator">PCILeech Firmware Generator</h1>
+
+<p><a href="https://github.com/ramseymcgrath/PCILeechFWGenerator/actions"><img src="https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg" alt="CI" /></a>
+<a href="https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator"><img src="https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg" alt="codecov" /></a>
+<img src="https://dcbadge.limes.pink/api/shield/429866199833247744" alt="" /></p>
+
+<p>Generate authentic PCIe DMA firmware from real donor hardware with a single command. This tool extracts donor configurations from a local device and generates unique PCILeech FPGA bitstreams (and optionally flashes a DMA card over USB-JTAG).</p>
+
+<blockquote>
+  <p>[!WARNING]
+This tool requires <em>real</em> hardware. The templates are built using the device identifiers directly from a donor card and placeholder values are explicitly avoided. Using your own donor device ensures your firmware will be unique.</p>
+</blockquote>
+
+<h2 id="-key-features">✨ Key Features</h2>
+
+<ul>
+  <li><strong>Donor Hardware Analysis</strong>: Extract real PCIe device configurations and register maps from live hardware via VFIO</li>
+  <li><strong>Full 4KB Config-Space Shadow</strong>: Complete configuration space emulation with BRAM-based overlay memory</li>
+  <li><strong>MSI-X Table Replication</strong>: Exact replication of MSI-X tables from donor devices with interrupt delivery logic</li>
+  <li><strong>Deterministic Variance Seeding</strong>: Consistent hardware variance based on device serial number for unique firmware</li>
+  <li><strong>Advanced SystemVerilog Generation</strong>: Comprehensive PCIe device controller with modular template architecture</li>
+  <li><strong>Active Device Interrupts</strong>: MSI-X interrupt controller with timer-based and event-driven interrupt generation</li>
+  <li><strong>Memory Overlay Mapping</strong>: BAR dispatcher with configurable memory regions and custom PIO windows</li>
+  <li><strong>Interactive TUI</strong>: Modern Textual-based interface with real-time device monitoring and guided workflows</li>
+  <li><strong>Containerized Build Pipeline</strong>: Podman-based synthesis environment with automated VFIO setup</li>
+  <li><strong>Automated Testing and Validation</strong>: Comprehensive test suite with SystemVerilog assertions and Python unit tests</li>
+  <li><strong>USB-JTAG Flashing</strong>: Direct firmware deployment to DMA boards via integrated flash utilities</li>
+</ul>
+
+<table>
+  <tbody>
+    <tr>
+      <td>📚 <strong><a href="https://pcileechfwgenerator.ramseymcgrath.com">Complete Documentation</a></strong></td>
+      <td>🏗️ <strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/device-cloning">Device Cloning Guide</a></strong></td>
+      <td>🔧 <strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/development">Development Setup</a></strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="-quick-start">🚀 Quick Start</h2>
+
+<h3 id="installation">Installation</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Install with TUI support (recommended)</span>
+pip <span class="nb">install </span>pcileechfwgenerator[tui]
+
+<span class="c"># Load required kernel modules</span>
+<span class="nb">sudo </span>modprobe vfio vfio-pci
+</code></pre></div></div>
+
+<h3 id="requirements">Requirements</h3>
+
+<ul>
+  <li><strong>Python ≥ 3.9</strong></li>
+  <li><strong>Donor PCIe card</strong> (any inexpensive NIC, sound, or capture card)</li>
+  <li><strong>Linux OS</strong> (You need this)</li>
+</ul>
+
+<h3 id="optional-requirements">Optional Requirements</h3>
+
+<ul>
+  <li><strong>Podman</strong> (<em>not Docker</em> - required for proper PCIe device mounting) You use podman or run the python locally. *You must use linux for either option</li>
+  <li><strong>DMA board</strong> (pcileech_75t484_x1, pcileech_35t325_x4, or pcileech_100t484_x1) You don’t need to flash your firmware with this tooling but you can.</li>
+  <li><strong>Vivado Studio</strong> (2022.2+ for synthesis and bitstream generation) You can use a locally generated Vivado project or insert the files into an existing one.</li>
+</ul>
+
+<h3 id="basic-usage">Basic Usage</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Interactive TUI (recommended for first-time users)</span>
+<span class="nb">sudo </span>python3 pcileech.py tui
+
+<span class="c"># CLI interface for scripted builds</span>
+<span class="nb">sudo </span>python3 pcileech.py build <span class="nt">--bdf</span> 0000:03:00.0 <span class="nt">--board</span> 75t
+
+<span class="c"># Check VFIO configuration</span>
+<span class="nb">sudo </span>python3 pcileech.py check <span class="nt">--device</span> 0000:03:00.0
+
+<span class="c"># Flash firmware to device</span>
+<span class="nb">sudo </span>python3 pcileech.py flash output/firmware.bin
+</code></pre></div></div>
+
+<blockquote>
+  <p>[!NOTE]
+The legacy entrypoint has been removed, please see the steps above and update your scripts accordingly</p>
+</blockquote>
+
+<h3 id="development-from-repository">Development from Repository</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
+<span class="nb">cd </span>PCILeechFWGenerator
+python3 <span class="nt">-m</span> venv .venv <span class="o">&amp;&amp;</span> <span class="nb">source</span> .venv/bin/activate
+pip <span class="nb">install</span> <span class="nt">-r</span> requirements.txt
+<span class="nb">sudo</span> <span class="nt">-E</span> python3 pcileech.py tui
+</code></pre></div></div>
+
+<h2 id="-troubleshooting">🔧 Troubleshooting</h2>
+
+<h3 id="vfio-setup-issues">VFIO Setup Issues</h3>
+
+<blockquote>
+  <p>[!WARNING]
+Avoid using on-board devices (audio, graphics cards) for donor info. The VFIO process can lock the bus during extraction and cause system reboots.</p>
+</blockquote>
+
+<p>The most common issues involve VFIO (Virtual Function I/O) configuration. Use the built-in diagnostic tool:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check VFIO setup and device compatibility</span>
+<span class="nb">sudo </span>python3 pcileech.py check
+
+<span class="c"># Check a specific device</span>
+<span class="nb">sudo </span>python3 pcileech.py check <span class="nt">--device</span> 0000:03:00.0
+
+<span class="c"># Interactive mode with guided fixes</span>
+<span class="nb">sudo </span>python3 pcileech.py check <span class="nt">--interactive</span>
+
+<span class="c"># Attempt automatic fixes</span>
+<span class="nb">sudo </span>python3 pcileech.py check <span class="nt">--fix</span>
+</code></pre></div></div>
+
+<h3 id="common-vfio-problems">Common VFIO Problems</h3>
+
+<p><strong>1. IOMMU not enabled in BIOS/UEFI</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable VT-d (Intel) or AMD-Vi (AMD) in BIOS settings</span>
+<span class="c"># Then add to /etc/default/grub GRUB_CMDLINE_LINUX:</span>
+<span class="c"># For Intel: intel_iommu=on</span>
+<span class="c"># For AMD: amd_iommu=on</span>
+<span class="nb">sudo </span>update-grub <span class="o">&amp;&amp;</span> <span class="nb">sudo </span>reboot
+</code></pre></div></div>
+
+<p><strong>2. VFIO modules not loaded</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>modprobe vfio vfio_pci vfio_iommu_type1
+</code></pre></div></div>
+
+<p><strong>3. Device not in IOMMU group</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check IOMMU groups</span>
+find /sys/kernel/iommu_groups/ <span class="nt">-name</span> <span class="s1">'*'</span> <span class="nt">-type</span> l | <span class="nb">grep </span>YOUR_DEVICE_BDF
+</code></pre></div></div>
+
+<p><strong>4. Permission issues</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Add user to required groups</span>
+<span class="nb">sudo </span>usermod <span class="nt">-a</span> <span class="nt">-G</span> vfio <span class="nv">$USER</span>
+<span class="nb">sudo </span>usermod <span class="nt">-a</span> <span class="nt">-G</span> dialout <span class="nv">$USER</span>  <span class="c"># For USB-JTAG access</span>
+</code></pre></div></div>
+
+<h3 id="installation-issues">Installation Issues</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># If pip installation fails</span>
+pip <span class="nb">install</span> <span class="nt">--upgrade</span> pip setuptools wheel
+pip <span class="nb">install </span>pcileechfwgenerator[tui]
+
+<span class="c"># For TUI dependencies</span>
+pip <span class="nb">install </span>textual rich psutil watchdog
+
+<span class="c"># Container issues</span>
+podman <span class="nt">--version</span>
+podman info | <span class="nb">grep </span>rootless
+</code></pre></div></div>
+
+<blockquote>
+  <p>[!NOTE]
+If you run into issues with your vivado project file formatting, first clear out all your cached files and rerun. Otherwise try pulling a copy of the pcileech repo directly and then inserting the generator output in.</p>
+</blockquote>
+
+<h2 id="-documentation">📚 Documentation</h2>
+
+<p>For detailed information, please visit our <strong><a href="https://pcileechfwgenerator.ramseymcgrath.com">Documentation Site</a></strong>:</p>
+
+<ul>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/device-cloning">Device Cloning Process</a></strong> - Complete guide to the cloning workflow</li>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/firmware-uniqueness">Firmware Uniqueness</a></strong> - How authenticity is achieved</li>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/manual-donor-dump">Manual Donor Dump</a></strong> - Step-by-step manual extraction</li>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/development">Development Setup</a></strong> - Contributing and development guide</li>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/tui-readme">TUI Documentation</a></strong> - Interactive interface guide</li>
+  <li><strong><a href="https://pcileechfwgenerator.ramseymcgrath.com/config-space-shadow">Config space info</a></strong> - Config space shadow info</li>
+</ul>
+
+<h2 id="-cleanup--safety">🧹 Cleanup &amp; Safety</h2>
+
+<ul>
+  <li><strong>Rebind donors</strong>: Use TUI/CLI to rebind donor devices to original drivers</li>
+  <li><strong>Keep firmware private</strong>: Generated firmware contains real device identifiers</li>
+  <li><strong>Use isolated build environments</strong>: Never build on production systems</li>
+  <li><strong>Container cleanup</strong>: <code class="language-plaintext highlighter-rouge">podman rmi pcileechfwgenerator:latest</code></li>
+</ul>
+
+<blockquote>
+  <p>[!IMPORTANT]
+This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.</p>
+</blockquote>
+
+<h2 id="-acknowledgments">🏆 Acknowledgments</h2>
+
+<ul>
+  <li><strong>PCILeech Community</strong>: For feedback and contributions</li>
+  <li>@Simonrak for the writemask implementation</li>
+</ul>
+
+<h2 id="-license">📄 License</h2>
+
+<p>This project is licensed under the Apache License - see the <a href="LICENSE">LICENSE</a> file for details.</p>
+
+<h2 id="️-legal-notice">⚠️ Legal Notice</h2>
+
+<p><em>AGAIN</em> This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.</p>
+
+<p><strong>Security Considerations:</strong></p>
+
+<ul>
+  <li>Never build firmware on systems used for production or sensitive operations</li>
+  <li>Use isolated build environments (Seperate dedicated hardware)</li>
+  <li>Keep generated firmware private and secure</li>
+  <li>Follow responsible disclosure practices for any security research</li>
+  <li>Use the SECURITY.md template to raise security concerns</li>
+</ul>
+
+<h2 id="️-site-navigation">🗂️ Site Navigation</h2>
+
+<ul>
+  <li>📋 <strong><a href="sitemap">Site Map</a></strong> - Complete index of all documentation pages</li>
+  <li>🔍 <strong><a href="search">Search</a></strong> - Search all documentation content</li>
+  <li>📖 <strong><a href="docs/">API Documentation</a></strong> - Auto-generated Python API reference</li>
+</ul>
+
+<hr />
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

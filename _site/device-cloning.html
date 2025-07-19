@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Device Cloning | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Device Cloning" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/device-cloning.html" />
+<meta property="og:url" content="http://localhost:4000/device-cloning.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Device Cloning" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Device Cloning","url":"http://localhost:4000/device-cloning.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">Device Cloning</h1>
+  </header>
+
+  <div class="post-content">
+    
+<h2 id="device-cloning">Device Cloning</h2>
+
+<p>The device cloning process creates an FPGA-based replica of a PCIe device through systematic hardware analysis and template generation. This section details the multi-stage process and error handling mechanisms.</p>
+
+<h3 id="prerequisites-and-system-requirements">Prerequisites and System Requirements</h3>
+
+<p>Before cloning begins, the system must meet specific requirements:</p>
+
+<ul>
+  <li><strong>IOMMU Support</strong>: Intel VT-d or AMD-Vi must be enabled in BIOS/UEFI</li>
+  <li><strong>Kernel Configuration</strong>: VFIO modules loaded (<code class="language-plaintext highlighter-rouge">vfio</code>, <code class="language-plaintext highlighter-rouge">vfio-pci</code>, <code class="language-plaintext highlighter-rouge">vfio_iommu_type1</code>)</li>
+  <li><strong>Root Privileges</strong>: Required for VFIO device binding operations</li>
+  <li><strong>Fallback Mode</strong>: For testing environments without IOMMU, use <code class="language-plaintext highlighter-rouge">iommu=pt</code> or <code class="language-plaintext highlighter-rouge">vfio.enable_unsafe_noiommu_mode=1</code></li>
+</ul>
+
+<h3 id="stage-1-vfio-device-acquisition">Stage 1: VFIO Device Acquisition</h3>
+
+<p>The generator establishes exclusive control over the target PCIe device through Linux VFIO:</p>
+
+<ol>
+  <li><strong>IOMMU Group Discovery</strong>: Identifies all devices sharing the same IOMMU group as the target BDF (e.g., <code class="language-plaintext highlighter-rouge">0000:01:00.0</code>)</li>
+  <li><strong>Driver Unbinding</strong>: Safely unbinds existing kernel drivers from all group members</li>
+  <li><strong>VFIO Binding</strong>: Rebinds devices to the <code class="language-plaintext highlighter-rouge">vfio-pci</code> driver for userspace access</li>
+  <li><strong>Handle Creation</strong>: Establishes <code class="language-plaintext highlighter-rouge">/dev/vfio/&lt;group&gt;</code> interface for safe device interaction</li>
+</ol>
+
+<p><strong>Error Handling</strong>:</p>
+
+<ul>
+  <li><strong>IOMMU Unavailable</strong>: Falls back to heuristic size estimation (requires explicit enablement)</li>
+  <li><strong>Driver Conflicts</strong>: Automatically handles in-use drivers with graceful fallback</li>
+  <li><strong>Permission Errors</strong>: Provides clear diagnostic messages for privilege escalation</li>
+</ul>
+
+<h3 id="stage-2-configuration-space-analysis">Stage 2: Configuration Space Analysis</h3>
+
+<p>The generator performs comprehensive configuration space extraction:</p>
+
+<h4 id="standard-pci-header-0x00-0xff">Standard PCI Header (0x00-0xFF)</h4>
+
+<ul>
+  <li><strong>Device Identity</strong>: Vendor ID, Device ID, Subsystem IDs, Class Code, Revision</li>
+  <li><strong>Command/Status</strong>: Capability flags, error status, device state</li>
+  <li><strong>BAR Registers</strong>: Base Address Registers 0-5 with size and type information</li>
+  <li><strong>Interrupt Configuration</strong>: Legacy INTx pin assignments</li>
+</ul>
+
+<h4 id="extended-configuration-space-0x100-0xfff">Extended Configuration Space (0x100-0xFFF)</h4>
+
+<ul>
+  <li><strong>Capability Structures</strong>: MSI/MSI-X, Power Management, PCIe-specific capabilities</li>
+  <li><strong>Vendor-Specific</strong>: Custom capability blocks preserved byte-for-byte</li>
+  <li><strong>Advanced Features</strong>: AER, VC, PASID, and other modern PCIe capabilities</li>
+</ul>
+
+<p><strong>Validation and Security</strong>:</p>
+
+<ul>
+  <li><strong>Checksum Generation</strong>: SHA-256 hash of configuration space prevents generic firmware</li>
+  <li><strong>Signature Verification</strong>: Ensures unique firmware per donor device</li>
+  <li><strong>Sanitization</strong>: Removes potentially sensitive vendor-specific data when requested</li>
+</ul>
+
+<h3 id="stage-3-bar-discovery-and-memory-mapping">Stage 3: BAR Discovery and Memory Mapping</h3>
+
+<p>Systematic analysis of Base Address Registers determines memory layout:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>For each BAR index (0-5):
+├── Issue VFIO_DEVICE_GET_REGION_INFO ioctl
+├── Extract: size, read/write permissions, mmap capability
+├── Filter: Ignore I/O ports and zero-sized regions
+├── Record: All valid MMIO BARs with metadata
+└── Select: Largest MMIO BAR as primary window
+</code></pre></div></div>
+
+<p><strong>Advanced BAR Handling</strong>:</p>
+
+<ul>
+  <li><strong>64-bit BARs</strong>: Properly handles paired 32-bit registers</li>
+  <li><strong>Prefetchable Memory</strong>: Preserves caching hints and optimization flags</li>
+  <li><strong>Size Validation</strong>: Ensures BAR sizes are power-of-2 aligned</li>
+  <li><strong>Conflict Resolution</strong>: Handles overlapping or invalid BAR configurations</li>
+</ul>
+
+<p><strong>Fallback Mechanisms</strong>:</p>
+
+<ul>
+  <li><strong>Heuristic Sizing</strong>: When VFIO fails, estimates BAR sizes from register patterns</li>
+  <li><strong>Conservative Defaults</strong>: Uses safe minimum sizes for critical BARs</li>
+  <li><strong>Manual Override</strong>: Allows explicit BAR configuration via command-line parameters</li>
+</ul>
+
+<h3 id="stage-4-interrupt-architecture-analysis">Stage 4: Interrupt Architecture Analysis</h3>
+
+<p>The generator determines optimal interrupt emulation strategy:</p>
+
+<h4 id="priority-order-highest-to-lowest">Priority Order (Highest to Lowest)</h4>
+
+<ol>
+  <li><strong>MSI-X</strong>: Multi-vector message signaled interrupts
+    <ul>
+      <li>Validates table size &gt; 0</li>
+      <li>Preserves vector count and table structure</li>
+      <li>Maps interrupt vectors to FPGA resources</li>
+    </ul>
+  </li>
+  <li><strong>MSI</strong>: Single-vector message signaled interrupts
+    <ul>
+      <li>Fallback when MSI-X unavailable</li>
+      <li>Simpler implementation with single interrupt line</li>
+    </ul>
+  </li>
+  <li><strong>Legacy INTx</strong>: Pin-based interrupts
+    <ul>
+      <li>Last resort for older devices</li>
+      <li>Emulates traditional interrupt sharing</li>
+    </ul>
+  </li>
+</ol>
+
+<p><strong>Capability Validation</strong>:</p>
+
+<ul>
+  <li><strong>Table Size Verification</strong>: Ensures MSI-X table is properly sized</li>
+  <li><strong>Vector Count Limits</strong>: Respects hardware and software constraints</li>
+  <li><strong>Interrupt Routing</strong>: Validates interrupt pin assignments</li>
+</ul>
+
+<h3 id="stage-5-template-context-generation">Stage 5: Template Context Generation</h3>
+
+<p>All extracted data is consolidated into a comprehensive template context:</p>
+
+<h4 id="core-components">Core Components</h4>
+
+<ul>
+  <li><strong>Device Identity</strong>: Complete PCI configuration header</li>
+  <li><strong>Memory Layout</strong>: BAR map with sizes, types, and access patterns</li>
+  <li><strong>Interrupt Configuration</strong>: Selected interrupt mechanism with parameters</li>
+  <li><strong>Timing Parameters</strong>: Clock domains, reset sequences, power states</li>
+  <li><strong>Feature Flags</strong>: DMA capabilities, error handling, debug interfaces</li>
+</ul>
+
+<h4 id="validation-pipeline">Validation Pipeline</h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Context Validation:
+├── Required Fields Check
+│   ├── Non-zero Vendor ID
+│   ├── Valid Device Class
+│   └── Usable MMIO BAR present
+├── Consistency Verification
+│   ├── BAR size alignment
+│   ├── Capability chain integrity
+│   └── Interrupt configuration validity
+└── Security Validation
+    ├── Signature uniqueness
+    ├── No default/generic patterns
+    └── Sanitized vendor data
+</code></pre></div></div>
+
+<p><strong>Error Recovery</strong>:</p>
+
+<ul>
+  <li><strong>Missing BARs</strong>: Provides synthetic minimal BAR configuration</li>
+  <li><strong>Invalid Capabilities</strong>: Gracefully degrades to simpler interrupt modes</li>
+  <li><strong>Corrupted Data</strong>: Attempts repair or fails with detailed diagnostics</li>
+</ul>
+
+<h3 id="stage-6-firmware-generation">Stage 6: Firmware Generation</h3>
+
+<p>The validated context drives the Jinja2/SystemVerilog template engine:</p>
+
+<h4 id="output-artifacts">Output Artifacts</h4>
+
+<ul>
+  <li><strong>FPGA Bitstream</strong>: Device-specific <code class="language-plaintext highlighter-rouge">.bit</code> or <code class="language-plaintext highlighter-rouge">.bin</code> file</li>
+  <li><strong>Configuration Headers</strong>: C/C++ headers for host software integration</li>
+  <li><strong>JSON Metadata</strong>: Machine-readable device description</li>
+  <li><strong>Build Reports</strong>: Synthesis timing, resource utilization, verification results</li>
+</ul>
+
+<h4 id="quality-assurance">Quality Assurance</h4>
+
+<ul>
+  <li><strong>Template Validation</strong>: Ensures generated Verilog is syntactically correct</li>
+  <li><strong>Resource Estimation</strong>: Predicts FPGA utilization before synthesis</li>
+  <li><strong>Timing Analysis</strong>: Validates clock domain crossings and setup/hold times</li>
+</ul>
+
+<h3 id="quick-start-command">Quick Start Command</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable IOMMU and run generator</span>
+<span class="nb">sudo </span>python3 generate.py build <span class="nt">--donor</span> 0000:01:00.0 <span class="nt">--board</span> pcileech_35t325_x4
+</code></pre></div></div>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

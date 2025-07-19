@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Supported Devices | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Supported Devices" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/supported-devices.html" />
+<meta property="og:url" content="http://localhost:4000/supported-devices.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Supported Devices" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Supported Devices","url":"http://localhost:4000/supported-devices.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">Supported Devices</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="supported-devices">Supported Devices</h1>
+
+<p>PCILeech Firmware Generator supports a wide range of PCIe devices as donors for firmware generation. This page provides detailed information about device compatibility, requirements, and recommendations.</p>
+
+<h2 id="device-categories">Device Categories</h2>
+
+<h3 id="network-interface-cards-nics">Network Interface Cards (NICs)</h3>
+
+<p>Network cards are excellent donors due to their simple PCIe implementation and widespread availability.</p>
+
+<p><strong>Recommended Models:</strong></p>
+
+<ul>
+  <li><strong>Realtek RTL8111/8168/8411</strong> - Common Gigabit Ethernet controllers</li>
+  <li><strong>Intel 82574L/82579LM</strong> - Enterprise-grade NICs with good documentation</li>
+  <li><strong>Broadcom NetXtreme</strong> - High-performance network controllers</li>
+</ul>
+
+<h3 id="audio-devices">Audio Devices</h3>
+
+<p>Sound cards and audio interfaces provide good donor material with well-documented PCIe implementations.</p>
+
+<p><strong>Recommended Models:</strong></p>
+
+<ul>
+  <li><strong>Creative Sound Blaster</strong> series - Professional audio cards</li>
+  <li><strong>ASUS Xonar</strong> series - High-quality audio interfaces</li>
+  <li><strong>M-Audio</strong> interfaces - Professional audio equipment</li>
+  <li><strong>Generic USB audio controllers</strong> - Simple PCIe-to-USB bridges</li>
+</ul>
+
+<h3 id="capture-cards">Capture Cards</h3>
+
+<p>Video capture devices offer diverse PCIe configurations and are readily available.</p>
+
+<p><strong>Recommended Models:</strong></p>
+
+<ul>
+  <li><strong>Blackmagic DeckLink</strong> series - Professional video capture</li>
+  <li><strong>AVerMedia Live Gamer</strong> series - Gaming capture cards</li>
+  <li><strong>Elgato Capture Cards</strong> - Streaming-focused devices</li>
+  <li><strong>Hauppauge WinTV</strong> series - TV tuner cards</li>
+</ul>
+
+<h3 id="other-suitable-devices">Other Suitable Devices</h3>
+
+<p>Various other PCIe devices can serve as effective donors.</p>
+
+<p><strong>Additional Categories:</strong></p>
+
+<ul>
+  <li><strong>SATA/SAS Controllers</strong> - Storage interface cards</li>
+  <li><strong>USB 3.0/3.1 Controllers</strong> - PCIe-to-USB expansion cards</li>
+  <li><strong>Serial/Parallel Port Cards</strong> - Legacy interface adapters</li>
+  <li><strong>GPIO/Digital I/O Cards</strong> - Industrial control interfaces</li>
+</ul>
+
+<h2 id="device-requirements">Device Requirements</h2>
+
+<h3 id="hardware-requirements">Hardware Requirements</h3>
+
+<ul>
+  <li><strong>PCIe Interface</strong> - Must be a standard PCIe device (not PCIe-to-PCI bridges)</li>
+  <li><strong>Standard Form Factor</strong> - x1, x4, x8, or x16 slots supported</li>
+  <li><strong>Accessible Configuration Space</strong> - Device must respond to PCIe configuration reads</li>
+  <li><strong>VFIO Compatible</strong> - Must be bindable to VFIO driver</li>
+</ul>
+
+<h3 id="software-requirements">Software Requirements</h3>
+
+<ul>
+  <li><strong>Linux IOMMU Support</strong> - Device must be in a separate IOMMU group</li>
+  <li><strong>VFIO Driver Binding</strong> - Must support vfio-pci driver binding</li>
+  <li><strong>Configuration Space Access</strong> - Full 4KB configuration space must be readable</li>
+</ul>
+
+<h2 id="device-selection-guidelines">Device Selection Guidelines</h2>
+
+<h3 id="ideal-donor-characteristics">Ideal Donor Characteristics</h3>
+
+<ol>
+  <li><strong>Simple Implementation</strong> - Devices with straightforward PCIe logic</li>
+  <li><strong>Good Documentation</strong> - Well-documented devices are easier to analyze</li>
+  <li><strong>Standard Compliance</strong> - Devices that follow PCIe specifications closely</li>
+  <li><strong>Stable Operation</strong> - Devices that don’t require complex initialization</li>
+</ol>
+
+<h3 id="devices-to-avoid">Devices to Avoid</h3>
+
+<ul>
+  <li><strong>On-board Devices</strong> - Integrated audio, network, or storage controllers</li>
+  <li><strong>Critical System Components</strong> - Graphics cards, primary storage controllers</li>
+  <li><strong>Complex Multi-function Devices</strong> - Devices with multiple PCIe functions</li>
+  <li><strong>Proprietary Implementations</strong> - Devices with non-standard PCIe behavior</li>
+</ul>
+
+<h2 id="compatibility-testing">Compatibility Testing</h2>
+
+<h3 id="pre-selection-verification">Pre-selection Verification</h3>
+
+<p>Before using a device as a donor, verify compatibility:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check device PCIe configuration</span>
+lspci <span class="nt">-vvv</span> <span class="nt">-s</span> <span class="o">[</span>device_id]
+
+<span class="c"># Verify IOMMU group isolation</span>
+./vfio_check.py <span class="o">[</span>device_id]
+
+<span class="c"># Test VFIO binding</span>
+<span class="nb">sudo</span> ./force_vfio_binds.sh <span class="o">[</span>device_id]
+</code></pre></div></div>
+
+<h3 id="configuration-analysis">Configuration Analysis</h3>
+
+<p>The generator analyzes several key aspects of donor devices:</p>
+
+<ul>
+  <li><strong>Vendor/Device ID</strong> - Unique device identification</li>
+  <li><strong>Configuration Space Layout</strong> - Register organization and capabilities</li>
+  <li><strong>BAR Configuration</strong> - Memory and I/O resource requirements</li>
+  <li><strong>MSI/MSI-X Support</strong> - Interrupt handling capabilities</li>
+  <li><strong>Power Management</strong> - PCIe power states and control</li>
+</ul>
+
+<h2 id="target-fpga-boards">Target FPGA Boards</h2>
+
+<h3 id="supported-pcileech-boards">Supported PCILeech Boards</h3>
+
+<p>The generator supports firmware generation for these PCILeech-compatible boards:</p>
+
+<ul>
+  <li><strong>pcileech_75t484_x1</strong> - Xilinx Spartan-7 XC7S75T, x1 PCIe</li>
+  <li><strong>pcileech_35t325_x4</strong> - Xilinx Spartan-6 XC6SLX25, x4 PCIe</li>
+  <li><strong>pcileech_100t484_x1</strong> - Xilinx Spartan-7 XC7S100T, x1 PCIe</li>
+</ul>
+
+<h3 id="board-specific-considerations">Board-specific Considerations</h3>
+
+<p>Each target board has specific resource constraints:</p>
+
+<ul>
+  <li><strong>Logic Resources</strong> - LUT and flip-flop availability</li>
+  <li><strong>Memory Resources</strong> - Block RAM for configuration space shadow</li>
+  <li><strong>I/O Resources</strong> - PCIe transceivers and general-purpose I/O</li>
+  <li><strong>Clock Resources</strong> - PCIe clock domains and user clocks</li>
+</ul>
+
+<h2 id="troubleshooting-device-issues">Troubleshooting Device Issues</h2>
+
+<h3 id="common-problems">Common Problems</h3>
+
+<ol>
+  <li><strong>VFIO Binding Failures</strong> - Device in use by another driver</li>
+  <li><strong>IOMMU Group Conflicts</strong> - Device shares IOMMU group with critical components</li>
+  <li><strong>Configuration Space Errors</strong> - Incomplete or corrupted configuration data</li>
+  <li><strong>Power Management Issues</strong> - Device doesn’t respond after power state changes</li>
+</ol>
+
+<h3 id="diagnostic-tools">Diagnostic Tools</h3>
+
+<p>Use the included tools to diagnose device issues:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Comprehensive device analysis</span>
+./vfio_setup_checker.py <span class="nt">--device</span> <span class="o">[</span>device_id] <span class="nt">--verbose</span>
+
+<span class="c"># Interactive troubleshooting</span>
+./vfio_setup_checker.py <span class="nt">--interactive</span>
+
+<span class="c"># Generate automated fix scripts</span>
+./vfio_setup_checker.py <span class="nt">--generate-script</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="security-considerations">Security Considerations</h3>
+
+<ul>
+  <li><strong>Isolated Testing</strong> - Use dedicated hardware for donor analysis</li>
+  <li><strong>Firmware Privacy</strong> - Keep generated firmware private and secure</li>
+  <li><strong>Clean Environment</strong> - Use isolated build environments</li>
+</ul>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+
+<ul>
+  <li><strong>Device Selection</strong> - Choose devices with appropriate complexity</li>
+  <li><strong>Resource Planning</strong> - Consider target board resource constraints</li>
+  <li><strong>Testing Methodology</strong> - Implement comprehensive testing procedures</li>
+</ul>
+
+<h3 id="development-workflow">Development Workflow</h3>
+
+<ol>
+  <li><strong>Device Identification</strong> - Catalog available donor devices</li>
+  <li><strong>Compatibility Testing</strong> - Verify VFIO and IOMMU compatibility</li>
+  <li><strong>Configuration Analysis</strong> - Extract and analyze device configuration</li>
+  <li><strong>Firmware Generation</strong> - Generate custom firmware for target board</li>
+  <li><strong>Validation Testing</strong> - Test generated firmware functionality</li>
+</ol>
+
+<h2 id="contributing-device-support">Contributing Device Support</h2>
+
+<h3 id="adding-new-devices">Adding New Devices</h3>
+
+<p>To add support for new device types:</p>
+
+<ol>
+  <li><strong>Test Compatibility</strong> - Verify device works with existing tools</li>
+  <li><strong>Document Configuration</strong> - Record device-specific requirements</li>
+  <li><strong>Submit Examples</strong> - Provide working configuration examples</li>
+  <li><strong>Update Documentation</strong> - Add device to compatibility lists</li>
+</ol>
+
+<h3 id="reporting-issues">Reporting Issues</h3>
+
+<p>When reporting device compatibility issues:</p>
+
+<ol>
+  <li><strong>Provide Device Information</strong> - Include lspci output and device details</li>
+  <li><strong>Include Error Messages</strong> - Capture complete error logs</li>
+  <li><strong>Describe Environment</strong> - Document system configuration</li>
+  <li><strong>Test Isolation</strong> - Verify issue isn’t system-specific</li>
+</ol>
+
+<hr />
+
+<p>For more information about device selection and configuration, see the <a href="device-cloning">Device Cloning Guide</a> and <a href="development">Development Setup</a> documentation.</p>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

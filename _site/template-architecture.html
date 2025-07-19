@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>PCIe Capabilities and Template Architecture | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="PCIe Capabilities and Template Architecture" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/template-architecture.html" />
+<meta property="og:url" content="http://localhost:4000/template-architecture.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="PCIe Capabilities and Template Architecture" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"PCIe Capabilities and Template Architecture","url":"http://localhost:4000/template-architecture.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">PCIe Capabilities and Template Architecture</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="pcie-capabilities-and-template-architecture">PCIe Capabilities and Template Architecture</h1>
+
+<p>This document describes the PCIe capabilities handled by the PCILeech Firmware Generator and provides detailed information about how the SystemVerilog templates are created, filled, and integrated into the final firmware.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The PCILeech Firmware Generator creates authentic PCIe device firmware by analyzing real donor hardware and generating comprehensive SystemVerilog implementations. The system handles multiple PCIe capabilities and features through a sophisticated template-based architecture.</p>
+
+<p>The generation process involves three main phases:</p>
+
+<ol>
+  <li><strong>Device Analysis</strong>: Extract configuration space, capabilities, and behavior from donor devices</li>
+  <li><strong>Context Building</strong>: Assemble comprehensive template context from all data sources</li>
+  <li><strong>Template Rendering</strong>: Generate SystemVerilog modules using Jinja2 templates</li>
+</ol>
+
+<h2 id="supported-pcie-capabilities">Supported PCIe Capabilities</h2>
+
+<h3 id="1-configuration-space-shadow-4kb-bram">1. Configuration Space Shadow (4KB BRAM)</h3>
+
+<p>The configuration space shadow is the foundation of PCIe device emulation, providing complete 4KB configuration space emulation in FPGA block RAM.</p>
+
+<p><strong>Key Features:</strong></p>
+
+<ul>
+  <li><strong>Full 4KB Configuration Space</strong>: Complete emulation of standard and extended configuration space</li>
+  <li><strong>Dual-Port Access</strong>: Simultaneous read/write operations for performance</li>
+  <li><strong>Overlay RAM</strong>: Dedicated storage for writable fields (Command/Status registers)</li>
+  <li><strong>Automatic Initialization</strong>: Populated from real donor device data or synthetic generation</li>
+  <li><strong>Hardware Integration</strong>: Seamless integration with PCIe core configuration interface</li>
+</ul>
+
+<p><strong>Implementation Details:</strong></p>
+
+<ul>
+  <li>Main configuration space stored in BRAM (<code class="language-plaintext highlighter-rouge">config_space_ram[0:1023]</code>)</li>
+  <li>Overlay RAM for writable fields (<code class="language-plaintext highlighter-rouge">overlay_ram[0:OVERLAY_ENTRIES-1]</code>)</li>
+  <li>State machine handles PCIe configuration TLP processing</li>
+  <li>Automatic overlay mapping detects writable registers from PCIe specifications</li>
+</ul>
+
+<pre><code class="language-systemverilog">// Configuration Space Shadow parameters
+parameter CONFIG_SPACE_SIZE = 4096;
+parameter OVERLAY_ENTRIES = 64;
+parameter DUAL_PORT = 1;
+</code></pre>
+
+<h3 id="2-msi-x-message-signaled-interrupts-extended">2. MSI-X (Message Signaled Interrupts Extended)</h3>
+
+<p>MSI-X provides scalable interrupt handling with up to 2048 interrupt vectors, essential for modern PCIe devices.</p>
+
+<p><strong>MSI-X Table Structure:</strong></p>
+
+<ul>
+  <li><strong>Message Address Lower (32-bit)</strong>: Target memory address for interrupt message</li>
+  <li><strong>Message Address Upper (32-bit)</strong>: Upper 32 bits for 64-bit addressing</li>
+  <li><strong>Message Data (32-bit)</strong>: Interrupt payload data</li>
+  <li><strong>Vector Control (32-bit)</strong>: Mask bit and reserved fields</li>
+</ul>
+
+<p><strong>Features Implemented:</strong></p>
+
+<ul>
+  <li><strong>Parameterized Table Size</strong>: 1-2048 vectors based on donor device</li>
+  <li><strong>BRAM-based Table Storage</strong>: Efficient memory usage with block RAM attributes</li>
+  <li><strong>Pending Bit Array (PBA)</strong>: Tracks pending interrupts for masked vectors</li>
+  <li><strong>Interrupt Delivery Logic</strong>: Validates vectors and delivers interrupts</li>
+  <li><strong>Byte-Enable Support</strong>: Granular write access to table entries</li>
+</ul>
+
+<p><strong>Template Integration:</strong></p>
+
+<pre><code class="language-systemverilog">// MSI-X Table parameters derived from donor device
+parameter NUM_MSIX = ;
+parameter MSIX_TABLE_BIR = ;
+parameter MSIX_TABLE_OFFSET = ;
+parameter MSIX_PBA_BIR = ;
+parameter MSIX_PBA_OFFSET = ;
+</code></pre>
+
+<h3 id="3-power-management-capability">3. Power Management Capability</h3>
+
+<p>Power management enables PCIe devices to transition between different power states (D0, D1, D2, D3hot, D3cold).</p>
+
+<p><strong>Power States Supported:</strong></p>
+
+<ul>
+  <li><strong>D0</strong>: Fully operational state</li>
+  <li><strong>D3hot</strong>: Low power state with auxiliary power</li>
+  <li><strong>D3cold</strong>: No power state (requires external power cycling)</li>
+</ul>
+
+<p><strong>Implementation Features:</strong></p>
+
+<ul>
+  <li><strong>PMCSR Register</strong>: Power Management Control and Status Register</li>
+  <li><strong>PME Support</strong>: Power Management Event signaling</li>
+  <li><strong>State Transitions</strong>: Automatic timeout-based transitions</li>
+  <li><strong>Minimal Resource Usage</strong>: &lt;40 LUT, &lt;50 FF implementation</li>
+</ul>
+
+<h3 id="4-pcie-express-capability">4. PCIe Express Capability</h3>
+
+<p>The PCIe Express capability provides device-specific PCIe functionality and advanced features.</p>
+
+<p><strong>Key Registers:</strong></p>
+
+<ul>
+  <li><strong>PCIe Capabilities Register</strong>: Device type and supported features</li>
+  <li><strong>Device Control/Status</strong>: Device-specific control and status bits</li>
+  <li><strong>Link Control/Status</strong>: Link training and status information</li>
+  <li><strong>Device Capabilities 2</strong>: Advanced device capabilities</li>
+</ul>
+
+<p><strong>Template Variables:</strong></p>
+
+<ul>
+  <li>Device-specific capability values extracted from donor device</li>
+  <li>Link width and speed configuration</li>
+  <li>ASPM (Active State Power Management) settings</li>
+  <li>Error reporting capabilities</li>
+</ul>
+
+<h3 id="5-base-address-registers-bars">5. Base Address Registers (BARs)</h3>
+
+<p>BAR implementation provides memory-mapped I/O regions for device communication.</p>
+
+<p><strong>BAR Types Supported:</strong></p>
+
+<ul>
+  <li><strong>Memory BARs</strong>: 32-bit and 64-bit memory regions</li>
+  <li><strong>I/O BARs</strong>: I/O port regions (legacy support)</li>
+  <li><strong>Prefetchable Memory</strong>: Optimized for bulk data transfer</li>
+</ul>
+
+<p><strong>Features:</strong></p>
+
+<ul>
+  <li><strong>Parameterized Sizes</strong>: 4KB to 4GB regions</li>
+  <li><strong>Address Decoding</strong>: Automatic address range validation</li>
+  <li><strong>Regional Memory Access</strong>: Subdivided into functional regions</li>
+  <li><strong>Burst Support</strong>: Optimized for high-throughput operations</li>
+</ul>
+
+<h2 id="template-architecture">Template Architecture</h2>
+
+<p>The PCILeech template system uses a sophisticated multi-phase approach to generate authentic PCIe device firmware.</p>
+
+<h3 id="1-data-collection-phase">1. Data Collection Phase</h3>
+
+<h4 id="device-binding-and-analysis">Device Binding and Analysis</h4>
+
+<p>The generation process begins with comprehensive device analysis:</p>
+
+<ol>
+  <li><strong>VFIO Driver Binding</strong>: Bind target device to VFIO driver for direct access</li>
+  <li><strong>Configuration Space Reading</strong>: Extract complete 4KB configuration space</li>
+  <li><strong>Capability Walking</strong>: Parse and identify all PCIe capabilities</li>
+  <li><strong>BAR Size Detection</strong>: Determine BAR sizes through write-back testing</li>
+  <li><strong>MSI-X Table Analysis</strong>: Extract interrupt table configuration if present</li>
+</ol>
+
+<h4 id="manufacturing-variance-application">Manufacturing Variance Application</h4>
+
+<p>To make generated firmware more realistic, the system applies manufacturing variance:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Manufacturing variance parameters
+</span><span class="k">class</span> <span class="nc">VarianceParameters</span><span class="p">:</span>
+    <span class="n">clock_jitter_percent_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span>
+    <span class="n">clock_jitter_percent_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span>
+    <span class="n">register_timing_jitter_ns_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span>
+    <span class="n">register_timing_jitter_ns_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">50.0</span>
+    <span class="n">process_variation_percent_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span>
+    <span class="n">process_variation_percent_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">15.0</span>
+</code></pre></div></div>
+
+<h3 id="2-context-building-phase">2. Context Building Phase</h3>
+
+<h4 id="pcileechcontextbuilder-integration">PCILeechContextBuilder Integration</h4>
+
+<p>The <code class="language-plaintext highlighter-rouge">PCILeechContextBuilder</code> class assembles comprehensive template context from all data sources:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">PCILeechContextBuilder</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">build_context</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">behavior_profile</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BehaviorProfile</span><span class="p">],</span>
+        <span class="n">config_space_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">msix_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+        <span class="n">interrupt_strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">"intx"</span><span class="p">,</span>
+        <span class="n">interrupt_vectors</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</code></pre></div></div>
+
+<h4 id="context-assembly-process">Context Assembly Process</h4>
+
+<ol>
+  <li><strong>Device Identifiers</strong>: Extract vendor/device IDs, class codes, revision</li>
+  <li><strong>Configuration Space Context</strong>: Process 4KB configuration space data</li>
+  <li><strong>MSI-X Context</strong>: Parse MSI-X table and PBA information</li>
+  <li><strong>BAR Configuration</strong>: Analyze BAR sizes, types, and memory regions</li>
+  <li><strong>Timing Configuration</strong>: Apply manufacturing variance and timing parameters</li>
+  <li><strong>Overlay Mapping</strong>: Generate writable register overlay mappings</li>
+</ol>
+
+<h3 id="3-template-processing-pipeline">3. Template Processing Pipeline</h3>
+
+<h4 id="phase-1-analysis-and-extraction">Phase 1: Analysis and Extraction</h4>
+
+<ol>
+  <li><strong>Device Binding</strong>: Bind donor device to VFIO driver</li>
+  <li><strong>Configuration Space Reading</strong>: Extract 4KB configuration space</li>
+  <li><strong>Capability Walking</strong>: Parse and analyze PCIe capabilities</li>
+  <li><strong>BAR Analysis</strong>: Determine BAR sizes and types</li>
+  <li><strong>MSI-X Table Reading</strong>: Extract MSI-X table data if present</li>
+</ol>
+
+<h4 id="phase-2-context-generation">Phase 2: Context Generation</h4>
+
+<ol>
+  <li><strong>Device Profile Creation</strong>: Generate device configuration structure</li>
+  <li><strong>Capability Mapping</strong>: Map capabilities to template parameters</li>
+  <li><strong>Overlay Mapping</strong>: Determine writable register overlays</li>
+  <li><strong>Manufacturing Variance</strong>: Apply deterministic timing variations</li>
+  <li><strong>Template Context Assembly</strong>: Combine all data sources</li>
+</ol>
+
+<h4 id="phase-3-template-rendering">Phase 3: Template Rendering</h4>
+
+<ol>
+  <li><strong>Template Selection</strong>: Choose appropriate templates based on device type</li>
+  <li><strong>Context Injection</strong>: Apply template context to Jinja2 templates</li>
+  <li><strong>Code Generation</strong>: Generate SystemVerilog modules</li>
+  <li><strong>File Integration</strong>: Create project files and build scripts</li>
+</ol>
+
+<h3 id="4-overlay-mapping-system">4. Overlay Mapping System</h3>
+
+<p>The overlay mapping system automatically detects writable registers in PCIe configuration space:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">OverlayMapper</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">detect_overlay_registers</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">config_space</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">capabilities</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+        <span class="s">"""
+        Detect registers that need overlay RAM for writable fields.
+        Returns list of (offset, mask) tuples for overlay entries.
+        """</span>
+</code></pre></div></div>
+
+<p><strong>Overlay Detection Process:</strong></p>
+
+<ol>
+  <li><strong>Standard Register Analysis</strong>: Check Command/Status, BAR, and capability registers</li>
+  <li><strong>Capability-Specific Overlays</strong>: MSI-X, Power Management, PCIe Express registers</li>
+  <li><strong>Mask Generation</strong>: Create bit-level masks for writable fields</li>
+  <li><strong>Validation</strong>: Ensure overlay mappings are consistent with PCIe specifications</li>
+</ol>
+
+<h2 id="systemverilog-module-hierarchy">SystemVerilog Module Hierarchy</h2>
+
+<h3 id="1-top-level-module">1. Top-Level Module</h3>
+
+<ul>
+  <li><strong>pcileech_top</strong>: Main wrapper module</li>
+  <li><strong>Responsibilities</strong>: Clock/reset distribution, PCIe interface, module instantiation</li>
+  <li><strong>Template</strong>: <code class="language-plaintext highlighter-rouge">top_level_wrapper.sv.j2</code></li>
+</ul>
+
+<h3 id="2-core-controller">2. Core Controller</h3>
+
+<ul>
+  <li><strong>pcileech_tlps128_bar_controller</strong>: Main device controller</li>
+  <li><strong>Responsibilities</strong>: TLP processing, BAR management, capability coordination</li>
+  <li><strong>Template</strong>: <code class="language-plaintext highlighter-rouge">pcileech_tlps128_bar_controller.sv.j2</code></li>
+</ul>
+
+<h3 id="3-configuration-space-shadow">3. Configuration Space Shadow</h3>
+
+<ul>
+  <li><strong>pcileech_tlps128_cfgspace_shadow</strong>: Configuration space implementation</li>
+  <li><strong>Responsibilities</strong>: Config space access, overlay management, capability registers</li>
+  <li><strong>Template</strong>: <code class="language-plaintext highlighter-rouge">cfg_shadow.sv.j2</code></li>
+</ul>
+
+<h3 id="4-msi-x-subsystem">4. MSI-X Subsystem</h3>
+
+<ul>
+  <li><strong>msix_table</strong>: MSI-X table and PBA implementation</li>
+  <li><strong>Responsibilities</strong>: Interrupt table management, vector delivery, masking</li>
+  <li><strong>Template</strong>: <code class="language-plaintext highlighter-rouge">msix_table.sv.j2</code></li>
+</ul>
+
+<h3 id="5-power-management">5. Power Management</h3>
+
+<ul>
+  <li><strong>pmcsr_stub</strong>: Power management implementation</li>
+  <li><strong>Responsibilities</strong>: D-state transitions, PME handling, power control</li>
+  <li><strong>Template</strong>: <code class="language-plaintext highlighter-rouge">pmcsr_stub.sv.j2</code></li>
+</ul>
+
+<h3 id="6-memory-regions">6. Memory Regions</h3>
+
+<ul>
+  <li><strong>region_device_ctrl</strong>: Device control region</li>
+  <li><strong>region_data_buffer</strong>: Data buffer region</li>
+  <li><strong>region_custom_pio</strong>: Custom PIO region</li>
+  <li><strong>Templates</strong>: Various region-specific templates</li>
+</ul>
+
+<h2 id="configuration-space-structure">Configuration Space Structure</h2>
+
+<h3 id="standard-configuration-space-0x00-0xff">Standard Configuration Space (0x00-0xFF)</h3>
+
+<ul>
+  <li><strong>0x00-0x03</strong>: Vendor ID / Device ID</li>
+  <li><strong>0x04-0x07</strong>: Command / Status</li>
+  <li><strong>0x08-0x0B</strong>: Class Code / Revision ID</li>
+  <li><strong>0x0C-0x0F</strong>: Cache Line Size / Latency Timer / Header Type / BIST</li>
+  <li><strong>0x10-0x27</strong>: Base Address Registers (BARs 0-5)</li>
+  <li><strong>0x28-0x2B</strong>: Cardbus CIS Pointer</li>
+  <li><strong>0x2C-0x2F</strong>: Subsystem Vendor ID / Subsystem ID</li>
+  <li><strong>0x30-0x33</strong>: Expansion ROM Base Address</li>
+  <li><strong>0x34-0x3B</strong>: Capabilities Pointer / Reserved</li>
+  <li><strong>0x3C-0x3F</strong>: Interrupt Line / Pin / Min_Gnt / Max_Lat</li>
+</ul>
+
+<h3 id="capability-structures-0x40-0xff">Capability Structures (0x40-0xFF)</h3>
+
+<ul>
+  <li><strong>0x40-0x47</strong>: Power Management Capability</li>
+  <li><strong>0x48-0x4F</strong>: MSI Capability (if not using MSI-X)</li>
+  <li><strong>0x50-0x5B</strong>: MSI-X Capability (if supported)</li>
+  <li><strong>0x60-0x9F</strong>: PCIe Express Capability</li>
+</ul>
+
+<h3 id="extended-configuration-space-0x100-0xfff">Extended Configuration Space (0x100-0xFFF)</h3>
+
+<ul>
+  <li><strong>0x100-0x2FF</strong>: MSI-X Table (if supported)</li>
+  <li><strong>0x300-0x3FF</strong>: MSI-X PBA (if supported)</li>
+  <li><strong>0x400-0xFFF</strong>: Extended capabilities and vendor-specific regions</li>
+</ul>
+
+<h2 id="memory-organization">Memory Organization</h2>
+
+<h3 id="bar-memory-layout">BAR Memory Layout</h3>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>BAR0 Memory Map (example):
+0x0000-0x00FF: Device Control Region
+0x0100-0x01FF: Status Registers
+0x0200-0x03FF: Data Buffer
+0x0400-0x0FFF: Custom PIO Region
+0x1000-0x1FFF: MSI-X Table (if applicable)
+0x2000-0x2FFF: MSI-X PBA (if applicable)
+</code></pre></div></div>
+
+<h3 id="bram-allocation">BRAM Allocation</h3>
+
+<ul>
+  <li><strong>Configuration Space</strong>: 4KB block RAM for complete config space</li>
+  <li><strong>Overlay RAM</strong>: Variable size based on writable register count</li>
+  <li><strong>MSI-X Table</strong>: Sized based on interrupt vector count</li>
+  <li><strong>Data Buffers</strong>: Parameterized based on device requirements</li>
+</ul>
+
+<h2 id="build-integration">Build Integration</h2>
+
+<h3 id="1-project-file-generation">1. Project File Generation</h3>
+
+<p>The template system generates complete Vivado project files:</p>
+
+<ul>
+  <li><strong>TCL Scripts</strong>: Project creation and configuration</li>
+  <li><strong>Constraint Files</strong>: Timing and placement constraints</li>
+  <li><strong>Memory Initialization</strong>: Configuration space and MSI-X table data</li>
+</ul>
+
+<h3 id="2-synthesis-optimization">2. Synthesis Optimization</h3>
+
+<p>Templates include synthesis-specific optimizations:</p>
+
+<ul>
+  <li><strong>RAM Style Attributes</strong>: Force block RAM inference</li>
+  <li><strong>Timing Constraints</strong>: Critical path optimization</li>
+  <li><strong>Resource Sharing</strong>: Efficient multiplexer generation</li>
+</ul>
+
+<h3 id="3-simulation-support">3. Simulation Support</h3>
+
+<p>Generated code includes simulation features:</p>
+
+<ul>
+  <li><strong>Testbench Integration</strong>: Automatic test pattern generation</li>
+  <li><strong>Debug Outputs</strong>: Comprehensive status and debug signals</li>
+  <li><strong>Assertion Checking</strong>: SystemVerilog assertions for verification</li>
+</ul>
+
+<h2 id="manufacturing-variance">Manufacturing Variance</h2>
+
+<h3 id="deterministic-variance-application">Deterministic Variance Application</h3>
+
+<p>The system applies realistic manufacturing variance to make generated firmware less detectable:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ManufacturingVarianceSimulator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">apply_timing_variance</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">base_timing</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">variance_percent</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="s">"""Apply deterministic timing variance based on device characteristics."""</span>
+</code></pre></div></div>
+
+<h3 id="variance-categories">Variance Categories</h3>
+
+<ol>
+  <li><strong>Clock Jitter</strong>: 2-5% variation in clock timing</li>
+  <li><strong>Register Timing</strong>: 10-50ns jitter in register access</li>
+  <li><strong>Power Noise</strong>: 1-3% supply voltage variation effects</li>
+  <li><strong>Process Variation</strong>: 5-15% parameter variation</li>
+  <li><strong>Temperature Drift</strong>: 10-100 ppm/°C timing drift</li>
+</ol>
+
+<h2 id="testing-and-validation">Testing and Validation</h2>
+
+<h3 id="template-validation">Template Validation</h3>
+
+<ol>
+  <li><strong>Syntax Checking</strong>: Validate generated SystemVerilog syntax</li>
+  <li><strong>Simulation Testing</strong>: Verify functionality with test patterns</li>
+  <li><strong>Timing Analysis</strong>: Ensure timing constraints are met</li>
+  <li><strong>Resource Utilization</strong>: Verify efficient FPGA resource usage</li>
+</ol>
+
+<h3 id="capability-testing">Capability Testing</h3>
+
+<ol>
+  <li><strong>Configuration Space Access</strong>: Test all configuration registers</li>
+  <li><strong>MSI-X Functionality</strong>: Verify interrupt table operation</li>
+  <li><strong>Power Management</strong>: Test D-state transitions</li>
+  <li><strong>BAR Access</strong>: Validate memory region access patterns</li>
+</ol>
+
+<h2 id="future-extensions">Future Extensions</h2>
+
+<h3 id="planned-capabilities">Planned Capabilities</h3>
+
+<ul>
+  <li><strong>SR-IOV</strong>: Single Root I/O Virtualization support</li>
+  <li><strong>AER</strong>: Advanced Error Reporting capability</li>
+  <li><strong>ATS</strong>: Address Translation Services</li>
+  <li><strong>ACS</strong>: Access Control Services</li>
+</ul>
+
+<h3 id="template-system-enhancements">Template System Enhancements</h3>
+
+<ul>
+  <li><strong>Multi-Function Support</strong>: Multiple PCIe functions per device</li>
+  <li><strong>Dynamic Reconfiguration</strong>: Runtime capability modification</li>
+  <li><strong>Enhanced Debugging</strong>: Improved debug and trace capabilities</li>
+  <li><strong>Performance Optimization</strong>: Advanced timing and resource optimization</li>
+</ul>
+
+<hr />
+
+<p>For more detailed information about specific capabilities, see the individual documentation pages for <a href="config-space-shadow">Configuration Space Shadow</a>, <a href="msix-implementation">MSI-X Implementation</a>, and <a href="device-cloning">Device Cloning Process</a>.</p>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

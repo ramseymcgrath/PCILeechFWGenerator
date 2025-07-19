@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>🛠️ Development Guide | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="🛠️ Development Guide" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4000/development.html" />
+<meta property="og:url" content="http://localhost:4000/development.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="🛠️ Development Guide" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"🛠️ Development Guide","url":"http://localhost:4000/development.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">🛠️ Development Guide</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="️-development-guide">🛠️ Development Guide</h1>
+
+<p><a href="https://badge.fury.io/py/pcileech-fw-generator"><img src="https://badge.fury.io/py/pcileech-fw-generator.svg" alt="PyPI version" /></a>
+<a href="https://pypi.org/project/pcileech-fw-generator/"><img src="https://img.shields.io/pypi/pyversions/pcileech-fw-generator.svg" alt="Python Support" /></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a></p>
+
+<p>This document provides instructions for setting up a development environment for the PCILeech Firmware Generator project.</p>
+
+<hr />
+
+<h2 id="-development-setup">🚀 Development Setup</h2>
+
+<p>The code needs to run on linux but can be developed anywhere with a python vers &gt;3.9</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Clone repository</span>
+git clone https://github.com/ramseymcgrath/PCILeechFWGenerator
+<span class="nb">cd </span>PCILeechFWGenerator
+
+<span class="c"># Create virtual environment</span>
+python3 <span class="nt">-m</span> venv venv
+<span class="nb">source </span>venv/bin/activate  <span class="c"># On Windows: venv\Scripts\activate</span>
+
+<span class="c"># Install development dependencies</span>
+pip <span class="nb">install</span> <span class="nt">-r</span> requirements-dev.txt
+
+<span class="c"># Install pre-commit hooks</span>
+pre-commit <span class="nb">install</span>
+
+<span class="c"># Run tests</span>
+pytest tests/
+</code></pre></div></div>
+
+<h2 id="-building-from-source">📦 Building from Source</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Build distributions</span>
+python <span class="nt">-m</span> build
+
+<span class="c"># Install locally</span>
+pip <span class="nb">install </span>dist/<span class="k">*</span>.whl
+
+</code></pre></div></div>
+
+<h2 id="unit-testing">Unit testing</h2>
+
+<p>TUI Tests are next to the code in the tui dir, app tests are in the tests/ dir.
+<code class="language-plaintext highlighter-rouge">make test</code> in the repo is the easiest way to run unit tests locally. The github action will run them in CI.</p>
+
+<h2 id="-contributing">🤝 Contributing</h2>
+
+<p>We welcome contributions! Please see <a href="../CONTRIBUTING.md"><code class="language-plaintext highlighter-rouge">CONTRIBUTING.md</code></a> for detailed guidelines.</p>
+
+<p><strong>Quick Start:</strong></p>
+<ol>
+  <li>Fork the repository</li>
+  <li>Create a feature branch (<code class="language-plaintext highlighter-rouge">git checkout -b feature/amazing-feature</code>)</li>
+  <li>Make your changes</li>
+  <li>Add tests for new functionality</li>
+  <li>Run the test suite (<code class="language-plaintext highlighter-rouge">pytest</code>)</li>
+  <li>Commit your changes (<code class="language-plaintext highlighter-rouge">git commit -m 'feat: add amazing feature'</code>)</li>
+  <li>Push to the branch (<code class="language-plaintext highlighter-rouge">git push origin feature/amazing-feature</code>)</li>
+  <li>Open a Pull Request</li>
+</ol>
+
+<h2 id="-testing">🧪 Testing</h2>
+
+<p>The project uses pytest for testing. Run the test suite with:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Run all tests</span>
+pytest
+
+<span class="c"># Run specific test file</span>
+pytest tests/test_specific_module.py
+
+<span class="c"># Run with coverage</span>
+pytest <span class="nt">--cov</span><span class="o">=</span>src tests/
+</code></pre></div></div>
+
+<h2 id="-code-style">📝 Code Style</h2>
+
+<p>This project follows these coding standards:</p>
+
+<ul>
+  <li>PEP 8 for Python code style</li>
+  <li>Black for code formatting</li>
+  <li>isort for import sorting</li>
+  <li>flake8 for linting</li>
+  <li>mypy for type checking</li>
+</ul>
+
+<p>Pre-commit hooks are configured to enforce these standards.</p>
+
+<h2 id="-device-driver-management">🔧 Device Driver Management</h2>
+
+<h3 id="vfio-pci-binding">VFIO-PCI Binding</h3>
+
+<p>The firmware generator manages PCIe device drivers during the build process. Here are some important implementation details:</p>
+
+<ul>
+  <li><strong>Driver Detection</strong>: The system checks the current driver bound to a device before attempting to bind it to vfio-pci</li>
+  <li><strong>Automatic Skip</strong>: If a device is already bound to vfio-pci, the binding process is skipped automatically</li>
+  <li><strong>Error Handling</strong>: Even if the bind command fails but the device is actually bound to vfio-pci, the system will detect this and continue</li>
+  <li><strong>Driver Restoration</strong>: After the build completes, the system attempts to restore the original driver</li>
+</ul>
+
+<p>This approach ensures smooth operation even in edge cases like:</p>
+<ul>
+  <li>Multiple consecutive builds using the same device</li>
+  <li>Manual pre-binding of devices to vfio-pci</li>
+  <li>Race conditions during driver binding</li>
+</ul>
+
+<h2 id="️-disclaimer">⚠️ Disclaimer</h2>
+
+<p>This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.</p>
+
+<hr />
+
+<p><strong>Version 0.5.0</strong> - Major release with TUI interface and professional packaging</p>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>
