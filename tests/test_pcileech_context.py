@@ -18,33 +18,28 @@ import fcntl
 import hashlib
 import os
 import struct
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from unittest.mock import Mock, MagicMock, patch, call, mock_open
+from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
 
-from src.device_clone.pcileech_context import (
-    PCILeechContextBuilder,
-    DeviceIdentifiers,
-    BarConfiguration,
-    TimingParameters,
-    ValidationLevel,
-    ContextError,
-)
+from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
+                                    VFIO_GROUP_GET_DEVICE_FD,
+                                    VFIO_REGION_INFO_FLAG_MMAP,
+                                    VFIO_REGION_INFO_FLAG_READ,
+                                    VFIO_REGION_INFO_FLAG_WRITE,
+                                    VfioRegionInfo)
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
 from src.device_clone.fallback_manager import FallbackManager
 from src.device_clone.overlay_mapper import OverlayMapper
-from src.cli.vfio_constants import (
-    VFIO_DEVICE_GET_REGION_INFO,
-    VFIO_GROUP_GET_DEVICE_FD,
-    VFIO_REGION_INFO_FLAG_MMAP,
-    VFIO_REGION_INFO_FLAG_READ,
-    VFIO_REGION_INFO_FLAG_WRITE,
-    VfioRegionInfo,
-)
+from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
+                                               DeviceIdentifiers,
+                                               PCILeechContextBuilder,
+                                               TimingParameters,
+                                               ValidationLevel)
 
 
 # Test fixtures for common data structures

@@ -18,10 +18,8 @@ from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 import pytest
 
 from src.device_clone.behavior_profiler import BehaviorProfile
-from src.device_clone.pcileech_generator import (
-    PCILeechGenerationConfig,
-    PCILeechGenerator,
-)
+from src.device_clone.pcileech_generator import (PCILeechGenerationConfig,
+                                                 PCILeechGenerator)
 from src.exceptions import PCILeechGenerationError
 from src.templating import TemplateRenderError
 

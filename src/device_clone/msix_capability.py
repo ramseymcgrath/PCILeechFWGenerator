@@ -12,15 +12,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
+    from ..templating.template_renderer import (TemplateRenderer,
+                                                TemplateRenderError)
 except ImportError:
     try:
-        from templating.template_renderer import TemplateRenderer, TemplateRenderError
+        from templating.template_renderer import (TemplateRenderer,
+                                                  TemplateRenderError)
     except ImportError:
-        from src.templating.template_renderer import (
-            TemplateRenderer,
-            TemplateRenderError,
-        )
+        from src.templating.template_renderer import (TemplateRenderer,
+                                                      TemplateRenderError)
 
 logger = logging.getLogger(__name__)
 
