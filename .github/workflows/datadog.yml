@@ -1,6 +1,8 @@
 on: [push]
 
 name: Datadog Software Composition Analysis
+permissions:
+  contents: read
 
 jobs:
   software-composition-analysis:
