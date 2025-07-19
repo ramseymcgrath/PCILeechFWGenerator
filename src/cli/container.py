@@ -14,8 +14,8 @@ from typing import List, Optional
 from log_config import get_logger
 from shell import Shell
 
-from .vfio import (VFIOBinder,  # auto‑fix & diagnostics baked in
-                   get_current_driver, restore_driver)
+from .vfio import VFIOBinder  # auto‑fix & diagnostics baked in
+from .vfio import get_current_driver, restore_driver
 
 # Import safe logging functions
 try:
@@ -83,6 +83,9 @@ class BuildConfig:
     active_interrupt_mode: str = "msi"
     active_interrupt_vector: int = 0
     active_priority: int = 15
+    # output options
+    output_template: Optional[str] = None
+    donor_template: Optional[str] = None
 
     def cmd_args(self) -> List[str]:
         """Translate config to build.py flags"""
@@ -121,6 +124,14 @@ class BuildConfig:
             args.append(f"--active-interrupt-vector {self.active_interrupt_vector}")
         if self.active_priority != 15:
             args.append(f"--active-priority {self.active_priority}")
+
+        # Add output template option
+        if self.output_template:
+            args.append(f"--output-template {self.output_template}")
+
+        # Add donor template option
+        if self.donor_template:
+            args.append(f"--donor-template {self.donor_template}")
 
         return args
 

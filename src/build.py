@@ -108,6 +108,8 @@ class BuildConfiguration:
     profile_duration: int = DEFAULT_PROFILE_DURATION
     parallel_writes: bool = True
     max_workers: int = MAX_PARALLEL_FILE_WRITES
+    output_template: Optional[str] = None
+    donor_template: Optional[str] = None
 
 
 @dataclass
@@ -662,6 +664,8 @@ class ConfigurationManager:
             enable_profiling=args.profile > 0,
             preload_msix=getattr(args, "preload_msix", True),
             profile_duration=args.profile,
+            output_template=getattr(args, "output_template", None),
+            donor_template=getattr(args, "donor_template", None),
         )
 
     def extract_device_config(
@@ -785,12 +789,15 @@ class FirmwareBuilder:
             PCILeechBuildError: If build fails
         """
         try:
-            # Step 1: Preload MSI-X data if requested
+            # Step 1: Load donor template if provided
+            donor_template = self._load_donor_template()
+
+            # Step 2: Preload MSI-X data if requested
             msix_data = self._preload_msix()
 
-            # Step 2: Generate PCILeech firmware
+            # Step 3: Generate PCILeech firmware
             self.logger.info("➤ Generating PCILeech firmware …")
-            generation_result = self._generate_firmware()
+            generation_result = self._generate_firmware(donor_template)
 
             # Step 3: Inject preloaded MSI-X data if available
             self._inject_msix(generation_result, msix_data)
@@ -809,6 +816,10 @@ class FirmwareBuilder:
 
             # Step 8: Store device configuration
             self._store_device_config(generation_result)
+
+            # Step 9: Generate donor template if requested
+            if self.config.output_template:
+                self._generate_donor_template(generation_result)
 
             # Return list of artifacts
             return self.file_manager.list_artifacts()
@@ -889,14 +900,39 @@ class FirmwareBuilder:
     # ────────────────────────────────────────────────────────────────────────
     # Private methods - build steps
     # ────────────────────────────────────────────────────────────────────────
+    def _load_donor_template(self) -> Optional[Dict[str, Any]]:
+        """Load donor template if provided."""
+        if self.config.donor_template:
+            from src.device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
+
+            self.logger.info(
+                f"Loading donor template from: {self.config.donor_template}"
+            )
+            try:
+                template = DonorInfoTemplateGenerator.load_template(
+                    self.config.donor_template
+                )
+                self.logger.info("✓ Donor template loaded successfully")
+                return template
+            except Exception as e:
+                self.logger.error(f"Failed to load donor template: {e}")
+                raise PCILeechBuildError(f"Failed to load donor template: {e}")
+        return None
+
     def _preload_msix(self) -> MSIXData:
         """Preload MSI-X data if configured."""
         if self.config.preload_msix:
             return self.msix_manager.preload_data()
         return MSIXData(preloaded=False)
 
-    def _generate_firmware(self) -> Dict[str, Any]:
-        """Generate PCILeech firmware."""
+    def _generate_firmware(
+        self, donor_template: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Generate PCILeech firmware with optional donor template."""
+        if donor_template:
+            # Pass the donor template to the generator config
+            self.gen.config.donor_template = donor_template
         return self.gen.generate_pcileech_firmware()
 
     def _inject_msix(self, result: Dict[str, Any], msix_data: MSIXData) -> None:
@@ -974,6 +1010,42 @@ class FirmwareBuilder:
 
         self._device_config = self.config_manager.extract_device_config(ctx, msix_data)
 
+    def _generate_donor_template(self, result: Dict[str, Any]) -> None:
+        """Generate and save donor info template if requested."""
+        from src.device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
+
+        # Get device info from the result
+        device_info = result.get("config_space_data", {}).get("device_info", {})
+        template_context = result.get("template_context", {})
+        device_config = template_context.get("device_config", {})
+
+        # Create a pre-filled template
+        generator = DonorInfoTemplateGenerator()
+        template = generator.generate_blank_template()
+
+        # Pre-fill with available device information
+        if device_config:
+            ident = template["device_info"]["identification"]
+            ident["vendor_id"] = device_config.get("vendor_id")
+            ident["device_id"] = device_config.get("device_id")
+            ident["subsystem_vendor_id"] = device_config.get("subsystem_vendor_id")
+            ident["subsystem_device_id"] = device_config.get("subsystem_device_id")
+            ident["class_code"] = device_config.get("class_code")
+            ident["revision_id"] = device_config.get("revision_id")
+
+        # Add BDF if available
+        template["metadata"]["device_bdf"] = self.config.bdf
+
+        # Save the template
+        if self.config.output_template:
+            output_path = Path(self.config.output_template)
+            if not output_path.is_absolute():
+                output_path = self.config.output_dir / output_path
+
+            generator.save_template_dict(template, output_path, pretty=True)
+            self.logger.info(f"  • Generated donor info template → {output_path.name}")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CLI Functions
@@ -1038,6 +1110,14 @@ Examples:
         dest="preload_msix",
         default=True,
         help="Disable preloading of MSI-X data before VFIO binding",
+    )
+    parser.add_argument(
+        "--output-template",
+        help="Output donor info JSON template alongside build artifacts",
+    )
+    parser.add_argument(
+        "--donor-template",
+        help="Use donor info JSON template to override discovered values",
     )
 
     return parser.parse_args(argv)

@@ -557,6 +557,11 @@ class PCILeechTUI(App):
                         id="enable-donor-dump",
                         variant="success",
                     )
+                    yield Button(
+                        "📝 Generate Donor Template",
+                        id="generate-donor-template",
+                        variant="primary",
+                    )
                     yield Button("⚙️ Advanced Settings", id="advanced-settings")
                     yield Button("📖 Documentation", id="documentation")
 
@@ -796,6 +801,9 @@ class PCILeechTUI(App):
         elif button_id == "enable-donor-dump":
             await self._toggle_donor_dump()
 
+        elif button_id == "generate-donor-template":
+            await self._generate_donor_template()
+
         elif button_id == "documentation":
             self.notify("Opening documentation...", severity="info")
 
@@ -934,6 +942,31 @@ class PCILeechTUI(App):
         except Exception as e:
             self.notify(f"Failed to open confirmation dialog: {e}", severity="error")
             return False
+
+    async def _generate_donor_template(self) -> None:
+        """Generate a donor info template file"""
+        try:
+            from pathlib import Path
+
+            from ..device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
+
+            # Default output path
+            output_path = Path("donor_info_template.json")
+
+            # Generate the template
+            DonorInfoTemplateGenerator.save_template(output_path, pretty=True)
+
+            self.notify(
+                f"✓ Donor info template saved to: {output_path}", severity="success"
+            )
+            self.notify(
+                "Fill in the device-specific values and use it for advanced cloning",
+                severity="information",
+            )
+
+        except Exception as e:
+            self.notify(f"Failed to generate donor template: {e}", severity="error")
 
     # Reactive watchers
     def watch_selected_device(self, device: Optional[PCIDevice]) -> None:

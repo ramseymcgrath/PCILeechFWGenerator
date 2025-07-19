@@ -53,11 +53,12 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  build     Build firmware (CLI mode)
-  tui       Launch interactive TUI
-  flash     Flash firmware to device
-  check     Check VFIO configuration
-  version   Show version information
+  build          Build firmware (CLI mode)
+  tui            Launch interactive TUI
+  flash          Flash firmware to device
+  check          Check VFIO configuration
+  donor-template Generate donor info template
+  version        Show version information
 
 Examples:
   # Interactive TUI mode
@@ -71,6 +72,14 @@ Examples:
 
   # Flash firmware
   sudo python3 pcileech.py flash output/firmware.bin
+  
+  # Generate donor template
+  sudo python3 pcileech.py donor-template -o my_device.json
+  sudo python3 pcileech.py donor-template --blank -o minimal.json  # Minimal template
+  sudo python3 pcileech.py donor-template --bdf 0000:03:00.0  # Pre-fill with device info
+  
+  # Build with donor template output
+  sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x4 --output-template device_template.json
         """,
     )
 
@@ -123,6 +132,14 @@ Examples:
     build_parser.add_argument(
         "--output-dir", default="output", help="Output directory for generated files"
     )
+    build_parser.add_argument(
+        "--output-template",
+        help="Output donor info JSON template alongside build artifacts",
+    )
+    build_parser.add_argument(
+        "--donor-template",
+        help="Use donor info JSON template to override discovered values",
+    )
 
     # TUI command
     tui_parser = subparsers.add_parser("tui", help="Launch interactive TUI")
@@ -146,6 +163,31 @@ Examples:
 
     # Version command
     subparsers.add_parser("version", help="Show version information")
+
+    # Donor template command
+    donor_parser = subparsers.add_parser(
+        "donor-template", help="Generate donor info template"
+    )
+    donor_parser.add_argument(
+        "-o",
+        "--output",
+        default="donor_info_template.json",
+        help="Output file path (default: donor_info_template.json)",
+    )
+    donor_parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Generate compact JSON without indentation",
+    )
+    donor_parser.add_argument(
+        "--blank",
+        action="store_true",
+        help="Generate minimal template with only essential fields",
+    )
+    donor_parser.add_argument(
+        "--bdf", help="Pre-fill template with device info from specified BDF"
+    )
+    donor_parser.add_argument("--validate", help="Validate an existing donor info file")
 
     return parser
 
@@ -190,6 +232,8 @@ def main():
         return handle_check(args)
     elif args.command == "version":
         return handle_version(args)
+    elif args.command == "donor-template":
+        return handle_donor_template(args)
     else:
         # No command specified, show help
         parser.print_help()
@@ -217,6 +261,12 @@ def handle_build(args):
             cli_args.append("--advanced-sv")
         if args.enable_variance:
             cli_args.append("--enable-variance")
+
+        if args.output_template:
+            cli_args.extend(["--output-template", args.output_template])
+
+        if args.donor_template:
+            cli_args.extend(["--donor-template", args.donor_template])
 
         # Run the CLI
         return cli_main(cli_args)
@@ -331,6 +381,78 @@ def handle_version(args):
         pass
 
     return 0
+
+
+def handle_donor_template(args):
+    """Handle donor template generation."""
+    try:
+        from src.device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
+
+        # If validate flag is set, validate the file instead
+        if args.validate:
+            try:
+                validator = DonorInfoTemplateGenerator()
+                is_valid, errors = validator.validate_template_file(args.validate)
+                if is_valid:
+                    print(f"✓ Template file '{args.validate}' is valid")
+                    return 0
+                else:
+                    print(f"✗ Template file '{args.validate}' has errors:")
+                    for error in errors:
+                        print(f"  - {error}")
+                    return 1
+            except Exception as e:
+                print(f"Error validating template: {e}")
+                return 1
+
+        # Generate template
+        generator = DonorInfoTemplateGenerator()
+
+        # If BDF is specified, try to pre-fill with device info
+        if args.bdf:
+            print(f"Generating template with device info from {args.bdf}...")
+            try:
+                template = generator.generate_template_from_device(args.bdf)
+                # Check if we actually got device info
+                if template["device_info"]["identification"]["vendor_id"] is None:
+                    print(f"Error: Failed to read device information from {args.bdf}")
+                    print("Possible causes:")
+                    print("  - Device does not exist")
+                    print("  - Insufficient permissions (try with sudo)")
+                    print("  - lspci command not available")
+                    return 1
+            except Exception as e:
+                print(f"Error: Could not read device info: {e}")
+                return 1
+        elif args.blank:
+            # Generate minimal template
+            template = generator.generate_minimal_template()
+            print("Generating minimal donor info template...")
+        else:
+            # Generate full template
+            template = generator.generate_blank_template()
+
+        # Save the template
+        generator.save_template_dict(
+            template, Path(args.output), pretty=not args.compact
+        )
+        print(f"✓ Donor info template saved to: {args.output}")
+
+        if args.bdf:
+            print("\nTemplate pre-filled with device information.")
+            print("Please review and complete any missing fields.")
+        else:
+            print("\nNext steps:")
+            print("1. Fill in the device-specific values in the template")
+            print("2. Run behavioral profiling to capture timing data")
+            print("3. Use the completed template for advanced device cloning")
+
+        return 0
+
+    except Exception as e:
+        print(f"Failed to generate donor template: {e}")
+        return 1
 
 
 if __name__ == "__main__":

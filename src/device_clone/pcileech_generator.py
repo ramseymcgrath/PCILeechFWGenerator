@@ -73,6 +73,9 @@ class PCILeechGenerationConfig:
     allowed_fallbacks: List[str] = field(default_factory=list)
     denied_fallbacks: List[str] = field(default_factory=list)
 
+    # Donor template
+    donor_template: Optional[Dict[str, Any]] = None
+
 
 class PCILeechGenerator:
     """
@@ -630,6 +633,7 @@ class PCILeechGenerator:
                 msix_data=msix_data,
                 interrupt_strategy=interrupt_strategy,
                 interrupt_vectors=interrupt_vectors,
+                donor_template=self.config.donor_template,
             )
 
             # Validate context completeness

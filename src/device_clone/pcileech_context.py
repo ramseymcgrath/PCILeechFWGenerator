@@ -207,6 +207,7 @@ class PCILeechContextBuilder:
         msix_data: Optional[Dict[str, Any]],
         interrupt_strategy: str = "intx",
         interrupt_vectors: int = 1,
+        donor_template: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build comprehensive template context from all data sources.
@@ -291,6 +292,10 @@ class PCILeechContextBuilder:
                 # Add overlay mapping for configuration space shadow
                 **overlay_config,  # This adds OVERLAY_MAP and OVERLAY_ENTRIES
             }
+
+            # Merge donor template if provided
+            if donor_template:
+                context = self._merge_donor_template(context, donor_template)
 
             # Final validation
             self._validate_context_completeness(context)
@@ -2286,6 +2291,47 @@ class PCILeechContextBuilder:
             "context_builder_version": "2.0.0",
             "validation_level": self.validation_level.value,
         }
+
+    def _merge_donor_template(
+        self, context: Dict[str, Any], donor_template: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Merge donor template values with discovered context values.
+
+        Template values override discovered values when there's a conflict.
+        Null values in the template are ignored.
+
+        Args:
+            context: The discovered context
+            donor_template: The donor template to merge
+
+        Returns:
+            Merged context dictionary
+        """
+        log_info_safe(
+            self.logger,
+            "Merging donor template with discovered values",
+            prefix="PCIL",
+        )
+
+        # Import the merge function from donor_info_template
+        from .donor_info_template import DonorInfoTemplateGenerator
+
+        # Create a temporary generator instance to use its merge method
+        generator = DonorInfoTemplateGenerator()
+
+        # Use the existing merge_template_with_discovered method
+        merged_context = generator.merge_template_with_discovered(
+            template=donor_template, discovered=context
+        )
+
+        log_info_safe(
+            self.logger,
+            "Successfully merged donor template with discovered values",
+            prefix="PCIL",
+        )
+
+        return merged_context
 
     def _validate_context_completeness(self, context: Dict[str, Any]) -> None:
         """
