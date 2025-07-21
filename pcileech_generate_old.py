@@ -2,6 +2,10 @@
 """
 PCILeech Firmware Generator - Legacy compatibility shim.
 This forwards to the new unified entrypoint.
+
+NOTE: This script exists only for backward compatibility.
+All functionality has been moved to pcileech.py with proper
+logging, string formatting, and error handling utilities.
 """
 
 import sys
@@ -30,7 +34,6 @@ def parse_arguments():
     parser.add_argument(
         "--board",
         required=True,
-        choices=["pcileech_35t325_x4", "pcileech_75t484_x1", "pcileech_100t484_x1"],
         help="Target board configuration",
     )
 
@@ -122,7 +125,9 @@ def run_pcileech_generation(args, allowed_fallbacks, denied_fallbacks):
     try:
         # Import with proper path relative to project root
         from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig, PCILeechGenerator)
+            PCILeechGenerationConfig,
+            PCILeechGenerator,
+        )
 
         logger.info(
             f"Starting PCILeech firmware generation for {args.bdf} on {args.board}"

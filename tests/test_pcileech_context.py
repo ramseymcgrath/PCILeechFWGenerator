@@ -25,27 +25,34 @@ from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
 
-from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_GROUP_GET_DEVICE_FD,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VfioRegionInfo)
+from src.cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
 from src.device_clone.fallback_manager import FallbackManager
 from src.device_clone.overlay_mapper import OverlayMapper
-from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
-                                               DeviceIdentifiers,
-                                               PCILeechContextBuilder,
-                                               TimingParameters,
-                                               ValidationLevel)
+from src.device_clone.pcileech_context import (
+    BarConfiguration,
+    ContextError,
+    DeviceIdentifiers,
+    PCILeechContextBuilder,
+    TimingParameters,
+    ValidationLevel,
+)
 
 
 # Test fixtures for common data structures
 @pytest.fixture
 def mock_config():
     """Mock configuration object."""
+    from src.device_clone.device_config import DeviceCapabilities
+
     config = Mock()
     config.enable_advanced_features = True
     config.enable_dma_operations = True
@@ -53,15 +60,15 @@ def mock_config():
     config.pcileech_command_timeout = 5000
     config.pcileech_buffer_size = 4096
     config.device_config = Mock()
-    config.device_config.capabilities = Mock()
-    config.device_config.capabilities.ext_cfg_cap_ptr = 0x100
-    config.device_config.capabilities.ext_cfg_xp_cap_ptr = 0x140
-    config.device_config.capabilities.max_payload_size = 256
-    config.device_config.capabilities.get_cfg_force_mps = Mock(return_value=1)
-    config.device_config.capabilities.check_tiny_pcie_issues = Mock(
-        return_value=(False, "")
-    )
-    config.device_config.capabilities.active_device = Mock(
+
+    # Create a mock that passes isinstance check
+    capabilities_mock = Mock(spec=DeviceCapabilities)
+    capabilities_mock.ext_cfg_cap_ptr = 0x100
+    capabilities_mock.ext_cfg_xp_cap_ptr = 0x140
+    capabilities_mock.max_payload_size = 256
+    capabilities_mock.get_cfg_force_mps = Mock(return_value=1)
+    capabilities_mock.check_tiny_pcie_issues = Mock(return_value=(False, ""))
+    capabilities_mock.active_device = Mock(
         enabled=True,
         timer_period=100000,
         timer_enable=1,
@@ -73,6 +80,8 @@ def mock_config():
         num_interrupt_sources=8,
         default_source_priority=8,
     )
+
+    config.device_config.capabilities = capabilities_mock
     return config
 
 
@@ -155,17 +164,62 @@ def msix_data():
 @pytest.fixture
 def behavior_profile():
     """Mock behavior profile."""
-    profile = Mock(spec=BehaviorProfile)
-    profile.total_accesses = 1500
-    profile.capture_duration = 60.0
-    profile.timing_patterns = [
-        Mock(avg_interval_us=50, frequency_hz=20000),
-        Mock(avg_interval_us=100, frequency_hz=10000),
-    ]
-    profile.state_transitions = [Mock(), Mock(), Mock()]
-    profile.variance_metadata = {"variance": 0.05}
-    profile.pattern_analysis = {"burst_detected": True}
-    return profile
+    from src.device_clone.behavior_profiler import (
+        BehaviorProfile,
+        RegisterAccess,
+        TimingPattern,
+    )
+
+    return BehaviorProfile(
+        device_bdf="0000:03:00.0",
+        capture_duration=60.0,
+        total_accesses=1500,
+        register_accesses=[
+            RegisterAccess(
+                timestamp=0.1,
+                register="BAR0",
+                offset=0x100,
+                operation="read",
+                value=0x12345678,
+                duration_us=10.0,
+            ),
+            RegisterAccess(
+                timestamp=0.2,
+                register="BAR0",
+                offset=0x200,
+                operation="write",
+                value=0xABCDEF00,
+                duration_us=15.0,
+            ),
+        ],
+        timing_patterns=[
+            TimingPattern(
+                pattern_type="periodic",
+                registers=["BAR0"],
+                avg_interval_us=50.0,
+                std_deviation_us=5.0,
+                frequency_hz=20000.0,
+                confidence=0.95,
+            ),
+            TimingPattern(
+                pattern_type="burst",
+                registers=["BAR1"],
+                avg_interval_us=100.0,
+                std_deviation_us=10.0,
+                frequency_hz=10000.0,
+                confidence=0.90,
+            ),
+        ],
+        state_transitions={
+            "idle": ["active"],
+            "active": ["idle", "busy"],
+            "busy": ["active"],
+        },
+        power_states=["D0", "D3hot"],
+        interrupt_patterns={"msi": {"frequency": 1000, "burst": False}},
+        variance_metadata={"variance": 0.05},
+        pattern_analysis={"burst_detected": True},
+    )
 
 
 @pytest.fixture
@@ -242,12 +296,23 @@ class TestPCILeechContextBuilder:
 
         # Mock internal methods
         builder._extract_device_identifiers = Mock(return_value=device_identifiers)
-        builder._build_device_config = Mock(return_value={"device_config": "test"})
+        builder._build_device_config = Mock(
+            return_value={
+                "vendor_id": "10ee",
+                "device_id": "7024",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10ee",
+                "subsystem_device_id": "0007",
+            }
+        )
         builder._build_config_space_context = Mock(
             return_value={"config_space": "test"}
         )
         builder._build_msix_context = Mock(return_value={"msix": "test"})
-        builder._build_bar_config = Mock(return_value={"bar": "test"})
+        builder._build_bar_config = Mock(
+            return_value={"bars": [{"type": "memory", "size": 1024}]}
+        )
         builder._build_timing_config = Mock(
             return_value=TimingParameters(
                 read_latency=4,
@@ -1034,7 +1099,10 @@ class TestPCILeechContextBuilder:
                 behavior_profile=None, config_space_data={}, msix_data=None
             )
 
-        assert "Context building failed" in str(exc_info.value)
+        # The error comes from _validate_input_data which checks for required fields
+        assert "Missing required data for unique firmware generation" in str(
+            exc_info.value
+        )
 
     def test_msix_alignment_warning(self, mock_config):
         """Test MSI-X table alignment warning generation."""

@@ -284,7 +284,7 @@ def generate_firmware(device_bdf: str, board_type: str) -> Path:
     
     Args:
         device_bdf: PCIe device Bus:Device.Function identifier
-        board_type: Target FPGA board type (35t, 75t, 100t)
+        board_type: Target FPGA board type
         
     Returns:
         Path to generated firmware binary

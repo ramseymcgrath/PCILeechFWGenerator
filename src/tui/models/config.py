@@ -30,8 +30,7 @@ except ImportError:
 class BuildConfiguration:
     """Comprehensive build configuration with production defaults"""
 
-    board_type: str = "75t"
-    device_type: str = PRODUCTION_DEFAULTS["DEFAULT_DEVICE_TYPE"]
+    board_type: str = "pcileech_35t325_x1"
     advanced_sv: bool = PRODUCTION_DEFAULTS["ADVANCED_SV"]
     enable_variance: bool = PRODUCTION_DEFAULTS["MANUFACTURING_VARIANCE"]
     behavior_profiling: bool = PRODUCTION_DEFAULTS["BEHAVIOR_PROFILING"]
@@ -60,10 +59,6 @@ class BuildConfiguration:
     def __post_init__(self):
         """Validate configuration after initialization"""
         valid_board_types = [
-            # Original boards
-            "35t",
-            "75t",
-            "100t",
             # CaptainDMA boards
             "pcileech_75t484_x1",
             "pcileech_35t484_x1",
@@ -124,7 +119,7 @@ class BuildConfiguration:
         return ", ".join(features) if features else "Basic Configuration"
 
     def to_cli_args(self) -> Dict[str, Any]:
-        """Convert to CLI arguments for existing generate.py"""
+        """Convert to CLI arguments for unified pcileech.py entrypoint"""
         args = {
             "board": self.board_type,
             "flash": self.flash_after_build,

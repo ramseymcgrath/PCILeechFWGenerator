@@ -14,15 +14,26 @@ The approach switches from dynamic computation to hard-coded constants because:
 - Build-time extraction ensures kernel version compatibility
 """
 
+import logging
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+# Add project root to path for imports
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "src"))
+
+from src.log_config import setup_logging, get_logger
+from src.string_utils import log_info_safe, log_error_safe, log_warning_safe
+from src.error_utils import log_error_with_root_cause
+
 
 def compile_and_run_helper():
     """Compile vfio_helper.c and run it to extract constants."""
+    logger = get_logger(__name__)
 
     # Compile the helper
     compile_cmd = [
@@ -35,24 +46,28 @@ def compile_and_run_helper():
         "vfio_helper.c",
     ]
 
-    print("Compiling vfio_helper...")
+    log_info_safe(logger, "Compiling vfio_helper...", prefix="PATCH")
     try:
         subprocess.run(compile_cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Compilation failed: {e}")
-        print(f"stderr: {e.stderr}")
+        log_error_safe(
+            logger, "Compilation failed: {error}", prefix="PATCH", error=str(e)
+        )
+        log_error_safe(logger, "stderr: {stderr}", prefix="PATCH", stderr=e.stderr)
         sys.exit(1)
 
     # Run the helper to get constants
-    print("Extracting VFIO constants...")
+    log_info_safe(logger, "Extracting VFIO constants...", prefix="PATCH")
     try:
         result = subprocess.run(
             ["./vfio_helper"], check=True, capture_output=True, text=True
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print(f"Helper execution failed: {e}")
-        print(f"stderr: {e.stderr}")
+        log_error_safe(
+            logger, "Helper execution failed: {error}", prefix="PATCH", error=str(e)
+        )
+        log_error_safe(logger, "stderr: {stderr}", prefix="PATCH", stderr=e.stderr)
         sys.exit(1)
 
 
@@ -68,10 +83,13 @@ def parse_constants(output):
 
 def update_vfio_constants_file(constants):
     """Update src/cli/vfio_constants.py with the extracted constants."""
+    logger = get_logger(__name__)
 
     vfio_constants_path = Path("src/cli/vfio_constants.py")
     if not vfio_constants_path.exists():
-        print(f"Error: {vfio_constants_path} not found!")
+        log_error_safe(
+            logger, "Error: {path} not found!", prefix="PATCH", path=vfio_constants_path
+        )
         sys.exit(1)
 
     # Read the current file
@@ -98,8 +116,12 @@ def update_vfio_constants_file(constants):
     for missing, fallback_value in missing_constants.items():
         if missing not in constants:
             # Add fallback values for missing constants
-            print(
-                f"Warning: {missing} not found in kernel headers output, using fallback value {fallback_value}"
+            log_warning_safe(
+                logger,
+                "{constant} not found in kernel headers output, using fallback value {value}",
+                prefix="PATCH",
+                constant=missing,
+                value=fallback_value,
             )
             constants[missing] = fallback_value
 
@@ -125,28 +147,43 @@ def update_vfio_constants_file(constants):
     with open(vfio_constants_path, "w") as f:
         f.write(new_content)
 
-    print(f"Updated {vfio_constants_path} with {len(constants)} constants")
+    log_info_safe(
+        logger,
+        "Updated {path} with {count} constants",
+        prefix="PATCH",
+        path=vfio_constants_path,
+        count=len(constants),
+    )
 
     # Show what was updated
     for name, value in constants.items():
-        print(f"  {name} = {value}")
+        log_info_safe(
+            logger, "  {name} = {value}", prefix="PATCH", name=name, value=value
+        )
 
 
 def main():
     """Main function to orchestrate the patching process."""
+    # Setup logging
+    setup_logging(level=logging.INFO)
+    logger = get_logger(__name__)
 
-    print("VFIO Constants Patcher")
-    print("=" * 50)
+    log_info_safe(logger, "VFIO Constants Patcher", prefix="PATCH")
+    log_info_safe(logger, "=" * 50, prefix="PATCH")
 
     # Check if we're in the right directory
     if not Path("src/cli/vfio_constants.py").exists():
-        print("Error: Must run from project root directory")
-        print("Expected to find: src/cli/vfio_constants.py")
+        log_error_safe(logger, "Must run from project root directory", prefix="PATCH")
+        log_error_safe(
+            logger, "Expected to find: src/cli/vfio_constants.py", prefix="PATCH"
+        )
         sys.exit(1)
 
     # Check if helper source exists
     if not Path("vfio_helper.c").exists():
-        print("Error: vfio_helper.c not found in current directory")
+        log_error_safe(
+            logger, "vfio_helper.c not found in current directory", prefix="PATCH"
+        )
         sys.exit(1)
 
     # Extract constants from kernel
@@ -154,7 +191,7 @@ def main():
     constants = parse_constants(output)
 
     if not constants:
-        print("Error: No constants extracted from helper")
+        log_error_safe(logger, "No constants extracted from helper", prefix="PATCH")
         sys.exit(1)
 
     # Update the Python file
@@ -164,8 +201,12 @@ def main():
     if Path("vfio_helper").exists():
         os.unlink("vfio_helper")
 
-    print("\nPatching complete!")
-    print("The vfio_constants.py file now contains kernel-correct ioctl numbers.")
+    log_info_safe(logger, "\nPatching complete!", prefix="PATCH")
+    log_info_safe(
+        logger,
+        "The vfio_constants.py file now contains kernel-correct ioctl numbers.",
+        prefix="PATCH",
+    )
 
 
 if __name__ == "__main__":

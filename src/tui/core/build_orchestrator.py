@@ -1332,8 +1332,6 @@ class BuildOrchestrator:
 
         if cli_args.get("advanced_sv"):
             build_cmd_parts.append("--advanced-sv")
-        if cli_args.get("device_type") != "generic":
-            build_cmd_parts.append(f"--device-type {cli_args['device_type']}")
         if cli_args.get("enable_variance"):
             build_cmd_parts.append("--enable-variance")
         if cli_args.get("enable_behavior_profiling"):

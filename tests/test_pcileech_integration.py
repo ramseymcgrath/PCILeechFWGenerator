@@ -10,12 +10,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.file_management.board_discovery import (BoardDiscovery,
-                                                 discover_all_boards)
+from src.file_management.board_discovery import BoardDiscovery, discover_all_boards
 from src.file_management.repo_manager import RepoManager
 from src.file_management.template_discovery import TemplateDiscovery
-from src.vivado_handling.pcileech_build_integration import \
-    PCILeechBuildIntegration
+from src.vivado_handling.pcileech_build_integration import PCILeechBuildIntegration
 
 
 class TestPCILeechIntegration(unittest.TestCase):
@@ -70,7 +68,11 @@ class TestPCILeechIntegration(unittest.TestCase):
             )
 
         # Test specific board retrieval if known board exists
-        known_boards = ["pcileech_75t484_x1", "35t", "pcileech_enigma_x1"]
+        known_boards = [
+            "pcileech_75t484_x1",
+            "pcileech_35t325_x1",
+            "pcileech_enigma_x1",
+        ]
         found_known_board = False
         for board in known_boards:
             if board in boards:
@@ -328,9 +330,11 @@ class TestBoardConfigIntegration(unittest.TestCase):
 
     def test_board_config_dynamic_loading(self):
         """Test that board configurations are loaded dynamically."""
-        from src.device_clone.board_config import (get_fpga_part,
-                                                   list_supported_boards,
-                                                   validate_board)
+        from src.device_clone.board_config import (
+            get_fpga_part,
+            list_supported_boards,
+            validate_board,
+        )
 
         # Get supported boards
         boards = list_supported_boards()
@@ -350,8 +354,7 @@ class TestBoardConfigIntegration(unittest.TestCase):
 
     def test_board_recommendations(self):
         """Test board recommendation system."""
-        from src.device_clone.board_config import \
-            list_boards_with_recommendations
+        from src.device_clone.board_config import list_boards_with_recommendations
 
         recommendations = list_boards_with_recommendations()
         self.assertIsInstance(recommendations, list)

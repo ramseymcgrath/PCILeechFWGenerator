@@ -25,13 +25,31 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.build import (  # Exception classes; Data classes; Manager classes; Main class; CLI functions; Constants
-    BUFFER_SIZE, CONFIG_SPACE_PATH_TEMPLATE, DEFAULT_OUTPUT_DIR,
-    DEFAULT_PROFILE_DURATION, FILE_WRITE_TIMEOUT, MAX_PARALLEL_FILE_WRITES,
-    REQUIRED_MODULES, BuildConfiguration, ConfigurationError,
-    ConfigurationManager, DeviceConfiguration, FileOperationError,
-    FileOperationsManager, FirmwareBuilder, ModuleChecker, ModuleImportError,
-    MSIXData, MSIXManager, MSIXPreloadError, PCILeechBuildError,
-    VivadoIntegrationError, _display_summary, main, parse_args)
+    BUFFER_SIZE,
+    CONFIG_SPACE_PATH_TEMPLATE,
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_PROFILE_DURATION,
+    FILE_WRITE_TIMEOUT,
+    MAX_PARALLEL_FILE_WRITES,
+    REQUIRED_MODULES,
+    BuildConfiguration,
+    ConfigurationError,
+    ConfigurationManager,
+    DeviceConfiguration,
+    FileOperationError,
+    FileOperationsManager,
+    FirmwareBuilder,
+    ModuleChecker,
+    ModuleImportError,
+    MSIXData,
+    MSIXManager,
+    MSIXPreloadError,
+    PCILeechBuildError,
+    VivadoIntegrationError,
+    _display_summary,
+    main,
+    parse_args,
+)
 
 # ============================================================================
 # Fixtures
@@ -612,11 +630,11 @@ def test_file_operations_manager_write_systemverilog_modules(temp_dir, mock_logg
     """Test FileOperationsManager.write_systemverilog_modules()."""
     manager = FileOperationsManager(temp_dir, False, 4, mock_logger)
 
-    # Create test modules
+    # Create test modules (COE files are skipped by design)
     modules = {
         "module1": "module module1; endmodule",
         "module2.sv": "module module2; endmodule",
-        "config.coe": "memory_initialization_radix=16;",
+        "config.coe": "memory_initialization_radix=16;",  # This will be skipped
     }
 
     # Mock _sequential_write to avoid actual file operations
@@ -624,19 +642,21 @@ def test_file_operations_manager_write_systemverilog_modules(temp_dir, mock_logg
         sv_files, special_files = manager.write_systemverilog_modules(modules)
 
         # Check that files were categorized correctly
+        # COE files are skipped, so only SV files should be present
         assert set(sv_files) == {"module1.sv", "module2.sv"}
-        assert set(special_files) == {"config.coe"}
+        assert set(special_files) == set()  # Empty because COE files are skipped
 
         # Check that _sequential_write was called with correct arguments
         assert mock_write.call_count == 1
         args = mock_write.call_args[0][0]
-        assert len(args) == 3  # 3 files
+        assert len(args) == 2  # Only 2 files (COE file is skipped)
 
         # Check paths and contents
         paths = [path for path, _ in args]
         assert any(path.name == "module1.sv" for path in paths)
         assert any(path.name == "module2.sv" for path in paths)
-        assert any(path.name == "config.coe" for path in paths)
+        # COE file should NOT be in the paths
+        assert not any(path.name == "config.coe" for path in paths)
 
 
 def test_file_operations_manager_write_systemverilog_modules_parallel(

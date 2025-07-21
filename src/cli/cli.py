@@ -7,8 +7,7 @@ Usage examples
     ./cli build
 
     # scripted build for CI (non‑interactive)
-    ./cli build --bdf 0000:01:00.0 --board pcileech_75t484_x1 \
-                --device-type network --advanced-sv
+    ./cli build --bdf 0000:01:00.0 --board pcileech_75t484_x1 --advanced-sv
 
     # flash an already‑generated bitstream
     ./cli flash output/firmware.bin --board pcileech_75t484_x1
@@ -96,12 +95,6 @@ def build_sub(parser: argparse._SubParsersAction):
     p = parser.add_parser("build", help="Build firmware (guided or scripted)")
     p.add_argument("--bdf", help="PCI BDF (skip for interactive picker)")
     p.add_argument("--board", choices=SUPPORTED_BOARDS, help="FPGA board")
-    p.add_argument(
-        "--device-type",
-        default="generic",
-        choices=["generic", "network", "storage", "graphics", "audio"],
-        help="Type of device being cloned",
-    )
     p.add_argument(
         "--advanced-sv", action="store_true", help="Enable advanced SV features"
     )
@@ -287,8 +280,7 @@ def main(argv: Optional[List[str]] = None):
         flash_bin(Path(args.firmware))
 
     elif args.cmd == "donor-template":
-        from ..device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         if args.with_comments:
             # Generate template with comments (for documentation)

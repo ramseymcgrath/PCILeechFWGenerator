@@ -20,13 +20,21 @@ class TestBuildOrchestrator(unittest.TestCase):
             bdf="0000:00:00.0",
             vendor_id="0x1234",
             device_id="0x5678",
+            vendor_name="Test Vendor",
+            device_name="Test Device",
+            device_class="0x123456",
             subsystem_vendor="0xabcd",
             subsystem_device="0xef01",
-            class_id="0x123456",
-            revision="0x01",
+            driver=None,
+            iommu_group="1",
+            power_state="D0",
+            link_speed="Gen3 x16",
+            bars=[],
+            suitability_score=1.0,
+            compatibility_issues=[],
         )
         self.config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             behavior_profiling=False,
             donor_dump=False,
@@ -277,7 +285,7 @@ class TestBuildOrchestrator(unittest.TestCase):
     ):
         # Setup basic config
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             behavior_profiling=False,
             donor_dump=False,
@@ -305,7 +313,7 @@ class TestBuildOrchestrator(unittest.TestCase):
     ):
         # Setup config with behavior profiling
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             behavior_profiling=True,
             donor_dump=False,
@@ -329,7 +337,7 @@ class TestBuildOrchestrator(unittest.TestCase):
     ):
         # Setup config with donor dump
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=False,
             behavior_profiling=False,
             donor_dump=True,
@@ -402,7 +410,7 @@ class TestBuildOrchestrator(unittest.TestCase):
         # Setup
         mock_exists.return_value = True
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             donor_info_file=None,
         )
@@ -417,7 +425,7 @@ class TestBuildOrchestrator(unittest.TestCase):
         # Setup - build.py doesn't exist
         mock_exists.return_value = False
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             donor_info_file=None,
         )
@@ -485,7 +493,7 @@ class TestBuildOrchestrator(unittest.TestCase):
         # Setup
         self.orchestrator._current_progress = MagicMock()
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=True,
             advanced_sv=True,
             device_type="network",
@@ -502,9 +510,8 @@ class TestBuildOrchestrator(unittest.TestCase):
 
         # Check command contains all expected flags
         self.assertIn("--bdf 0000:00:00.0", " ".join(cmd))
-        self.assertIn("--board AU280", " ".join(cmd))
+        self.assertIn("--board pcileech_35t325_x1", " ".join(cmd))
         self.assertIn("--advanced-sv", " ".join(cmd))
-        self.assertIn("--device-type network", " ".join(cmd))
         self.assertIn("--enable-behavior-profiling", " ".join(cmd))
         self.assertIn("--profile-duration 30", " ".join(cmd))
         self.assertIn("--run-vivado", " ".join(cmd))
@@ -515,7 +522,7 @@ class TestBuildOrchestrator(unittest.TestCase):
         # Setup
         self.orchestrator._current_progress = MagicMock()
         config = BuildConfiguration(
-            board_type="AU280",
+            board_type="pcileech_35t325_x1",
             local_build=False,
             advanced_sv=True,
             device_type="network",
@@ -545,14 +552,13 @@ class TestBuildOrchestrator(unittest.TestCase):
 
         # Check build flags are passed to container
         self.assertIn("--bdf 0000:00:00.0", " ".join(cmd))
-        self.assertIn("--board AU280", " ".join(cmd))
+        self.assertIn("--board pcileech_35t325_x1", " ".join(cmd))
         self.assertIn("--advanced-sv", " ".join(cmd))
-        self.assertIn("--device-type network", " ".join(cmd))
 
     async def test_generate_bitstream(self):
         # Setup
         self.orchestrator._current_progress = MagicMock()
-        config = BuildConfiguration(board_type="AU280")
+        config = BuildConfiguration(board_type="pcileech_35t325_x1")
 
         # Run test
         with patch("asyncio.sleep"):

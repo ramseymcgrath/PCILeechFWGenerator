@@ -18,13 +18,22 @@ from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 import pytest
 
 # Import the module under test
-from src.cli.vfio_handler import (BindingState, DeviceInfo, VFIOBinder,
-                                  VFIOBinderImpl, VFIOBindError,
-                                  VFIODeviceNotFoundError, VFIOGroupError,
-                                  VFIOPathManager, VFIOPermissionError,
-                                  _get_current_driver, _get_iommu_group,
-                                  _get_iommu_group_safe, render_pretty,
-                                  run_diagnostics)
+from src.cli.vfio_handler import (
+    BindingState,
+    DeviceInfo,
+    VFIOBinder,
+    VFIOBinderImpl,
+    VFIOBindError,
+    VFIODeviceNotFoundError,
+    VFIOGroupError,
+    VFIOPathManager,
+    VFIOPermissionError,
+    _get_current_driver,
+    _get_iommu_group,
+    _get_iommu_group_safe,
+    render_pretty,
+    run_diagnostics,
+)
 
 
 # Test fixtures
@@ -635,7 +644,7 @@ class TestVFIOBinderImpl:
         binder = VFIOBinderImpl(valid_bdf)
         binder.group_id = "42"
 
-        with pytest.raises(OSError, match="Failed to link group"):
+        with pytest.raises(VFIOBindError, match="Failed to open VFIO device FD"):
             binder._open_vfio_device_fd()
 
     @patch("os.geteuid", return_value=0)
@@ -648,7 +657,7 @@ class TestVFIOBinderImpl:
         binder = VFIOBinderImpl(valid_bdf)
         binder.group_id = "42"
 
-        with pytest.raises(OSError, match="Failed to link group"):
+        with pytest.raises(VFIOBindError, match="Failed to open VFIO device FD"):
             binder._open_vfio_device_fd()
 
     @patch("os.geteuid", return_value=0)
@@ -757,7 +766,9 @@ class TestHelperFunctions:
         self, mock_resolve, mock_is_symlink, mock_exists, valid_bdf
     ):
         """Test getting current driver successfully."""
-        mock_resolve.return_value = Mock(name="vfio-pci")
+        mock_path = Mock()
+        mock_path.name = "vfio-pci"
+        mock_resolve.return_value = mock_path
 
         result = _get_current_driver(valid_bdf)
 
@@ -792,7 +803,9 @@ class TestHelperFunctions:
     @patch("pathlib.Path.resolve")
     def test_get_iommu_group_success(self, mock_resolve, mock_exists, valid_bdf):
         """Test getting IOMMU group successfully."""
-        mock_resolve.return_value = Mock(name="42")
+        mock_path = Mock()
+        mock_path.name = "42"
+        mock_resolve.return_value = mock_path
 
         result = _get_iommu_group(valid_bdf)
 
@@ -862,9 +875,18 @@ class TestDiagnostics:
     def test_run_diagnostics_success(self, mock_vfio_assist, valid_bdf):
         """Test successful diagnostics run."""
         # Mock the diagnostics result
-        mock_check = Mock(name="test_check", status="ok", message="All good")
-        mock_result = Mock(overall="ok", can_proceed=True, checks=[mock_check])
-        mock_diagnostics = Mock(run=Mock(return_value=mock_result))
+        mock_check = Mock()
+        mock_check.name = "test_check"
+        mock_check.status = "ok"
+        mock_check.message = "All good"
+
+        mock_result = Mock()
+        mock_result.overall = "ok"
+        mock_result.can_proceed = True
+        mock_result.checks = [mock_check]
+
+        mock_diagnostics = Mock()
+        mock_diagnostics.run.return_value = mock_result
         mock_vfio_assist.Diagnostics.return_value = mock_diagnostics
 
         result = run_diagnostics(valid_bdf)
@@ -877,12 +899,11 @@ class TestDiagnostics:
         assert result["checks"][0]["message"] == "All good"
 
     @patch("src.cli.vfio_handler.HAS_VFIO_ASSIST", True)
-    @patch(
-        "src.cli.vfio_handler.vfio_assist.Diagnostics",
-        side_effect=Exception("Diagnostics failed"),
-    )
-    def test_run_diagnostics_error(self, mock_diagnostics, valid_bdf):
+    @patch("src.cli.vfio_handler.vfio_assist")
+    def test_run_diagnostics_error(self, mock_vfio_assist, valid_bdf):
         """Test diagnostics with error."""
+        mock_vfio_assist.Diagnostics.side_effect = Exception("Diagnostics failed")
+
         result = run_diagnostics(valid_bdf)
 
         assert result["overall"] == "error"
@@ -980,16 +1001,26 @@ class TestEdgeCases:
             VFIOBinderImpl("")
 
     @patch("os.geteuid", return_value=0)
-    def test_device_name_too_long(self, mock_geteuid):
+    @patch("os.close")
+    @patch("fcntl.ioctl")
+    @patch("os.open")
+    def test_device_name_too_long(
+        self, mock_open, mock_ioctl, mock_close, mock_geteuid
+    ):
         """Test with device name that's too long for ioctl."""
         long_bdf = "0000:" + "a" * 50 + ":00.0"
         binder = VFIOBinderImpl("0000:01:00.0")  # Use valid BDF for init
         binder.bdf = long_bdf  # Override with long BDF
         binder.group_id = "42"
 
-        with patch("os.open", return_value=100):
-            with pytest.raises(VFIOBindError, match="too long"):
-                binder._open_vfio_device_fd()
+        # Mock file descriptor returns
+        mock_open.side_effect = [100, 101]  # container_fd, group_fd
+
+        # Mock ioctl calls to succeed up to the device name check
+        mock_ioctl.side_effect = [None, None]  # GROUP_SET_CONTAINER, SET_IOMMU
+
+        with pytest.raises(VFIOBindError, match=r"Device name .* too long"):
+            binder._open_vfio_device_fd()
 
     @patch("os.geteuid", return_value=0)
     @patch("pathlib.Path.exists")

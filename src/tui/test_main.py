@@ -25,19 +25,6 @@ def mocked_app():
 
 
 @pytest.fixture
-def config_dialog():
-    dialog = ConfigurationDialog()
-    dialog.app = MockedApp()
-    # Mock query methods since we don't have a real DOM
-    dialog.query_one = MagicMock()
-    # Set up common mocks for form elements
-    dialog._get_select_options = MagicMock(return_value=["75t", "35t", "100t"])
-    dialog._sanitize_select_value = MagicMock(return_value="75t")
-    dialog._parse_float_input = MagicMock(return_value=30.0)
-    return dialog
-
-
-@pytest.fixture
 def confirm_dialog():
     return ConfirmationDialog("Test Title", "Test Message")
 
@@ -84,8 +71,7 @@ def test_tui_app_compose():
 def test_populate_form(config_dialog, mocked_app):
     """Test form population from configuration"""
     config = BuildConfiguration(
-        board_type="75t",
-        device_type="network",
+        board_type="pcileech_35t325_x1",
         name="Test Config",
         advanced_sv=True,
         profile_duration=45.0,
@@ -96,9 +82,7 @@ def test_populate_form(config_dialog, mocked_app):
         widget = MagicMock(spec=widget_type)
         # Set up Select widget mocks
         if selector == "#board-type-select":
-            widget.value = "35t"  # will be updated to 75t
-        elif selector == "#device-type-select":
-            widget.value = "generic"  # will be updated to network
+            widget.value = "pcileech_35t325_x1"
         return widget
 
     config_dialog.query_one.side_effect = mock_query_one
@@ -108,7 +92,6 @@ def test_populate_form(config_dialog, mocked_app):
 
     # Check calls
     assert config_dialog.query_one.call_count > 0
-    # Board type should be set to 75t
     board_type_select_calls = [
         call
         for call in config_dialog.query_one.call_args_list
@@ -121,9 +104,7 @@ def test_create_config_from_form(config_dialog):
     """Test creating a configuration from form values"""
     # Mock form elements
     board_select = MagicMock(spec=Select)
-    board_select.value = "75t"
-    device_select = MagicMock(spec=Select)
-    device_select.value = "network"
+    board_select.value = "pcileech_35t325_x1"
     name_input = MagicMock(spec=Input)
     name_input.value = "Test Configuration"
     desc_input = MagicMock(spec=Input)
@@ -137,8 +118,6 @@ def test_create_config_from_form(config_dialog):
     def mock_query_one(selector, widget_type=None):
         if selector == "#board-type-select":
             return board_select
-        elif selector == "#device-type-select":
-            return device_select
         elif selector == "#config-name-input":
             return name_input
         elif selector == "#config-description-input":
@@ -179,8 +158,7 @@ def test_create_config_from_form(config_dialog):
     config = config_dialog._create_config_from_form()
 
     # Check configuration values
-    assert config.board_type == "75t"
-    assert config.device_type == "network"
+    assert config.board_type == "pcileech_35t325_x1"
     assert config.name == "Test Configuration"
     assert config.description == "Test Description"
     assert config.advanced_sv is True

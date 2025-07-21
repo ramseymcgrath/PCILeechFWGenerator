@@ -158,10 +158,10 @@ pip <span class="nb">install </span>textual rich psutil watchdog pydantic
 <p>There are several ways to launch the TUI:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Method 1: Using the dedicated TUI script</span>
-python3 tui_generate.py
+python3 pcileech.py tui
 
-<span class="c"># Method 2: Using the --tui flag with generate.py</span>
-<span class="nb">sudo </span>python3 generate.py <span class="nt">--tui</span>
+<span class="c"># Method 2: Direct execution</span>
+<span class="nb">sudo </span>python3 -m src.tui.main
 
 <span class="c"># Method 3: Direct execution</span>
 <span class="nb">sudo </span>python3 <span class="nt">-m</span> src.tui.main
@@ -283,8 +283,7 @@ pcileech-tui-sudo
 <h4 id="network-device-standard">Network Device Standard</h4>
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Network Device Standard"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"75t"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"device_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"network"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pcileech_35t325_x1"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"advanced_sv"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
   </span><span class="nl">"enable_variance"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
   </span><span class="nl">"behavior_profiling"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
@@ -373,7 +372,7 @@ pcileech-tui-sudo
   <li><strong>Cause</strong>: Not running with root privileges</li>
   <li><strong>Solutions</strong>:
     <ul>
-      <li>Run with sudo: <code class="language-plaintext highlighter-rouge">sudo python3 tui_generate.py</code></li>
+      <li>Run with sudo: <code class="language-plaintext highlighter-rouge">sudo python3 pcileech.py tui</code></li>
       <li>Add user to required groups</li>
     </ul>
   </li>
@@ -523,7 +522,7 @@ pcileech-tui-sudo
 pcileech-tui-sudo
    
 <span class="c"># Or directly with sudo</span>
-<span class="nb">sudo </span>python3 tui_generate.py
+<span class="nb">sudo </span>python3 pcileech.py tui
 </code></pre></div>    </div>
 
     <blockquote>

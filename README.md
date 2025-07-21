@@ -57,7 +57,7 @@ sudo modprobe vfio vfio-pci
 sudo python3 pcileech.py tui
 
 # CLI interface for scripted builds
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1
 
 # Check VFIO configuration
 sudo python3 pcileech.py check --device 0000:03:00.0

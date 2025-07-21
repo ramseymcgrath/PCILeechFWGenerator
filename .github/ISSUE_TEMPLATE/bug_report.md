@@ -124,7 +124,7 @@ assignees: ''
 **Commands Run for Debugging:**
 ```bash
 # List any debugging commands you tried
-# e.g., python generate.py --debug, vivado -version, etc.
+# e.g., python pcileech.py --verbose, vivado -version, etc.
 ```
 
 **System Information:**

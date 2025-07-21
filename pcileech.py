@@ -10,6 +10,7 @@ This is the single entry point for all PCILeech functionality:
 """
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -19,25 +20,62 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
+# Import our custom utilities
+from src.log_config import setup_logging, get_logger
+from src.string_utils import (
+    safe_format,
+    log_info_safe,
+    log_error_safe,
+    log_warning_safe,
+)
+from src.error_utils import log_error_with_root_cause, format_concise_error
+
+
+def get_available_boards():
+    """Get list of available board configurations."""
+    try:
+        from src.device_clone.board_config import list_supported_boards
+
+        boards = list_supported_boards()
+        if not boards:
+            return [
+                "pcileech_35t325_x4",
+                "pcileech_75t484_x1",
+                "pcileech_100t484_x1",
+            ]
+        return sorted(boards)
+    except Exception:
+        return [
+            "pcileech_35t325_x4",
+            "pcileech_75t484_x1",
+            "pcileech_100t484_x1",
+        ]
+
 
 def check_sudo():
     """Check if running as root and warn if not."""
+    logger = get_logger(__name__)
     if os.geteuid() != 0:
-        print("Warning: PCILeech requires root privileges for hardware access.")
-        print("Please run with sudo or as root user.")
+        log_warning_safe(
+            logger,
+            "PCILeech requires root privileges for hardware access.",
+            prefix="SUDO",
+        )
+        log_warning_safe(logger, "Please run with sudo or as root user.", prefix="SUDO")
         return False
     return True
 
 
 def check_vfio_requirements():
     """Check if VFIO modules are loaded."""
+    logger = get_logger(__name__)
     try:
         # Check if VFIO modules are loaded
         with open("/proc/modules", "r") as f:
             modules = f.read()
             if "vfio " not in modules or "vfio_pci " not in modules:
-                print("Warning: VFIO modules not loaded. Run:")
-                print("  sudo modprobe vfio vfio-pci")
+                log_warning_safe(logger, "VFIO modules not loaded. Run:", prefix="VFIO")
+                log_warning_safe(logger, "  sudo modprobe vfio vfio-pci", prefix="VFIO")
                 return False
     except FileNotFoundError:
         # /proc/modules not available, skip check
@@ -65,7 +103,7 @@ Examples:
   sudo python3 pcileech.py tui
 
   # CLI build mode
-  sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t
+  sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1
 
   # Check VFIO configuration
   sudo python3 pcileech.py check --device 0000:03:00.0
@@ -105,21 +143,8 @@ Examples:
     build_parser.add_argument(
         "--board",
         required=True,
-        choices=[
-            "35t",
-            "75t",
-            "100t",
-            "pcileech_35t325_x4",
-            "pcileech_75t484_x1",
-            "pcileech_100t484_x1",
-        ],
+        choices=get_available_boards(),
         help="Target board configuration",
-    )
-    build_parser.add_argument(
-        "--device-type",
-        default="network",
-        choices=["generic", "network", "storage", "graphics", "audio"],
-        help="Type of device being cloned",
     )
     build_parser.add_argument(
         "--advanced-sv",
@@ -197,28 +222,30 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Handle global options
+    # Setup logging with our custom configuration
     if args.verbose:
-        import logging
-
-        logging.basicConfig(level=logging.DEBUG)
+        setup_logging(level=logging.DEBUG)
     elif args.quiet:
-        import logging
-
-        logging.basicConfig(level=logging.ERROR)
+        setup_logging(level=logging.ERROR)
     else:
-        import logging
+        setup_logging(level=logging.INFO)
 
-        logging.basicConfig(level=logging.INFO)
+    logger = get_logger(__name__)
 
     # Check sudo requirements for hardware operations
     if args.command in ["build", "check"] and not check_sudo():
-        print("Error: Root privileges required for hardware operations.")
+        log_error_safe(
+            logger, "Root privileges required for hardware operations.", prefix="MAIN"
+        )
         return 1
 
     # Check VFIO requirements for build operations
     if args.command == "build" and not check_vfio_requirements():
-        print("Run 'sudo python3 pcileech.py check' to validate VFIO setup.")
+        log_error_safe(
+            logger,
+            "Run 'sudo python3 pcileech.py check' to validate VFIO setup.",
+            prefix="MAIN",
+        )
         return 1
 
     # Route to appropriate handler
@@ -242,20 +269,21 @@ def main():
 
 def handle_build(args):
     """Handle CLI build mode."""
+    logger = get_logger(__name__)
     try:
         # Import and use the existing CLI build functionality
         from src.cli.cli import main as cli_main
 
+        log_info_safe(
+            logger,
+            "Starting build for device {bdf} on board {board}",
+            prefix="BUILD",
+            bdf=args.bdf,
+            board=args.board,
+        )
+
         # Convert arguments to CLI format
-        cli_args = [
-            "build",
-            "--bdf",
-            args.bdf,
-            "--board",
-            args.board,
-            "--device-type",
-            args.device_type,
-        ]
+        cli_args = ["build", "--bdf", args.bdf, "--board", args.board]
 
         if args.advanced_sv:
             cli_args.append("--advanced-sv")
@@ -272,44 +300,60 @@ def handle_build(args):
         return cli_main(cli_args)
 
     except Exception as e:
-        print(f"Build failed: {e}")
+        log_error_with_root_cause(logger, "Build failed", e)
         return 1
 
 
 def handle_tui(args):
     """Handle TUI mode."""
+    logger = get_logger(__name__)
     try:
         # Check if Textual is available
         try:
             import textual  # noqa: F401
         except ImportError:
-            print("Error: Textual framework not installed.")
-            print("Please install with: pip install textual rich psutil")
+            log_error_safe(logger, "Textual framework not installed.", prefix="TUI")
+            log_error_safe(
+                logger,
+                "Please install with: pip install textual rich psutil",
+                prefix="TUI",
+            )
             return 1
 
         # Import and run the TUI application
         from src.tui.main import PCILeechTUI
 
+        log_info_safe(logger, "Launching interactive TUI", prefix="TUI")
         app = PCILeechTUI()
         app.run()
         return 0
 
     except KeyboardInterrupt:
-        print("\nTUI application interrupted by user")
+        log_info_safe(logger, "TUI application interrupted by user", prefix="TUI")
         return 1
     except Exception as e:
-        print(f"TUI failed: {e}")
+        log_error_with_root_cause(logger, "TUI failed", e)
         return 1
 
 
 def handle_flash(args):
     """Handle firmware flashing."""
+    logger = get_logger(__name__)
     try:
         # Check if firmware file exists
         firmware_path = Path(args.firmware)
         if not firmware_path.exists():
-            print(f"Error: Firmware file not found: {firmware_path}")
+            log_error_safe(
+                logger,
+                "Firmware file not found: {path}",
+                prefix="FLASH",
+                path=firmware_path,
+            )
             return 1
+
+        log_info_safe(
+            logger, "Flashing firmware: {path}", prefix="FLASH", path=firmware_path
+        )
 
         # Try to use the flash utility
         try:
@@ -324,59 +368,140 @@ def handle_flash(args):
                 ["usbloader", "-f", str(firmware_path)], capture_output=True, text=True
             )
             if result.returncode != 0:
-                print(f"Flash failed: {result.stderr}")
+                log_error_safe(
+                    logger, "Flash failed: {error}", prefix="FLASH", error=result.stderr
+                )
                 return 1
-            print(f"Successfully flashed {firmware_path}")
+            log_info_safe(
+                logger,
+                "Successfully flashed {path}",
+                prefix="FLASH",
+                path=firmware_path,
+            )
 
         return 0
 
     except Exception as e:
-        print(f"Flash failed: {e}")
+        log_error_with_root_cause(logger, "Flash failed", e)
         return 1
 
 
 def handle_check(args):
     """Handle VFIO checking."""
+    logger = get_logger(__name__)
     try:
-        # Import VFIO checker functionality
-        import vfio_check
+        # Import the VFIO diagnostics functionality
+        from src.cli.vfio_diagnostics import (
+            Diagnostics,
+            Status,
+            render,
+            remediation_script,
+        )
+        import subprocess
+        from pathlib import Path
 
-        # Convert arguments to vfio_check format
-        vfio_args = []
-        if args.device:
-            vfio_args.append(args.device)
-        if args.interactive:
-            vfio_args.append("--interactive")
+        log_info_safe(
+            logger,
+            "Running VFIO diagnostics{device}",
+            prefix="CHECK",
+            device=f" for device {args.device}" if args.device else "",
+        )
+
+        # Create diagnostics instance and run checks
+        diag = Diagnostics(args.device)
+        report = diag.run()
+
+        # Render the report
+        render(report)
+
+        # Handle fix option
         if args.fix:
-            vfio_args.append("--fix")
+            if report.overall == Status.OK:
+                log_info_safe(
+                    logger,
+                    "✅ System already VFIO-ready - nothing to do",
+                    prefix="CHECK",
+                )
+                return 0
 
-        # Call the main function directly with sys.argv manipulation
-        import sys
+            # Generate remediation script
+            script_text = remediation_script(report)
+            temp = Path("/tmp/vfio_fix.sh")
+            temp.write_text(script_text)
+            temp.chmod(0o755)
 
-        original_argv = sys.argv
-        try:
-            sys.argv = ["vfio_check"] + vfio_args
-            return vfio_check.main()
-        finally:
-            sys.argv = original_argv
+            log_info_safe(
+                logger,
+                "📝 Remediation script written to {path}",
+                prefix="CHECK",
+                path=temp,
+            )
 
+            if args.interactive:
+                confirm = input("Run remediation script now? [y/N]: ").strip().lower()
+                if confirm not in ("y", "yes"):
+                    log_info_safe(logger, "Aborted.", prefix="CHECK")
+                    return 1
+
+            log_info_safe(
+                logger,
+                "Executing remediation script (requires root)...",
+                prefix="CHECK",
+            )
+            try:
+                subprocess.run(["sudo", str(temp)], check=True)
+
+                # Re-run diagnostics after remediation
+                log_info_safe(
+                    logger,
+                    "Re-running diagnostics after remediation...",
+                    prefix="CHECK",
+                )
+                new_report = Diagnostics(args.device).run()
+                render(new_report)
+                return 0 if new_report.can_proceed else 1
+            except subprocess.CalledProcessError as e:
+                log_error_safe(
+                    logger, "Script failed: {error}", prefix="CHECK", error=str(e)
+                )
+                return 1
+
+        # Exit with appropriate code
+        return 0 if report.can_proceed else 1
+
+    except ImportError as e:
+        log_error_safe(logger, "❌ VFIO diagnostics module not found.", prefix="CHECK")
+        log_error_safe(
+            logger,
+            "Please ensure you're running this from the PCILeech project directory.",
+            prefix="CHECK",
+        )
+        log_error_safe(logger, "Details: {error}", prefix="CHECK", error=str(e))
+        return 1
     except Exception as e:
-        print(f"VFIO check failed: {e}")
+        log_error_with_root_cause(logger, "VFIO check failed", e)
+        import traceback
+
+        if logger.isEnabledFor(logging.DEBUG):
+            traceback.print_exc()
         return 1
 
 
 def handle_version(args):
     """Handle version information."""
-    print("PCILeech Firmware Generator v2.0")
-    print("Copyright (c) 2024 PCILeech Project")
-    print("Licensed under MIT License")
+    logger = get_logger(__name__)
+    log_info_safe(logger, "PCILeech Firmware Generator v2.0", prefix="VERSION")
+    log_info_safe(logger, "Copyright (c) 2024 PCILeech Project", prefix="VERSION")
+    log_info_safe(logger, "Licensed under MIT License", prefix="VERSION")
 
     # Show additional version info
     try:
         import pkg_resources
 
         version = pkg_resources.get_distribution("pcileechfwgenerator").version
-        print(f"Package version: {version}")
+        log_info_safe(
+            logger, "Package version: {version}", prefix="VERSION", version=version
+        )
     except:
         pass
 
@@ -385,9 +510,9 @@ def handle_version(args):
 
 def handle_donor_template(args):
     """Handle donor template generation."""
+    logger = get_logger(__name__)
     try:
-        from src.device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         # If validate flag is set, validate the file instead
         if args.validate:
@@ -395,15 +520,27 @@ def handle_donor_template(args):
                 validator = DonorInfoTemplateGenerator()
                 is_valid, errors = validator.validate_template_file(args.validate)
                 if is_valid:
-                    print(f"✓ Template file '{args.validate}' is valid")
+                    log_info_safe(
+                        logger,
+                        "✓ Template file '{file}' is valid",
+                        prefix="DONOR",
+                        file=args.validate,
+                    )
                     return 0
                 else:
-                    print(f"✗ Template file '{args.validate}' has errors:")
+                    log_error_safe(
+                        logger,
+                        "✗ Template file '{file}' has errors:",
+                        prefix="DONOR",
+                        file=args.validate,
+                    )
                     for error in errors:
-                        print(f"  - {error}")
+                        log_error_safe(
+                            logger, "  - {error}", prefix="DONOR", error=error
+                        )
                     return 1
             except Exception as e:
-                print(f"Error validating template: {e}")
+                log_error_with_root_cause(logger, "Error validating template", e)
                 return 1
 
         # Generate template
@@ -411,24 +548,42 @@ def handle_donor_template(args):
 
         # If BDF is specified, try to pre-fill with device info
         if args.bdf:
-            print(f"Generating template with device info from {args.bdf}...")
+            log_info_safe(
+                logger,
+                "Generating template with device info from {bdf}...",
+                prefix="DONOR",
+                bdf=args.bdf,
+            )
             try:
                 template = generator.generate_template_from_device(args.bdf)
                 # Check if we actually got device info
                 if template["device_info"]["identification"]["vendor_id"] is None:
-                    print(f"Error: Failed to read device information from {args.bdf}")
-                    print("Possible causes:")
-                    print("  - Device does not exist")
-                    print("  - Insufficient permissions (try with sudo)")
-                    print("  - lspci command not available")
+                    log_error_safe(
+                        logger,
+                        "Failed to read device information from {bdf}",
+                        prefix="DONOR",
+                        bdf=args.bdf,
+                    )
+                    log_error_safe(logger, "Possible causes:", prefix="DONOR")
+                    log_error_safe(logger, "  - Device does not exist", prefix="DONOR")
+                    log_error_safe(
+                        logger,
+                        "  - Insufficient permissions (try with sudo)",
+                        prefix="DONOR",
+                    )
+                    log_error_safe(
+                        logger, "  - lspci command not available", prefix="DONOR"
+                    )
                     return 1
             except Exception as e:
-                print(f"Error: Could not read device info: {e}")
+                log_error_with_root_cause(logger, "Could not read device info", e)
                 return 1
         elif args.blank:
             # Generate minimal template
             template = generator.generate_minimal_template()
-            print("Generating minimal donor info template...")
+            log_info_safe(
+                logger, "Generating minimal donor info template...", prefix="DONOR"
+            )
         else:
             # Generate full template
             template = generator.generate_blank_template()
@@ -437,21 +592,42 @@ def handle_donor_template(args):
         generator.save_template_dict(
             template, Path(args.output), pretty=not args.compact
         )
-        print(f"✓ Donor info template saved to: {args.output}")
+        log_info_safe(
+            logger,
+            "✓ Donor info template saved to: {output}",
+            prefix="DONOR",
+            output=args.output,
+        )
 
         if args.bdf:
-            print("\nTemplate pre-filled with device information.")
-            print("Please review and complete any missing fields.")
+            log_info_safe(
+                logger, "Template pre-filled with device information.", prefix="DONOR"
+            )
+            log_info_safe(
+                logger, "Please review and complete any missing fields.", prefix="DONOR"
+            )
         else:
-            print("\nNext steps:")
-            print("1. Fill in the device-specific values in the template")
-            print("2. Run behavioral profiling to capture timing data")
-            print("3. Use the completed template for advanced device cloning")
+            log_info_safe(logger, "Next steps:", prefix="DONOR")
+            log_info_safe(
+                logger,
+                "1. Fill in the device-specific values in the template",
+                prefix="DONOR",
+            )
+            log_info_safe(
+                logger,
+                "2. Run behavioral profiling to capture timing data",
+                prefix="DONOR",
+            )
+            log_info_safe(
+                logger,
+                "3. Use the completed template for advanced device cloning",
+                prefix="DONOR",
+            )
 
         return 0
 
     except Exception as e:
-        print(f"Failed to generate donor template: {e}")
+        log_error_with_root_cause(logger, "Failed to generate donor template", e)
         return 1
 
 

@@ -136,7 +136,7 @@ class ErrorTemplates:
             details="Root privileges required for device binding "
             "and container operations",
             suggested_actions=[
-                "Run with sudo: sudo python3 tui_generate.py",
+                "Run with sudo: sudo python3 pcileech.py tui",
                 "Ensure user is in required groups (docker, vfio)",
                 "Check system security policies",
             ],

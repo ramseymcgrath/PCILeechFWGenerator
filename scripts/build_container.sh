@@ -94,7 +94,7 @@ run_tests() {
     # Test 3: File structure
     print_status "Testing file structure..."
     $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" test -f /app/src/build.py
-    $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" test -f /app/generate.py
+    $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" test -f /app/pcileech.py
     $CONTAINER_ENGINE run --rm "$CONTAINER_TAG" test -d /app/output
     
     # Test 4: Python imports
@@ -201,14 +201,14 @@ show_usage_examples() {
     echo "    --device=/dev/vfio/GROUP --device=/dev/vfio/vfio \\"
     echo "    -v ./output:/app/output \\"
     echo "    $CONTAINER_TAG \\"
-    echo "    sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t"
+    echo "    sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board pcileech_35t325_x1"
     echo
     echo "With privileged access (less secure):"
     echo "  $CONTAINER_ENGINE run --rm -it --privileged \\"
     echo "    --device=/dev/vfio/GROUP --device=/dev/vfio/vfio \\"
     echo "    -v ./output:/app/output \\"
     echo "    $CONTAINER_TAG \\"
-    echo "    sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board 75t"
+    echo "    sudo python3 /app/src/build.py --bdf 0000:03:00.0 --board pcileech_35t325_x1"
     echo
 }
 

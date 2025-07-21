@@ -35,8 +35,7 @@ def sample_config():
     return BuildConfiguration(
         name="Test Profile",
         description="Test Description",
-        board_type="75t",
-        device_type="network",
+        board_type="pcileech_35t325_x1",
         advanced_sv=True,
         enable_variance=True,
         behavior_profiling=False,

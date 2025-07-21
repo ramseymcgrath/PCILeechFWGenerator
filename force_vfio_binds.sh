@@ -10,7 +10,7 @@ usage() {
 Usage: $0 -d <BDF> -b <donor-board> [-p <generator-path>]
 
   -d  PCI device BDF to clone (e.g. 0000:05:00.0)
-  -b  Donor board name passed to generate.py (e.g. pcileech_75t484_x1)
+  -b  Donor board name passed to pcileech.py (e.g. pcileech_75t484_x1)
   -p  Path to PCILeechFWGenerator root (default: \$HOME/PCILeechFWGenerator)
 EOF
   exit 1
@@ -100,6 +100,6 @@ done
 # ---------- run the build -----------------------------------------------------
 echo "🚀  Launching PCILeechFWGenerator ..."
 cd "$GEN_PATH"
-sudo -E python3 generate.py build --bdf "$BDF" --board "$BOARD"
+sudo -E python3 pcileech.py build --bdf "$BDF" --board "$BOARD"
 
 echo "✅  Build finished - firmware should be in $GEN_PATH/output"

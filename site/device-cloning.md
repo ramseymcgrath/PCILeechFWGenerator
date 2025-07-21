@@ -158,5 +158,5 @@ The validated context drives the Jinja2/SystemVerilog template engine:
 
 ```bash
 # Enable IOMMU and run generator
-sudo python3 generate.py build --donor 0000:01:00.0 --board pcileech_35t325_x4
+sudo python3 pcileech.py build --bdf 0000:01:00.0 --board pcileech_35t325_x4
 ```

@@ -11,8 +11,18 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
-                             ProgressBar, Select, Static, Switch)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    Select,
+    Static,
+    Switch,
+)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -69,10 +79,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                 yield Label("Board Type:")
                 yield Select(
                     [
-                        # Original boards
-                        ("35t", "35t"),
-                        ("75t", "75t"),
-                        ("100t", "100t"),
                         # CaptainDMA boards
                         ("pcileech_75t484_x1", "CaptainDMA 75T"),
                         ("pcileech_35t484_x1", "CaptainDMA 35T 4.1"),
@@ -84,21 +90,8 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                         ("pcileech_squirrel", "PCIe Squirrel"),
                         ("pcileech_pciescreamer_xc7a35", "PCIeScreamer"),
                     ],
-                    value="75t",
+                    value="pcileech_35t325_x1",
                     id="board-type-select",
-                )
-
-                # Device Type Selection
-                yield Label("Device Type:")
-                yield Select(
-                    [
-                        ("generic", "Generic"),
-                        ("network", "Network"),
-                        ("storage", "Storage"),
-                        ("graphics", "Graphics"),
-                        ("audio", "Audio"),
-                    ],
-                    id="device-type-select",
                 )
 
                 # Configuration Name
@@ -196,19 +189,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
         # Get current configuration from parent app
         app = self.app
 
-        # Initialize the device type select with default value
-        try:
-            device_type_select = self.query_one("#device-type-select", Select)
-            device_type_options = self._get_select_options(device_type_select)
-
-            # Set to generic if available, otherwise first option
-            if "generic" in device_type_options:
-                device_type_select.value = "generic"
-            elif device_type_options:
-                device_type_select.value = device_type_options[0]
-        except Exception as e:
-            print(f"Error initializing device type select: {e}")
-
         # Then populate with current configuration if available
         if hasattr(app, "current_config"):
             config = app.current_config
@@ -230,26 +210,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
                     f"Board type '{board_type}' not found, using '{board_type_options[0]}'"
                 )
                 board_type_select.value = board_type_options[0]
-
-            # Set device type safely
-            try:
-                device_type_select = self.query_one("#device-type-select", Select)
-                device_type_options = self._get_select_options(device_type_select)
-
-                # Only set the value if it's valid
-                device_type = config.device_type
-                if device_type in device_type_options:
-                    device_type_select.value = device_type
-                elif "generic" in device_type_options:
-                    print(f"Device type '{device_type}' not found, using 'generic'")
-                    device_type_select.value = "generic"
-                elif device_type_options:
-                    print(
-                        f"Device type '{device_type}' not found, using '{device_type_options[0]}'"
-                    )
-                    device_type_select.value = device_type_options[0]
-            except Exception as e:
-                print(f"Error setting device type: {e}")
 
             self.query_one("#config-name-input", Input).value = config.name
             self.query_one("#config-description-input", Input).value = (
@@ -349,10 +309,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
     def _create_config_from_form(self) -> BuildConfiguration:
         """Create BuildConfiguration from form values"""
         try:
-            # Get device type safely
-            device_type_select = self.query_one("#device-type-select", Select)
-            # Use "network" as default for test compatibility
-            device_type = self._sanitize_select_value(device_type_select, "network")
 
             # Get board type safely
             board_type_select = self.query_one("#board-type-select", Select)
@@ -365,7 +321,6 @@ class ConfigurationDialog(ModalScreen[BuildConfiguration]):
 
             return BuildConfiguration(
                 board_type=board_type,
-                device_type=device_type,
                 name=self.query_one("#config-name-input", Input).value,
                 description=self.query_one("#config-description-input", Input).value,
                 advanced_sv=self.query_one("#advanced-sv-switch", Switch).value,
@@ -490,7 +445,6 @@ class PCILeechTUI(App):
                 with Vertical(id="config-panel", classes="panel"):
                     yield Static("⚙️ Build Configuration", classes="panel-title")
                     yield Static("Board Type: 75t", id="board-type")
-                    yield Static("Device Type: generic", id="device-type")
                     yield Static("Advanced Features: Enabled", id="advanced-features")
                     yield Static("Build Mode: Standard", id="build-mode")
                     with Horizontal(classes="button-row"):
@@ -642,9 +596,6 @@ class PCILeechTUI(App):
         try:
             self.query_one("#board-type", Static).update(
                 f"Board Type: {config.board_type}"
-            )
-            self.query_one("#device-type", Static).update(
-                f"Device Type: {config.device_type}"
             )
 
             features = "Enabled" if config.is_advanced else "Basic"
@@ -948,8 +899,7 @@ class PCILeechTUI(App):
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import \
-                DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")

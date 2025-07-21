@@ -19,8 +19,12 @@ from .vfio import get_current_driver, restore_driver
 
 # Import safe logging functions
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):
@@ -63,7 +67,6 @@ class BuildConfig:
     board: str
     # feature toggles
     advanced_sv: bool = False
-    device_type: str = "generic"
     enable_variance: bool = False
     disable_power_management: bool = False
     disable_error_handling: bool = False
@@ -88,48 +91,17 @@ class BuildConfig:
     donor_template: Optional[str] = None
 
     def cmd_args(self) -> List[str]:
-        """Translate config to build.py flags"""
+        """Translate config to build.py flags - only include supported arguments"""
         args = [f"--bdf {self.bdf}", f"--board {self.board}"]
-        if self.advanced_sv:
-            args.append("--advanced-sv")
-        if self.device_type != "generic":
-            args.append(f"--device-type {self.device_type}")
-        if self.enable_variance:
-            args.append("--enable-variance")
-        if self.disable_power_management:
-            args.append("--disable-power-management")
-        if self.disable_error_handling:
-            args.append("--disable-error-handling")
-        if self.disable_performance_counters:
-            args.append("--disable-performance-counters")
+
+        # Only include arguments that build.py actually supports:
+        # --profile (for behavior profiling duration)
         if self.behavior_profile_duration != 30:
-            args.append(f"--behavior-profile-duration {self.behavior_profile_duration}")
+            args.append(f"--profile {self.behavior_profile_duration}")
 
-        # Add fallback control arguments
-        if self.fallback_mode != "none":
-            args.append(f"--fallback-mode {self.fallback_mode}")
-        if self.allowed_fallbacks:
-            args.append(f"--allow-fallbacks {','.join(self.allowed_fallbacks)}")
-        if self.denied_fallbacks:
-            args.append(f"--deny-fallbacks {','.join(self.denied_fallbacks)}")
-
-        # Add active device configuration arguments
-        if self.disable_active_device:
-            args.append("--disable-active-device")
-        if self.active_timer_period != 100000:
-            args.append(f"--active-timer-period {self.active_timer_period}")
-        if self.active_interrupt_mode != "msi":
-            args.append(f"--active-interrupt-mode {self.active_interrupt_mode}")
-        if self.active_interrupt_vector != 0:
-            args.append(f"--active-interrupt-vector {self.active_interrupt_vector}")
-        if self.active_priority != 15:
-            args.append(f"--active-priority {self.active_priority}")
-
-        # Add output template option
+        # --output-template and --donor-template are supported
         if self.output_template:
             args.append(f"--output-template {self.output_template}")
-
-        # Add donor template option
         if self.donor_template:
             args.append(f"--donor-template {self.donor_template}")
 
@@ -141,15 +113,35 @@ class BuildConfig:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def check_podman_available() -> bool:
+    """Check if Podman is available and working."""
+    if shutil.which("podman") is None:
+        return False
+
+    # Try to run a simple podman command to check if it's working
+    try:
+        shell = Shell()
+        shell.run("podman version", timeout=5)
+        return True
+    except RuntimeError:
+        return False
+
+
 def require_podman() -> None:
     if shutil.which("podman") is None:
         raise EnvError("Podman not found - install it or adjust PATH")
 
 
 def image_exists(name: str) -> bool:
-    shell = Shell()
-    out = shell.run("podman images --format '{{.Repository}}:{{.Tag}}'", timeout=5)
-    return any(line.startswith(name) for line in out.splitlines())
+    try:
+        shell = Shell()
+        out = shell.run("podman images --format '{{.Repository}}:{{.Tag}}'", timeout=5)
+        return any(line.startswith(name) for line in out.splitlines())
+    except RuntimeError as e:
+        # If podman fails to connect, return False
+        if "Cannot connect to Podman" in str(e) or "connection refused" in str(e):
+            return False
+        raise
 
 
 def build_image(name: str, tag: str) -> None:
@@ -163,11 +155,157 @@ def build_image(name: str, tag: str) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def prompt_user_for_local_build() -> bool:
+    """Prompt user to confirm local build when Podman is unavailable."""
+    print("\n" + "=" * 60)
+    print("⚠️  Podman is not available or cannot connect.")
+    print("=" * 60)
+    print("\nThe build normally runs in a container for consistency.")
+    print("However, you can run the build locally on your system.")
+    print("\nNote: Local builds require all dependencies to be installed.")
+    print("      (Vivado, Python packages, etc.)")
+    print()
+
+    while True:
+        response = (
+            input("Would you like to run the build locally? [y/N]: ").strip().lower()
+        )
+        if response in ["y", "yes"]:
+            return True
+        elif response in ["n", "no", ""]:
+            return False
+        else:
+            print("Please enter 'y' for yes or 'n' for no.")
+
+
+def run_local_build(cfg: BuildConfig) -> None:
+    """Run build locally without container."""
+    log_info_safe(
+        logger,
+        "Running local build - board={board}",
+        board=cfg.board,
+        prefix="LOCAL",
+    )
+
+    # Ensure output directory exists
+    output_dir = Path.cwd() / "output"
+    output_dir = output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build command arguments for local build
+    cmd_args = cfg.cmd_args()
+
+    # Add src to path if needed
+    src_path = Path(__file__).parent.parent
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
+
+    # Import build module
+    try:
+        from build import main as build_main
+    except ImportError:
+        # Try alternative import path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from src.build import main as build_main
+
+    # Prepare arguments for build.py - only pass supported arguments
+    build_args = []
+    for i, arg in enumerate(cmd_args):
+        if arg == "--bdf" and i + 1 < len(cmd_args):
+            build_args.extend(["--bdf", cmd_args[i + 1]])
+        elif arg == "--board" and i + 1 < len(cmd_args):
+            build_args.extend(["--board", cmd_args[i + 1]])
+        elif arg == "--profile" and i + 1 < len(cmd_args):
+            build_args.extend(["--profile", cmd_args[i + 1]])
+        elif arg == "--output-template" and i + 1 < len(cmd_args):
+            build_args.extend(["--output-template", cmd_args[i + 1]])
+        elif arg == "--donor-template" and i + 1 < len(cmd_args):
+            build_args.extend(["--donor-template", cmd_args[i + 1]])
+        # All other arguments are not supported by build.py and are skipped
+
+    log_info_safe(
+        logger,
+        "Executing local build with args: {args}",
+        args=" ".join(build_args),
+        prefix="LOCAL",
+    )
+
+    # Run the build
+    start = time.time()
+    try:
+        result = build_main(build_args)
+        if result != 0:
+            raise RuntimeError(f"Local build failed with exit code {result}")
+
+        elapsed = time.time() - start
+        log_info_safe(
+            logger,
+            "Local build completed in {elapsed:.1f}s ✓",
+            elapsed=elapsed,
+            prefix="LOCAL",
+        )
+    except Exception as e:
+        elapsed = time.time() - start
+        log_error_safe(
+            logger,
+            "Local build failed after {elapsed:.1f}s: {error}",
+            elapsed=elapsed,
+            error=str(e),
+            prefix="LOCAL",
+        )
+        raise
+
+
 def run_build(cfg: BuildConfig) -> None:
     """High‑level orchestration: VFIO bind → container run → cleanup"""
-    require_podman()
-    if not image_exists(f"{cfg.container_image}:{cfg.container_tag}"):
-        build_image(cfg.container_image, cfg.container_tag)
+    # Check if Podman is available and working
+    podman_available = check_podman_available()
+
+    if not podman_available:
+        log_warning_safe(
+            logger,
+            "Podman not available or cannot connect",
+            prefix="BUILD",
+        )
+
+        # Prompt user for local build
+        if prompt_user_for_local_build():
+            run_local_build(cfg)
+        else:
+            log_info_safe(
+                logger,
+                "Build cancelled by user",
+                prefix="BUILD",
+            )
+            sys.exit(1)
+        return
+
+    # Try container build first
+    try:
+        require_podman()
+        if not image_exists(f"{cfg.container_image}:{cfg.container_tag}"):
+            build_image(cfg.container_image, cfg.container_tag)
+    except (EnvError, RuntimeError) as e:
+        if "Cannot connect to Podman" in str(e) or "connection refused" in str(e):
+            log_warning_safe(
+                logger,
+                "Podman connection failed: {error}",
+                error=str(e),
+                prefix="BUILD",
+            )
+
+            # Prompt user for local build
+            if prompt_user_for_local_build():
+                run_local_build(cfg)
+            else:
+                log_info_safe(
+                    logger,
+                    "Build cancelled by user",
+                    prefix="BUILD",
+                )
+                sys.exit(1)
+            return
+        raise
 
     # Ensure host output dir exists and is absolute
     output_dir = (Path.cwd() / "output").resolve()
@@ -331,7 +469,6 @@ if __name__ == "__main__":
     p.add_argument("bdf", help="PCIe BDF, e.g. 0000:03:00.0")
     p.add_argument("board", help="Target board string")
     p.add_argument("--advanced-sv", action="store_true")
-    p.add_argument("--device-type", default="generic")
     p.add_argument("--enable-variance", action="store_true")
     p.add_argument("--auto-fix", action="store_true")
     args = p.parse_args()

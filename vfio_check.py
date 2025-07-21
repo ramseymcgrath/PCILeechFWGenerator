@@ -12,11 +12,16 @@ Usage:
 """
 
 import argparse
+import logging
 import os
 import sys
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+from src.log_config import setup_logging, get_logger
+from src.string_utils import log_info_safe, log_error_safe
+from src.error_utils import log_error_with_root_cause
 
 
 def main():
@@ -64,18 +69,29 @@ PCILeech from accessing PCI devices for firmware generation.
 
     args = parser.parse_args()
 
+    # Setup logging
+    if args.quiet:
+        setup_logging(level=logging.WARNING)
+    else:
+        setup_logging(level=logging.INFO)
+
+    logger = get_logger(__name__)
+
     if not args.quiet:
-        print("🔧 VFIO Configuration Checker")
-        print("=" * 50)
-        print("Checking VFIO setup for PCILeech compatibility...")
+        log_info_safe(logger, "🔧 VFIO Configuration Checker", prefix="VFIO")
+        log_info_safe(logger, "=" * 50, prefix="VFIO")
+        log_info_safe(
+            logger, "Checking VFIO setup for PCILeech compatibility...", prefix="VFIO"
+        )
 
         if args.device_bdf:
-            print(f"Target Device: {args.device_bdf}")
-        print()
+            log_info_safe(
+                logger, "Target Device: {device}", prefix="VFIO", device=args.device_bdf
+            )
+        log_info_safe(logger, "", prefix="VFIO")
 
     try:
-        from src.cli.vfio_diagnostics import (VFIODiagnostics,
-                                              run_vfio_diagnostic)
+        from src.cli.vfio_diagnostics import VFIODiagnostics, run_vfio_diagnostic
 
         # Run diagnostics
         result = run_vfio_diagnostic(
@@ -86,9 +102,20 @@ PCILeech from accessing PCI devices for firmware generation.
         if args.quiet:
             # Just print summary for quiet mode
             status_symbol = "✅" if result.can_proceed else "❌"
-            print(f"{status_symbol} VFIO Status: {result.overall_status.value.upper()}")
+            log_info_safe(
+                logger,
+                "{symbol} VFIO Status: {status}",
+                prefix="VFIO",
+                symbol=status_symbol,
+                status=result.overall_status.value.upper(),
+            )
             if result.critical_issues:
-                print(f"Critical Issues: {len(result.critical_issues)}")
+                log_info_safe(
+                    logger,
+                    "Critical Issues: {count}",
+                    prefix="VFIO",
+                    count=len(result.critical_issues),
+                )
 
         # Generate script if requested
         if args.generate_script:
@@ -100,22 +127,31 @@ PCILeech from accessing PCI devices for firmware generation.
                 f.write(script)
 
             os.chmod(script_path, 0o755)
-            print(f"\n📝 Remediation script generated: {script_path}")
-            print("To apply fixes, run:")
-            print(f"   sudo ./{script_path}")
+            log_info_safe(
+                logger,
+                "\n📝 Remediation script generated: {path}",
+                prefix="VFIO",
+                path=script_path,
+            )
+            log_info_safe(logger, "To apply fixes, run:", prefix="VFIO")
+            log_info_safe(logger, "   sudo ./{path}", prefix="VFIO", path=script_path)
 
         # Exit with appropriate code
         return 0 if result.can_proceed else 1
 
-    except ImportError:
-        print("❌ Error: VFIO diagnostics module not found.")
-        print("Please ensure you're running this from the PCILeech project directory.")
+    except ImportError as e:
+        log_error_safe(logger, "❌ VFIO diagnostics module not found.", prefix="VFIO")
+        log_error_safe(
+            logger,
+            "Please ensure you're running this from the PCILeech project directory.",
+            prefix="VFIO",
+        )
         return 1
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user.")
+        log_info_safe(logger, "\n⚠️  Operation cancelled by user.", prefix="VFIO")
         return 1
     except Exception as e:
-        print(f"❌ Error: {e}")
+        log_error_with_root_cause(logger, "❌ Error", e)
         return 1
 
 

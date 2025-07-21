@@ -77,7 +77,7 @@ DonorInfoTemplateGenerator.save_template_dict(template, Path('device_template.js
 "
 
 # Then use existing behavioral profiling during build
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --enable-behavioral-profiling
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1 --enable-behavioral-profiling
 ```
 
 This approach allows you to:
@@ -337,7 +337,7 @@ Run behavioral profiling to capture timing and access patterns:
 
 ```bash
 # Enable behavioral profiling in your build
-sudo python3 pcileech.py build --bdf 0000:03:00.0 --board 75t --enable-behavioral-profiling
+sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1 --enable-behavioral-profiling
 ```
 
 ### Step 3: Manual Testing
@@ -405,13 +405,6 @@ Example scenarios:
 4. **Documentation**: Add detailed comments in the "comments" field
 5. **Sharing**: Consider contributing templates for common devices
 
-## Template Examples
-
-Example templates for common devices can be found in:
-
-- `configs/donor_templates/` directory
-- Community contributions on GitHub
-- Device manufacturer documentation
 
 ## Troubleshooting
 

@@ -473,7 +473,7 @@ validate_donor_dump() {
 
 test_donor_integration() {
     local donor_file="$1"
-    local test_board="${2:-75t}"
+    local test_board="${2:-pcileech_35t325_x1}"
     local test_bdf="${3:-0000:03:00.0}"
     
     echo "Testing donor dump integration..."
@@ -842,7 +842,7 @@ The manual process gives you complete control over donor dump generation, making
 - **Custom integration** with existing workflows
 - **Educational purposes** to understand the process
 
-For most users, the automated [`pcileech-generate`](../PCILeechFWGenerator/pcileech_generate.py) command or [TUI interface](tui-readme.md) remains the recommended approach, but this manual process provides a powerful alternative when needed.
+For most users, the automated [`pcileech.py`](../PCILeechFWGenerator/pcileech.py) command or [TUI interface](tui-readme.md) remains the recommended approach, but this manual process provides a powerful alternative when needed.
 
 ## Quick Reference
 

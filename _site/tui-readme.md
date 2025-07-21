@@ -84,16 +84,13 @@ pip install textual rich psutil watchdog pydantic
 There are several ways to launch the TUI:
 
 ```bash
-# Method 1: Using the dedicated TUI script
-python3 tui_generate.py
+# Method 1: Using the unified entrypoint (recommended)
+sudo python3 pcileech.py tui
 
-# Method 2: Using the --tui flag with generate.py
-sudo python3 generate.py --tui
-
-# Method 3: Direct execution
+# Method 2: Direct execution 
 sudo python3 -m src.tui.main
 
-# Method 4: Using the sudo wrapper (recommended for root access)
+# Method 3: Using the sudo wrapper (if installed)
 ./install-sudo-wrapper.sh  # Install the wrapper first (one-time setup)
 pcileech-tui-sudo
 ```
@@ -185,8 +182,7 @@ Profiles are stored in `~/.pcileech/profiles/` as JSON files.
 ```json
 {
   "name": "Network Device Standard",
-  "board_type": "75t",
-  "device_type": "network",
+  "board_type": "pcileech_35t325_x1",
   "advanced_sv": true,
   "enable_variance": true,
   "behavior_profiling": true,
@@ -199,8 +195,7 @@ Profiles are stored in `~/.pcileech/profiles/` as JSON files.
 ```json
 {
   "name": "Quick Development",
-  "board_type": "35t",
-  "device_type": "generic",
+  "board_type": "pcileech_35t325_x1",
   "advanced_sv": false,
   "enable_variance": false,
   "flash_after_build": true,
@@ -212,8 +207,7 @@ Profiles are stored in `~/.pcileech/profiles/` as JSON files.
 ```json
 {
   "name": "Local Build",
-  "board_type": "75t",
-  "device_type": "generic",
+  "board_type": "pcileech_35t325_x1",
   "advanced_sv": true,
   "enable_variance": true,
   "donor_dump": false,
@@ -261,7 +255,7 @@ The TUI provides intelligent error analysis and guidance:
 #### Insufficient Permissions
 - **Cause**: Not running with root privileges
 - **Solutions**:
-  - Run with sudo: `sudo python3 tui_generate.py`
+  - Run with sudo: `sudo python3 pcileech.py tui`
   - Add user to required groups
 
 ## 🚀 Advanced Features
@@ -375,7 +369,7 @@ The TUI continuously monitors:
    pcileech-tui-sudo
    
    # Or directly with sudo
-   sudo python3 tui_generate.py
+   sudo python3 pcileech.py tui
    ```
    
    > **Note**: When running with sudo, you might encounter the error `ModuleNotFoundError: No module named 'src'`. This happens because sudo changes the Python module search path. Use the provided sudo wrapper script to avoid this issue.
