@@ -24,11 +24,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.error_utils import extract_root_cause
-from src.exceptions import PCILeechGenerationError
+from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
+
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.templating import (AdvancedSVGenerator, BuildContext,
-                            TemplateRenderer, TemplateRenderError)
+from src.templating import (
+    AdvancedSVGenerator,
+    BuildContext,
+    TemplateRenderer,
+    TemplateRenderError,
+)
 
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
@@ -46,7 +51,6 @@ class PCILeechGenerationConfig:
 
     # Device identification
     device_bdf: str
-    device_profile: str = "generic"
 
     # Generation options
     enable_behavior_profiling: bool = True
@@ -147,7 +151,6 @@ class PCILeechGenerator:
         # Initialize configuration space manager
         self.config_space_manager = ConfigSpaceManager(
             bdf=self.config.device_bdf,
-            device_profile=self.config.device_profile,
             strict_vfio=getattr(self.config, "strict_vfio", True),
         )
 
@@ -304,6 +307,10 @@ class PCILeechGenerator:
 
             return generation_result
 
+        except PlatformCompatibilityError:
+            # For platform compatibility issues, don't log additional error messages
+            # The original detailed error was already logged
+            raise
         except Exception as e:
             log_error_safe(
                 self.logger,
@@ -939,8 +946,9 @@ class PCILeechGenerator:
                         )
                     else:
                         # Generate new content as last resort
-                        from ..templating.systemverilog_generator import \
-                            AdvancedSVGenerator
+                        from ..templating.systemverilog_generator import (
+                            AdvancedSVGenerator,
+                        )
 
                         sv_gen = AdvancedSVGenerator(
                             template_dir=self.config.template_dir
@@ -1156,7 +1164,6 @@ class PCILeechGenerator:
             "generator_version": "1.0.0",
             "config": {
                 "device_bdf": self.config.device_bdf,
-                "device_profile": self.config.device_profile,
                 "enable_behavior_profiling": self.config.enable_behavior_profiling,
                 "enable_manufacturing_variance": self.config.enable_manufacturing_variance,
                 "enable_advanced_features": self.config.enable_advanced_features,

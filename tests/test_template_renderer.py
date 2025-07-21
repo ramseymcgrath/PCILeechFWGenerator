@@ -8,8 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from src.templating.template_renderer import (TemplateRenderer,
-                                              TemplateRenderError)
+from src.templating.template_renderer import TemplateRenderer, TemplateRenderError
 
 
 class TestTemplateRenderer:

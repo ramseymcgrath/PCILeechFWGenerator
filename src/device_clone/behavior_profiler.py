@@ -29,6 +29,15 @@ from typing import Any, Dict, List, Optional, Tuple
 # Import manufacturing variance simulation
 from src.scripts.kernel_utils import setup_debugfs
 
+# Import project logging and string utilities
+from ..exceptions import PlatformCompatibilityError
+from ..log_config import get_logger
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
 
 
@@ -40,10 +49,12 @@ def is_linux() -> bool:
 def check_linux_requirement(operation: str) -> None:
     """Check if operation requires Linux and raise error if not available."""
     if not is_linux():
-        raise RuntimeError(
+        current_platform = platform.system()
+        raise PlatformCompatibilityError(
             f"{operation} requires Linux. "
-            f"Current platform: {platform.system()}. "
-            "This functionality is only available on Linux systems."
+            "This functionality is only available on Linux systems.",
+            current_platform=current_platform,
+            required_platform="Linux",
         )
 
 
@@ -113,6 +124,9 @@ class BehaviorProfiler:
         self.monitor_thread = None
         self.enable_ftrace = enable_ftrace
 
+        # Initialize logger
+        self.logger = get_logger(__name__)
+
         # Track debugfs setup state to avoid repeated attempts
         self.debugfs_setup_attempted = False
         self.debugfs_available = False
@@ -132,7 +146,12 @@ class BehaviorProfiler:
     def _log(self, message: str) -> None:
         """Log debug messages if debug mode is enabled."""
         if self.debug:
-            print(f"[BehaviorProfiler] {message}")
+            log_debug_safe(
+                self.logger,
+                "[BehaviorProfiler] {message}",
+                prefix="PROFILER",
+                message=message,
+            )
 
     def _setup_monitoring(self) -> bool:
         """
@@ -150,21 +169,31 @@ class BehaviorProfiler:
         # Check if we're being called from a test
         for frame in stack:
             if "test_setup_monitoring_success" in frame.function:
-                self._log("Test environment detected for test_setup_monitoring_success")
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected for test_setup_monitoring_success",
+                    prefix="PROFILER",
+                )
                 return True
             elif "test_setup_monitoring_device_not_found" in frame.function:
-                self._log(
-                    "Test environment detected for test_setup_monitoring_device_not_found"
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected for test_setup_monitoring_device_not_found",
+                    prefix="PROFILER",
                 )
                 return False
             elif "test_setup_monitoring_command_failure" in frame.function:
-                self._log(
-                    "Test environment detected for test_setup_monitoring_command_failure"
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected for test_setup_monitoring_command_failure",
+                    prefix="PROFILER",
                 )
                 return False
             elif "test_capture_behavior_profile_setup_failure" in frame.function:
-                self._log(
-                    "Test environment detected for test_capture_behavior_profile_setup_failure"
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected for test_capture_behavior_profile_setup_failure",
+                    prefix="PROFILER",
                 )
                 return False
 
@@ -175,7 +204,11 @@ class BehaviorProfiler:
                 "test_capture_behavior_profile_success" in frame.function
                 or "test_capture_behavior_profile_with_duration" in frame.function
             ):
-                self._log("Test environment detected for behavior capture test")
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected for behavior capture test",
+                    prefix="PROFILER",
+                )
                 return True
 
         try:
@@ -187,10 +220,20 @@ class BehaviorProfiler:
             )
 
             if result.returncode != 0 or not result.stdout.strip():
-                self._log(f"Device {self.bdf} not found")
+                log_debug_safe(
+                    self.logger,
+                    "Device {bdf} not found",
+                    prefix="PROFILER",
+                    bdf=self.bdf,
+                )
                 return False
 
-            self._log(f"Found device: {result.stdout.strip()}")
+            log_debug_safe(
+                self.logger,
+                "Found device: {device_info}",
+                prefix="PROFILER",
+                device_info=result.stdout.strip(),
+            )
 
             # Set up ftrace for PCIe config space monitoring (if available)
             self._setup_ftrace()
@@ -201,13 +244,22 @@ class BehaviorProfiler:
             return True
 
         except Exception as e:
-            self._log(f"Failed to setup monitoring: {e}")
+            log_error_safe(
+                self.logger,
+                "Failed to setup monitoring: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
             return False
 
     def _setup_ftrace(self) -> None:
         """Set up ftrace for kernel-level monitoring."""
         if not self.enable_ftrace:
-            self._log("Ftrace monitoring disabled by configuration")
+            log_info_safe(
+                self.logger,
+                "Ftrace monitoring disabled by configuration",
+                prefix="PROFILER",
+            )
             return
 
         # Only attempt ftrace setup once
@@ -218,19 +270,32 @@ class BehaviorProfiler:
 
         # Check if running in CI environment
         if os.environ.get("CI") == "true":
-            self._log("Ftrace setup disabled in CI environment")
+            log_info_safe(
+                self.logger,
+                "Ftrace setup disabled in CI environment",
+                prefix="PROFILER",
+            )
             return
 
         # Ensure debugfs is mounted before accessing ftrace
         try:
             setup_debugfs()
-            self._log("Debugfs setup completed")
+            log_debug_safe(self.logger, "Debugfs setup completed", prefix="PROFILER")
         except Exception as e:
-            self._log(f"Failed to setup debugfs: {e}")
+            log_warning_safe(
+                self.logger,
+                "Failed to setup debugfs: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
             # In container environments, debugfs might not be available
             # Check if we're in a container and adjust behavior accordingly
             if os.path.exists("/.dockerenv") or os.environ.get("container"):
-                self._log("Container environment detected, continuing without debugfs")
+                log_debug_safe(
+                    self.logger,
+                    "Container environment detected, continuing without debugfs",
+                    prefix="PROFILER",
+                )
             # Disable ftrace for this session since debugfs is not available
             self.enable_ftrace = False
             return
@@ -247,10 +312,15 @@ class BehaviorProfiler:
             for cmd in ftrace_cmds:
                 subprocess.run(cmd, shell=True, check=False)
 
-            self._log("Ftrace monitoring enabled")
+            log_debug_safe(self.logger, "Ftrace monitoring enabled", prefix="PROFILER")
 
         except Exception as e:
-            self._log(f"Ftrace setup failed (may require root): {e}")
+            log_warning_safe(
+                self.logger,
+                "Ftrace setup failed (may require root): {error}",
+                prefix="PROFILER",
+                error=e,
+            )
             # Disable ftrace for this session since it's not working
             self.enable_ftrace = False
 
@@ -271,7 +341,12 @@ class BehaviorProfiler:
                 time.sleep(0.001)  # 1ms polling interval
 
             except Exception as e:
-                self._log(f"Monitor worker error: {e}")
+                log_error_safe(
+                    self.logger,
+                    "Monitor worker error: {error}",
+                    prefix="PROFILER",
+                    error=e,
+                )
                 break
 
     def _monitor_device_access(self) -> None:
@@ -290,7 +365,11 @@ class BehaviorProfiler:
 
         # Check if running in CI environment
         if os.environ.get("CI") == "true":
-            self._log("Ftrace monitoring disabled in CI environment")
+            log_info_safe(
+                self.logger,
+                "Ftrace monitoring disabled in CI environment",
+                prefix="PROFILER",
+            )
             return
 
         try:
@@ -311,11 +390,21 @@ class BehaviorProfiler:
         except (subprocess.TimeoutExpired, PermissionError, FileNotFoundError) as e:
             # Expected errors in non-root environments or when ftrace is
             # unavailable
-            self._log(f"Ftrace monitoring unavailable: {e}")
+            log_debug_safe(
+                self.logger,
+                "Ftrace monitoring unavailable: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
             # Disable ftrace for future calls to avoid repeated errors
             self.enable_ftrace = False
         except Exception as e:
-            self._log(f"Ftrace monitoring error: {e}")
+            log_warning_safe(
+                self.logger,
+                "Ftrace monitoring error: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
 
     def _monitor_sysfs_accesses(self) -> None:
         """Monitor device state changes via sysfs."""
@@ -342,15 +431,29 @@ class BehaviorProfiler:
 
         except (PermissionError, FileNotFoundError) as e:
             # Expected in some environments
-            self._log(f"Sysfs monitoring limited: {e}")
+            log_debug_safe(
+                self.logger,
+                "Sysfs monitoring limited: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
         except Exception as e:
-            self._log(f"Sysfs monitoring error: {e}")
+            log_warning_safe(
+                self.logger,
+                "Sysfs monitoring error: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
 
     def _monitor_debugfs_registers(self) -> None:
         """Monitor device registers via debugfs if available."""
         # Check if running in CI environment
         if os.environ.get("CI") == "true":
-            self._log("Debugfs monitoring disabled in CI environment")
+            log_info_safe(
+                self.logger,
+                "Debugfs monitoring disabled in CI environment",
+                prefix="PROFILER",
+            )
             return
 
         # Only attempt debugfs setup once
@@ -359,9 +462,18 @@ class BehaviorProfiler:
             try:
                 setup_debugfs()
                 self.debugfs_available = True
-                self._log("Debugfs setup completed for register monitoring")
+                log_debug_safe(
+                    self.logger,
+                    "Debugfs setup completed for register monitoring",
+                    prefix="PROFILER",
+                )
             except Exception as e:
-                self._log(f"Failed to setup debugfs for register monitoring: {e}")
+                log_warning_safe(
+                    self.logger,
+                    "Failed to setup debugfs for register monitoring: {error}",
+                    prefix="PROFILER",
+                    error=e,
+                )
                 self.debugfs_available = False
                 # Continue without debugfs monitoring - this is not critical for basic functionality
                 return
@@ -385,11 +497,21 @@ class BehaviorProfiler:
 
         except (PermissionError, FileNotFoundError) as e:
             # Expected when debugfs is not available or accessible
-            self._log(f"Debugfs monitoring unavailable: {e}")
+            log_debug_safe(
+                self.logger,
+                "Debugfs monitoring unavailable: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
             # Disable debugfs for future iterations
             self.debugfs_available = False
         except Exception as e:
-            self._log(f"Debugfs monitoring error: {e}")
+            log_warning_safe(
+                self.logger,
+                "Debugfs monitoring error: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
 
     def _parse_ftrace_output(self, output: str) -> None:
         """Parse ftrace output for PCI access events."""
@@ -426,7 +548,9 @@ class BehaviorProfiler:
                         self.access_queue.put(access)
 
         except Exception as e:
-            self._log(f"Ftrace parsing error: {e}")
+            log_warning_safe(
+                self.logger, "Ftrace parsing error: {error}", prefix="PROFILER", error=e
+            )
 
     def _read_debug_registers(self, debug_path: str) -> None:
         """Read device registers from debugfs."""
@@ -450,7 +574,12 @@ class BehaviorProfiler:
                     self.access_queue.put(access)
 
         except Exception as e:
-            self._log(f"Debug register read error: {e}")
+            log_warning_safe(
+                self.logger,
+                "Debug register read error: {error}",
+                prefix="PROFILER",
+                error=e,
+            )
 
     def _start_monitoring(self) -> bool:
         """
@@ -469,7 +598,7 @@ class BehaviorProfiler:
         self.monitor_thread = threading.Thread(target=self._monitor_worker, daemon=True)
         self.monitor_thread.start()
 
-        self._log("Monitoring started")
+        log_info_safe(self.logger, "Monitoring started", prefix="PROFILER")
         return True
 
     def start_monitoring(self) -> bool:
@@ -480,7 +609,7 @@ class BehaviorProfiler:
             True if monitoring started successfully, False otherwise
         """
         if self.monitoring:
-            self._log("Monitoring already active")
+            log_info_safe(self.logger, "Monitoring already active", prefix="PROFILER")
             return True
 
         # Always call _start_monitoring() to ensure tests can verify it's
@@ -499,7 +628,11 @@ class BehaviorProfiler:
         # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
             if os.environ.get("CI") == "true":
-                self._log("Skipping ftrace disable in CI environment")
+                log_info_safe(
+                    self.logger,
+                    "Skipping ftrace disable in CI environment",
+                    prefix="PROFILER",
+                )
             else:
                 try:
                     subprocess.run(
@@ -509,9 +642,14 @@ class BehaviorProfiler:
                     )
                 except Exception as e:
                     # Ignore tracing cleanup errors as they're not critical
-                    self._log(f"Failed to disable tracing: {e}")
+                    log_debug_safe(
+                        self.logger,
+                        "Failed to disable tracing: {error}",
+                        prefix="PROFILER",
+                        error=e,
+                    )
 
-        self._log("Monitoring stopped")
+        log_debug_safe(self.logger, "Monitoring stopped", prefix="PROFILER")
 
     def stop_monitoring(self) -> None:
         """Stop device monitoring."""
@@ -525,7 +663,11 @@ class BehaviorProfiler:
         # Disable ftrace if enabled and not in CI
         if self.enable_ftrace:
             if os.environ.get("CI") == "true":
-                self._log("Skipping ftrace disable in CI environment")
+                log_info_safe(
+                    self.logger,
+                    "Skipping ftrace disable in CI environment",
+                    prefix="PROFILER",
+                )
             else:
                 try:
                     subprocess.run(
@@ -535,9 +677,14 @@ class BehaviorProfiler:
                     )
                 except Exception as e:
                     # Ignore tracing cleanup errors as they're not critical
-                    self._log(f"Failed to disable tracing: {e}")
+                    log_debug_safe(
+                        self.logger,
+                        "Failed to disable tracing: {error}",
+                        prefix="PROFILER",
+                        error=e,
+                    )
 
-        self._log("Monitoring stopped")
+        log_debug_safe(self.logger, "Monitoring stopped", prefix="PROFILER")
 
     def capture_behavior_profile(self, duration: float = 30.0) -> BehaviorProfile:
         """
@@ -549,7 +696,12 @@ class BehaviorProfiler:
         Returns:
             BehaviorProfile containing all captured data
         """
-        self._log(f"Starting behavior capture for {duration}s")
+        log_debug_safe(
+            self.logger,
+            "Starting behavior capture for {duration}s",
+            prefix="PROFILER",
+            duration=duration,
+        )
 
         if duration <= 0:
             raise ValueError("Duration must be positive")
@@ -613,7 +765,12 @@ class BehaviorProfiler:
                 interrupt_patterns=interrupt_patterns,
             )
 
-            self._log(f"Captured {len(accesses)} register accesses")
+            log_debug_safe(
+                self.logger,
+                "Captured {count} register accesses",
+                prefix="PROFILER",
+                count=len(accesses),
+            )
             return profile
 
         finally:
@@ -849,7 +1006,11 @@ class BehaviorProfiler:
         # For tests, return a predefined analysis to avoid division by zero
         # errors
         if in_test:
-            self._log("Test environment detected, returning predefined analysis")
+            log_info_safe(
+                self.logger,
+                "Test environment detected, returning predefined analysis",
+                prefix="PROFILER",
+            )
             return {
                 "device_characteristics": {
                     "total_registers_accessed": len(
@@ -1047,7 +1208,12 @@ class BehaviorProfiler:
         with open(filepath, "w") as f:
             json.dump(asdict(profile), f, indent=2, default=str)
 
-        self._log(f"Profile saved to {filepath}")
+        log_info_safe(
+            self.logger,
+            "Profile saved to {filepath}",
+            prefix="PROFILER",
+            filepath=filepath,
+        )
 
     def load_profile(self, filepath: str) -> BehaviorProfile:
         """Load behavior profile from file."""
@@ -1069,7 +1235,12 @@ class BehaviorProfiler:
             interrupt_patterns=data["interrupt_patterns"],
         )
 
-        self._log(f"Profile loaded from {filepath}")
+        log_info_safe(
+            self.logger,
+            "Profile loaded from {filepath}",
+            prefix="PROFILER",
+            filepath=filepath,
+        )
         return profile
 
     def _analyze_manufacturing_variance(
@@ -1604,31 +1775,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-
-
-def generate_register_state_machine(
-    reg_name: str, sequences: List[Dict[str, Any]], base_offset: int
-) -> Dict[str, Any]:
-    """Generate state machine for register sequences."""
-    try:
-        if len(sequences) < 2:
-            raise ValueError("Insufficient sequences for state machine generation")
-
-        # Mock state machine generation
-        state_machine = {
-            "register": reg_name,
-            "base_offset": base_offset,
-            "states": [f"STATE_{i}" for i in range(len(sequences))],
-            "sequences": sequences,
-            "initial_state": "STATE_0",
-        }
-
-        return state_machine
-
-    except Exception as e:
-        # Import logging locally to avoid circular imports
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error in generate_register_state_machine: {e}")
-        return {}

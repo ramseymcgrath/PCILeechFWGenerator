@@ -119,8 +119,7 @@ def validate_build_configuration():
     print("=== Build Configuration Validation ===")
 
     try:
-        from build import (ALLOW_MOCK_DATA, PRODUCTION_MODE,
-                           validate_production_mode)
+        from build import ALLOW_MOCK_DATA, PRODUCTION_MODE, validate_production_mode
 
         print(f"Loaded Configuration:")
         print(f"  PRODUCTION_MODE: {PRODUCTION_MODE}")

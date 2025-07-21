@@ -11,11 +11,14 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Protocol, Union,
-                    runtime_checkable)
+from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
 
-from ..exceptions import (DeviceConfigError, TCLBuilderError,
-                          TemplateNotFoundError, XDCConstraintError)
+from ..exceptions import (
+    DeviceConfigError,
+    TCLBuilderError,
+    TemplateNotFoundError,
+    XDCConstraintError,
+)
 from ..import_utils import safe_import, safe_import_class
 
 
@@ -191,8 +194,10 @@ class ConstraintManager:
         """
         try:
             # Import repo_manager functions directly
-            from file_management.repo_manager import (get_xdc_files,
-                                                      is_repository_accessible)
+            from file_management.repo_manager import (
+                get_xdc_files,
+                is_repository_accessible,
+            )
 
             if not is_repository_accessible(board_name):
                 raise XDCConstraintError("Repository is not accessible")
@@ -300,7 +305,7 @@ class TCLBuilder:
         self,
         template_dir: Optional[Union[str, Path]] = None,
         output_dir: Optional[Union[str, Path]] = None,
-        device_profile: str = "generic",
+        device_profile: Optional[str] = None,
     ):
         """
         Initialize the TCL builder.
@@ -308,7 +313,7 @@ class TCLBuilder:
         Args:
             template_dir: Directory containing template files
             output_dir: Directory for output files
-            device_profile: Device configuration profile to use
+            device_profile: Device configuration profile to use (optional)
         """
         self.logger = logging.getLogger(__name__)
         self.output_dir = Path(output_dir) if output_dir else Path(".")
@@ -346,8 +351,13 @@ class TCLBuilder:
         except ImportError as e:
             raise TCLBuilderError(f"Failed to initialize template renderer: {e}") from e
 
-    def _init_device_config(self, device_profile: str):
+    def _init_device_config(self, device_profile: Optional[str]):
         """Initialize device configuration with robust error handling."""
+        if device_profile is None:
+            self.logger.info("No device profile specified, using live device detection")
+            self.device_config = None
+            return
+
         try:
             from src.device_clone.device_config import get_device_config
 
@@ -359,9 +369,11 @@ class TCLBuilder:
     def _init_build_helpers(self):
         """Initialize build helpers with fallback handling."""
         try:
-            from build_helpers import (batch_write_tcl_files,
-                                       create_fpga_strategy_selector,
-                                       validate_fpga_part)
+            from build_helpers import (
+                batch_write_tcl_files,
+                create_fpga_strategy_selector,
+                validate_fpga_part,
+            )
 
             self.batch_write_tcl_files = batch_write_tcl_files
             self.fpga_strategy_selector = create_fpga_strategy_selector()

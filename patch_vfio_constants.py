@@ -26,9 +26,9 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
-from src.log_config import setup_logging, get_logger
-from src.string_utils import log_info_safe, log_error_safe, log_warning_safe
 from src.error_utils import log_error_with_root_cause
+from src.log_config import get_logger, setup_logging
+from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
 
 
 def compile_and_run_helper():

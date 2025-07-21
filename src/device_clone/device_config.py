@@ -577,7 +577,7 @@ def get_config_manager() -> DeviceConfigManager:
     return _config_manager
 
 
-def get_device_config(profile_name: str) -> DeviceConfiguration:
+def get_device_config(profile_name: str) -> Optional[DeviceConfiguration]:
     """
     Get device configuration by profile name.
 
@@ -588,11 +588,18 @@ def get_device_config(profile_name: str) -> DeviceConfiguration:
     Args:
         profile_name: Name of the device profile to load
 
-    Raises:
-        ValueError: If the profile is not found
+    Returns:
+        DeviceConfiguration if found, None if not found (for graceful degradation)
     """
     manager = get_config_manager()
-    return manager.get_profile(profile_name)
+    try:
+        return manager.get_profile(profile_name)
+    except ValueError:
+        # Profile not found - return None for graceful degradation
+        logger.warning(
+            f"Device profile '{profile_name}' not found, using live device detection"
+        )
+        return None
 
 
 def validate_hex_id(value: str, bit_width: int = 16) -> int:

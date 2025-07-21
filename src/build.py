@@ -24,11 +24,15 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 # Import board functions from the correct module
-from src.device_clone.board_config import (get_board_info,
-                                           get_pcileech_board_config,
-                                           validate_board)
+from src.device_clone.board_config import (
+    get_board_info,
+    get_pcileech_board_config,
+    validate_board,
+)
+
 # Import msix_capability at the module level to avoid late imports
 from src.device_clone.msix_capability import parse_msix_capability
+from src.exceptions import PlatformCompatibilityError
 from src.log_config import get_logger, setup_logging
 from src.string_utils import safe_format
 
@@ -824,6 +828,10 @@ class FirmwareBuilder:
             # Return list of artifacts
             return self.file_manager.list_artifacts()
 
+        except PlatformCompatibilityError:
+            # For platform compatibility issues, don't log additional error messages
+            # The original detailed error was already logged
+            raise
         except Exception as e:
             self.logger.error("Build failed: %s", str(e))
             if self.logger.isEnabledFor(logging.DEBUG):
@@ -838,9 +846,11 @@ class FirmwareBuilder:
             VivadoIntegrationError: If Vivado integration fails
         """
         try:
-            from src.vivado_handling import (find_vivado_installation,
-                                             integrate_pcileech_build,
-                                             run_vivado_with_error_reporting)
+            from src.vivado_handling import (
+                find_vivado_installation,
+                integrate_pcileech_build,
+                run_vivado_with_error_reporting,
+            )
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
@@ -881,13 +891,14 @@ class FirmwareBuilder:
         from src.device_clone.behavior_profiler import BehaviorProfiler
         from src.device_clone.board_config import get_pcileech_board_config
         from src.device_clone.pcileech_generator import (
-            PCILeechGenerationConfig, PCILeechGenerator)
+            PCILeechGenerationConfig,
+            PCILeechGenerator,
+        )
         from src.templating.tcl_builder import BuildContext, TCLBuilder
 
         self.gen = PCILeechGenerator(
             PCILeechGenerationConfig(
                 device_bdf=self.config.bdf,
-                device_profile="generic",
                 template_dir=None,
                 output_dir=self.config.output_dir,
                 enable_behavior_profiling=self.config.enable_profiling,
@@ -903,8 +914,7 @@ class FirmwareBuilder:
     def _load_donor_template(self) -> Optional[Dict[str, Any]]:
         """Load donor template if provided."""
         if self.config.donor_template:
-            from src.device_clone.donor_info_template import \
-                DonorInfoTemplateGenerator
+            from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
 
             self.logger.info(
                 f"Loading donor template from: {self.config.donor_template}"
@@ -1012,8 +1022,7 @@ class FirmwareBuilder:
 
     def _generate_donor_template(self, result: Dict[str, Any]) -> None:
         """Generate and save donor info template if requested."""
-        from src.device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         # Get device info from the result
         device_info = result.get("config_space_data", {}).get("device_info", {})
@@ -1186,6 +1195,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[FATAL] {e}", file=sys.stderr)
         return 2
 
+    except PlatformCompatibilityError as e:
+        # Platform compatibility errors - log once at info level since details were already logged
+        logger.info("Build skipped due to platform compatibility: %s", e)
+        return 1
+
     except ConfigurationError as e:
         # Configuration errors indicate user error
         logger.error("Configuration error: %s", e)
@@ -1204,9 +1218,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 130
 
     except Exception as e:
-        # Unexpected errors
-        logger.error("Unexpected error: %s", e)
-        logger.debug("Full traceback:", exc_info=True)
+        # Check if this is a platform compatibility error
+        error_str = str(e)
+        if (
+            "requires Linux" in error_str
+            or "platform incompatibility" in error_str
+            or "only available on Linux" in error_str
+        ):
+            # Platform compatibility errors were already logged in detail
+            logger.info(
+                "Build skipped due to platform compatibility (see details above)"
+            )
+        else:
+            # Unexpected errors
+            logger.error("Unexpected error: %s", e)
+            logger.debug("Full traceback:", exc_info=True)
         return 1
 
 

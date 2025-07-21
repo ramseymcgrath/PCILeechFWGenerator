@@ -20,15 +20,16 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
+from src.error_utils import format_concise_error, log_error_with_root_cause
+
 # Import our custom utilities
-from src.log_config import setup_logging, get_logger
+from src.log_config import get_logger, setup_logging
 from src.string_utils import (
-    safe_format,
-    log_info_safe,
     log_error_safe,
+    log_info_safe,
     log_warning_safe,
+    safe_format,
 )
-from src.error_utils import log_error_with_root_cause, format_concise_error
 
 
 def get_available_boards():
@@ -165,6 +166,12 @@ Examples:
         "--donor-template",
         help="Use donor info JSON template to override discovered values",
     )
+    build_parser.add_argument(
+        "--device-type",
+        choices=["generic", "network", "storage", "audio", "graphics"],
+        default="generic",
+        help="Override device type detection (default: auto-detect from class code)",
+    )
 
     # TUI command
     tui_parser = subparsers.add_parser("tui", help="Launch interactive TUI")
@@ -296,6 +303,10 @@ def handle_build(args):
         if args.donor_template:
             cli_args.extend(["--donor-template", args.donor_template])
 
+        # Pass device type if specified and not the default
+        if hasattr(args, "device_type") and args.device_type != "generic":
+            cli_args.extend(["--device-type", args.device_type])
+
         # Run the CLI
         return cli_main(cli_args)
 
@@ -391,14 +402,15 @@ def handle_check(args):
     logger = get_logger(__name__)
     try:
         # Import the VFIO diagnostics functionality
+        import subprocess
+        from pathlib import Path
+
         from src.cli.vfio_diagnostics import (
             Diagnostics,
             Status,
-            render,
             remediation_script,
+            render,
         )
-        import subprocess
-        from pathlib import Path
 
         log_info_safe(
             logger,

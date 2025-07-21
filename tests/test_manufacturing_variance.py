@@ -8,8 +8,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.device_clone.manufacturing_variance import (
-    DeviceClass, ManufacturingVarianceSimulator, TimingDatum, VarianceModel,
-    VarianceParameters, VarianceType, clamp)
+    DeviceClass,
+    ManufacturingVarianceSimulator,
+    TimingDatum,
+    VarianceModel,
+    VarianceParameters,
+    VarianceType,
+    clamp,
+)
 
 
 class TestHelperFunctions:

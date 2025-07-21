@@ -7,14 +7,20 @@ cloned pcileech-fpga repository, allowing the build process to use the
 latest templates from the upstream repository.
 """
 
-import logging
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from ..log_config import get_logger
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .repo_manager import RepoManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemplateDiscovery:
@@ -50,7 +56,12 @@ class TemplateDiscovery:
         try:
             board_path = RepoManager.get_board_path(board_name, repo_root=repo_root)
         except RuntimeError as e:
-            logger.error(f"Failed to get board path for {board_name}: {e}")
+            log_error_safe(
+                logger,
+                "Failed to get board path for {board_name}: {error}",
+                board_name=board_name,
+                error=e,
+            )
             return {}
 
         templates = {}
@@ -63,8 +74,12 @@ class TemplateDiscovery:
 
             if template_files:
                 templates[template_type] = template_files
-                logger.info(
-                    f"Found {len(template_files)} {template_type} templates for {board_name}"
+                log_info_safe(
+                    logger,
+                    "Found {count} {template_type} templates for {board_name}",
+                    count=len(template_files),
+                    template_type=template_type,
+                    board_name=board_name,
                 )
 
         return templates
@@ -170,12 +185,21 @@ class TemplateDiscovery:
                     copied_files.append(dest_path)
 
                 except Exception as e:
-                    logger.warning(f"Failed to copy template {template_file}: {e}")
+                    log_warning_safe(
+                        logger,
+                        "Failed to copy template {template_file}: {error}",
+                        template_file=template_file,
+                        error=e,
+                    )
 
             if copied_files:
                 copied_templates[template_type] = copied_files
-                logger.info(
-                    f"Copied {len(copied_files)} {template_type} templates to {type_dir}"
+                log_info_safe(
+                    logger,
+                    "Copied {count} {template_type} templates to {type_dir}",
+                    count=len(copied_files),
+                    template_type=template_type,
+                    type_dir=type_dir,
                 )
 
         return copied_templates
@@ -212,8 +236,11 @@ class TemplateDiscovery:
                         try:
                             return template_file.read_text(encoding="utf-8")
                         except Exception as e:
-                            logger.error(
-                                f"Failed to read template {template_file}: {e}"
+                            log_error_safe(
+                                logger,
+                                "Failed to read template {template_file}: {error}",
+                                template_file=template_file,
+                                error=e,
                             )
                             return None
 
@@ -241,7 +268,11 @@ class TemplateDiscovery:
 
         # Then overlay local templates
         if local_template_dir.exists():
-            logger.info(f"Overlaying local templates from {local_template_dir}")
+            log_info_safe(
+                logger,
+                "Overlaying local templates from {local_template_dir}",
+                local_template_dir=local_template_dir,
+            )
 
             for local_file in local_template_dir.rglob("*"):
                 if local_file.is_file():
@@ -253,7 +284,11 @@ class TemplateDiscovery:
 
                     # Copy local file (overwriting if exists)
                     shutil.copy2(local_file, dest_path)
-                    logger.debug(f"Overlaid local template: {relative_path}")
+                    log_debug_safe(
+                        logger,
+                        "Overlaid local template: {relative_path}",
+                        relative_path=relative_path,
+                    )
 
     @classmethod
     def get_pcileech_core_files(
@@ -307,7 +342,9 @@ class TemplateDiscovery:
                         core_files[filename] = matches[0]
                         break
 
-        logger.info(f"Found {len(core_files)} core PCILeech files")
+        log_info_safe(
+            logger, "Found {count} core PCILeech files", count=len(core_files)
+        )
         return core_files
 
     @classmethod

@@ -6,23 +6,31 @@ This module provides functionality to parse MSI-X capability structures from
 PCI configuration space and generate SystemVerilog code for MSI-X table replication.
 """
 
-import logging
 import struct
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import project logging and string utilities
+from ..log_config import get_logger
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
+
 # Import template renderer
 try:
-    from ..templating.template_renderer import (TemplateRenderer,
-                                                TemplateRenderError)
+    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     try:
-        from templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+        from templating.template_renderer import TemplateRenderer, TemplateRenderError
     except ImportError:
-        from src.templating.template_renderer import (TemplateRenderer,
-                                                      TemplateRenderError)
+        from src.templating.template_renderer import (
+            TemplateRenderer,
+            TemplateRenderError,
+        )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def hex_to_bytes(hex_string: str) -> bytearray:
@@ -120,49 +128,59 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     Returns:
         Offset of the capability in the configuration space, or None if not found
     """
-    logger.debug(f"Searching for capability ID 0x{cap_id:02x} in configuration space")
-    logger.debug(f"Configuration space length: {len(cfg)} characters")
+    log_debug_safe(
+        logger,
+        "Searching for capability ID 0x{cap_id:02x} in configuration space",
+        cap_id=cap_id,
+    )
+    log_debug_safe(
+        logger, "Configuration space length: {length} characters", length=len(cfg)
+    )
 
     # Check if configuration space is valid (minimum 256 bytes for basic config space)
     if not cfg or len(cfg) < 512:  # 256 bytes = 512 hex chars
-        logger.warning("Configuration space is too small (need ≥256 bytes)")
+        log_warning_safe(logger, "Configuration space is too small (need ≥256 bytes)")
         return None
 
     try:
         # Convert hex string to bytes for efficient processing
         cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
-        logger.error(f"Invalid hex string in configuration space: {e}")
+        log_error_safe(
+            logger, "Invalid hex string in configuration space: {error}", error=e
+        )
         return None
 
     # Check if capabilities are supported (Status register bit 4)
     status_offset = 0x06
     if not is_valid_offset(cfg_bytes, status_offset, 2):
-        logger.warning("Status register not found in configuration space")
+        log_warning_safe(logger, "Status register not found in configuration space")
         return None
 
     try:
         status = read_u16_le(cfg_bytes, status_offset)
         if not (status & 0x10):  # Check capabilities bit
-            logger.debug("Device does not support capabilities")
+            log_debug_safe(logger, "Device does not support capabilities")
             return None
     except struct.error:
-        logger.warning("Failed to read status register")
+        log_warning_safe(logger, "Failed to read status register")
         return None
 
     # Get capabilities pointer (offset 0x34)
     cap_ptr_offset = 0x34
     if not is_valid_offset(cfg_bytes, cap_ptr_offset, 1):
-        logger.warning("Capabilities pointer not found in configuration space")
+        log_warning_safe(
+            logger, "Capabilities pointer not found in configuration space"
+        )
         return None
 
     try:
         cap_ptr = read_u8(cfg_bytes, cap_ptr_offset)
         if cap_ptr == 0:
-            logger.debug("No capabilities present")
+            log_debug_safe(logger, "No capabilities present")
             return None
     except IndexError:
-        logger.warning("Failed to read capabilities pointer")
+        log_warning_safe(logger, "Failed to read capabilities pointer")
         return None
 
     # Walk the capabilities list
@@ -174,7 +192,11 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
         # Ensure we have enough data for capability header (ID + next pointer)
         if not is_valid_offset(cfg_bytes, current_ptr, 2):
-            logger.warning(f"Capability pointer 0x{current_ptr:02x} is out of bounds")
+            log_warning_safe(
+                logger,
+                "Capability pointer 0x{current_ptr:02x} is out of bounds",
+                current_ptr=current_ptr,
+            )
             return None
 
         # Read capability ID and next pointer
@@ -187,10 +209,14 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
 
             current_ptr = next_ptr
         except IndexError:
-            logger.warning(f"Invalid capability data at offset 0x{current_ptr:02x}")
+            log_warning_safe(
+                logger,
+                "Invalid capability data at offset 0x{current_ptr:02x}",
+                current_ptr=current_ptr,
+            )
             return None
 
-    logger.debug(f"Capability ID 0x{cap_id:02x} not found")
+    log_debug_safe(logger, "Capability ID 0x{cap_id:02x} not found", cap_id=cap_id)
     return None
 
 
@@ -207,20 +233,22 @@ def msix_size(cfg: str) -> int:
     # Find MSI-X capability (ID 0x11)
     cap = find_cap(cfg, 0x11)
     if cap is None:
-        logger.info("MSI-X capability not found")
+        log_info_safe(logger, "MSI-X capability not found")
         return 0
 
     try:
         # Convert hex string to bytes for efficient processing
         cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
-        logger.error(f"Invalid hex string in configuration space: {e}")
+        log_error_safe(
+            logger, "Invalid hex string in configuration space: {error}", error=e
+        )
         return 0
 
     # Read Message Control register (offset 2 from capability start)
     msg_ctrl_offset = cap + 2
     if not is_valid_offset(cfg_bytes, msg_ctrl_offset, 2):
-        logger.warning("MSI-X Message Control register is out of bounds")
+        log_warning_safe(logger, "MSI-X Message Control register is out of bounds")
         return 0
 
     try:
@@ -230,12 +258,15 @@ def msix_size(cfg: str) -> int:
         # Table size is encoded in the lower 11 bits (Table Size field)
         table_size = (msg_ctrl & 0x7FF) + 1
 
-        logger.debug(
-            f"MSI-X table size: {table_size} entries (msg_ctrl=0x{msg_ctrl:04x})"
+        log_debug_safe(
+            logger,
+            "MSI-X table size: {table_size} entries (msg_ctrl=0x{msg_ctrl:04x})",
+            table_size=table_size,
+            msg_ctrl=msg_ctrl,
         )
         return table_size
     except struct.error:
-        logger.warning("Failed to read MSI-X Message Control register")
+        log_warning_safe(logger, "Failed to read MSI-X Message Control register")
         return 0
 
 
@@ -268,20 +299,22 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
     # Find MSI-X capability (ID 0x11)
     cap = find_cap(cfg, 0x11)
     if cap is None:
-        logger.info("MSI-X capability not found")
+        log_info_safe(logger, "MSI-X capability not found")
         return result
-    logger.debug(f"MSI-X capability found at offset 0x{cap:02x}")
+    log_debug_safe(logger, "MSI-X capability found at offset 0x{cap:02x}", cap=cap)
     try:
         # Convert hex string to bytes for efficient processing
         cfg_bytes = hex_to_bytes(cfg)
     except ValueError as e:
-        logger.error(f"Invalid hex string in configuration space: {e}")
+        log_error_safe(
+            logger, "Invalid hex string in configuration space: {error}", error=e
+        )
         return result
 
     # Read Message Control register (offset 2 from capability start)
     msg_ctrl_offset = cap + 2
     if not is_valid_offset(cfg_bytes, msg_ctrl_offset, 2):
-        logger.warning("MSI-X Message Control register is out of bounds")
+        log_warning_safe(logger, "MSI-X Message Control register is out of bounds")
         return result
 
     try:
@@ -296,7 +329,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         # Read Table Offset/BIR register (offset 4 from capability start)
         table_offset_bir_offset = cap + 4
         if not is_valid_offset(cfg_bytes, table_offset_bir_offset, 4):
-            logger.warning("MSI-X Table Offset/BIR register is out of bounds")
+            log_warning_safe(logger, "MSI-X Table Offset/BIR register is out of bounds")
             return result
 
         table_offset_bir = read_u32_le(cfg_bytes, table_offset_bir_offset)
@@ -308,7 +341,7 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         # Read PBA Offset/BIR register (offset 8 from capability start)
         pba_offset_bir_offset = cap + 8
         if not is_valid_offset(cfg_bytes, pba_offset_bir_offset, 4):
-            logger.warning("MSI-X PBA Offset/BIR register is out of bounds")
+            log_warning_safe(logger, "MSI-X PBA Offset/BIR register is out of bounds")
             return result
 
         pba_offset_bir = read_u32_le(cfg_bytes, pba_offset_bir_offset)
@@ -330,23 +363,34 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
             }
         )
 
-        logger.info(
-            f"MSI-X capability found: {table_size} entries, "
-            f"table BIR {table_bir} offset 0x{table_offset:x}, "
-            f"PBA BIR {pba_bir} offset 0x{pba_offset:x}"
+        log_info_safe(
+            logger,
+            "MSI-X capability found: {table_size} entries, "
+            "table BIR {table_bir} offset 0x{table_offset:x}, "
+            "PBA BIR {pba_bir} offset 0x{pba_offset:x}",
+            table_size=table_size,
+            table_bir=table_bir,
+            table_offset=table_offset,
+            pba_bir=pba_bir,
+            pba_offset=pba_offset,
         )
 
         # Check for alignment warnings
         if table_offset_bir & 0x7 != 0:
-            logger.warning(
-                f"MSI-X table offset 0x{table_offset_bir:x} is not 8-byte aligned "
-                f"(actual offset: 0x{table_offset_bir:x}, aligned: 0x{table_offset:x})"
+            log_warning_safe(
+                logger,
+                "MSI-X table offset 0x{table_offset_bir:x} is not 8-byte aligned "
+                "(actual offset: 0x{table_offset_bir:x}, aligned: 0x{table_offset:x})",
+                table_offset_bir=table_offset_bir,
+                table_offset=table_offset,
             )
 
         return result
 
     except struct.error as e:
-        logger.warning(f"Error reading MSI-X capability registers: {e}")
+        log_warning_safe(
+            logger, "Error reading MSI-X capability registers: {error}", error=e
+        )
         return result
 
 
@@ -362,7 +406,9 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     """
     if msix_info["table_size"] == 0:
         return "MSI-X not supported or no entries"
-    logger.debug("MSI-X: Found, generating SystemVerilog code for MSI-X table")
+    log_debug_safe(
+        logger, "MSI-X: Found, generating SystemVerilog code for MSI-X table"
+    )
 
     table_size = msix_info["table_size"]
     pba_size = (table_size + 31) // 32  # Number of 32-bit words needed for PBA

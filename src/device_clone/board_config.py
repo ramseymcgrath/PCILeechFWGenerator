@@ -10,8 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..file_management.board_discovery import (BoardDiscovery,
-                                               discover_all_boards)
+from ..file_management.board_discovery import BoardDiscovery, discover_all_boards
 
 logger = logging.getLogger(__name__)
 

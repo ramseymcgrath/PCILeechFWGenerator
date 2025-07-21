@@ -8,14 +8,20 @@ board configurations.
 """
 
 import json
-import logging
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from ..log_config import get_logger
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .repo_manager import RepoManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BoardDiscovery:
@@ -66,7 +72,12 @@ class BoardDiscovery:
             if board_path.exists() and board_path.is_dir():
                 board_name = config["name"]
                 boards[board_name] = cls._analyze_board(board_path, config)
-                logger.info(f"Discovered board: {board_name} at {board_path}")
+                log_info_safe(
+                    logger,
+                    "Discovered board: {board_name} at {board_path}",
+                    board_name=board_name,
+                    board_path=board_path,
+                )
 
         # Discover CaptainDMA boards
         captaindma_root = repo_root / "CaptainDMA"
@@ -78,8 +89,11 @@ class BoardDiscovery:
                     boards[board_name] = cls._analyze_board(
                         board_path, {"name": board_name, **config}
                     )
-                    logger.info(
-                        f"Discovered CaptainDMA board: {board_name} at {board_path}"
+                    log_info_safe(
+                        logger,
+                        "Discovered CaptainDMA board: {board_name} at {board_path}",
+                        board_name=board_name,
+                        board_path=board_path,
                     )
 
         # Discover any additional boards by scanning for vivado project files
@@ -332,8 +346,11 @@ class BoardDiscovery:
                         additional_boards[board_name] = cls._analyze_board(
                             board_dir, {"name": board_name, "fpga_part": fpga_part}
                         )
-                        logger.info(
-                            f"Discovered additional board: {board_name} at {board_dir}"
+                        log_info_safe(
+                            logger,
+                            "Discovered additional board: {board_name} at {board_dir}",
+                            board_name=board_name,
+                            board_dir=board_dir,
                         )
 
         return additional_boards
@@ -471,7 +488,12 @@ class BoardDiscovery:
         with open(output_file, "w") as f:
             json.dump(export_data, f, indent=2, sort_keys=True)
 
-        logger.info(f"Exported {len(boards)} board configurations to {output_file}")
+        log_info_safe(
+            logger,
+            "Exported {count} board configurations to {output_file}",
+            count=len(boards),
+            output_file=output_file,
+        )
 
 
 def discover_all_boards(repo_root: Optional[Path] = None) -> Dict[str, Dict]:

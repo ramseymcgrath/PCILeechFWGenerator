@@ -15,8 +15,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -187,19 +191,16 @@ class SysfsError(ConfigSpaceError):
 class ConfigSpaceManager:
     """Manages PCI configuration space operations with improved structure and error handling."""
 
-    def __init__(
-        self, bdf: str, device_profile: str = "generic", strict_vfio: bool = False
-    ) -> None:
+    def __init__(self, bdf: str, strict_vfio: bool = False) -> None:
         """
         Initialize ConfigSpaceManager.
 
         Args:
             bdf: Bus:Device.Function identifier
-            device_profile: Device profile name for configuration
             strict_vfio: If True, require VFIO for config space access
         """
         self.bdf = bdf
-        self.device_config = get_device_config(device_profile)
+        self.device_config = None  # No device profiles - use live detection
         self.strict_vfio = strict_vfio
         self._config_path = Path(f"/sys/bus/pci/devices/{self.bdf}/config")
 

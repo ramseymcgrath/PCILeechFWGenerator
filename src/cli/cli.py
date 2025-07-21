@@ -23,8 +23,14 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from log_config import get_logger, setup_logging
-from shell import Shell
+try:
+    # Try direct import first (when run as a module)
+    from log_config import get_logger, setup_logging
+    from shell import Shell
+except ImportError:
+    # Fallback to absolute import (when run as a script)
+    from src.log_config import get_logger, setup_logging
+    from src.shell import Shell
 
 from .container import BuildConfig, run_build  # new unified runner
 
@@ -259,7 +265,6 @@ def main(argv: Optional[List[str]] = None):
         cfg = BuildConfig(
             bdf=bdf,
             board=board,
-            device_type=args.device_type,
             advanced_sv=args.advanced_sv,
             enable_variance=args.enable_variance,
             auto_fix=args.auto_fix,

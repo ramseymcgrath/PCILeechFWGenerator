@@ -115,6 +115,26 @@ class ModuleImportError(PCILeechError):
     pass
 
 
+class PlatformCompatibilityError(PCILeechError):
+    """Raised when a feature is not supported on the current platform."""
+
+    def __init__(
+        self,
+        message: str,
+        current_platform: str | None = None,
+        required_platform: str | None = None,
+    ):
+        super().__init__(message)
+        self.current_platform = current_platform
+        self.required_platform = required_platform
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.current_platform and self.required_platform:
+            return f"{base_msg} (Current: {self.current_platform}, Required: {self.required_platform})"
+        return base_msg
+
+
 # Export all exception classes
 __all__ = [
     "PCILeechError",
@@ -128,5 +148,8 @@ __all__ = [
     "RepositoryError",
     "BuildError",
     "ValidationError",
+    "ContextError",
+    "PCILeechGenerationError",
     "ModuleImportError",
+    "PlatformCompatibilityError",
 ]

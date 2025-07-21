@@ -12,10 +12,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.device_clone.config_space_manager import ConfigSpaceConstants
-from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
-                                            DeviceConfigManager,
-                                            DeviceConfiguration,
-                                            DeviceIdentification, DeviceType)
+from src.device_clone.device_config import (
+    DeviceCapabilities,
+    DeviceClass,
+    DeviceConfigManager,
+    DeviceConfiguration,
+    DeviceIdentification,
+    DeviceType,
+)
 
 
 class TestExtendedConfigPointers:

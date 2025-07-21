@@ -39,7 +39,7 @@ def setup_logging(
             log_colors={
                 "DEBUG": "cyan",
                 "INFO": "green",
-                "WARNING": "orange",
+                "WARNING": "yellow",
                 "ERROR": "red",
                 "CRITICAL": "red,bg_white",
             },

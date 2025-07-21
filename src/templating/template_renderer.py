@@ -19,8 +19,13 @@ except ImportError:
 
 
 try:
-    from jinja2 import (Environment, FileSystemLoader, StrictUndefined,
-                        Template, TemplateError)
+    from jinja2 import (
+        Environment,
+        FileSystemLoader,
+        StrictUndefined,
+        Template,
+        TemplateError,
+    )
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"

@@ -1276,7 +1276,6 @@ def main():
             auto_install_headers=args.auto_install_headers,
             save_to_file=args.save_to,
             generate_if_unavailable=args.generate,
-            device_type=args.device_type,
         )
 
         print(f"Device information for {args.bdf}:")

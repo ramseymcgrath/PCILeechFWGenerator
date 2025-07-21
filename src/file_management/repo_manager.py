@@ -11,13 +11,21 @@ retrieve board paths and XDC files for various PCILeech boards.
 from __future__ import annotations
 
 import datetime as _dt
-import logging as _log
 import os as _os
 import shutil as _shutil
 import subprocess as _sp
 import time as _time
 from pathlib import Path
 from typing import List
+
+# Import project logging and string utilities
+from ..log_config import get_logger
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 ###############################################################################
 # Configuration constants - override with environment vars if desired.
@@ -36,10 +44,10 @@ REPO_DIR = CACHE_DIR / "pcileech-fpga"
 UPDATE_INTERVAL_DAYS = 7
 
 ###############################################################################
-# Logging setup (only active when module is executed directly)
+# Logging setup
 ###############################################################################
 
-_logger = _log.getLogger(__name__)
+_logger = get_logger(__name__)
 
 ###############################################################################
 # Helper utilities
@@ -50,7 +58,7 @@ def _run(
     cmd: List[str], *, cwd: Path | None = None, env: dict | None = None
 ) -> _sp.CompletedProcess:
     """Run *cmd* and return the completed process, raising on error."""
-    _logger.debug("Running %s (cwd=%s)", cmd, cwd)
+    log_debug_safe(_logger, "Running {cmd} (cwd={cwd})", cmd=cmd, cwd=cwd)
     return _sp.run(cmd, cwd=str(cwd) if cwd else None, env=env, check=True, text=True)
 
 
@@ -92,7 +100,11 @@ class RepoManager:
 
         # Clean up anything that *looks* like a failed clone
         if repo_path.exists():
-            _logger.warning("Removing invalid repo directory %s", repo_path)
+            log_warning_safe(
+                _logger,
+                "Removing invalid repo directory {repo_path}",
+                repo_path=repo_path,
+            )
             _shutil.rmtree(repo_path, ignore_errors=True)
 
         cls._clone(repo_url, repo_path)
@@ -210,24 +222,25 @@ class RepoManager:
             except ValueError:
                 pass  # treat malformed stamp as out‑of‑date
         if not need_update:
-            _logger.debug(
-                "Repository %s is fresh enough (last update %s)",
-                path,
-                stamp.read_text().strip(),
+            log_debug_safe(
+                _logger,
+                "Repository {path} is fresh enough (last update {timestamp})",
+                path=path,
+                timestamp=stamp.read_text().strip(),
             )
             return
 
-        _logger.info("Updating repo %s ...", path)
+        log_info_safe(_logger, "Updating repo {path} ...", path=path)
 
         if not _git_available():
-            _logger.warning("git executable not available - skipping update")
+            log_warning_safe(_logger, "git executable not available - skipping update")
             return
 
         try:
             _run(["git", "-C", str(path), "pull", "--rebase", "--autostash"])
             stamp.write_text(_dt.datetime.now().isoformat())
         except Exception as exc:
-            _logger.warning("Git pull failed: %s", exc)
+            log_warning_safe(_logger, "Git pull failed: {error}", error=exc)
 
     # ------------------------------------------------------------------
     # Clone logic
@@ -236,7 +249,9 @@ class RepoManager:
     @classmethod
     def _clone(cls, repo_url: str, dst: Path) -> None:
         """Clone repository using git command."""
-        _logger.info("Cloning %s -> %s", repo_url, dst)
+        log_info_safe(
+            _logger, "Cloning {repo_url} -> {dst}", repo_url=repo_url, dst=dst
+        )
 
         if not _git_available():
             raise RuntimeError("git executable not available for cloning")
@@ -255,7 +270,12 @@ class RepoManager:
             except Exception as exc:
                 if dst.exists():
                     _shutil.rmtree(dst, ignore_errors=True)
-                _logger.warning("Clone attempt %d failed: %s", attempts, exc)
+                log_warning_safe(
+                    _logger,
+                    "Clone attempt {attempts} failed: {error}",
+                    attempts=attempts,
+                    error=exc,
+                )
                 if attempts >= 3:
                     raise RuntimeError(
                         f"Failed to clone {repo_url} after {attempts} attempts"
@@ -337,10 +357,14 @@ def is_repository_accessible(
 ###############################################################################
 
 if __name__ == "__main__":
-    _log.basicConfig(level=_log.INFO, format="%(levelname)s: %(message)s")
+    import logging
+
+    from ..log_config import setup_logging
+
+    setup_logging(level=logging.INFO)
     try:
         path = RepoManager.ensure_repo()
-        _logger.info("Repository ready at %s", path)
+        log_info_safe(_logger, "Repository ready at {path}", path=path)
     except Exception as exc:  # pragma: no cover - runtime feedback only
-        _logger.error("%s", exc)
+        log_error_safe(_logger, "Error: {error}", error=exc)
         raise SystemExit(1)

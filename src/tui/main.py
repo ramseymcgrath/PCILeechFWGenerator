@@ -845,7 +845,19 @@ class PCILeechTUI(App):
                 self.notify("Build was cancelled", severity="warning")
 
         except Exception as e:
-            self.notify(f"Build failed: {e}", severity="error")
+            error_msg = str(e)
+            # Check if this is a platform compatibility error to reduce redundant messaging
+            if (
+                "requires Linux" in error_msg
+                or "platform incompatibility" in error_msg
+                or "only available on Linux" in error_msg
+            ):
+                self.notify(
+                    "Build skipped: Platform compatibility issue (see logs)",
+                    severity="warning",
+                )
+            else:
+                self.notify(f"Build failed: {e}", severity="error")
         finally:
             # Reset button states
             self.query_one("#start-build", Button).disabled = False

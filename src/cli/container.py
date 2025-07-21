@@ -94,6 +94,12 @@ class BuildConfig:
         """Translate config to build.py flags - only include supported arguments"""
         args = [f"--bdf {self.bdf}", f"--board {self.board}"]
 
+        # Add feature toggles
+        if self.advanced_sv:
+            args.append("--advanced-sv")
+        if self.enable_variance:
+            args.append("--enable-variance")
+
         # Only include arguments that build.py actually supports:
         # --profile (for behavior profiling duration)
         if self.behavior_profile_duration != 30:
@@ -180,6 +186,8 @@ def prompt_user_for_local_build() -> bool:
 
 def run_local_build(cfg: BuildConfig) -> None:
     """Run build locally without container."""
+    import sys
+
     log_info_safe(
         logger,
         "Running local build - board={board}",
@@ -192,9 +200,6 @@ def run_local_build(cfg: BuildConfig) -> None:
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build command arguments for local build
-    cmd_args = cfg.cmd_args()
-
     # Add src to path if needed
     src_path = Path(__file__).parent.parent
     if str(src_path) not in sys.path:
@@ -202,26 +207,47 @@ def run_local_build(cfg: BuildConfig) -> None:
 
     # Import build module
     try:
-        from build import main as build_main
+        from src.build import main as build_main
     except ImportError:
         # Try alternative import path
         sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-        from src.build import main as build_main
+        try:
+            from src.build import main as build_main
+        except ImportError:
+            log_error_safe(
+                logger,
+                "Failed to import build module - cannot run local build",
+                prefix="LOCAL",
+            )
+            raise ImportError("Cannot run local build - missing build module")
 
-    # Prepare arguments for build.py - only pass supported arguments
+    # Process the command arguments properly
     build_args = []
-    for i, arg in enumerate(cmd_args):
-        if arg == "--bdf" and i + 1 < len(cmd_args):
-            build_args.extend(["--bdf", cmd_args[i + 1]])
-        elif arg == "--board" and i + 1 < len(cmd_args):
-            build_args.extend(["--board", cmd_args[i + 1]])
-        elif arg == "--profile" and i + 1 < len(cmd_args):
-            build_args.extend(["--profile", cmd_args[i + 1]])
-        elif arg == "--output-template" and i + 1 < len(cmd_args):
-            build_args.extend(["--output-template", cmd_args[i + 1]])
-        elif arg == "--donor-template" and i + 1 < len(cmd_args):
-            build_args.extend(["--donor-template", cmd_args[i + 1]])
-        # All other arguments are not supported by build.py and are skipped
+
+    # Add core arguments directly
+    build_args.append("--bdf")
+    build_args.append(cfg.bdf)
+    build_args.append("--board")
+    build_args.append(cfg.board)
+
+    # Add boolean flags
+    if cfg.advanced_sv:
+        build_args.append("--advanced-sv")
+    if cfg.enable_variance:
+        build_args.append("--enable-variance")
+
+    # Add other parameters that build.py supports
+    if cfg.behavior_profile_duration != 30:
+        build_args.append("--profile")
+        build_args.append(str(cfg.behavior_profile_duration))
+
+    if cfg.output_template:
+        build_args.append("--output-template")
+        build_args.append(cfg.output_template)
+
+    if cfg.donor_template:
+        build_args.append("--donor-template")
+        build_args.append(cfg.donor_template)
 
     log_info_safe(
         logger,
@@ -246,13 +272,31 @@ def run_local_build(cfg: BuildConfig) -> None:
         )
     except Exception as e:
         elapsed = time.time() - start
-        log_error_safe(
-            logger,
-            "Local build failed after {elapsed:.1f}s: {error}",
-            elapsed=elapsed,
-            error=str(e),
-            prefix="LOCAL",
+
+        # Check if this is a platform compatibility error to reduce redundant logging
+        error_str = str(e)
+        is_platform_error = (
+            "requires Linux" in error_str
+            or "Current platform:" in error_str
+            or "only available on Linux" in error_str
+            or "platform incompatibility" in error_str
         )
+
+        if is_platform_error:
+            # For platform errors, log at a lower level since the detailed error was already logged
+            log_info_safe(
+                logger,
+                "Local build skipped due to platform incompatibility (see details above)",
+                prefix="LOCAL",
+            )
+        else:
+            log_error_safe(
+                logger,
+                "Local build failed after {elapsed:.1f}s: {error}",
+                elapsed=elapsed,
+                error=error_str,
+                prefix="LOCAL",
+            )
         raise
 
 
@@ -477,7 +521,6 @@ if __name__ == "__main__":
         bdf=args.bdf,
         board=args.board,
         advanced_sv=args.advanced_sv,
-        device_type=args.device_type,
         enable_variance=args.enable_variance,
         auto_fix=args.auto_fix,
     )

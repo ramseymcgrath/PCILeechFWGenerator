@@ -14,36 +14,17 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ..device_clone.constants import (PCILEECH_BUILD_SCRIPT,
-                                      PCILEECH_PROJECT_SCRIPT)
+from ..device_clone.constants import PCILEECH_BUILD_SCRIPT, PCILEECH_PROJECT_SCRIPT
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+    safe_print_format,
+)
 
 logger = logging.getLogger(__name__)
-try:
-    from ..string_utils import log_info_safe, log_warning_safe, safe_format
-except ImportError:
-    try:
-        from string_utils import log_info_safe, log_warning_safe, safe_format
-    except ImportError:
-        # Fallback implementations if string_utils not available
-        def log_info_safe(logger, template, **kwargs):
-            try:
-                message = template.format(**kwargs) if kwargs else template
-                logger.info(message)
-            except Exception:
-                logger.info(template)
-
-        def log_warning_safe(logger, template, **kwargs):
-            try:
-                message = template.format(**kwargs) if kwargs else template
-                logger.warning(message)
-            except Exception:
-                logger.warning(template)
-
-        def safe_format(template, **kwargs):
-            try:
-                return template.format(**kwargs)
-            except Exception:
-                return template
 
 
 class FileManager:
@@ -84,9 +65,11 @@ class FileManager:
         ip_path.mkdir(parents=True, exist_ok=True)
         directories["ip"] = ip_path
 
-        logger.info(f"Created PCILeech directory structure:")
-        logger.info(f"  Source directory: {src_path}")
-        logger.info(f"  IP directory: {ip_path}")
+        log_info_safe(
+            logger, "Created PCILeech directory structure", prefix="FILE_MANAGER"
+        )
+        log_info_safe(logger, "  Source directory: {src_path}", src_path=src_path)
+        log_info_safe(logger, "  IP directory: {ip_path}", ip_path=ip_path)
 
         return directories
 
@@ -111,7 +94,12 @@ class FileManager:
         with open(file_path, "w") as f:
             f.write(content)
 
-        logger.info(f"Written file to src directory: {filename}")
+        log_info_safe(
+            logger,
+            "Written file to src directory: {filename}",
+            prefix="FILE_MANAGER",
+            filename=filename,
+        )
         return file_path
 
     def write_to_ip_directory(
@@ -135,7 +123,12 @@ class FileManager:
         with open(file_path, "w") as f:
             f.write(content)
 
-        logger.info(f"Written file to ip directory: {filename}")
+        log_info_safe(
+            logger,
+            "Written file to ip directory: {filename}",
+            prefix="FILE_MANAGER",
+            filename=filename,
+        )
         return file_path
 
     def cleanup_intermediate_files(self) -> List[str]:
@@ -169,7 +162,9 @@ class FileManager:
             ".Xil/",  # Xilinx temporary directory
         ]
 
-        logger.info("Starting cleanup of intermediate files...")
+        log_info_safe(
+            logger, "Starting cleanup of intermediate files...", prefix="FILE_MANAGER"
+        )
 
         try:
             # Get all files in output directory
@@ -200,12 +195,14 @@ class FileManager:
                                     log_info_safe(
                                         logger,
                                         "Cleaned directory: {filename}",
+                                        prefix="FILE_MANAGER",
                                         filename=file_path.name,
                                     )
                                 except PermissionError as e:
                                     log_warning_safe(
                                         logger,
                                         "Permission denied while cleaning directory {filename} (path: {filepath}): {error}",
+                                        prefix="FILE_MANAGER",
                                         filename=file_path.name,
                                         filepath=file_path,
                                         error=e,
@@ -214,6 +211,7 @@ class FileManager:
                                     log_warning_safe(
                                         logger,
                                         "Directory not found during cleanup {filename} (path: {filepath}): {error}",
+                                        prefix="FILE_MANAGER",
                                         filename=file_path.name,
                                         filepath=file_path,
                                         error=e,
@@ -222,6 +220,7 @@ class FileManager:
                                     log_warning_safe(
                                         logger,
                                         "Unexpected error while cleaning directory {filename} (path: {filepath}): {error}",
+                                        prefix="FILE_MANAGER",
                                         filename=file_path.name,
                                         filepath=file_path,
                                         error=e,
@@ -235,11 +234,17 @@ class FileManager:
                                 try:
                                     file_path.unlink()
                                     cleaned_files.append(str(file_path))
-                                    logger.debug(f"Cleaned file: {file_path.name}")
+                                    log_debug_safe(
+                                        logger,
+                                        "Cleaned file: {filename}",
+                                        prefix="FILE_MANAGER",
+                                        filename=file_path.name,
+                                    )
                                 except Exception as e:
                                     log_warning_safe(
                                         logger,
                                         "Could not clean file {filename} (path: {filepath}): {error}",
+                                        prefix="FILE_MANAGER",
                                         filename=file_path.name,
                                         filepath=file_path,
                                         error=e,
@@ -249,12 +254,15 @@ class FileManager:
             log_info_safe(
                 logger,
                 "Cleanup completed: preserved {preserved_count} files, cleaned {cleaned_count} items",
+                prefix="FILE_MANAGER",
                 preserved_count=len(preserved_files),
                 cleaned_count=len(cleaned_files),
             )
 
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            log_error_safe(
+                logger, "Error during cleanup: {error}", prefix="FILE_MANAGER", error=e
+            )
 
         return preserved_files
 
@@ -444,7 +452,12 @@ class FileManager:
                 validation_results["validation_status"] = "failed_no_tcl"
 
         except Exception as e:
-            logger.error(f"Error during output validation: {e}")
+            log_error_safe(
+                logger,
+                "Error during output validation: {error}",
+                prefix="FILE_MANAGER",
+                error=e,
+            )
             validation_results["validation_status"] = "error"
 
         return validation_results
@@ -547,11 +560,21 @@ class FileManager:
 
             # Ensure PCILeech repository is available
             repo_path = RepoManager.ensure_repo()
-            logger.info(f"Using PCILeech repository at: {repo_path}")
+            log_info_safe(
+                logger,
+                "Using PCILeech repository at: {repo_path}",
+                prefix="FILE_MANAGER",
+                repo_path=repo_path,
+            )
 
             # Get board-specific path
             board_path = RepoManager.get_board_path(board, repo_root=repo_path)
-            logger.info(f"Board path: {board_path}")
+            log_info_safe(
+                logger,
+                "Board path: {board_path}",
+                prefix="FILE_MANAGER",
+                board_path=board_path,
+            )
 
             # Create source directory structure
             src_dir = self.output_dir / "src"
@@ -571,7 +594,12 @@ class FileManager:
                             else:
                                 copied_files["verilog"].append(str(dest_file))
 
-                            logger.info(f"Copied source file: {src_file.name}")
+                            log_info_safe(
+                                logger,
+                                "Copied source file: {src_name}",
+                                prefix="FILE_MANAGER",
+                                src_name=src_file.name,
+                            )
 
                 # Copy package files
                 for pkg_file in board_path.rglob("*_pkg.sv*"):
@@ -579,19 +607,34 @@ class FileManager:
                         dest_file = src_dir / pkg_file.name
                         shutil.copy2(pkg_file, dest_file)
                         copied_files["packages"].append(str(dest_file))
-                        logger.info(f"Copied package file: {pkg_file.name}")
+                        log_info_safe(
+                            logger,
+                            "Copied package file: {pkg_name}",
+                            prefix="FILE_MANAGER",
+                            pkg_name=pkg_file.name,
+                        )
 
             # Copy local PCILeech files from project directory
             local_pcileech_dir = Path(__file__).parent.parent.parent / "pcileech"
             if local_pcileech_dir.exists():
-                logger.info(f"Copying local PCILeech files from: {local_pcileech_dir}")
+                log_info_safe(
+                    logger,
+                    "Copying local PCILeech files from: {local_dir}",
+                    prefix="FILE_MANAGER",
+                    local_dir=local_pcileech_dir,
+                )
 
                 # Copy package files
                 for pkg_file in local_pcileech_dir.glob("*.svh"):
                     dest_file = src_dir / pkg_file.name
                     shutil.copy2(pkg_file, dest_file)
                     copied_files["packages"].append(str(dest_file))
-                    logger.info(f"Copied local package: {pkg_file.name}")
+                    log_info_safe(
+                        logger,
+                        "Copied local package: {pkg_name}",
+                        prefix="FILE_MANAGER",
+                        pkg_name=pkg_file.name,
+                    )
 
                 # Copy RTL files
                 rtl_dir = local_pcileech_dir / "rtl"
@@ -600,7 +643,12 @@ class FileManager:
                         dest_file = src_dir / rtl_file.name
                         shutil.copy2(rtl_file, dest_file)
                         copied_files["systemverilog"].append(str(dest_file))
-                        logger.info(f"Copied local RTL: {rtl_file.name}")
+                        log_info_safe(
+                            logger,
+                            "Copied local RTL: {rtl_name}",
+                            prefix="FILE_MANAGER",
+                            rtl_name=rtl_file.name,
+                        )
 
             # Copy constraint files using repo manager
             try:
@@ -612,19 +660,44 @@ class FileManager:
                     dest_file = constraints_dir / xdc_file.name
                     shutil.copy2(xdc_file, dest_file)
                     copied_files["constraints"].append(str(dest_file))
-                    logger.info(f"Copied constraint file: {xdc_file.name}")
+                    log_info_safe(
+                        logger,
+                        "Copied constraint file: {xdc_name}",
+                        prefix="FILE_MANAGER",
+                        xdc_name=xdc_file.name,
+                    )
 
             except Exception as e:
-                logger.warning(f"Could not copy constraint files: {e}")
+                log_warning_safe(
+                    logger,
+                    "Could not copy constraint files: {error}",
+                    prefix="FILE_MANAGER",
+                    error=e,
+                )
 
             # Log summary
             total_files = sum(len(files) for files in copied_files.values())
-            logger.info(f"Successfully copied {total_files} PCILeech source files")
+            log_info_safe(
+                logger,
+                "Successfully copied {total_files} PCILeech source files",
+                prefix="FILE_MANAGER",
+                total_files=total_files,
+            )
 
         except ImportError as e:
-            logger.error(f"Could not import repo manager: {e}")
+            log_error_safe(
+                logger,
+                "Could not import repo manager: {error}",
+                prefix="FILE_MANAGER",
+                error=e,
+            )
         except Exception as e:
-            logger.error(f"Error copying PCILeech sources: {e}")
+            log_error_safe(
+                logger,
+                "Error copying PCILeech sources: {error}",
+                prefix="FILE_MANAGER",
+                error=e,
+            )
 
         return copied_files
 
@@ -670,48 +743,86 @@ class FileManager:
 
     def print_final_output_info(self, validation_results: Dict[str, Any]):
         """Print detailed information about final output files."""
-        logger.info("=" * 80)
-        logger.info("FINAL BUILD OUTPUT VALIDATION")
-        logger.info("=" * 80)
+        log_info_safe(logger, "=" * 80, prefix="FILE_MANAGER")
+        log_info_safe(logger, "FINAL BUILD OUTPUT VALIDATION", prefix="FILE_MANAGER")
+        log_info_safe(logger, "=" * 80, prefix="FILE_MANAGER")
 
         build_mode = validation_results["build_mode"]
         status = validation_results["validation_status"]
 
         # Display build status
         if status == "success_full_build":
-            logger.info("BUILD STATUS: SUCCESS (Full Vivado Build)")
+            log_info_safe(
+                logger,
+                "BUILD STATUS: SUCCESS (Full Vivado Build)",
+                prefix="FILE_MANAGER",
+            )
         elif status == "success_tcl_ready":
-            logger.info("BUILD STATUS: SUCCESS (TCL Build Script Ready)")
+            log_info_safe(
+                logger,
+                "BUILD STATUS: SUCCESS (TCL Build Script Ready)",
+                prefix="FILE_MANAGER",
+            )
         elif status == "warning_small_bitstream":
-            logger.warning("BUILD STATUS: WARNING - Bitstream file is unusually small")
+            log_warning_safe(
+                logger,
+                "BUILD STATUS: WARNING - Bitstream file is unusually small",
+                prefix="FILE_MANAGER",
+            )
         elif status == "warning_incomplete_tcl":
-            logger.warning("BUILD STATUS: WARNING - TCL script may be incomplete")
+            log_warning_safe(
+                logger,
+                "BUILD STATUS: WARNING - TCL script may be incomplete",
+                prefix="FILE_MANAGER",
+            )
         elif status == "warning_missing_hex":
-            logger.warning(
-                "BUILD STATUS: WARNING - No hex file generated in TCL script"
+            log_warning_safe(
+                logger,
+                "BUILD STATUS: WARNING - No hex file generated in TCL script",
+                prefix="FILE_MANAGER",
             )
         elif status == "failed_no_bitstream":
-            logger.error("BUILD STATUS: FAILED - No bitstream file generated")
+            log_error_safe(
+                logger,
+                "BUILD STATUS: FAILED - No bitstream file generated",
+                prefix="FILE_MANAGER",
+            )
         elif status == "failed_no_tcl":
-            logger.error("BUILD STATUS: FAILED - No TCL build script generated")
+            log_error_safe(
+                logger,
+                "BUILD STATUS: FAILED - No TCL build script generated",
+                prefix="FILE_MANAGER",
+            )
         else:
-            logger.error("BUILD STATUS: ERROR - Validation failed")
+            log_error_safe(
+                logger, "BUILD STATUS: ERROR - Validation failed", prefix="FILE_MANAGER"
+            )
 
-        logger.info(f"BUILD MODE: {build_mode.replace('_', ' ').title()}")
+        log_info_safe(
+            logger,
+            "BUILD MODE: {build_mode}",
+            prefix="FILE_MANAGER",
+            build_mode=build_mode.replace("_", " ").title(),
+        )
 
         # TCL file information (always show if present)
         if validation_results.get("tcl_file_info"):
             info = validation_results["tcl_file_info"]
-            print("\n📜 BUILD SCRIPT:")
-            print(f"   File: {info['filename']}")
-            print(
-                safe_format(
-                    "   Size: {size_kb} KB ({size_bytes:,} bytes)",
-                    size_kb=info["size_kb"],
-                    size_bytes=info["size_bytes"],
-                )
+            safe_print_format("\n📜 BUILD SCRIPT:", prefix="FILE_MANAGER")
+            safe_print_format(
+                "   File: {filename}", prefix="FILE_MANAGER", filename=info["filename"]
             )
-            print(f"   SHA256: {info['sha256'][:16]}...")
+            safe_print_format(
+                "   Size: {size_kb} KB ({size_bytes:,} bytes)",
+                prefix="FILE_MANAGER",
+                size_kb=info["size_kb"],
+                size_bytes=info["size_bytes"],
+            )
+            safe_print_format(
+                "   SHA256: {sha256}...",
+                prefix="FILE_MANAGER",
+                sha256=info["sha256"][:16],
+            )
 
             # TCL script validation
             features = []
@@ -735,74 +846,114 @@ class FileManager:
             else:
                 features.append("⚠️  No hex file generation commands")
 
-            print("   Features:")
+            safe_print_format("   Features:", prefix="FILE_MANAGER")
             for feature in features:
-                print(f"     {feature}")
+                safe_print_format(
+                    "     {feature}", prefix="FILE_MANAGER", feature=feature
+                )
 
         # Bitstream information (only if Vivado was run)
         if validation_results.get("bitstream_info"):
             info = validation_results["bitstream_info"]
-            print("\n📁 BITSTREAM FILE:")
-            print(f"   File: {info['filename']}")
-            print(
-                safe_format(
-                    "   Size: {size_mb} MB ({size_bytes:,} bytes)",
-                    size_mb=info["size_mb"],
-                    size_bytes=info["size_bytes"],
-                )
+            safe_print_format("\n📁 BITSTREAM FILE:", prefix="FILE_MANAGER")
+            safe_print_format(
+                "   File: {filename}", prefix="FILE_MANAGER", filename=info["filename"]
             )
-            print(f"   SHA256: {info['sha256'][:16]}...")
+            safe_print_format(
+                "   Size: {size_mb} MB ({size_bytes:,} bytes)",
+                prefix="FILE_MANAGER",
+                size_mb=info["size_mb"],
+                size_bytes=info["size_bytes"],
+            )
+            safe_print_format(
+                "   SHA256: {sha256}...",
+                prefix="FILE_MANAGER",
+                sha256=info["sha256"][:16],
+            )
 
             # Validate bitstream size
             if info["size_mb"] < self.min_bitstream_size_mb:
-                print(
-                    f"   ⚠️  WARNING: Bitstream is very small (less than {self.min_bitstream_size_mb} MB), may be incomplete"
+                safe_print_format(
+                    "   ⚠️  WARNING: Bitstream is very small (less than {min_size} MB), may be incomplete",
+                    prefix="FILE_MANAGER",
+                    min_size=self.min_bitstream_size_mb,
                 )
             elif info["size_mb"] > self.max_bitstream_size_mb:
-                print(
-                    f"   ⚠️  WARNING: Bitstream is very large (greater than {self.max_bitstream_size_mb} MB), check for issues"
+                safe_print_format(
+                    "   ⚠️  WARNING: Bitstream is very large (greater than {max_size} MB), check for issues",
+                    prefix="FILE_MANAGER",
+                    max_size=self.max_bitstream_size_mb,
                 )
             else:
-                print("   ✅ Bitstream size looks normal")
+                safe_print_format(
+                    "   ✅ Bitstream size looks normal", prefix="FILE_MANAGER"
+                )
 
         # Flash file information
         if validation_results.get("flash_file_info"):
             info = validation_results["flash_file_info"]
-            print("\n💾 FLASH FILE:")
-            print(f"   File: {info['filename']}")
-            print(
-                safe_format(
-                    "   Size: {size_mb} MB ({size_bytes:,} bytes)",
-                    size_mb=info["size_mb"],
-                    size_bytes=info["size_bytes"],
-                )
+            safe_print_format("\n💾 FLASH FILE:", prefix="FILE_MANAGER")
+            safe_print_format(
+                "   File: {filename}", prefix="FILE_MANAGER", filename=info["filename"]
             )
-            print(f"   SHA256: {info['sha256'][:16]}...")
+            safe_print_format(
+                "   Size: {size_mb} MB ({size_bytes:,} bytes)",
+                prefix="FILE_MANAGER",
+                size_mb=info["size_mb"],
+                size_bytes=info["size_bytes"],
+            )
+            safe_print_format(
+                "   SHA256: {sha256}...",
+                prefix="FILE_MANAGER",
+                sha256=info["sha256"][:16],
+            )
 
         # Debug file information
         if validation_results.get("debug_file_info"):
             info = validation_results["debug_file_info"]
-            print("\n🔍 DEBUG FILE:")
-            print(f"   File: {info['filename']}")
-            print(f"   Size: {info['size_bytes']:,} bytes")
+            safe_print_format("\n🔍 DEBUG FILE:", prefix="FILE_MANAGER")
+            safe_print_format(
+                "   File: {filename}", prefix="FILE_MANAGER", filename=info["filename"]
+            )
+            safe_print_format(
+                "   Size: {size_bytes:,} bytes",
+                prefix="FILE_MANAGER",
+                size_bytes=info["size_bytes"],
+            )
 
         # Report files
         if validation_results.get("reports_info"):
-            print("\n📊 ANALYSIS REPORTS:")
+            safe_print_format("\n📊 ANALYSIS REPORTS:", prefix="FILE_MANAGER")
             for report in validation_results["reports_info"]:
-                print(
-                    f"   {report['filename']} ({report['type']}) - {report['size_bytes']:,} bytes"
+                safe_print_format(
+                    "   {filename} ({report_type}) - {size_bytes:,} bytes",
+                    prefix="FILE_MANAGER",
+                    filename=report["filename"],
+                    report_type=report["type"],
+                    size_bytes=report["size_bytes"],
                 )
 
         # File checksums
         if validation_results.get("checksums"):
-            print("\n🔐 FILE CHECKSUMS (for verification):")
+            safe_print_format(
+                "\n🔐 FILE CHECKSUMS (for verification):", prefix="FILE_MANAGER"
+            )
             for filename, checksum in validation_results["checksums"].items():
-                print(f"   {filename}: {checksum[:16]}...")  # Show first 16 characters
+                safe_print_format(
+                    "   {filename}: {checksum}...",
+                    prefix="FILE_MANAGER",
+                    filename=filename,
+                    checksum=checksum[:16],
+                )
 
-        print("\n" + "=" * 80)
+        safe_print_format("\n" + "=" * 80, prefix="FILE_MANAGER")
         if build_mode == "tcl_only":
-            print("TCL build script is ready! Run with Vivado to generate bitstream.")
+            safe_print_format(
+                "TCL build script is ready! Run with Vivado to generate bitstream.",
+                prefix="FILE_MANAGER",
+            )
         else:
-            print("Build output files are ready for deployment!")
-        print("=" * 80 + "\n")
+            safe_print_format(
+                "Build output files are ready for deployment!", prefix="FILE_MANAGER"
+            )
+        safe_print_format("=" * 80 + "\n", prefix="FILE_MANAGER")

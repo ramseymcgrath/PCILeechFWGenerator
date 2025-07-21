@@ -11,6 +11,8 @@ import logging
 import os
 from typing import List, Optional, Set
 
+from ..exceptions import PlatformCompatibilityError
+
 # Production mode environment variable
 PRODUCTION_MODE_ENV = "PCILEECH_PRODUCTION_MODE"
 
@@ -166,11 +168,25 @@ class FallbackManager:
             {"type": fallback_type, "reason": reason, "allowed": allowed}
         )
 
+        # Check if this is a platform compatibility issue to reduce redundant logging
+        is_platform_error = (
+            "requires Linux" in reason
+            or "Current platform: Darwin" in reason
+            or "only available on Linux" in reason
+        )
+
         # Log with appropriate level
         if allowed:
             self.logger.warning(f"Using fallback for {fallback_type}: {reason}")
         else:
-            self.logger.error(f"Fallback for {fallback_type} not allowed: {reason}")
+            if is_platform_error:
+                # For platform compatibility issues, just log once at INFO level
+                # since the detailed error was already logged by the platform check
+                self.logger.info(
+                    f"Fallback for {fallback_type} not allowed due to platform incompatibility"
+                )
+            else:
+                self.logger.error(f"Fallback for {fallback_type} not allowed: {reason}")
 
     def get_fallback_history(self) -> List[dict]:
         """
