@@ -16,7 +16,13 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 
 try:
-    from ..string_utils import safe_format
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 except ImportError:
     # Fallback for script execution
     import sys
@@ -71,8 +77,10 @@ class CapabilityRule:
         self.cap_type = cap_type
         self.category = category
         self.conditions = conditions or {}
-        self.description = (
-            description or f"Rule for {cap_type.value} capability 0x{cap_id:02x}"
+        self.description = description or safe_format(
+            "Rule for {cap_type} capability 0x{cap_id:02x}",
+            cap_type=cap_type.value,
+            cap_id=cap_id,
         )
 
     def matches(
@@ -136,15 +144,20 @@ class CapabilityRule:
             return device_context.get("device_id") in expected_value
 
         else:
-            logger.warning(f"Unknown condition '{condition}' in rule")
+            log_warning_safe(
+                logger,
+                "Unknown condition '{condition}' in rule",
+                prefix="PCI_CAP",
+                condition=condition,
+            )
             return True  # Unknown conditions are ignored
 
     def __repr__(self) -> str:
         return safe_format(
             "CapabilityRule(cap_id=0x{cap_id:02x}, type={cap_type}, category={category})",
             cap_id=self.cap_id,
-            cap_type=self.cap_type.value,
-            category=self.category.name,
+            cap_type=self.cap_type,
+            category=self.category,
         )
 
 
@@ -170,7 +183,12 @@ class RuleEngine:
             rule: CapabilityRule to add
         """
         self.rules.append(rule)
-        logger.debug(f"Added rule: {rule}")
+        log_debug_safe(
+            logger,
+            "Added rule: {rule}",
+            prefix="PCI_CAP",
+            rule=rule,
+        )
 
     def remove_rules(self, cap_id: int, cap_type: CapabilityType) -> int:
         """
@@ -192,8 +210,13 @@ class RuleEngine:
         removed_count = initial_count - len(self.rules)
 
         if removed_count > 0:
-            logger.debug(
-                f"Removed {removed_count} rules for {cap_type.value} capability 0x{cap_id:02x}"
+            log_debug_safe(
+                logger,
+                safe_format(
+                    "Removed {removed_count} rules for {cap_type.value} capability 0x{cap_id:02x}",
+                    removed_count=removed_count,
+                    cap_id=cap_id,
+                ),
             )
 
         return removed_count
@@ -220,27 +243,29 @@ class RuleEngine:
             device_context = self._extract_device_context(config_space)
 
         # Find matching rules (first match wins)
-        for rule in self.rules:
+        for offset, rule in enumerate(self.rules):
             if rule.matches(cap_info, config_space, device_context):
-                logger.debug(
+                log_debug_safe(
+                    logger,
                     safe_format(
                         "Rule matched for {cap_type} capability 0x{cap_id:02x} at offset 0x{offset:02x}: {category}",
-                        cap_type=cap_info.cap_type.value,
+                        cap_type=cap_info.cap_type,
                         cap_id=cap_info.cap_id,
-                        offset=cap_info.offset,
-                        category=rule.category.name,
-                    )
+                        offset=getattr(cap_info, "offset", 0),
+                        category=rule.category,
+                    ),
                 )
                 return rule.category
 
         # Default to UNSUPPORTED if no rules match
-        logger.debug(
+        log_debug_safe(
+            logger,
             safe_format(
                 "No rules matched for {cap_type} capability 0x{cap_id:02x} at offset 0x{offset:02x}, defaulting to UNSUPPORTED",
-                cap_type=cap_info.cap_type.value,
+                cap_type=cap_info.cap_type,
                 cap_id=cap_info.cap_id,
-                offset=cap_info.offset,
-            )
+                offset=getattr(cap_info, "offset", 0),
+            ),
         )
         return EmulationCategory.UNSUPPORTED
 
@@ -284,7 +309,12 @@ class RuleEngine:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            raise FileNotFoundError(f"Rule configuration file not found: {file_path}")
+            raise FileNotFoundError(
+                safe_format(
+                    "Rule configuration file not found: {file_path}",
+                    file_path=file_path,
+                )
+            )
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -293,13 +323,25 @@ class RuleEngine:
                 elif file_path.suffix.lower() == ".json":
                     config = json.load(f)
                 else:
-                    raise ValueError(f"Unsupported file format: {file_path.suffix}")
+                    raise ValueError(
+                        safe_format("Unsupported file format: {file_path.suffix}")
+                    )
 
             self._load_rules_from_config(config)
-            logger.info(f"Loaded rules from {file_path}")
+            log_info_safe(
+                logger,
+                "Loaded rules from {file_path}",
+                prefix="PCI_CAP",
+                file_path=file_path,
+            )
 
         except (yaml.YAMLError, json.JSONDecodeError) as e:
-            raise ValueError(f"Invalid configuration file format: {e}") from e
+            raise ValueError(
+                safe_format(
+                    "Invalid configuration file format: {e}",
+                    e=e,
+                )
+            ) from e
 
     def save_rules_to_file(
         self, file_path: Union[str, Path], format_type: str = "yaml"
@@ -320,9 +362,20 @@ class RuleEngine:
             elif format_type.lower() == "json":
                 json.dump(config, f, indent=2)
             else:
-                raise ValueError(f"Unsupported format: {format_type}")
+                raise ValueError(
+                    safe_format(
+                        "Unsupported format: {format_type}",
+                        format_type=format_type,
+                    )
+                )
 
-        logger.info(f"Saved {len(self.rules)} rules to {file_path}")
+        log_info_safe(
+            logger,
+            "Saved {count} rules to {file_path}",
+            prefix="PCI_CAP",
+            count=len(self.rules),
+            file_path=file_path,
+        )
 
     def _load_default_rules(self) -> None:
         """Load the default rule configuration that matches current behavior."""
@@ -426,7 +479,12 @@ class RuleEngine:
         for rule in standard_rules + extended_rules:
             self.add_rule(rule)
 
-        logger.info(f"Loaded {len(self.rules)} default rules")
+        log_info_safe(
+            logger,
+            "Loaded {count} default rules",
+            prefix="PCI_CAP",
+            count=len(self.rules),
+        )
 
     def _extract_device_context(self, config_space: ConfigSpace) -> Dict[str, Any]:
         """
@@ -504,7 +562,12 @@ class RuleEngine:
             context["msi_vector"] = 0x0020  # Default MSI vector
 
         except (IndexError, ValueError) as e:
-            logger.warning(f"Failed to extract device context: {e}")
+            log_warning_safe(
+                logger,
+                "Failed to extract device context: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return context
 
@@ -517,7 +580,12 @@ class RuleEngine:
                 rule = self._create_rule_from_config(rule_config)
                 self.add_rule(rule)
             except (KeyError, ValueError) as e:
-                logger.error(f"Failed to load rule from config: {e}")
+                log_error_safe(
+                    logger,
+                    "Failed to load rule from config: {e}",
+                    prefix="PCI_CAP",
+                    e=e,
+                )
 
     def _create_rule_from_config(self, rule_config: Dict[str, Any]) -> CapabilityRule:
         """Create a CapabilityRule from configuration dictionary."""

@@ -17,6 +17,9 @@ from ..file_management.repo_manager import RepoManager
 from ..file_management.template_discovery import TemplateDiscovery
 from ..templating.tcl_builder import BuildContext, TCLBuilder
 
+
+from ..string_utils import log_info_safe, log_warning_safe, log_error_safe
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +77,11 @@ class PCILeechBuildIntegration:
             )
 
         board_config = boards[board_name]
-        logger.info(f"Preparing build environment for {board_name}")
+        log_info_safe(
+            logger,
+            "Preparing build environment for {board_name}",
+            board_name=board_name,
+        )
 
         # Create board-specific output directory
         board_output_dir = self.output_dir / board_name
@@ -117,9 +124,13 @@ class PCILeechBuildIntegration:
                 dest_path = output_dir / xdc_file.name
                 shutil.copy2(xdc_file, dest_path)
                 copied_files.append(dest_path)
-                logger.info(f"Copied XDC file: {xdc_file.name}")
+                log_info_safe(
+                    logger,
+                    "Copied XDC file: {xdc_file_name}",
+                    xdc_file_name=xdc_file.name,
+                )
         except Exception as e:
-            logger.warning(f"Failed to copy XDC files: {e}")
+            log_warning_safe(logger, "Failed to copy XDC files: {error}", error=e)
 
         return copied_files
 
@@ -145,7 +156,12 @@ class PCILeechBuildIntegration:
                 copied_files.append(dest_path)
 
             except Exception as e:
-                logger.warning(f"Failed to copy source file {src_file}: {e}")
+                log_warning_safe(
+                    logger,
+                    "Failed to copy source file {src_file}: {error}",
+                    src_file=str(src_file),
+                    error=e,
+                )
 
         # Also copy core PCILeech files
         core_files = self.template_discovery.get_pcileech_core_files(self.repo_root)
@@ -154,9 +170,14 @@ class PCILeechBuildIntegration:
             try:
                 shutil.copy2(filepath, dest_path)
                 copied_files.append(dest_path)
-                logger.info(f"Copied core file: {filename}")
+                log_info_safe(logger, "Copied core file: {filename}", filename=filename)
             except Exception as e:
-                logger.warning(f"Failed to copy core file {filename}: {e}")
+                log_warning_safe(
+                    logger,
+                    "Failed to copy core file {filename}: {error}",
+                    filename=filename,
+                    error=e,
+                )
 
         return copied_files
 
@@ -187,10 +208,14 @@ class PCILeechBuildIntegration:
             dest_path.write_text(adapted_content)
 
             build_scripts["main"] = dest_path
-            logger.info(f"Using existing build script: {existing_script.name}")
+            log_info_safe(
+                logger,
+                "Using existing build script: {script_name}",
+                script_name=existing_script.name,
+            )
         else:
             # Generate build scripts using TCLBuilder
-            logger.info("Generating build scripts using TCLBuilder")
+            log_info_safe(logger, "Generating build scripts using TCLBuilder")
             build_scripts.update(
                 self._generate_build_scripts(board_config, scripts_dir)
             )
@@ -236,7 +261,7 @@ class PCILeechBuildIntegration:
             return scripts
 
         except Exception as e:
-            logger.error(f"Failed to generate build scripts: {e}")
+            log_error_safe(logger, "Failed to generate build scripts: {error}", error=e)
             return {}
 
     def create_unified_build_script(
@@ -333,7 +358,11 @@ puts "Bitstream location: $OUTPUT_DIR/[get_property top [current_fileset]].bit"
 """
 
         script_path.write_text(script_content)
-        logger.info(f"Created unified build script: {script_path}")
+        log_info_safe(
+            logger,
+            "Created unified build script: {script_path}",
+            script_path=str(script_path),
+        )
 
         return script_path
 
@@ -408,10 +437,12 @@ def integrate_pcileech_build(
         )
         if warnings:
             for warning in warnings:
-                logger.warning(warning)
+                log_warning_safe(logger, "{warning}", warning=warning)
         if not is_compatible:
-            logger.error(
-                f"Board {board_name} may not be fully compatible with device configuration"
+            log_error_safe(
+                logger,
+                "Board {board_name} may not be fully compatible with device configuration",
+                board_name=board_name,
             )
 
     return integration.create_unified_build_script(board_name, device_config)

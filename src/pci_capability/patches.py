@@ -12,7 +12,13 @@ import logging
 from typing import Dict, List, Optional, Set, Tuple
 
 try:
-    from ..string_utils import safe_format
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 except ImportError:
     # Fallback for script execution
     import sys
@@ -66,12 +72,20 @@ class BinaryPatch:
             )
 
         if offset < 0:
-            raise ValueError(f"Invalid offset: {offset}")
+            raise ValueError(
+                safe_format(
+                    "Invalid offset: {offset}",
+                    offset=offset,
+                )
+            )
 
         self.offset = offset
         self.original_data = original_data
         self.new_data = new_data
-        self.description = description or f"Patch at offset 0x{offset:02x}"
+        self.description = description or safe_format(
+            "Patch at offset 0x{offset:02x}",
+            offset=offset,
+        )
         self.applied = False
 
     @property
@@ -128,7 +142,12 @@ class BinaryPatch:
             True if the patch was applied successfully, False otherwise
         """
         if not self.can_apply_to(config_space):
-            logger.warning(f"Cannot apply patch: {self.description}")
+            log_warning_safe(
+                logger,
+                "Cannot apply patch: {self.description}",
+                prefix="PCI_CAP",
+                description=self.description,
+            )
             return False
 
         try:
@@ -137,11 +156,22 @@ class BinaryPatch:
                 config_space[self.offset + i] = byte_value
 
             self.applied = True
-            logger.debug(f"Applied patch: {self.description}")
+            log_debug_safe(
+                logger,
+                "Applied patch: {description}",
+                prefix="PCI_CAP",
+                description=self.description,
+            )
             return True
 
         except (IndexError, ValueError) as e:
-            logger.error(f"Failed to apply patch {self.description}: {e}")
+            log_error_safe(
+                logger,
+                "Failed to apply patch {description}: {e}",
+                prefix="PCI_CAP",
+                description=self.description,
+                e=e,
+            )
             return False
 
     def rollback_from(self, config_space: ConfigSpace) -> bool:
@@ -155,11 +185,21 @@ class BinaryPatch:
             True if the patch was rolled back successfully, False otherwise
         """
         if not self.applied:
-            logger.warning(f"Patch not applied, cannot rollback: {self.description}")
+            log_warning_safe(
+                logger,
+                "Patch not applied, cannot rollback: {self.description}",
+                prefix="PCI_CAP",
+                description=self.description,
+            )
             return False
 
         if not config_space.has_data(self.offset, self.size):
-            logger.error(f"Cannot rollback patch, invalid bounds: {self.description}")
+            log_error_safe(
+                logger,
+                "Cannot rollback patch, invalid bounds: {self.description}",
+                prefix="PCI_CAP",
+                description=self.description,
+            )
             return False
 
         try:
@@ -168,11 +208,22 @@ class BinaryPatch:
                 config_space[self.offset + i] = byte_value
 
             self.applied = False
-            logger.debug(f"Rolled back patch: {self.description}")
+            log_debug_safe(
+                logger,
+                "Rolled back patch: {description}",
+                prefix="PCI_CAP",
+                description=self.description,
+            )
             return True
 
         except (IndexError, ValueError) as e:
-            logger.error(f"Failed to rollback patch {self.description}: {e}")
+            log_error_safe(
+                logger,
+                "Failed to rollback patch {self.description}: {e}",
+                prefix="PCI_CAP",
+                description=self.description,
+                e=e,
+            )
             return False
 
     def to_patch_info(self, action: str) -> PatchInfo:
@@ -228,17 +279,23 @@ class PatchEngine:
         # Check for conflicts with existing patches
         for existing_patch in self.patches:
             if patch.overlaps_with(existing_patch):
-                logger.warning(
+                log_warning_safe(
+                    logger,
                     safe_format(
                         "Patch conflict: {new_patch} overlaps with {existing_patch}",
-                        new_patch=patch.description,
-                        existing_patch=existing_patch.description,
-                    )
+                        new_patch=patch,
+                        existing_patch=existing_patch,
+                    ),
                 )
                 return False
 
         self.patches.append(patch)
-        logger.debug(f"Added patch: {patch.description}")
+        log_debug_safe(
+            logger,
+            "Added patch: {description}",
+            prefix="PCI_CAP",
+            description=patch.description,
+        )
         return True
 
     def create_patch(
@@ -266,7 +323,12 @@ class PatchEngine:
                 return patch
             return None
         except ValueError as e:
-            logger.error(f"Failed to create patch: {e}")
+            log_error_safe(
+                logger,
+                "Failed to create patch: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
             return None
 
     def create_byte_patch(
@@ -289,8 +351,13 @@ class PatchEngine:
             BinaryPatch if created successfully, None otherwise
         """
         if not (0 <= original_value <= 255) or not (0 <= new_value <= 255):
-            logger.error(
-                f"Invalid byte values: original={original_value}, new={new_value}"
+            log_error_safe(
+                logger,
+                safe_format(
+                    "Invalid byte values: original={original_value}, new={new_value}",
+                    original_value=original_value,
+                    new_value=new_value,
+                ),
             )
             return None
 
@@ -299,7 +366,12 @@ class PatchEngine:
             bytes([original_value]),
             bytes([new_value]),
             description
-            or f"Byte patch at 0x{offset:02x}: 0x{original_value:02x} -> 0x{new_value:02x}",
+            or safe_format(
+                "Byte patch at 0x{offset:02x}: 0x{original_value:02x} -> 0x{new_value:02x}",
+                offset=offset,
+                original_value=original_value,
+                new_value=new_value,
+            ),
         )
 
     def create_word_patch(
@@ -322,8 +394,13 @@ class PatchEngine:
             BinaryPatch if created successfully, None otherwise
         """
         if not (0 <= original_value <= 0xFFFF) or not (0 <= new_value <= 0xFFFF):
-            logger.error(
-                f"Invalid word values: original={original_value}, new={new_value}"
+            log_error_safe(
+                logger,
+                safe_format(
+                    "Invalid word values: original={original_value}, new={new_value}",
+                    original_value=original_value,
+                    new_value=new_value,
+                ),
             )
             return None
 
@@ -332,7 +409,12 @@ class PatchEngine:
             original_value.to_bytes(2, "little"),
             new_value.to_bytes(2, "little"),
             description
-            or f"Word patch at 0x{offset:02x}: 0x{original_value:04x} -> 0x{new_value:04x}",
+            or safe_format(
+                "Word patch at 0x{offset:02x}: 0x{original_value:04x} -> 0x{new_value:04x}",
+                offset=offset,
+                original_value=original_value,
+                new_value=new_value,
+            ),
         )
 
     def create_dword_patch(
@@ -357,8 +439,13 @@ class PatchEngine:
         if not (0 <= original_value <= 0xFFFFFFFF) or not (
             0 <= new_value <= 0xFFFFFFFF
         ):
-            logger.error(
-                f"Invalid dword values: original={original_value}, new={new_value}"
+            log_error_safe(
+                logger,
+                safe_format(
+                    "Invalid dword values: original={original_value}, new={new_value}",
+                    original_value=original_value,
+                    new_value=new_value,
+                ),
             )
             return None
 
@@ -367,7 +454,12 @@ class PatchEngine:
             original_value.to_bytes(4, "little"),
             new_value.to_bytes(4, "little"),
             description
-            or f"Dword patch at 0x{offset:02x}: 0x{original_value:08x} -> 0x{new_value:08x}",
+            or safe_format(
+                "Dword patch at 0x{offset:02x}: 0x{original_value:08x} -> 0x{new_value:08x}",
+                offset=offset,
+                original_value=original_value,
+                new_value=new_value,
+            ),
         )
 
     def validate_patches(
@@ -389,9 +481,13 @@ class PatchEngine:
             if patch.can_apply_to(config_space):
                 valid_patches.append(patch)
             else:
-                error_msg = f"Patch validation failed: {patch.description}"
+                error_msg = safe_format("Patch validation failed: {patch.description}")
                 errors.append(error_msg)
-                logger.warning(error_msg)
+                log_warning_safe(
+                    logger,
+                    error_msg,
+                    prefix="PCI_CAP",
+                )
 
         return valid_patches, errors
 
@@ -411,7 +507,12 @@ class PatchEngine:
         if validate_first:
             valid_patches, validation_errors = self.validate_patches(config_space)
             if validation_errors:
-                logger.warning(f"Validation found {len(validation_errors)} errors")
+                log_warning_safe(
+                    logger,
+                    "Validation found {len_validation_errors} errors",
+                    prefix="PCI_CAP",
+                    len_validation_errors=len(validation_errors),
+                )
         else:
             valid_patches = self.patches
             validation_errors = []
@@ -427,12 +528,22 @@ class PatchEngine:
                 self.applied_patches.append(patch)
                 applied_count += 1
             else:
-                error_msg = f"Failed to apply patch: {patch.description}"
+                error_msg = safe_format("Failed to apply patch: {patch.description}")
                 errors.append(error_msg)
 
-        logger.info(f"Applied {applied_count} patches successfully")
+        log_info_safe(
+            logger,
+            "Applied {applied_count} patches successfully",
+            prefix="PCI_CAP",
+            applied_count=applied_count,
+        )
         if errors:
-            logger.warning(f"Encountered {len(errors)} errors during patch application")
+            log_warning_safe(
+                logger,
+                "Encountered {error_count} errors during patch application",
+                prefix="PCI_CAP",
+                error_count=len(errors),
+            )
 
         return applied_count, errors
 
@@ -454,15 +565,25 @@ class PatchEngine:
             if patch.rollback_from(config_space):
                 rolled_back_count += 1
             else:
-                error_msg = f"Failed to rollback patch: {patch.description}"
+                error_msg = safe_format("Failed to rollback patch: {patch.description}")
                 errors.append(error_msg)
 
         # Clear applied patches list
         self.applied_patches.clear()
 
-        logger.info(f"Rolled back {rolled_back_count} patches successfully")
+        log_info_safe(
+            logger,
+            "Rolled back {rolled_back_count} patches successfully",
+            prefix="PCI_CAP",
+            rolled_back_count=rolled_back_count,
+        )
         if errors:
-            logger.warning(f"Encountered {len(errors)} errors during rollback")
+            log_warning_safe(
+                logger,
+                "Encountered {error_count} errors during rollback",
+                prefix="PCI_CAP",
+                error_count=len(errors),
+            )
 
         return rolled_back_count, errors
 
@@ -479,7 +600,11 @@ class PatchEngine:
         patch_infos = []
 
         for i, patch in enumerate(self.patches):
-            action = f"{action_prefix}_{i:03d}"
+            action = safe_format(
+                "{action_prefix}_{i:03d}",
+                action_prefix=action_prefix,
+                i=i,
+            )
             patch_infos.append(patch.to_patch_info(action))
 
         return patch_infos
@@ -488,7 +613,11 @@ class PatchEngine:
         """Clear all patches from the engine."""
         self.patches.clear()
         self.applied_patches.clear()
-        logger.debug("Cleared all patches from engine")
+        log_debug_safe(
+            logger,
+            "Cleared all patches from engine",
+            prefix="PCI_CAP",
+        )
 
     def get_coverage_map(self) -> Dict[int, BinaryPatch]:
         """

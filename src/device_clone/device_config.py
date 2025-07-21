@@ -23,6 +23,13 @@ except ImportError:
     yaml = None
     YAML_AVAILABLE = False
 
+from ..string_utils import (
+    log_info_safe,
+    log_warning_safe,
+    log_error_safe,
+    log_debug_safe,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -319,7 +326,11 @@ class DeviceConfigManager:
     def _load_default_profiles(self) -> None:
         """Load default device profiles."""
         self.profiles.update(self.DEFAULT_PROFILES)
-        logger.debug(f"Loaded {len(self.DEFAULT_PROFILES)} default device profiles")
+        log_debug_safe(
+            logger,
+            "Loaded {count} default device profiles",
+            count=len(self.DEFAULT_PROFILES),
+        )
 
     def load_config_file(self, file_path: Union[str, Path]) -> DeviceConfiguration:
         """Load device configuration from file."""
@@ -344,11 +355,20 @@ class DeviceConfigManager:
             config = self._dict_to_config(data)
             config.validate()
 
-            logger.info(f"Loaded device configuration from {file_path}")
+            log_info_safe(
+                logger,
+                "Loaded device configuration from {file_path}",
+                file_path=str(file_path),
+            )
             return config
 
         except Exception as e:
-            logger.error(f"Failed to load configuration from {file_path}: {e}")
+            log_error_safe(
+                logger,
+                "Failed to load configuration from {file_path}: {error}",
+                file_path=str(file_path),
+                error=e,
+            )
             raise
 
     def _dict_to_config(self, data: Dict[str, Any]) -> DeviceConfiguration:
@@ -435,16 +455,24 @@ class DeviceConfigManager:
         # Try to load from file
         config_file = self.config_dir / f"{name}.yaml"
         if config_file.exists():
-            logger.warning("=" * 80)
-            logger.warning("⚠️  WARNING: USING PRECONFIGURED YAML DEVICE CONFIGURATION")
-            logger.warning(f"   Loading device profile from: {config_file}")
-            logger.warning(
-                "   This uses hardcoded vendor/device IDs that may not be unique!"
+            log_warning_safe(logger, "=" * 80)
+            log_warning_safe(
+                logger, "⚠️  WARNING: USING PRECONFIGURED YAML DEVICE CONFIGURATION"
             )
-            logger.warning(
-                "   Consider using live device detection instead of YAML configs."
+            log_warning_safe(
+                logger,
+                "   Loading device profile from: {config_file}",
+                config_file=str(config_file),
             )
-            logger.warning("=" * 80)
+            log_warning_safe(
+                logger,
+                "   This uses hardcoded vendor/device IDs that may not be unique!",
+            )
+            log_warning_safe(
+                logger,
+                "   Consider using live device detection instead of YAML configs.",
+            )
+            log_warning_safe(logger, "=" * 80)
             config = self.load_config_file(config_file)
             self.profiles[name] = config
             return config
@@ -452,16 +480,24 @@ class DeviceConfigManager:
         # Try JSON file
         config_file = self.config_dir / f"{name}.json"
         if config_file.exists():
-            logger.warning("=" * 80)
-            logger.warning("⚠️  WARNING: USING PRECONFIGURED JSON DEVICE CONFIGURATION")
-            logger.warning(f"   Loading device profile from: {config_file}")
-            logger.warning(
-                "   This uses hardcoded vendor/device IDs that may not be unique!"
+            log_warning_safe(logger, "=" * 80)
+            log_warning_safe(
+                logger, "⚠️  WARNING: USING PRECONFIGURED JSON DEVICE CONFIGURATION"
             )
-            logger.warning(
-                "   Consider using live device detection instead of JSON configs."
+            log_warning_safe(
+                logger,
+                "   Loading device profile from: {config_file}",
+                config_file=str(config_file),
             )
-            logger.warning("=" * 80)
+            log_warning_safe(
+                logger,
+                "   This uses hardcoded vendor/device IDs that may not be unique!",
+            )
+            log_warning_safe(
+                logger,
+                "   Consider using live device detection instead of JSON configs.",
+            )
+            log_warning_safe(logger, "=" * 80)
             config = self.load_config_file(config_file)
             self.profiles[name] = config
             return config
@@ -518,7 +554,11 @@ class DeviceConfigManager:
         config.validate()
         self.profiles[name] = config
 
-        logger.info(f"Created device profile '{name}' from environment variables")
+        log_info_safe(
+            logger,
+            "Created device profile '{name}' from environment variables",
+            name=name,
+        )
         return config
 
     def list_profiles(self) -> List[str]:
@@ -558,10 +598,19 @@ class DeviceConfigManager:
             # Add the profile to the in-memory profiles dictionary
             self.profiles[config.name] = config
 
-            logger.info(f"Saved device configuration to {file_path}")
+            log_info_safe(
+                logger,
+                "Saved device configuration to {file_path}",
+                file_path=str(file_path),
+            )
 
         except Exception as e:
-            logger.error(f"Failed to save configuration to {file_path}: {e}")
+            log_error_safe(
+                logger,
+                "Failed to save configuration to {file_path}: {error}",
+                file_path=str(file_path),
+                error=e,
+            )
             raise
 
 
@@ -596,8 +645,10 @@ def get_device_config(profile_name: str) -> Optional[DeviceConfiguration]:
         return manager.get_profile(profile_name)
     except ValueError:
         # Profile not found - return None for graceful degradation
-        logger.warning(
-            f"Device profile '{profile_name}' not found, using live device detection"
+        log_warning_safe(
+            logger,
+            "Device profile '{profile_name}' not found, using live device detection",
+            profile_name=profile_name,
         )
         return None
 
@@ -652,5 +703,7 @@ def generate_device_state_machine(registers: List[Dict[str, Any]]) -> Dict[str, 
         return device_state_machine
 
     except Exception as e:
-        logger.error(f"Error in generate_device_state_machine: {e}")
+        log_error_safe(
+            logger, "Error in generate_device_state_machine: {error}", error=e
+        )
         return {}

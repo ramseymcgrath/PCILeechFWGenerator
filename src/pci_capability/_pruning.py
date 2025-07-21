@@ -275,7 +275,13 @@ def _generate_standard_capability_patches(
 
         if action == PruningAction.REMOVE:
             # Record the removal patch
-            before_bytes = f"{config_space.read_byte(offset):02x}{config_space.read_byte(offset + 1):02x}"
+            before_bytes = safe_format("{config_space.read_byte(offset):02x}{config_space.read_byte(offset + 1):02x}")=config_space.read_byte(offset),
+                config_space.read_byte(offset
+                +
+                1)=config_space.read_byte(offset
+                +
+                1)
+            )
             patches.append(PatchInfo(offset, "REMOVE_STD_CAP", before_bytes, "0000"))
 
             # Update pointer chain
@@ -290,22 +296,30 @@ def _generate_standard_capability_patches(
                 )
 
                 ptr_offset = prev_offset + header_offset_adj
-                before_bytes = f"{config_space.read_byte(ptr_offset):02x}"
+                before_bytes = safe_format("{config_space.read_byte(ptr_offset):02x}")=config_space.read_byte(ptr_offset)
+            )
                 patches.append(
                     PatchInfo(
-                        ptr_offset, "UPDATE_STD_PTR", before_bytes, f"{next_ptr:02x}"
+                        ptr_offset, "UPDATE_STD_PTR", before_bytes, safe_format(
+                    "{next_ptr:02x}",
+                    next_ptr=next_ptr,
+                )
                     )
                 )
             else:
                 # Update capabilities pointer at 0x34
                 next_ptr = cap.next_ptr
-                before_bytes = f"{config_space.read_byte(PCI_CAPABILITIES_POINTER):02x}"
+                before_bytes = safe_format("{config_space.read_byte(PCI_CAPABILITIES_POINTER):02x}")=config_space.read_byte(PCI_CAPABILITIES_POINTER)
+            )
                 patches.append(
                     PatchInfo(
                         PCI_CAPABILITIES_POINTER,
                         "UPDATE_CAP_PTR",
                         before_bytes,
-                        f"{next_ptr:02x}",
+                        safe_format(
+                    "{next_ptr:02x}",
+                    next_ptr=next_ptr,
+                ),
                     )
                 )
 
@@ -313,13 +327,17 @@ def _generate_standard_capability_patches(
             # Record modification patches based on capability type
             if cap.cap_id == PCICapabilityID.POWER_MANAGEMENT.value:
                 pm_cap_offset = cap.offset + PM_CAP_CAPABILITIES_OFFSET
-                before_bytes = f"{config_space.read_word(pm_cap_offset):04x}"
+                before_bytes = safe_format("{config_space.read_word(pm_cap_offset):04x}")=config_space.read_word(pm_cap_offset)
+            )
                 patches.append(
                     PatchInfo(
                         pm_cap_offset,
                         "MODIFY_PM_CAP",
                         before_bytes,
-                        f"{PM_CAP_D3HOT_SUPPORT:04x}",
+                        safe_format(
+                    "{PM_CAP_D3HOT_SUPPORT:04x}",
+                    PM_CAP_D3HOT_SUPPORT=PM_CAP_D3HOT_SUPPORT,
+                ),
                     )
                 )
 
@@ -353,7 +371,10 @@ def _generate_extended_capability_patches(
             before_bytes = ""
             for i in range(zero_len):
                 if offset + i < len(config_space):
-                    before_bytes += f"{config_space.read_byte(offset + i):02x}"
+                    before_bytes += safe_format("{config_space.read_byte(offset + i):02x}")=config_space.read_byte(offset
+                +
+                i)
+            )
             after_bytes = "00" * zero_len
             patches.append(
                 PatchInfo(offset, "REMOVE_EXT_CAP", before_bytes, after_bytes)
@@ -363,7 +384,8 @@ def _generate_extended_capability_patches(
             if cap.cap_id == PCIExtCapabilityID.ACCESS_CONTROL_SERVICES.value:
                 # ACS - keep header + control regs, zero feature bits
                 control_offset = cap.offset + ACS_CONTROL_REGISTER_OFFSET
-                before_bytes = f"{config_space.read_word(control_offset):04x}"
+                before_bytes = safe_format("{config_space.read_word(control_offset):04x}")=config_space.read_word(control_offset)
+            )
                 patches.append(
                     PatchInfo(control_offset, "MODIFY_ACS", before_bytes, "0000")
                 )
@@ -371,7 +393,8 @@ def _generate_extended_capability_patches(
             elif cap.cap_id == PCIExtCapabilityID.DOWNSTREAM_PORT_CONTAINMENT.value:
                 # DPC - similar to ACS
                 control_offset = cap.offset + DPC_CONTROL_REGISTER_OFFSET
-                before_bytes = f"{config_space.read_word(control_offset):04x}"
+                before_bytes = safe_format("{config_space.read_word(control_offset):04x}")=config_space.read_word(control_offset)
+            )
                 patches.append(
                     PatchInfo(control_offset, "MODIFY_DPC", before_bytes, "0000")
                 )
@@ -381,10 +404,16 @@ def _generate_extended_capability_patches(
                 cap_offset = cap.offset + RBAR_CAPABILITY_REGISTER_OFFSET
                 if config_space.has_data(cap_offset, 4):
                     before_val = config_space.read_dword(cap_offset)
-                    before_bytes = f"{before_val:08x}"
+                    before_bytes = safe_format(
+                    "{before_val:08x}",
+                    before_val=before_val,
+                )
                     # Clear size bits above 128MB (bit 27 and above)
                     clamped_val = before_val & RBAR_SIZE_MASK_ABOVE_128MB
-                    after_bytes = f"{clamped_val:08x}"
+                    after_bytes = safe_format(
+                    "{clamped_val:08x}",
+                    clamped_val=clamped_val,
+                )
                     patches.append(
                         PatchInfo(cap_offset, "MODIFY_RBAR", before_bytes, after_bytes)
                     )

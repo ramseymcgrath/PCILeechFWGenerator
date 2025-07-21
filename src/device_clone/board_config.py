@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from ..file_management.board_discovery import BoardDiscovery, discover_all_boards
 
+from ..string_utils import log_info_safe, log_debug_safe
+
 logger = logging.getLogger(__name__)
 
 # Cache for discovered boards
@@ -29,9 +31,9 @@ def _ensure_board_cache(repo_root: Optional[Path] = None) -> Dict[str, Dict]:
         _cache_repo_root = repo_root
 
     if _board_cache is None:
-        logger.info("Discovering boards from pcileech-fpga repository...")
+        log_info_safe(logger, "Discovering boards from pcileech-fpga repository...")
         _board_cache = discover_all_boards(repo_root)
-        logger.info(f"Discovered {len(_board_cache)} boards")
+        log_info_safe(logger, "Discovered {count} boards", count=len(_board_cache))
 
     return _board_cache
 
@@ -65,7 +67,12 @@ def get_fpga_part(board: str, repo_root: Optional[Path] = None) -> str:
         )
 
     fpga_part = boards[board]["fpga_part"]
-    logger.debug(f"Board {board} mapped to FPGA part {fpga_part}")
+    log_debug_safe(
+        logger,
+        "Board {board} mapped to FPGA part {fpga_part}",
+        board=board,
+        fpga_part=fpga_part,
+    )
     return fpga_part
 
 

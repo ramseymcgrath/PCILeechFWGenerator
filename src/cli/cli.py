@@ -32,6 +32,8 @@ except ImportError:
     from src.log_config import get_logger, setup_logging
     from src.shell import Shell
 
+
+from ..string_utils import log_info_safe, log_warning_safe
 from .container import BuildConfig, run_build  # new unified runner
 
 logger = get_logger(__name__)
@@ -216,8 +218,7 @@ def flash_bin(path: Path):
     from .flash import flash_firmware
 
     flash_firmware(path)
-
-    logger.info("Firmware flashed successfully ✓")
+    log_info_safe(logger, "Firmware flashed successfully ✓")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -250,8 +251,8 @@ def main(argv: Optional[List[str]] = None):
             and args.legacy_compatibility
             and fallback_mode == "none"
         ):
-            logger.warning(
-                "Legacy compatibility mode enabled - using 'auto' fallback mode"
+            log_warning_safe(
+                logger, "Legacy compatibility mode enabled - using 'auto' fallback mode"
             )
             fallback_mode = "auto"
             if not allowed_fallbacks:
@@ -292,18 +293,26 @@ def main(argv: Optional[List[str]] = None):
             template_str = DonorInfoTemplateGenerator.generate_template_with_comments()
             with open(args.output, "w") as f:
                 f.write(template_str)
-            logger.info(f"✓ Donor info template with comments saved to: {args.output}")
+            log_info_safe(
+                logger,
+                "✓ Donor info template with comments saved to: {output}",
+                output=args.output,
+            )
         else:
             # Generate valid JSON template
             DonorInfoTemplateGenerator.save_template(
                 args.output, pretty=not args.compact
             )
-            logger.info(f"✓ Donor info template saved to: {args.output}")
+            log_info_safe(
+                logger, "✓ Donor info template saved to: {output}", output=args.output
+            )
 
-        logger.info("\nNext steps:")
-        logger.info("1. Fill in the device-specific values in the template")
-        logger.info("2. Run behavioral profiling to capture timing data")
-        logger.info("3. Use the completed template for advanced device cloning")
+        log_info_safe(logger, "\nNext steps:")
+        log_info_safe(logger, "1. Fill in the device-specific values in the template")
+        log_info_safe(logger, "2. Run behavioral profiling to capture timing data")
+        log_info_safe(
+            logger, "3. Use the completed template for advanced device cloning"
+        )
 
 
 if __name__ == "__main__":

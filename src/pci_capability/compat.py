@@ -13,7 +13,33 @@ from typing import Dict, List, Optional
 from .core import CapabilityWalker, ConfigSpace
 from .processor import CapabilityProcessor
 from .rules import RuleEngine
-from .types import CapabilityType, EmulationCategory, PatchInfo, PruningAction
+from .types import CapabilityType, PatchInfo, PruningAction, EmulationCategory
+
+try:
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
+except ImportError:
+    import sys
+    import os
+    from pathlib import Path
+
+    # Add parent directory to sys.path for direct import if needed
+    current_dir = Path(__file__).parent
+    parent_dir = str(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +84,13 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
         return cap_info.offset if cap_info else None
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error finding standard capability 0x{cap_id:02x}: {e}")
+        log_error_safe(
+            logger,
+            "Error finding standard capability 0x{cap_id:02x}: {e}",
+            prefix="PCI_CAP",
+            cap_id=cap_id,
+            e=e,
+        )
         return None
 
 
@@ -81,7 +113,13 @@ def find_ext_cap(cfg: str, cap_id: int) -> Optional[int]:
         return cap_info.offset if cap_info else None
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error finding extended capability 0x{cap_id:04x}: {e}")
+        log_error_safe(
+            logger,
+            "Error finding extended capability 0x{cap_id:04x}: {e}",
+            prefix="PCI_CAP",
+            cap_id=cap_id,
+            e=e,
+        )
         return None
 
 
@@ -111,7 +149,12 @@ def get_all_capabilities(cfg: str) -> Dict[int, Dict]:
             }
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error getting standard capabilities: {e}")
+        log_error_safe(
+            logger,
+            "Error getting standard capabilities: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
 
     return capabilities
 
@@ -143,7 +186,12 @@ def get_all_ext_capabilities(cfg: str) -> Dict[int, Dict]:
             }
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error getting extended capabilities: {e}")
+        log_error_safe(
+            logger,
+            "Error getting extended capabilities: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
 
     return ext_capabilities
 
@@ -153,8 +201,8 @@ def categorize_capabilities(
 ) -> Dict[int, "EmulationCategory"]:
     """
     Categorize capabilities based on emulation feasibility (compatibility version).
-
-    Args:
+    from .types import CapabilityInfo, CapabilityType
+    from .utils import categorize_capabilities as utils_categorize_capabilities
         capabilities: Dictionary of capabilities (from get_all_capabilities or get_all_ext_capabilities)
 
     Returns:
@@ -248,7 +296,12 @@ def prune_capabilities(cfg: str, actions: Dict[int, PruningAction]) -> str:
         return config_space.to_hex()
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error pruning capabilities: {e}")
+        log_error_safe(
+            logger,
+            "Error pruning capabilities: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return cfg
 
 
@@ -274,7 +327,12 @@ def get_capability_patches(
         return generate_capability_patches(config_space, actions)
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error generating capability patches: {e}")
+        log_error_safe(
+            logger,
+            "Error generating capability patches: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return []
 
 
@@ -309,7 +367,12 @@ def prune_capabilities_by_rules(cfg: str) -> str:
         return config_space.to_hex()
 
     except (ValueError, IndexError) as e:
-        logger.error(f"Error pruning capabilities by rules: {e}")
+        log_error_safe(
+            logger,
+            "Error pruning capabilities by rules: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return cfg
 
 
@@ -352,9 +415,19 @@ def process_capabilities_enhanced(
         if rule_config_file:
             try:
                 rule_engine.load_rules_from_file(rule_config_file)
-                logger.info(f"Loaded custom rules from {rule_config_file}")
+                log_info_safe(
+                    logger,
+                    "Loaded custom rules from {rule_config_file}",
+                    prefix="PCI_CAP",
+                    rule_config_file=rule_config_file,
+                )
             except Exception as e:
-                logger.warning(f"Failed to load custom rules: {e}")
+                log_warning_safe(
+                    logger,
+                    "Failed to load custom rules: {e}",
+                    prefix="PCI_CAP",
+                    e=e,
+                )
 
         # Initialize processor
         processor = CapabilityProcessor(config_space, rule_engine)
@@ -376,7 +449,12 @@ def process_capabilities_enhanced(
         return results
 
     except Exception as e:
-        logger.error(f"Enhanced capability processing failed: {e}")
+        log_error_safe(
+            logger,
+            "Enhanced capability processing failed: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return {
             "capabilities_found": 0,
             "categories": {},
@@ -417,7 +495,12 @@ def categorize_capabilities_with_rules(
         return processor.categorize_all_capabilities(device_context)
 
     except Exception as e:
-        logger.error(f"Rule-based categorization failed: {e}")
+        log_error_safe(
+            logger,
+            "Rule-based categorization failed: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return {}
 
 
@@ -460,5 +543,10 @@ def get_capability_patches_enhanced(
         return processor.get_patch_info_list()
 
     except Exception as e:
-        logger.error(f"Enhanced patch generation failed: {e}")
+        log_error_safe(
+            logger,
+            "Enhanced patch generation failed: {e}",
+            prefix="PCI_CAP",
+            e=e,
+        )
         return []

@@ -12,7 +12,13 @@ import logging
 from typing import Dict, Iterator, List, Optional, Set
 
 try:
-    from ..string_utils import safe_format
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 except ImportError:
     # Fallback for script execution
     import sys
@@ -21,7 +27,13 @@ except ImportError:
     src_dir = Path(__file__).parent.parent
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
-    from string_utils import safe_format
+    from string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 
 from .constants import (
     EXTENDED_CAPABILITY_NAMES,
@@ -69,7 +81,12 @@ class ConfigSpace:
         try:
             self._data = bytearray.fromhex(hex_data)
         except ValueError as e:
-            raise ValueError(f"Invalid hex data: {e}") from e
+            raise ValueError(
+                safe_format(
+                    "Invalid hex data: {e}",
+                    e=e,
+                )
+            ) from e
 
     def _validate_hex_string(self, hex_data: str) -> None:
         """Validate that the hex string meets basic requirements."""
@@ -77,8 +94,12 @@ class ConfigSpace:
             raise ValueError("Configuration string is empty")
 
         if len(hex_data) % 2 != 0:
-            raise ValueError(f"Configuration string length {len(hex_data)} is odd")
-
+            raise ValueError(
+                safe_format(
+                    "Configuration string length {length} is odd",
+                    length=len(hex_data),
+                )
+            )
         if len(hex_data) < PCI_CONFIG_SPACE_MIN_HEX_CHARS:
             raise ValueError(
                 safe_format(
@@ -88,7 +109,6 @@ class ConfigSpace:
                     min_bytes=PCI_CONFIG_SPACE_MIN_SIZE,
                 )
             )
-
         # Validate it's proper hex by attempting conversion
         try:
             int(hex_data, 16)
@@ -112,7 +132,11 @@ class ConfigSpace:
         """
         if offset < 0 or offset >= len(self._data):
             raise IndexError(
-                f"Offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         return self._data[offset]
 
@@ -131,7 +155,11 @@ class ConfigSpace:
         """
         if offset < 0 or offset + 1 >= len(self._data):
             raise IndexError(
-                f"Word offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Word offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         return int.from_bytes(self._data[offset : offset + 2], "little")
 
@@ -150,7 +178,11 @@ class ConfigSpace:
         """
         if offset < 0 or offset + 3 >= len(self._data):
             raise IndexError(
-                f"Dword offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Dword offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         return int.from_bytes(self._data[offset : offset + 4], "little")
 
@@ -168,10 +200,19 @@ class ConfigSpace:
         """
         if offset < 0 or offset >= len(self._data):
             raise IndexError(
-                f"Offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         if not 0 <= value <= 255:
-            raise ValueError(f"Value {value} is not a valid byte (0-255)")
+            raise ValueError(
+                safe_format(
+                    "Value {value} is not a valid byte (0-255)",
+                    value=value,
+                )
+            )
         self._data[offset] = value
 
     def write_word(self, offset: int, value: int) -> None:
@@ -188,10 +229,19 @@ class ConfigSpace:
         """
         if offset < 0 or offset + 1 >= len(self._data):
             raise IndexError(
-                f"Word offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Word offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         if not 0 <= value <= 0xFFFF:
-            raise ValueError(f"Value {value} is not a valid word (0-65535)")
+            raise ValueError(
+                safe_format(
+                    "Value {value} is not a valid word (0-65535)",
+                    value=value,
+                )
+            )
         self._data[offset : offset + 2] = value.to_bytes(2, "little")
 
     def write_dword(self, offset: int, value: int) -> None:
@@ -208,10 +258,19 @@ class ConfigSpace:
         """
         if offset < 0 or offset + 3 >= len(self._data):
             raise IndexError(
-                f"Dword offset {offset:02x} is out of bounds (size: {len(self._data)})"
+                safe_format(
+                    "Dword offset {offset:02x} is out of bounds (size: {size})",
+                    offset=offset,
+                    size=len(self._data),
+                )
             )
         if not 0 <= value <= 0xFFFFFFFF:
-            raise ValueError(f"Value {value} is not a valid dword (0-4294967295)")
+            raise ValueError(
+                safe_format(
+                    "Value {value} is not a valid dword (0-4294967295)",
+                    value=value,
+                )
+            )
         self._data[offset : offset + 4] = value.to_bytes(4, "little")
 
     def has_data(self, offset: int, length: int) -> bool:
@@ -289,8 +348,12 @@ class CapabilityWalker:
 
         while current_ptr != 0 and current_ptr not in visited:
             if not self.config_space.has_data(current_ptr, 2):
-                logger.warning(
-                    f"Standard capability pointer {current_ptr:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Standard capability pointer {current_ptr:02x} is out of bounds",
+                        current_ptr=current_ptr,
+                    ),
                 )
                 break
 
@@ -303,16 +366,23 @@ class CapabilityWalker:
                 # Handle capabilities with 2-byte headers
                 if cap_id in TWO_BYTE_HEADER_CAPABILITIES:
                     if not self.config_space.has_data(current_ptr, 3):
-                        logger.warning(
-                            f"2-byte header capability at {current_ptr:02x} is truncated"
+                        log_warning_safe(
+                            logger,
+                            safe_format(
+                                "2-byte header capability at {current_ptr:02x} is truncated",
+                                current_ptr=current_ptr,
+                            ),
                         )
                         break
                     next_ptr = self.config_space.read_byte(current_ptr + 2)
 
                 name = STANDARD_CAPABILITY_NAMES.get(
-                    cap_id, f"Unknown (0x{cap_id:02x})"
+                    cap_id,
+                    safe_format(
+                        "Unknown (0x{cap_id:02x})",
+                        cap_id=cap_id,
+                    ),
                 )
-
                 yield CapabilityInfo(
                     offset=current_ptr,
                     cap_id=cap_id,
@@ -324,8 +394,13 @@ class CapabilityWalker:
                 current_ptr = next_ptr
 
             except (IndexError, ValueError) as e:
-                logger.warning(
-                    f"Error reading standard capability at {current_ptr:02x}: {e}"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Error reading standard capability at {current_ptr:02x}: {e}",
+                        current_ptr=current_ptr,
+                        e=e,
+                    ),
                 )
                 break
 
@@ -346,15 +421,23 @@ class CapabilityWalker:
 
         while current_ptr != 0 and current_ptr not in visited:
             if not self.config_space.has_data(current_ptr, 4):
-                logger.warning(
-                    f"Extended capability pointer {current_ptr:03x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Extended capability pointer {current_ptr:03x} is out of bounds",
+                        current_ptr=current_ptr,
+                    ),
                 )
                 break
 
             # Check DWORD alignment
             if current_ptr & PCI_EXT_CAP_ALIGNMENT != 0:
-                logger.warning(
-                    f"Extended capability pointer {current_ptr:03x} is not DWORD aligned"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Extended capability pointer {current_ptr:03x} is not DWORD aligned",
+                        current_ptr=current_ptr,
+                    ),
                 )
                 break
 
@@ -381,13 +464,20 @@ class CapabilityWalker:
                     break
 
                 name = EXTENDED_CAPABILITY_NAMES.get(
-                    cap_id, f"Unknown Extended (0x{cap_id:04x})"
+                    cap_id,
+                    safe_format(
+                        "Unknown Extended (0x{cap_id:04x})",
+                        cap_id=cap_id,
+                    ),
                 )
                 if cap_id not in EXTENDED_CAPABILITY_NAMES and cap_id <= 0x0029:
-                    logger.info(
-                        f"Unknown extended capability ID 0x{cap_id:04x} encountered"
+                    log_info_safe(
+                        logger,
+                        safe_format(
+                            "Unknown extended capability ID 0x{cap_id:04x} encountered",
+                            cap_id=cap_id,
+                        ),
                     )
-
                 yield CapabilityInfo(
                     offset=current_ptr,
                     cap_id=cap_id,
@@ -404,8 +494,13 @@ class CapabilityWalker:
                 current_ptr = next_ptr
 
             except (IndexError, ValueError) as e:
-                logger.warning(
-                    f"Error reading extended capability at {current_ptr:03x}: {e}"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Error reading extended capability at {current_ptr:03x}: {e}",
+                        current_ptr=current_ptr,
+                        e=e,
+                    ),
                 )
                 break
 
@@ -455,24 +550,40 @@ class CapabilityWalker:
     def _capabilities_supported(self) -> bool:
         """Check if device supports capabilities."""
         if not self.config_space.has_data(PCI_STATUS_REGISTER, 2):
-            logger.warning("Status register not found in configuration space")
+            log_warning_safe(
+                logger,
+                "Status register not found in configuration space",
+                prefix="PCI_CAP",
+            )
             return False
 
         try:
             status = self.config_space.read_word(PCI_STATUS_REGISTER)
             return bool(status & PCI_STATUS_CAP_LIST)
         except (IndexError, ValueError):
-            logger.warning("Failed to read status register")
+            log_warning_safe(
+                logger,
+                "Failed to read status register",
+                prefix="PCI_CAP",
+            )
             return False
 
     def _get_capabilities_pointer(self) -> int:
         """Get the capabilities pointer from offset 0x34."""
         if not self.config_space.has_data(PCI_CAPABILITIES_POINTER, 1):
-            logger.warning("Capabilities pointer not found in configuration space")
+            log_warning_safe(
+                logger,
+                "Capabilities pointer not found in configuration space",
+                prefix="PCI_CAP",
+            )
             return 0
 
         try:
             return self.config_space.read_byte(PCI_CAPABILITIES_POINTER)
         except (IndexError, ValueError):
-            logger.warning("Failed to read capabilities pointer")
+            log_warning_safe(
+                logger,
+                "Failed to read capabilities pointer",
+                prefix="PCI_CAP",
+            )
             return 0

@@ -12,7 +12,13 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
-    from ..string_utils import safe_format
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 except ImportError:
     # Fallback for script execution
     import sys
@@ -21,7 +27,13 @@ except ImportError:
     src_dir = Path(__file__).parent.parent
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
-    from string_utils import safe_format
+    from string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 
 from .core import CapabilityWalker, ConfigSpace
 from .msix import MSIXCapabilityHandler
@@ -89,7 +101,12 @@ class CapabilityProcessor:
         """
         if self._capabilities_cache is None or force_refresh:
             self._capabilities_cache = self.walker.get_all_capabilities()
-            logger.info(f"Discovered {len(self._capabilities_cache)} capabilities")
+            log_info_safe(
+                logger,
+                "Discovered {count} capabilities",
+                prefix="PCI_CAP",
+                count=len(self._capabilities_cache),
+            )
 
         return self._capabilities_cache.copy()
 
@@ -120,7 +137,12 @@ class CapabilityProcessor:
             )
             self._device_context_cache = device_context
 
-            logger.info(f"Categorized {len(self._categories_cache)} capabilities")
+            log_info_safe(
+                logger,
+                "Categorized {count} capabilities",
+                prefix="PCI_CAP",
+                count=len(self._categories_cache),
+            )
 
         return self._categories_cache.copy()
 
@@ -144,8 +166,11 @@ class CapabilityProcessor:
         Returns:
             Dictionary with processing results
         """
-        logger.info(
-            f"Starting capability processing with actions: {[a.name for a in actions]}"
+        log_info_safe(
+            logger,
+            "Starting capability processing with actions: {actions}",
+            prefix="PCI_CAP",
+            actions=[a.name for a in actions],
         )
 
         # Discover and categorize capabilities
@@ -189,13 +214,14 @@ class CapabilityProcessor:
             results["patches_applied"] = patches_applied
             results["errors"].extend(patch_errors)
 
-        logger.info(
+        log_info_safe(
+            logger,
             safe_format(
                 "Capability processing completed: {found} capabilities, {created} patches created, {applied} patches applied",
                 found=results["capabilities_found"],
                 created=results["patches_created"],
                 applied=results["patches_applied"],
-            )
+            ),
         )
 
         return results
@@ -253,7 +279,10 @@ class CapabilityProcessor:
         # Basic configuration space validation
         if len(self.config_space) < 256:
             errors.append(
-                f"Configuration space too small: {len(self.config_space)} bytes"
+                safe_format(
+                    "Configuration space too small: {size} bytes",
+                    size=len(self.config_space),
+                )
             )
 
         # Validate all capabilities
@@ -262,7 +291,12 @@ class CapabilityProcessor:
         for offset, cap_info in capabilities.items():
             # Basic capability validation
             if not self.config_space.has_data(offset, 2):
-                errors.append(f"Capability at 0x{offset:02x} is truncated")
+                errors.append(
+                    safe_format(
+                        "Capability at 0x{offset:02x} is truncated",
+                        offset=offset,
+                    )
+                )
                 continue
 
             # Validate capability ID matches
@@ -270,10 +304,21 @@ class CapabilityProcessor:
                 actual_id = self.config_space.read_byte(offset)
                 if actual_id != cap_info.cap_id:
                     errors.append(
-                        f"Capability ID mismatch at 0x{offset:02x}: expected 0x{cap_info.cap_id:02x}, found 0x{actual_id:02x}"
+                        safe_format(
+                            "Capability ID mismatch at 0x{offset:02x}: expected 0x{expected:02x}, found 0x{actual:02x}",
+                            offset=offset,
+                            expected=cap_info.cap_id,
+                            actual=actual_id,
+                        )
                     )
             except (IndexError, ValueError) as e:
-                errors.append(f"Failed to validate capability at 0x{offset:02x}: {e}")
+                errors.append(
+                    safe_format(
+                        "Failed to validate capability at 0x{offset:02x}: {error}",
+                        offset=offset,
+                        error=e,
+                    )
+                )
 
             # MSI-X specific validation
             if cap_info.cap_id == 0x11:  # MSI-X
@@ -310,7 +355,11 @@ class CapabilityProcessor:
         self._categories_cache = None
         self._device_context_cache = None
         self.patch_engine.clear_patches()
-        logger.debug("Cleared all processing state")
+        log_debug_safe(
+            logger,
+            "Cleared all processing state",
+            prefix="PCI_CAP",
+        )
 
     def _get_device_context(self) -> Dict[str, Any]:
         """
@@ -331,7 +380,8 @@ class CapabilityProcessor:
 
             self._device_context_cache = context
 
-        return self._device_context_cache
+        # Always return a dict, never None
+        return self._device_context_cache or {}
 
     def _update_device_features(
         self, context: Dict[str, Any], capabilities: Dict[int, CapabilityInfo]
@@ -394,15 +444,12 @@ class CapabilityProcessor:
                     context["pcie_l1_latency"] = (dev_caps >> 9) & 0x7
 
                     # Log device capabilities for debugging
-                    logger.debug(
-                        f"PCIe device capabilities: max_payload={context['pcie_max_payload_size']}, "
-                        f"extended_tag_supported={context['pcie_extended_tag_supported']}"
-                    )
-
-                    # Log device capabilities for debugging
-                    logger.debug(
-                        f"PCIe device capabilities: max_payload={context['pcie_max_payload_size']}, "
-                        f"extended_tag_supported={context['pcie_extended_tag_supported']}"
+                    log_debug_safe(
+                        logger,
+                        "PCIe device capabilities: max_payload={max_payload}, extended_tag_supported={extended_tag}",
+                        prefix="PCI_CAP",
+                        max_payload=context["pcie_max_payload_size"],
+                        extended_tag=context["pcie_extended_tag_supported"],
                     )
 
                 # Device control
@@ -460,7 +507,12 @@ class CapabilityProcessor:
             device_type = context["pcie_device_type"]
 
             # Log the device type for debugging
-            logger.debug(f"PCIe device type: {device_type}")
+            log_debug_safe(
+                logger,
+                "PCIe device type: {device_type}",
+                prefix="PCI_CAP",
+                device_type=device_type,
+            )
 
             # For endpoints (type 0)
             if device_type == 0:
@@ -472,7 +524,11 @@ class CapabilityProcessor:
                 context["enable_extended_tag"] = context.get(
                     "pcie_extended_tag_enabled", True
                 )
-                logger.debug("Setting endpoint-specific features")
+                log_debug_safe(
+                    logger,
+                    "Setting endpoint-specific features",
+                    prefix="PCI_CAP",
+                )
 
             # For switches (types 1-6)
             elif 1 <= device_type <= 6:
@@ -480,7 +536,11 @@ class CapabilityProcessor:
                 context["enable_relaxed_ordering"] = False
                 context["enable_no_snoop"] = False
                 context["enable_extended_tag"] = True
-                logger.debug("Setting switch-specific features")
+                log_debug_safe(
+                    logger,
+                    "Setting switch-specific features",
+                    prefix="PCI_CAP",
+                )
 
         # Set power management features based on capability
         if has_pm:
@@ -506,8 +566,13 @@ class CapabilityProcessor:
                     context["aspm_control"] = aspm_support
 
                 # Log the ASPM settings for debugging
-                logger.debug(
-                    f"ASPM: support={aspm_support}, control={current_aspm_control}, final={context['aspm_control']}"
+                log_debug_safe(
+                    logger,
+                    "ASPM: support={support}, control={control}, final={final}",
+                    prefix="PCI_CAP",
+                    support=aspm_support,
+                    control=current_aspm_control,
+                    final=context["aspm_control"],
                 )
 
     def _group_capabilities_by_category(
@@ -599,16 +664,25 @@ class CapabilityProcessor:
 
             # Log the number of patches created for debugging
             if patches:
-                logger.debug(
-                    f"Created {len(patches)} patches for {cap_info.name} at 0x{cap_info.offset:02x}"
+                log_debug_safe(
+                    logger,
+                    "Created {count} patches for {name} at 0x{offset:02x}",
+                    prefix="PCI_CAP",
+                    count=len(patches),
+                    name=cap_info.name,
+                    offset=cap_info.offset,
                 )
 
             for patch in patches:
                 if self.patch_engine.add_patch(patch):
                     patches_created += 1
                 else:
-                    logger.warning(
-                        f"Failed to add patch for {cap_info.name} at 0x{cap_info.offset:02x}"
+                    log_warning_safe(
+                        logger,
+                        "Failed to add patch for {name} at 0x{offset:02x}",
+                        prefix="PCI_CAP",
+                        name=cap_info.name,
+                        offset=cap_info.offset,
                     )
 
         return patches_created
@@ -661,8 +735,13 @@ class CapabilityProcessor:
                 # For other capabilities, create generic patches
                 patches.extend(self._create_generic_modification_patches(cap_info))
         except Exception as e:
-            logger.error(
-                f"Error creating patches for capability {cap_info.name} at 0x{cap_info.offset:02x}: {e}"
+            log_error_safe(
+                logger,
+                "Error creating patches for capability {name} at 0x{offset:02x}: {error}",
+                prefix="PCI_CAP",
+                name=cap_info.name,
+                offset=cap_info.offset,
+                error=e,
             )
             # Return at least one patch to ensure the test passes
             if not patches and cap_info.cap_id in [
@@ -670,12 +749,21 @@ class CapabilityProcessor:
                 0x05,
                 0x10,
             ]:  # Critical capabilities
-                logger.info(f"Creating fallback patch for {cap_info.name}")
+                log_info_safe(
+                    logger,
+                    "Creating fallback patch for {name}",
+                    prefix="PCI_CAP",
+                    name=cap_info.name,
+                )
                 dummy_patch = self.patch_engine.create_byte_patch(
                     cap_info.offset,
                     self.config_space.read_byte(cap_info.offset),
                     self.config_space.read_byte(cap_info.offset),
-                    f"Fallback patch for {cap_info.name} at 0x{cap_info.offset:02x}",
+                    safe_format(
+                        "Fallback patch for {name} at 0x{offset:02x}",
+                        name=cap_info.name,
+                        offset=cap_info.offset,
+                    ),
                 )
                 if dummy_patch:
                     patches.append(dummy_patch)
@@ -690,8 +778,11 @@ class CapabilityProcessor:
             # MSI Message Control register is at offset 2 from capability header
             control_offset = cap_info.offset + 2
             if not self.config_space.has_data(control_offset, 2):
-                logger.warning(
-                    f"MSI control register at 0x{control_offset:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    "MSI control register at 0x{offset:02x} is out of bounds",
+                    prefix="PCI_CAP",
+                    offset=control_offset,
                 )
                 return patches
 
@@ -713,7 +804,11 @@ class CapabilityProcessor:
                     control_offset,
                     current_control,
                     new_control,
-                    f"Enable MSI with {1 << mme} messages at 0x{control_offset:02x}",
+                    safe_format(
+                        "Enable MSI with {count} messages at 0x{offset:02x}",
+                        count=mme,
+                        offset=control_offset,
+                    ),
                 )
                 if patch:
                     patches.append(patch)
@@ -734,7 +829,10 @@ class CapabilityProcessor:
                         addr_offset,
                         current_addr,
                         emulator_addr,
-                        f"Set MSI address for emulator at 0x{addr_offset:02x}",
+                        safe_format(
+                            "Set MSI address for emulator at 0x{offset:02x}",
+                            offset=addr_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -753,13 +851,21 @@ class CapabilityProcessor:
                         data_offset,
                         current_data,
                         emulator_vector,
-                        f"Set MSI vector for emulator at 0x{data_offset:02x}",
+                        safe_format(
+                            "Set MSI vector for emulator at 0x{offset:02x}",
+                            offset=data_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating MSI patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating MSI patches: {error}",
+                prefix="PCI_CAP",
+                error=e,
+            )
 
         return patches
 
@@ -771,8 +877,11 @@ class CapabilityProcessor:
             # PCI Express Capabilities Register is at offset 2
             caps_offset = cap_info.offset + 2
             if not self.config_space.has_data(caps_offset, 2):
-                logger.warning(
-                    f"PCIe caps register at 0x{caps_offset:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    "PCIe caps register at 0x{offset:02x} is out of bounds",
+                    prefix="PCI_CAP",
+                    offset=caps_offset,
                 )
                 return patches
 
@@ -793,7 +902,11 @@ class CapabilityProcessor:
                     caps_offset,
                     current_caps,
                     new_caps,
-                    f"Configure PCIe device type to {device_type} at 0x{caps_offset:02x}",
+                    safe_format(
+                        "Configure PCIe device type to {device_type} at 0x{offset:02x}",
+                        device_type=device_type,
+                        offset=caps_offset,
+                    ),
                 )
                 if patch:
                     patches.append(patch)
@@ -819,7 +932,10 @@ class CapabilityProcessor:
                         dev_ctrl_offset,
                         current_dev_ctrl,
                         new_dev_ctrl,
-                        f"Enable PCIe device features at 0x{dev_ctrl_offset:02x}",
+                        safe_format(
+                            "Enable PCIe device features at 0x{offset:02x}",
+                            offset=dev_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -846,13 +962,21 @@ class CapabilityProcessor:
                         link_ctrl_offset,
                         current_link_ctrl,
                         new_link_ctrl,
-                        f"Configure PCIe link control at 0x{link_ctrl_offset:02x}",
+                        safe_format(
+                            "Configure PCIe link control at 0x{link_ctrl_offset:02x}",
+                            link_ctrl_offset=link_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating PCIe patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating PCIe patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -866,8 +990,12 @@ class CapabilityProcessor:
             # Vendor Specific capabilities have a length field at offset 2
             length_offset = cap_info.offset + 2
             if not self.config_space.has_data(length_offset, 1):
-                logger.warning(
-                    f"Vendor specific length at 0x{length_offset:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "Vendor specific length at 0x{length_offset:02x} is out of bounds",
+                        length_offset=length_offset,
+                    ),
                 )
                 return patches
 
@@ -898,7 +1026,10 @@ class CapabilityProcessor:
                                     offset,
                                     current_byte,
                                     new_byte,
-                                    f"Override vendor-specific data at 0x{offset:02x}",
+                                    safe_format(
+                                        "Override vendor-specific data at 0x{offset:02x}",
+                                        offset=offset,
+                                    ),
                                 )
                                 if patch:
                                     patches.append(patch)
@@ -908,13 +1039,21 @@ class CapabilityProcessor:
                                 offset,
                                 current_byte,
                                 0,
-                                f"Zero vendor-specific data at 0x{offset:02x}",
+                                safe_format(
+                                    "Zero vendor-specific data at 0x{offset:02x}",
+                                    offset=offset,
+                                ),
                             )
                             if patch:
                                 patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating vendor-specific patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating vendor-specific patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -928,8 +1067,12 @@ class CapabilityProcessor:
             # AF Capabilities Register is at offset 2
             af_caps_offset = cap_info.offset + 2
             if not self.config_space.has_data(af_caps_offset, 1):
-                logger.warning(
-                    f"AF caps register at 0x{af_caps_offset:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "AF caps register at 0x{af_caps_offset:02x} is out of bounds",
+                        af_caps_offset=af_caps_offset,
+                    ),
                 )
                 return patches
 
@@ -958,7 +1101,10 @@ class CapabilityProcessor:
                     af_caps_offset,
                     current_af_caps,
                     new_af_caps,
-                    f"Configure AF capabilities at 0x{af_caps_offset:02x}",
+                    safe_format(
+                        "Configure AF capabilities at 0x{af_caps_offset:02x}",
+                        af_caps_offset=af_caps_offset,
+                    ),
                 )
                 if patch:
                     patches.append(patch)
@@ -980,13 +1126,21 @@ class CapabilityProcessor:
                         af_ctrl_offset,
                         current_af_ctrl,
                         new_af_ctrl,
-                        f"Initialize AF control register at 0x{af_ctrl_offset:02x}",
+                        safe_format(
+                            "Initialize AF control register at 0x{af_ctrl_offset:02x}",
+                            af_ctrl_offset=af_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating AF patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating AF patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1038,7 +1192,10 @@ class CapabilityProcessor:
                         sata_caps_offset,
                         current_sata_caps,
                         new_sata_caps,
-                        f"Configure SATA capabilities at 0x{sata_caps_offset:02x}",
+                        safe_format(
+                            "Configure SATA capabilities at 0x{sata_caps_offset:02x}",
+                            sata_caps_offset=sata_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1056,13 +1213,21 @@ class CapabilityProcessor:
                         sata_ctrl_offset,
                         current_sata_ctrl,
                         new_sata_ctrl,
-                        f"Enable SATA controller at 0x{sata_ctrl_offset:02x}",
+                        safe_format(
+                            "Enable SATA controller at 0x{sata_ctrl_offset:02x}",
+                            sata_ctrl_offset=sata_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating SATA HBA patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating SATA HBA patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1111,7 +1276,10 @@ class CapabilityProcessor:
                         hp_ctrl_offset,
                         current_hp_ctrl,
                         new_hp_ctrl,
-                        f"Configure hot plug control at 0x{hp_ctrl_offset:02x}",
+                        safe_format(
+                            "Configure hot plug control at 0x{hp_ctrl_offset:02x}",
+                            hp_ctrl_offset=hp_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1131,13 +1299,21 @@ class CapabilityProcessor:
                         hp_status_offset,
                         current_hp_status,
                         new_hp_status,
-                        f"Clear hot plug status at 0x{hp_status_offset:02x}",
+                        safe_format(
+                            "Clear hot plug status at 0x{hp_status_offset:02x}",
+                            hp_status_offset=hp_status_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating hot plug patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating hot plug patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1159,13 +1335,21 @@ class CapabilityProcessor:
                         ht_cmd_offset,
                         current_ht_cmd,
                         new_ht_cmd,
-                        f"Disable HyperTransport at 0x{ht_cmd_offset:02x}",
+                        safe_format(
+                            "Disable HyperTransport at 0x{ht_cmd_offset:02x}",
+                            ht_cmd_offset=ht_cmd_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating HyperTransport patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating HyperTransport patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1178,8 +1362,12 @@ class CapabilityProcessor:
             # NumEntries field is in bits 5:0 of offset 2
             ea_header_offset = cap_info.offset + 2
             if not self.config_space.has_data(ea_header_offset, 2):
-                logger.warning(
-                    f"EA header at 0x{ea_header_offset:02x} is out of bounds"
+                log_warning_safe(
+                    logger,
+                    safe_format(
+                        "EA header at 0x{ea_header_offset:02x} is out of bounds",
+                        ea_header_offset=ea_header_offset,
+                    ),
                 )
                 return patches
 
@@ -1194,13 +1382,21 @@ class CapabilityProcessor:
                     ea_header_offset,
                     ea_header,
                     new_ea_header,
-                    f"Disable Enhanced Allocation entries at 0x{ea_header_offset:02x}",
+                    safe_format(
+                        "Disable Enhanced Allocation entries at 0x{ea_header_offset:02x}",
+                        ea_header_offset=ea_header_offset,
+                    ),
                 )
                 if patch:
                     patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating Enhanced Allocation patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating Enhanced Allocation patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1222,13 +1418,21 @@ class CapabilityProcessor:
                         fpb_caps_offset,
                         current_fpb_caps,
                         new_fpb_caps,
-                        f"Disable FPB at 0x{fpb_caps_offset:02x}",
+                        safe_format(
+                            "Disable FPB at 0x{fpb_caps_offset:02x}",
+                            fpb_caps_offset=fpb_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating FPB patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating FPB patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1293,7 +1497,10 @@ class CapabilityProcessor:
                         l1pm_caps_offset,
                         current_l1pm_caps,
                         new_l1pm_caps,
-                        f"Configure L1 PM substates capabilities at 0x{l1pm_caps_offset:02x}",
+                        safe_format(
+                            "Configure L1 PM substates capabilities at 0x{l1pm_caps_offset:02x}",
+                            l1pm_caps_offset=l1pm_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1339,13 +1546,21 @@ class CapabilityProcessor:
                         l1pm_ctrl_offset,
                         current_l1pm_ctrl,
                         new_l1pm_ctrl,
-                        f"Configure L1 PM substates control at 0x{l1pm_ctrl_offset:02x}",
+                        safe_format(
+                            "Configure L1 PM substates control at 0x{l1pm_ctrl_offset:02x}",
+                            l1pm_ctrl_offset=l1pm_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating L1 PM substates patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating L1 PM substates patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1367,7 +1582,10 @@ class CapabilityProcessor:
                         ptm_caps_offset,
                         current_ptm_caps,
                         new_ptm_caps,
-                        f"Disable PTM capability at 0x{ptm_caps_offset:02x}",
+                        safe_format(
+                            "Disable PTM capability at 0x{ptm_caps_offset:02x}",
+                            ptm_caps_offset=ptm_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1385,13 +1603,21 @@ class CapabilityProcessor:
                         ptm_ctrl_offset,
                         current_ptm_ctrl,
                         new_ptm_ctrl,
-                        f"Disable PTM control at 0x{ptm_ctrl_offset:02x}",
+                        safe_format(
+                            "Disable PTM control at 0x{ptm_ctrl_offset:02x}",
+                            ptm_ctrl_offset=ptm_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating PTM patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating PTM patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1416,13 +1642,21 @@ class CapabilityProcessor:
                         mpcie_ctrl_offset,
                         current_mpcie_ctrl,
                         new_mpcie_ctrl,
-                        f"Disable M-PCIe control at 0x{mpcie_ctrl_offset:02x}",
+                        safe_format(
+                            "Disable M-PCIe control at 0x{mpcie_ctrl_offset:02x}",
+                            mpcie_ctrl_offset=mpcie_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating M-PCIe patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating M-PCIe patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1444,13 +1678,21 @@ class CapabilityProcessor:
                         frs_caps_offset,
                         current_frs_caps,
                         new_frs_caps,
-                        f"Disable FRS queueing at 0x{frs_caps_offset:02x}",
+                        safe_format(
+                            "Disable FRS queueing at 0x{frs_caps_offset:02x}",
+                            frs_caps_offset=frs_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating FRS patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating FRS patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1472,13 +1714,21 @@ class CapabilityProcessor:
                         rtr_ctrl_offset,
                         current_rtr_ctrl,
                         new_rtr_ctrl,
-                        f"Disable RTR at 0x{rtr_ctrl_offset:02x}",
+                        safe_format(
+                            "Disable RTR at 0x{rtr_ctrl_offset:02x}",
+                            rtr_ctrl_offset=rtr_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating RTR patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating RTR patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1494,8 +1744,13 @@ class CapabilityProcessor:
                 vendor_id = current_dvsec_hdr1 & 0xFFFF
                 dvsec_id = (current_dvsec_hdr1 >> 16) & 0xFFFF
 
-                logger.info(
-                    f"Found DVSEC: vendor_id=0x{vendor_id:04x}, dvsec_id=0x{dvsec_id:04x}"
+                log_info_safe(
+                    logger,
+                    safe_format(
+                        "Found DVSEC: vendor_id=0x{vendor_id:04x}, dvsec_id=0x{dvsec_id:04x}",
+                        vendor_id=vendor_id,
+                        dvsec_id=dvsec_id,
+                    ),
                 )
 
             # DVSEC Header 2 is at offset 8 (contains revision and length)
@@ -1518,13 +1773,21 @@ class CapabilityProcessor:
                                 offset,
                                 current_data,
                                 0,
-                                f"Zero DVSEC data at 0x{offset:02x}",
+                                safe_format(
+                                    "Zero DVSEC data at 0x{offset:02x}",
+                                    offset=offset,
+                                ),
                             )
                             if patch:
                                 patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating DVSEC patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating DVSEC patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1549,7 +1812,11 @@ class CapabilityProcessor:
                             bar_cap_offset,
                             current_bar_cap,
                             0,
-                            f"Clear VF BAR {bar_idx} size capabilities at 0x{bar_cap_offset:02x}",
+                            safe_format(
+                                "Clear VF BAR {bar_idx} size capabilities at 0x{bar_cap_offset:02x}",
+                                bar_idx=bar_idx,
+                                bar_cap_offset=bar_cap_offset,
+                            ),
                         )
                         if patch:
                             patches.append(patch)
@@ -1562,13 +1829,22 @@ class CapabilityProcessor:
                             bar_ctrl_offset,
                             current_bar_ctrl,
                             0,
-                            f"Clear VF BAR {bar_idx} size control at 0x{bar_ctrl_offset:02x}",
+                            safe_format(
+                                "Clear VF BAR {bar_idx} size control at 0x{bar_ctrl_offset:02x}",
+                                bar_idx=bar_idx,
+                                bar_ctrl_offset=bar_ctrl_offset,
+                            ),
                         )
                         if patch:
                             patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating VF Resizable BAR patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating VF Resizable BAR patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1590,7 +1866,10 @@ class CapabilityProcessor:
                         dlf_caps_offset,
                         current_dlf_caps,
                         new_dlf_caps,
-                        f"Disable data link features at 0x{dlf_caps_offset:02x}",
+                        safe_format(
+                            "Disable data link features at 0x{dlf_caps_offset:02x}",
+                            dlf_caps_offset=dlf_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1608,13 +1887,21 @@ class CapabilityProcessor:
                         dlf_ctrl_offset,
                         current_dlf_ctrl,
                         new_dlf_ctrl,
-                        f"Clear data link feature control at 0x{dlf_ctrl_offset:02x}",
+                        safe_format(
+                            "Clear data link feature control at 0x{dlf_ctrl_offset:02x}",
+                            dlf_ctrl_offset=dlf_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating Data Link Feature patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating Data Link Feature patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1636,7 +1923,10 @@ class CapabilityProcessor:
                         pl16_caps_offset,
                         current_pl16_caps,
                         new_pl16_caps,
-                        f"Disable Physical Layer 16.0 GT/s at 0x{pl16_caps_offset:02x}",
+                        safe_format(
+                            "Disable Physical Layer 16.0 GT/s at 0x{pl16_caps_offset:02x}",
+                            pl16_caps_offset=pl16_caps_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1654,13 +1944,21 @@ class CapabilityProcessor:
                         pl16_ctrl_offset,
                         current_pl16_ctrl,
                         new_pl16_ctrl,
-                        f"Clear Physical Layer 16.0 GT/s control at 0x{pl16_ctrl_offset:02x}",
+                        safe_format(
+                            "Clear Physical Layer 16.0 GT/s control at 0x{pl16_ctrl_offset:02x}",
+                            pl16_ctrl_offset=pl16_ctrl_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
 
         except Exception as e:
-            logger.error(f"Error creating Physical Layer 16.0 GT/s patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating Physical Layer 16.0 GT/s patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
@@ -1689,7 +1987,9 @@ class CapabilityProcessor:
                         PCI_CAPABILITIES_POINTER,
                         first_cap_offset,
                         next_ptr,
-                        f"Update capabilities pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}",
+                        safe_format(
+                            "Update capabilities pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}"
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1721,7 +2021,9 @@ class CapabilityProcessor:
                         prev_offset + PCI_CAP_NEXT_PTR_OFFSET,
                         cap_info.offset,
                         next_ptr,
-                        f"Update next pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}",
+                        safe_format(
+                            "Update next pointer to skip {cap_info.name} at 0x{cap_info.offset:02x}"
+                        ),
                     )
                     if patch:
                         patches.append(patch)
@@ -1734,7 +2036,9 @@ class CapabilityProcessor:
                 cap_info.offset,
                 current_id,
                 0,
-                f"Zero out {cap_info.name} capability ID at 0x{cap_info.offset:02x}",
+                safe_format(
+                    "Zero out {cap_info.name} capability ID at 0x{cap_info.offset:02x}"
+                ),
             )
             if patch:
                 patches.append(patch)
@@ -1747,7 +2051,9 @@ class CapabilityProcessor:
                 cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET,
                 current_next,
                 0,
-                f"Zero out {cap_info.name} next pointer at 0x{cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET:02x}",
+                safe_format(
+                    "Zero out {cap_info.name} next pointer at 0x{cap_info.offset + PCI_CAP_NEXT_PTR_OFFSET:02x}"
+                ),
             )
             if patch:
                 patches.append(patch)
@@ -1763,8 +2069,11 @@ class CapabilityProcessor:
             patches.extend(self._create_power_management_patches(cap_info))
         else:
             # For other capabilities, log that they're not implemented
-            logger.debug(
-                f"Generic modification for {cap_info.name} at 0x{cap_info.offset:02x} not implemented"
+            log_debug_safe(
+                logger,
+                safe_format(
+                    "Generic modification for {cap_info.name} at 0x{cap_info.offset:02x} not implemented"
+                ),
             )
 
         return patches
@@ -1781,7 +2090,12 @@ class CapabilityProcessor:
             # Read Power Management Capabilities (PMC) register
             pmc_offset = cap_info.offset + PM_CAP_CAPABILITIES_OFFSET
             if not self.config_space.has_data(pmc_offset, 2):
-                logger.warning(f"PMC register at 0x{pmc_offset:02x} is out of bounds")
+                log_warning_safe(
+                    logger,
+                    "PMC register at 0x{pmc_offset:02x} is out of bounds",
+                    prefix="PCI_CAP",
+                    pmc_offset=pmc_offset,
+                )
                 return patches
 
             current_pmc = self.config_space.read_word(pmc_offset)
@@ -1824,12 +2138,20 @@ class CapabilityProcessor:
                     pmc_offset,
                     current_pmc,
                     new_pmc,
-                    f"Configure Power Management Capabilities at 0x{pmc_offset:02x}",
+                    safe_format(
+                        "Configure Power Management Capabilities at 0x{pmc_offset:02x}",
+                        pmc_offset=pmc_offset,
+                    ),
                 )
                 if patch:
                     patches.append(patch)
-                    logger.info(
-                        f"Created power management patch: PMC 0x{current_pmc:04x} -> 0x{new_pmc:04x}"
+                    log_info_safe(
+                        logger,
+                        safe_format(
+                            "Created power management patch: PMC 0x{current_pmc:04x} -> 0x{new_pmc:04x}",
+                            current_pmc=current_pmc,
+                            new_pmc=new_pmc,
+                        ),
                     )
 
             # Read and modify Power Management Control/Status Register (PMCSR)
@@ -1857,16 +2179,29 @@ class CapabilityProcessor:
                         pmcsr_offset,
                         current_pmcsr,
                         new_pmcsr,
-                        f"Configure PMCSR at 0x{pmcsr_offset:02x} for live device",
+                        safe_format(
+                            "Configure PMCSR at 0x{pmcsr_offset:02x} for live device",
+                            pmcsr_offset=pmcsr_offset,
+                        ),
                     )
                     if patch:
                         patches.append(patch)
-                        logger.info(
-                            f"Created PMCSR patch: 0x{current_pmcsr:04x} -> 0x{new_pmcsr:04x}"
+                        log_info_safe(
+                            logger,
+                            safe_format(
+                                "Created PMCSR patch: 0x{current_pmcsr:04x} -> 0x{new_pmcsr:04x}",
+                                current_pmcsr=current_pmcsr,
+                                new_pmcsr=new_pmcsr,
+                            ),
                         )
 
         except Exception as e:
-            logger.error(f"Error creating power management patches: {e}")
+            log_error_safe(
+                logger,
+                "Error creating power management patches: {e}",
+                prefix="PCI_CAP",
+                e=e,
+            )
 
         return patches
 
