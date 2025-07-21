@@ -676,17 +676,21 @@ class VFIOBinderImpl:
 
         # Optionally attach; generators in guests should do this instead
         if self._attach:
+            fd = None
+            cont_fd = None
             try:
                 fd, cont_fd = self._open_vfio_device_fd()
             finally:
-                try:
-                    os.close(fd)
-                except OSError:
-                    pass  # Already closed
-                try:
-                    os.close(cont_fd)
-                except OSError:
-                    pass  # Already closed
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass  # Already closed
+                if cont_fd is not None:
+                    try:
+                        os.close(cont_fd)
+                    except OSError:
+                        pass  # Already closed
 
         return self._path_manager.get_vfio_group_path(self.group_id)
 
