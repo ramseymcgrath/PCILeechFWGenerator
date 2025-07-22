@@ -2,20 +2,6 @@
 """
 Driver Register Scraper with Enhanced Analysis
 
-CHANGELOG:
-v2.0.0 - Major refactoring with comprehensive improvements:
-- Split file-system helpers into kernel_utils.py module
-- Moved regex patterns to module-level constants
-- Encapsulated analysis helpers into DriverAnalyzer class
-- Replaced print()/sys.exit() with logging and argparse
-- Added proper error handling with subprocess safety
-- Implemented Vendor/Device ID validation
-- Optimized file reading with content caching
-- Enhanced analysis robustness for function context and access sequences
-- Updated output schema with hex offsets, bit_width, and driver_module
-- Added comprehensive type hints and documentation
-- Applied formatting standards (black --line-length 88)
-
 Usage:
     python3 driver_scrape.py <vendor_id_hex> <device_id_hex> [--verbose] [--src PATH]
 

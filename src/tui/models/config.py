@@ -31,6 +31,7 @@ class BuildConfiguration:
     """Comprehensive build configuration with production defaults"""
 
     board_type: str = "pcileech_35t325_x1"
+    device_type: str = PRODUCTION_DEFAULTS["DEFAULT_DEVICE_TYPE"]
     advanced_sv: bool = PRODUCTION_DEFAULTS["ADVANCED_SV"]
     enable_variance: bool = PRODUCTION_DEFAULTS["MANUFACTURING_VARIANCE"]
     behavior_profiling: bool = PRODUCTION_DEFAULTS["BEHAVIOR_PROFILING"]

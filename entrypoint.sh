@@ -3,7 +3,7 @@ set -e
 
 # Display usage information
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-    echo "PCILeech DMA Firmware Generator Container v2.0"
+    echo "PCILeech DMA Firmware Generator Container v0.7.3"
     echo "Usage: podman run --rm -it --cap-add=SYS_RAWIO --cap-add=SYS_ADMIN \\"
     echo "         --device=/dev/vfio/GROUP --device=/dev/vfio/vfio \\"
     echo "         -v ./output:/app/output dma-fw \\"

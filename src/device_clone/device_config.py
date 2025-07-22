@@ -311,7 +311,6 @@ class DeviceConfiguration:
 class DeviceConfigManager:
     """Manages device configurations with file loading and validation."""
 
-    # Default device profiles - REMOVED FOR SECURITY
     # Previously contained hardcoded vendor/device IDs that could create
     # insecure generic firmware. Use live device detection or explicit
     # configuration files instead.

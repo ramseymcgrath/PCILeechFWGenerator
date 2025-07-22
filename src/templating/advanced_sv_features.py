@@ -207,7 +207,7 @@ class AdvancedSVFeatureGenerator:
         header = generate_sv_header_comment(
             f"{module_name.replace('_', ' ').title()} Module",
             generator="AdvancedSVFeatureGenerator",
-            version="2.0",
+            version="0.7.3",
         )
 
         module_body = "\n\n".join(filter(None, components))

@@ -40,7 +40,7 @@ class TestDonorInfoTemplateGenerator:
         assert "generated_at" in metadata
         assert metadata["device_bdf"] == ""
         assert metadata["kernel_version"] == ""
-        assert metadata["generator_version"] == "enhanced-v2.0"
+        assert metadata["generator_version"] == "0.7.3"
         assert metadata["behavioral_data_included"] is True
         assert metadata["profile_capture_duration"] is None
         assert metadata["comments"] == ""

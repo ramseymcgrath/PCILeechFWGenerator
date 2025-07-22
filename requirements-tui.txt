@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-tui.txt
 
 # Core TUI framework
-textual==3.3.0
+textual>=4.0.0
 
 # Rich text rendering and formatting
 rich>=13.0.0

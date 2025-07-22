@@ -171,7 +171,7 @@ def create_build_config(build_data: Dict[str, Any]) -> BuildConfig:
         timing=timing,
         pcileech=pcileech,
         pcileech_modules=build_data.get("pcileech_modules", []),
-        build_system_version=build_data.get("build_system_version", "2.0"),
+        build_system_version=build_data.get("build_system_version", "0.7.3"),
         integration_type=build_data.get("integration_type", "pcileech"),
     )
 

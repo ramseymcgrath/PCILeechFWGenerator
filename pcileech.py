@@ -124,7 +124,7 @@ Examples:
 
     # Add global options
     parser.add_argument(
-        "--version", action="version", version="PCILeech Firmware Generator v2.0"
+        "--version", action="version", version="PCILeech Firmware Generator v0.7.3"
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose output"
@@ -502,7 +502,7 @@ def handle_check(args):
 def handle_version(args):
     """Handle version information."""
     logger = get_logger(__name__)
-    log_info_safe(logger, "PCILeech Firmware Generator v2.0", prefix="VERSION")
+    log_info_safe(logger, "PCILeech Firmware Generator v0.7.3", prefix="VERSION")
     log_info_safe(logger, "Copyright (c) 2024 PCILeech Project", prefix="VERSION")
     log_info_safe(logger, "Licensed under MIT License", prefix="VERSION")
 

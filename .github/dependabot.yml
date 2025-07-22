@@ -2,7 +2,7 @@ version: 2
 updates:
   # Python dependencies
   - package-ecosystem: "pip"
-    directory: "/src"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -35,7 +35,7 @@ updates:
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directory: "/.github/workflows"
     schedule:
       interval: "weekly"
       day: "wednesday"

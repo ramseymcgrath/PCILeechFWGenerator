@@ -1013,7 +1013,7 @@ class AdvancedSVGenerator:
                         "pcileech_cfgspace_coe",
                     ],
                     "integration_type": "pcileech",
-                    "build_system_version": "2.0",
+                    "build_system_version": "0.7.3",
                 }
             )
 

@@ -13,7 +13,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import yaml
 
 try:
     from ..string_utils import (
@@ -297,7 +296,7 @@ class RuleEngine:
 
     def load_rules_from_file(self, file_path: Union[str, Path]) -> None:
         """
-        Load rules from a YAML or JSON configuration file.
+        Load rules from a JSON configuration file.
 
         Args:
             file_path: Path to the configuration file
@@ -316,16 +315,12 @@ class RuleEngine:
                 )
             )
 
+        if file_path.suffix.lower() != ".json":
+            raise ValueError(safe_format("Unsupported file format: {file_path.suffix}"))
+
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                if file_path.suffix.lower() in [".yaml", ".yml"]:
-                    config = yaml.safe_load(f)
-                elif file_path.suffix.lower() == ".json":
-                    config = json.load(f)
-                else:
-                    raise ValueError(
-                        safe_format("Unsupported file format: {file_path.suffix}")
-                    )
+                config = json.load(f)
 
             self._load_rules_from_config(config)
             log_info_safe(
@@ -335,7 +330,7 @@ class RuleEngine:
                 file_path=file_path,
             )
 
-        except (yaml.YAMLError, json.JSONDecodeError) as e:
+        except json.JSONDecodeError as e:
             raise ValueError(
                 safe_format(
                     "Invalid configuration file format: {e}",
@@ -343,31 +338,18 @@ class RuleEngine:
                 )
             ) from e
 
-    def save_rules_to_file(
-        self, file_path: Union[str, Path], format_type: str = "yaml"
-    ) -> None:
+    def save_rules_to_file(self, file_path: Union[str, Path]) -> None:
         """
-        Save current rules to a configuration file.
+        Save current rules to a JSON configuration file.
 
         Args:
             file_path: Path to save the configuration file
-            format_type: File format ("yaml" or "json")
         """
         file_path = Path(file_path)
         config = self._rules_to_config()
 
         with open(file_path, "w", encoding="utf-8") as f:
-            if format_type.lower() == "yaml":
-                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-            elif format_type.lower() == "json":
-                json.dump(config, f, indent=2)
-            else:
-                raise ValueError(
-                    safe_format(
-                        "Unsupported format: {format_type}",
-                        format_type=format_type,
-                    )
-                )
+            json.dump(config, f, indent=2)
 
         log_info_safe(
             logger,

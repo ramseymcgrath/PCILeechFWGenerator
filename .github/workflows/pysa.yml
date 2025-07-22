@@ -35,12 +35,11 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/upload-artifact@v3
-        with:
-          submodules: true
+      - name: Checkout repository
+        uses: actions/checkout@main
 
       - name: Run Pysa
-        uses: facebook/pysa-action@f46a63777e59268613bd6e2ff4e29f144ca9e88b
+        uses: facebook/pysa-action@main
         with:
           # To customize these inputs:
           # See https://github.com/facebook/pysa-action#inputs

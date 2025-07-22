@@ -10,6 +10,10 @@ help:
 	@echo "  install      - Install package in development mode"
 	@echo "  install-dev  - Install development dependencies"
 	@echo "  test         - Run test suite"
+	@echo "  test-tui     - Run TUI integration tests only"
+	@echo "  test-unit    - Run unit tests only (no hardware/TUI)"
+	@echo "  test-all     - Run all tests with coverage"
+	@echo "  test-fast    - Run fast tests only"
 	@echo "  lint         - Run code linting"
 	@echo "  format       - Format code with black and isort"
 	@echo "  clean        - Clean build artifacts"
@@ -44,6 +48,18 @@ install-dev:
 
 test:
 	pytest tests/ --cov=src --cov-report=term-missing
+
+test-tui:
+	pytest tests/test_tui_integration.py -v -m tui
+
+test-unit:
+	pytest tests/ -k "not tui" -m "not hardware" --cov=src --cov-report=term-missing
+
+test-all:
+	pytest tests/ -v --cov=src --cov-report=term-missing
+
+test-fast:
+	pytest tests/ -x -q -m "not slow and not hardware"
 
 lint:
 	flake8 src/ tests/
