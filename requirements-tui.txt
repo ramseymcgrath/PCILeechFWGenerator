@@ -4,6 +4,7 @@
 # Core TUI framework
 textual>=4.0.0
 
+
 # Rich text rendering and formatting
 rich>=13.0.0
 

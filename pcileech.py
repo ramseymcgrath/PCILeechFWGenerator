@@ -80,6 +80,7 @@ def check_and_install_requirements():
             print("\nError: Non-interactive environment detected. Unable to prompt for input.")
             print("Set PCILEECH_AUTO_INSTALL=1 to auto-install or run the script in an interactive terminal.")
             sys.exit(1)
+
         choice = input("\nChoice [1/2/3]: ").strip()
         install = choice == "1"
 
