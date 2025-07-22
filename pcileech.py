@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-PCILeech Firmware Generator - Unified Entry Point
+PCILeech Firmware Generator - Unified Entry Point with Requirements Enforcement
 
-This is the single entry point for all PCILeech functionality:
-- CLI mode for scripted builds
-- TUI mode for interactive use
-- VFIO checking and system validation
-- Container and local environment support
+This is the single entry point for all PCILeech functionality with automatic
+dependency checking and installation.
 """
 
 import argparse
+import importlib
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,16 +19,240 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
-from src.error_utils import format_concise_error, log_error_with_root_cause
 
-# Import our custom utilities
-from src.log_config import get_logger, setup_logging
-from src.string_utils import (
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-)
+class RequirementsError(Exception):
+    """Raised when requirements cannot be satisfied."""
+
+    pass
+
+
+def check_and_install_requirements():
+    """Check if all requirements are installed and optionally install them."""
+    requirements_file = project_root / "requirements.txt"
+
+    if not requirements_file.exists():
+        print("⚠️  Warning: requirements.txt not found")
+        return True
+
+    # Parse requirements.txt
+    missing_packages = []
+    with open(requirements_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            # Handle different requirement formats
+            package_name = (
+                line.split("==")[0]
+                .split(">=")[0]
+                .split("<=")[0]
+                .split("~=")[0]
+                .split("!=")[0]
+            )
+            package_name = package_name.strip()
+
+            # Skip git+https and other URL-based requirements for now
+            if package_name.startswith(("git+", "http://", "https://", "-e")):
+                continue
+
+            # Check if package is importable
+            if not is_package_available(package_name):
+                missing_packages.append(line.strip())
+
+    if not missing_packages:
+        return True
+
+    print("❌ Missing required packages:")
+    for pkg in missing_packages:
+        print(f"   - {pkg}")
+
+    # Ask user if they want to install
+    if os.getenv("PCILEECH_AUTO_INSTALL") == "1":
+        install = True
+    else:
+        print("\nOptions:")
+        print("1. Auto-install missing packages (requires pip)")
+        print("2. Exit and install manually")
+        print("3. Continue anyway (may cause errors)")
+
+        choice = input("\nChoice [1/2/3]: ").strip()
+        install = choice == "1"
+
+        if choice == "2":
+            print("\nTo install manually:")
+            print(f"pip install -r {requirements_file}")
+            print("\nOr set PCILEECH_AUTO_INSTALL=1 to auto-install next time")
+            sys.exit(1)
+        elif choice == "3":
+            print("⚠️  Continuing without installing dependencies...")
+            return False
+
+    if install:
+        return install_requirements(requirements_file)
+
+    return False
+
+
+def is_package_available(package_name):
+    """Check if a package is available for import."""
+    # Handle package name mappings (PyPI name vs import name)
+    import_mappings = {
+        "pyyaml": "yaml",
+        "pillow": "PIL",
+        "beautifulsoup4": "bs4",
+        "python-dateutil": "dateutil",
+        "msgpack": "msgpack",
+        "protobuf": "google.protobuf",
+        "pycryptodome": "Crypto",
+        "pyserial": "serial",
+        "python-magic": "magic",
+        "opencv-python": "cv2",
+        "scikit-learn": "sklearn",
+        "matplotlib": "matplotlib.pyplot",
+    }
+
+    import_name = import_mappings.get(package_name.lower(), package_name)
+
+    try:
+        importlib.import_module(import_name)
+        return True
+    except ImportError:
+        # Try alternative import patterns
+        alternatives = [
+            package_name.replace("-", "_"),
+            package_name.replace("_", "-"),
+            package_name.lower(),
+        ]
+
+        for alt_name in alternatives:
+            try:
+                importlib.import_module(alt_name)
+                return True
+            except ImportError:
+                continue
+
+        return False
+
+
+def install_requirements(requirements_file):
+    """Install requirements using pip."""
+    print(f"\n📦 Installing requirements from {requirements_file}...")
+
+    try:
+        # Use current Python interpreter to ensure we install to the right environment
+        cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+
+        # Check if we're in a virtual environment
+        if hasattr(sys, "real_prefix") or (
+            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+        ):
+            print("🐍 Detected virtual environment")
+        else:
+            print(
+                "⚠️  Installing to system Python (consider using a virtual environment)"
+            )
+            # Ask for confirmation for system-wide install
+            if os.getenv("PCILEECH_AUTO_INSTALL") != "1":
+                confirm = input("Install to system Python? [y/N]: ").strip().lower()
+                if confirm not in ("y", "yes"):
+                    print(
+                        "Aborted. Please use a virtual environment or install manually."
+                    )
+                    sys.exit(1)
+            cmd.append("--user")  # Install to user directory for safety
+
+        # Run pip install
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+        if result.returncode == 0:
+            print("✅ Requirements installed successfully")
+            return True
+        else:
+            print(f"❌ Failed to install requirements:")
+            print(f"   stdout: {result.stdout}")
+            print(f"   stderr: {result.stderr}")
+            print(f"\nTry installing manually:")
+            print(f"   pip install -r {requirements_file}")
+            return False
+
+    except FileNotFoundError:
+        print("❌ pip not found. Please install pip first.")
+        return False
+    except Exception as e:
+        print(f"❌ Error installing requirements: {e}")
+        return False
+
+
+def check_critical_imports():
+    """Check for imports that are absolutely required for basic functionality."""
+    critical_packages = {
+        "textual": "TUI functionality (install with: pip install textual)",
+        "rich": "Rich text output (install with: pip install rich)",
+        "psutil": "System information (install with: pip install psutil)",
+    }
+
+    missing_critical = []
+
+    for package, description in critical_packages.items():
+        if not is_package_available(package):
+            missing_critical.append((package, description))
+
+    return missing_critical
+
+
+def safe_import_with_fallback(module_name, fallback_msg=None):
+    """Safely import a module with a helpful error message."""
+    try:
+        return importlib.import_module(module_name)
+    except ImportError as e:
+        if fallback_msg:
+            print(f"❌ {fallback_msg}")
+        else:
+            print(f"❌ Required module '{module_name}' not available")
+            print(f"   Install with: pip install {module_name}")
+        raise RequirementsError(f"Missing required module: {module_name}") from e
+
+
+# Early requirements check before any other imports
+if __name__ == "__main__":
+    # Check requirements before proceeding
+    try:
+        requirements_ok = check_and_install_requirements()
+
+        # Check critical packages that might not be in requirements.txt
+        missing_critical = check_critical_imports()
+        if missing_critical:
+            print("\n❌ Critical packages missing:")
+            for package, description in missing_critical:
+                print(f"   - {package}: {description}")
+
+            if not requirements_ok:
+                print("\nPlease install missing packages and try again.")
+                sys.exit(1)
+
+    except KeyboardInterrupt:
+        print("\n⚠️  Installation interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error checking requirements: {e}")
+        sys.exit(1)
+
+
+# Import our custom utilities (after requirements check)
+try:
+    from src.error_utils import format_concise_error, log_error_with_root_cause
+    from src.log_config import get_logger, setup_logging
+    from src.string_utils import (
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
+except ImportError as e:
+    print(f"❌ Failed to import PCILeech modules: {e}")
+    print("Make sure you're running from the PCILeech project directory")
+    sys.exit(1)
 
 
 def get_available_boards():
@@ -114,11 +337,9 @@ Examples:
   
   # Generate donor template
   sudo python3 pcileech.py donor-template -o my_device.json
-  sudo python3 pcileech.py donor-template --blank -o minimal.json  # Minimal template
-  sudo python3 pcileech.py donor-template --bdf 0000:03:00.0  # Pre-fill with device info
-  
-  # Build with donor template output
-  sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x4 --output-template device_template.json
+
+Environment Variables:
+  PCILEECH_AUTO_INSTALL=1    Automatically install missing dependencies
         """,
     )
 
@@ -131,6 +352,11 @@ Examples:
     )
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress non-error output"
+    )
+    parser.add_argument(
+        "--skip-requirements-check",
+        action="store_true",
+        help="Skip automatic requirements checking",
     )
 
     # Create subparsers for different modes
@@ -226,8 +452,16 @@ Examples:
 
 def main():
     """Main entry point."""
+    # Parse args early to check for skip flag
     parser = create_parser()
     args = parser.parse_args()
+
+    # Skip requirements check if requested
+    if not args.skip_requirements_check:
+        try:
+            check_and_install_requirements()
+        except RequirementsError:
+            return 1
 
     # Setup logging with our custom configuration
     if args.verbose:
@@ -255,22 +489,25 @@ def main():
         )
         return 1
 
-    # Route to appropriate handler
-    if args.command == "build":
-        return handle_build(args)
-    elif args.command == "tui":
-        return handle_tui(args)
-    elif args.command == "flash":
-        return handle_flash(args)
-    elif args.command == "check":
-        return handle_check(args)
-    elif args.command == "version":
-        return handle_version(args)
-    elif args.command == "donor-template":
-        return handle_donor_template(args)
-    else:
-        # No command specified, show help
-        parser.print_help()
+    # Route to appropriate handler with safe imports
+    try:
+        if args.command == "build":
+            return handle_build(args)
+        elif args.command == "tui":
+            return handle_tui(args)
+        elif args.command == "flash":
+            return handle_flash(args)
+        elif args.command == "check":
+            return handle_check(args)
+        elif args.command == "version":
+            return handle_version(args)
+        elif args.command == "donor-template":
+            return handle_donor_template(args)
+        else:
+            # No command specified, show help
+            parser.print_help()
+            return 1
+    except RequirementsError:
         return 1
 
 
@@ -310,7 +547,17 @@ def handle_build(args):
         # Run the CLI
         return cli_main(cli_args)
 
+    except ImportError as e:
+        log_error_safe(
+            logger, "Failed to import CLI module: {error}", prefix="BUILD", error=str(e)
+        )
+        log_error_safe(
+            logger, "Make sure all dependencies are installed", prefix="BUILD"
+        )
+        return 1
     except Exception as e:
+        from src.error_utils import log_error_with_root_cause
+
         log_error_with_root_cause(logger, "Build failed", e)
         return 1
 
@@ -319,17 +566,11 @@ def handle_tui(args):
     """Handle TUI mode."""
     logger = get_logger(__name__)
     try:
-        # Check if Textual is available
-        try:
-            import textual  # noqa: F401
-        except ImportError:
-            log_error_safe(logger, "Textual framework not installed.", prefix="TUI")
-            log_error_safe(
-                logger,
-                "Please install with: pip install textual rich psutil",
-                prefix="TUI",
-            )
-            return 1
+        # Check if Textual is available with helpful error
+        textual = safe_import_with_fallback(
+            "textual",
+            "Textual framework not installed. Install with: pip install textual rich psutil",
+        )
 
         # Import and run the TUI application
         from src.tui.main import PCILeechTUI
@@ -339,10 +580,14 @@ def handle_tui(args):
         app.run()
         return 0
 
+    except RequirementsError:
+        return 1
     except KeyboardInterrupt:
         log_info_safe(logger, "TUI application interrupted by user", prefix="TUI")
         return 1
     except Exception as e:
+        from src.error_utils import log_error_with_root_cause
+
         log_error_with_root_cause(logger, "TUI failed", e)
         return 1
 
@@ -373,8 +618,6 @@ def handle_flash(args):
             flash_firmware(firmware_path)
         except ImportError:
             # Fallback to direct usbloader if available
-            import subprocess
-
             result = subprocess.run(
                 ["usbloader", "-f", str(firmware_path)], capture_output=True, text=True
             )
@@ -393,6 +636,8 @@ def handle_flash(args):
         return 0
 
     except Exception as e:
+        from src.error_utils import log_error_with_root_cause
+
         log_error_with_root_cause(logger, "Flash failed", e)
         return 1
 
@@ -402,7 +647,6 @@ def handle_check(args):
     logger = get_logger(__name__)
     try:
         # Import the VFIO diagnostics functionality
-        import subprocess
         from pathlib import Path
 
         from src.cli.vfio_diagnostics import (
@@ -491,6 +735,8 @@ def handle_check(args):
         log_error_safe(logger, "Details: {error}", prefix="CHECK", error=str(e))
         return 1
     except Exception as e:
+        from src.error_utils import log_error_with_root_cause
+
         log_error_with_root_cause(logger, "VFIO check failed", e)
         import traceback
 
@@ -552,6 +798,8 @@ def handle_donor_template(args):
                         )
                     return 1
             except Exception as e:
+                from src.error_utils import log_error_with_root_cause
+
                 log_error_with_root_cause(logger, "Error validating template", e)
                 return 1
 
@@ -588,6 +836,8 @@ def handle_donor_template(args):
                     )
                     return 1
             except Exception as e:
+                from src.error_utils import log_error_with_root_cause
+
                 log_error_with_root_cause(logger, "Could not read device info", e)
                 return 1
         elif args.blank:
@@ -639,6 +889,8 @@ def handle_donor_template(args):
         return 0
 
     except Exception as e:
+        from src.error_utils import log_error_with_root_cause
+
         log_error_with_root_cause(logger, "Failed to generate donor template", e)
         return 1
 
