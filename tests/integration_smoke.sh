@@ -9,6 +9,8 @@ BDF="$(cat "$MOCK_ROOT/BDF")"
 mkdir -p "$OUTDIR"
 
 echo "[host build]"
+pip3 install -r requirements.txt --no-cache-dir
+pip3 install -r requirements-tui.txt --no-cache-dir
 PCILEECH_SYSFS_ROOT="$MOCK_ROOT/sys/bus/pci/devices" \
 python pcileech.py build --bdf "$BDF" --board "$BOARD" --out "$OUTDIR" --no-synth
 
