@@ -432,7 +432,7 @@ class DonorInfoTemplateGenerator:
     "generated_at": "2025-01-19T12:30:45Z",  // Auto-generated timestamp
     "device_bdf": "",  // PCIe Bus:Device.Function (e.g., "0000:03:00.0")
     "kernel_version": "",  // Kernel version used for profiling
-    "generator_version": "0.7.30",
+    "generator_version": "0.7.3",
     "behavioral_data_included": true,
     "profile_capture_duration": null,  // Duration of behavioral capture in seconds
     "comments": ""  // Any additional notes about the device
