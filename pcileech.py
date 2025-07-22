@@ -77,8 +77,12 @@ def check_and_install_requirements():
         print("3. Continue anyway (may cause errors)")
 
         if not os.isatty(sys.stdin.fileno()):
-            print("\nError: Non-interactive environment detected. Unable to prompt for input.")
-            print("Set PCILEECH_AUTO_INSTALL=1 to auto-install or run the script in an interactive terminal.")
+            print(
+                "\nError: Non-interactive environment detected. Unable to prompt for input."
+            )
+            print(
+                "Set PCILEECH_AUTO_INSTALL=1 to auto-install or run the script in an interactive terminal."
+            )
             sys.exit(1)
 
         choice = input("\nChoice [1/2/3]: ").strip()
@@ -193,7 +197,7 @@ def check_critical_imports():
     """Check for imports that are absolutely required for basic functionality."""
     critical_packages = {
         "textual": "TUI functionality (install with: pip install textual)",
-        "rich": "Rich text output (install with: pip install rich)",
+        "rich": "Rich text display (install with: pip install rich)",
         "psutil": "System information (install with: pip install psutil)",
     }
 
@@ -338,10 +342,10 @@ Examples:
   sudo python3 pcileech.py check --device 0000:03:00.0
 
   # Flash firmware
-  sudo python3 pcileech.py flash output/firmware.bin
+  sudo python3 pcileech.py flash firmware.bin
   
   # Generate donor template
-  sudo python3 pcileech.py donor-template -o my_device.json
+  sudo python3 pcileech.py donor-template --save-to my_device.json
 
 Environment Variables:
   PCILEECH_AUTO_INSTALL=1    Automatically install missing dependencies
@@ -353,10 +357,10 @@ Environment Variables:
         "--version", action="version", version="PCILeech Firmware Generator v0.7.3"
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose output"
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
     parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Suppress non-error output"
+        "--quiet", "-q", action="store_true", help="Suppress non-error messages"
     )
     parser.add_argument(
         "--skip-requirements-check",
@@ -387,11 +391,11 @@ Environment Variables:
         "--enable-variance", action="store_true", help="Enable manufacturing variance"
     )
     build_parser.add_argument(
-        "--output-dir", default="output", help="Output directory for generated files"
+        "--build-dir", default="build", help="Directory for generated firmware files"
     )
     build_parser.add_argument(
-        "--output-template",
-        help="Output donor info JSON template alongside build artifacts",
+        "--generate-donor-template",
+        help="Generate donor info JSON template alongside build artifacts",
     )
     build_parser.add_argument(
         "--donor-template",
@@ -432,10 +436,9 @@ Environment Variables:
         "donor-template", help="Generate donor info template"
     )
     donor_parser.add_argument(
-        "-o",
-        "--output",
+        "--save-to",
         default="donor_info_template.json",
-        help="Output file path (default: donor_info_template.json)",
+        help="File path to save template (default: donor_info_template.json)",
     )
     donor_parser.add_argument(
         "--compact",
@@ -539,8 +542,8 @@ def handle_build(args):
         if args.enable_variance:
             cli_args.append("--enable-variance")
 
-        if args.output_template:
-            cli_args.extend(["--output-template", args.output_template])
+        if args.generate_donor_template:
+            cli_args.extend(["--output-template", args.generate_donor_template])
 
         if args.donor_template:
             cli_args.extend(["--donor-template", args.donor_template])
@@ -857,13 +860,13 @@ def handle_donor_template(args):
 
         # Save the template
         generator.save_template_dict(
-            template, Path(args.output), pretty=not args.compact
+            template, Path(args.save_to), pretty=not args.compact
         )
         log_info_safe(
             logger,
-            "✓ Donor info template saved to: {output}",
+            "✓ Donor info template saved to: {file}",
             prefix="DONOR",
-            output=args.output,
+            file=args.save_to,
         )
 
         if args.bdf:
