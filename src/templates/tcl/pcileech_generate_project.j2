@@ -28,7 +28,7 @@ file mkdir $project_dir
 create_project $project_name $project_dir -part $fpga_part -force
 
 # Set project properties
-set_property target_language Verilog [current_project]
+set_property target_language SystemVerilog [current_project]
 set_property simulator_language Mixed [current_project]
 set_property default_lib xil_defaultlib [current_project]
 
@@ -78,24 +78,22 @@ if {[file exists $src_dir]} {
 puts "Configuring PCIe IP Core for {{ pcie_ip_type }}..."
 
 {% if pcie_ip_type == "axi_pcie" %}
-# AXI PCIe IP for smaller Artix-7 devices
-create_ip -name axi_pcie -vendor xilinx.com -library ip -module_name pcie_axi_bridge
-set_property -dict [list \
-    CONFIG.LINK_SPEED {2.5_GT/s} \
-    CONFIG.PCIE_CAP_SLOT_IMPLEMENTED {false} \
-    CONFIG.BAR0_ENABLED {true} \
-    CONFIG.BAR0_TYPE {Memory} \
-    CONFIG.BAR0_64BIT {true} \
-    CONFIG.BAR0_SIZE "{1}" \
-    CONFIG.DEVICE_ID "{{ device.device_id if device.device_id else 0x7021 }}" \
-    CONFIG.VENDOR_ID "{{ device.vendor_id if device.vendor_id else 0x10EE }}" \
-    CONFIG.Class_Code_Base "2" \
-    CONFIG.Class_Code_Interface "0" \
-    CONFIG.Class_Code_Sub "0" \
-    CONFIG.REV_ID "{{ device.revision_id if device.revision_id else 0x00 }}" \
-    CONFIG.SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
-    CONFIG.SUBSYSTEM_VENDOR_ID {{ device.subsys_vendor_id if device.subsys_vendor_id else "0000" }} \
-] [get_ips pcie_axi_bridge]
+# Custom PCIe implementation for Artix-7 35T
+# This part uses custom SystemVerilog modules instead of Xilinx IP cores
+
+# Set device-specific parameters for custom PCIe implementation
+set DEVICE_ID {{ device.device_id if device.device_id else "0x7021" }}
+set VENDOR_ID {{ device.vendor_id if device.vendor_id else "0x10EE" }}
+set REVISION_ID {{ device.revision_id if device.revision_id else "0x00" }}
+set SUBSYSTEM_VENDOR_ID {{ device.vendor_id if device.vendor_id else "0x10EE" }}
+set SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0x0000" }}
+
+puts "Using custom PCIe implementation for Artix-7 35T"
+puts "Device ID: $DEVICE_ID"
+puts "Vendor ID: $VENDOR_ID"
+puts "Revision ID: $REVISION_ID"
+
+# No IP cores required - PCIe functionality implemented in custom SystemVerilog modules
 
 {% elif pcie_ip_type == "pcie_ultrascale" %}
 # UltraScale PCIe IP

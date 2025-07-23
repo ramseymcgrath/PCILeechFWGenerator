@@ -6,6 +6,88 @@ permissions:
   contents: read
 
 jobs:
+  systemverilog-validation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Validate SystemVerilog Templates
+      run: |
+        python scripts/validate_systemverilog_templates.py
+    
+    - name: Validate Project SystemVerilog Configuration
+      run: |
+        python scripts/validate_project_systemverilog.py
+    
+    - name: Check Template Rendering
+      run: |
+        # Install minimal dependencies for template rendering
+        python -m pip install --upgrade pip
+        pip install jinja2 pyyaml
+        
+        # Test that templates can be rendered with sample data
+        python -c "
+        import sys
+        sys.path.append('src')
+        from templating.renderer import TemplateRenderer
+        import tempfile
+        import os
+        
+        try:
+            renderer = TemplateRenderer('src/templates')
+            
+            # Test sample context data
+            sample_context = {
+                'table_size_minus_one': 31,
+                'table_offset_bir': 0x12345678,
+                'pba_offset_bir': 0x87654321,
+                'pba_size_minus_one': 7,
+                'NUM_MSIX': 32,
+                'MSIX_TABLE_BIR': 0,
+                'MSIX_TABLE_OFFSET': 0x1000,
+                'MSIX_PBA_BIR': 0,
+                'MSIX_PBA_OFFSET': 0x2000,
+                'pba_size': 8
+            }
+            
+            # Try rendering key SystemVerilog templates
+            templates_to_test = [
+                'sv/msix_capability_registers.sv.j2',
+                'sv/msix_implementation.sv.j2'
+            ]
+            
+            for template_path in templates_to_test:
+                try:
+                    result = renderer.render_template(template_path, sample_context)
+                    if not result or len(result.strip()) == 0:
+                        print(f'❌ Template {template_path} rendered empty result')
+                        sys.exit(1)
+                    
+                    # Check that the rendered result looks like valid SystemVerilog
+                    if 'module' not in result or 'endmodule' not in result:
+                        print(f'❌ Template {template_path} does not produce valid module structure')
+                        sys.exit(1)
+                    
+                    print(f'✅ Template {template_path} rendered successfully')
+                except Exception as e:
+                    print(f'❌ Failed to render template {template_path}: {e}')
+                    sys.exit(1)
+            
+            print('✅ All SystemVerilog templates render successfully!')
+            
+        except ImportError as e:
+            print(f'⚠️  Could not import renderer: {e}')
+            print('Skipping template rendering test')
+        except Exception as e:
+            print(f'❌ Template rendering test failed: {e}')
+            sys.exit(1)
+        "
+
   unit-test:
     runs-on: ubuntu-latest
     strategy:

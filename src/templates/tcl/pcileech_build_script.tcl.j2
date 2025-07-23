@@ -13,7 +13,7 @@ set device_part "{{ build_params.device_part | default('xc7a35tcpg236-1') }}"
 create_project $project_name $project_dir -part $device_part -force
 
 # Set project properties
-set_property target_language Verilog [current_project]
+set_property target_language SystemVerilog [current_project]
 set_property simulator_language Mixed [current_project]
 
 # Add SystemVerilog source files

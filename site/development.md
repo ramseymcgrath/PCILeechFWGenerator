@@ -71,6 +71,26 @@ pytest tests/test_specific_module.py
 pytest --cov=src tests/
 ```
 
+### SystemVerilog Template Validation
+
+To ensure SystemVerilog compatibility and prevent synthesis errors, the project includes validation scripts for templates:
+
+```bash
+# Validate SystemVerilog templates for syntax issues
+./scripts/validate_systemverilog_templates.py
+
+# Check that project templates use SystemVerilog (not Verilog)
+./scripts/validate_project_systemverilog.py
+```
+
+These validations are automatically run in CI to catch issues like:
+- Missing `module`/`endmodule` declarations
+- Standalone `input`/`output` declarations outside module ports
+- Project templates configured for Verilog instead of SystemVerilog
+- Inconsistent use of SystemVerilog vs Verilog constructs
+
+The validation helps maintain compatibility with Vivado synthesis and prevents common template errors.
+
 ## 📝 Code Style
 
 This project follows these coding standards:

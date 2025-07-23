@@ -9,15 +9,48 @@
 // PBA offset: 0x{{ "%x" | format(pba_offset) }}
 //==============================================================================
 
-// MSI-X Table parameters
-localparam NUM_MSIX = {{ table_size }};
-localparam MSIX_TABLE_BIR = {{ table_bir }};
-localparam MSIX_TABLE_OFFSET = 32'h{{ "%X" | format(table_offset) }};
-localparam MSIX_PBA_BIR = {{ pba_bir }};
-localparam MSIX_PBA_OFFSET = 32'h{{ "%X" | format(pba_offset) }};
-localparam MSIX_ENABLED = {{ enabled_val }};
-localparam MSIX_FUNCTION_MASK = {{ function_mask_val }};
-localparam PBA_SIZE = {{ pba_size }};  // Number of 32-bit words needed for PBA
+module msix_implementation #(
+    parameter NUM_MSIX = {{ table_size }},
+    parameter MSIX_TABLE_BIR = {{ table_bir }},
+    parameter MSIX_TABLE_OFFSET = 32'h{{ "%X" | format(table_offset) }},
+    parameter MSIX_PBA_BIR = {{ pba_bir }},
+    parameter MSIX_PBA_OFFSET = 32'h{{ "%X" | format(pba_offset) }},
+    parameter MSIX_ENABLED = {{ enabled_val }},
+    parameter MSIX_FUNCTION_MASK = {{ function_mask_val }},
+    parameter PBA_SIZE = {{ pba_size }}  // Number of 32-bit words needed for PBA
+)(
+    input wire clk,
+    input wire rst_n,
+    
+    // MSI-X control registers - dynamically connected to configuration space
+    // These signals are properly driven by the actual MSI-X capability registers
+    input wire msix_enabled,        // Connected to MSI-X Message Control Enable bit (bit 15)
+    input wire msix_function_mask,  // Connected to MSI-X Message Control Function Mask bit (bit 14)
+    input wire [10:0] msix_table_size, // Connected to MSI-X Message Control Table Size field (bits 10:0)
+
+    // MSI-X capability register interface for dynamic control
+    input wire        msix_cap_wr,     // Write strobe for MSI-X capability registers
+    input wire [31:0] msix_cap_addr,   // Address within MSI-X capability space
+    input wire [31:0] msix_cap_wdata,  // Write data for MSI-X capability registers
+    input wire [3:0]  msix_cap_be,     // Byte enables for MSI-X capability writes
+    output reg [31:0] msix_cap_rdata,  // Read data from MSI-X capability registers
+
+    // MSI-X interrupt generation interface
+    output bit        msix_interrupt,  // MSI-X interrupt request
+    output bit [10:0] msix_vector,     // MSI-X vector number
+    output bit [63:0] msix_msg_addr,   // MSI-X message address
+    output bit [31:0] msix_msg_data,   // MSI-X message data
+    
+    // BAR access interface
+    input wire [31:0] bar_addr,        // BAR address for MSI-X table/PBA access
+    input wire [2:0]  bar_index,       // BAR index
+    input wire        bar_wr,          // BAR write enable
+    input wire        bar_rd,          // BAR read enable
+    input wire [31:0] bar_wdata,       // BAR write data
+    input wire [3:0]  bar_be,          // BAR byte enables
+    output bit [31:0] bar_rdata,       // BAR read data
+    output bit        bar_ack          // BAR access acknowledge
+);
 
 {% if alignment_warning %}
 {{ alignment_warning }}
@@ -29,92 +62,156 @@ localparam PBA_SIZE = {{ pba_size }};  // Number of 32-bit words needed for PBA
 // MSI-X PBA storage
 reg [31:0] msix_pba[0:{{ pba_size_minus_one }}];
 
-// MSI-X control registers - dynamically connected to configuration space
-// These signals are properly driven by the actual MSI-X capability registers
-input wire msix_enabled;        // Connected to MSI-X Message Control Enable bit (bit 15)
-input wire msix_function_mask;  // Connected to MSI-X Message Control Function Mask bit (bit 14)
-input wire [10:0] msix_table_size; // Connected to MSI-X Message Control Table Size field (bits 10:0)
-
-// MSI-X capability register interface for dynamic control
-input wire        msix_cap_wr;     // Write strobe for MSI-X capability registers
-input wire [31:0] msix_cap_addr;   // Address within MSI-X capability space
-input wire [31:0] msix_cap_wdata;  // Write data for MSI-X capability registers
-input wire [3:0]  msix_cap_be;     // Byte enables for MSI-X capability writes
-output reg [31:0] msix_cap_rdata;  // Read data from MSI-X capability registers
-
-// MSI-X interrupt generation interface
-output reg        msix_interrupt;  // MSI-X interrupt request
-output reg [10:0] msix_vector;     // MSI-X vector number
-output reg [63:0] msix_msg_addr;   // MSI-X message address
-output reg [31:0] msix_msg_data;   // MSI-X message data
-
 // MSI-X Table access logic
-function logic is_msix_table_access(input logic [31:0] addr, input logic [2:0] bar_index);
-    return (bar_index == MSIX_TABLE_BIR) &&
-           (addr >= MSIX_TABLE_OFFSET) &&
-           (addr < (MSIX_TABLE_OFFSET + NUM_MSIX * 16));
+function is_msix_table_access(input [31:0] addr, input [2:0] bar_index);
+    begin
+        is_msix_table_access = (bar_index == MSIX_TABLE_BIR) &&
+               (addr >= MSIX_TABLE_OFFSET) &&
+               (addr < (MSIX_TABLE_OFFSET + NUM_MSIX * 16));
+    end
 endfunction
 
 // MSI-X PBA access logic
-function logic is_msix_pba_access(input logic [31:0] addr, input logic [2:0] bar_index);
-    return (bar_index == MSIX_PBA_BIR) &&
-           (addr >= MSIX_PBA_OFFSET) &&
-           (addr < (MSIX_PBA_OFFSET + {{ pba_size }} * 4));
+function is_msix_pba_access(input [31:0] addr, input [2:0] bar_index);
+    begin
+        is_msix_pba_access = (bar_index == MSIX_PBA_BIR) &&
+               (addr >= MSIX_PBA_OFFSET) &&
+               (addr < (MSIX_PBA_OFFSET + {{ pba_size }} * 4));
+    end
 endfunction
 
 // MSI-X Table read logic
-function logic [31:0] msix_table_read(input logic [31:0] addr);
-    logic [31:0] table_addr;
-    table_addr = (addr - MSIX_TABLE_OFFSET) >> 2;  // Convert to DWORD index
-    return msix_table[table_addr];
+function [31:0] msix_table_read(input [31:0] addr);
+    reg [31:0] table_addr;
+    begin
+        table_addr = (addr - MSIX_TABLE_OFFSET) >> 2;  // Convert to DWORD index
+        msix_table_read = msix_table[table_addr];
+    end
 endfunction
 
 // MSI-X Table write logic with byte enables
-task msix_table_write(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] byte_enable);
-    logic [31:0] table_addr;
-    logic [31:0] current_value;
+task msix_table_write(input [31:0] addr, input [31:0] data, input [3:0] byte_enable);
+    reg [31:0] table_addr;
+    reg [31:0] current_value;
+    begin
+        table_addr = (addr - MSIX_TABLE_OFFSET) >> 2;  // Convert to DWORD index
+        current_value = msix_table[table_addr];
 
-    table_addr = (addr - MSIX_TABLE_OFFSET) >> 2;  // Convert to DWORD index
-    current_value = msix_table[table_addr];
+        // Apply byte enables
+        if (byte_enable[0]) current_value[7:0] = data[7:0];
+        if (byte_enable[1]) current_value[15:8] = data[15:8];
+        if (byte_enable[2]) current_value[23:16] = data[23:16];
+        if (byte_enable[3]) current_value[31:24] = data[31:24];
 
-    // Apply byte enables
-    if (byte_enable[0]) current_value[7:0] = data[7:0];
-    if (byte_enable[1]) current_value[15:8] = data[15:8];
-    if (byte_enable[2]) current_value[23:16] = data[23:16];
-    if (byte_enable[3]) current_value[31:24] = data[31:24];
-
-    msix_table[table_addr] = current_value;
+        msix_table[table_addr] = current_value;
+    end
 endtask
 
 // MSI-X PBA read logic
-function logic [31:0] msix_pba_read(input logic [31:0] addr);
-    logic [31:0] pba_addr;
-    pba_addr = (addr - MSIX_PBA_OFFSET) >> 2;  // Convert to DWORD index
-    return msix_pba[pba_addr];
+function [31:0] msix_pba_read(input [31:0] addr);
+    reg [31:0] pba_addr;
+    begin
+        pba_addr = (addr - MSIX_PBA_OFFSET) >> 2;  // Convert to DWORD index
+        msix_pba_read = msix_pba[pba_addr];
+    end
 endfunction
 
 // MSI-X PBA write logic (typically read-only, but implemented for completeness)
-task msix_pba_write(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] byte_enable);
-    logic [31:0] pba_addr;
-    logic [31:0] current_value;
+task msix_pba_write(input [31:0] addr, input [31:0] data, input [3:0] byte_enable);
+    reg [31:0] pba_addr;
+    reg [31:0] current_value;
+    begin
+        pba_addr = (addr - MSIX_PBA_OFFSET) >> 2;  // Convert to DWORD index
+        current_value = msix_pba[pba_addr];
 
-    pba_addr = (addr - MSIX_PBA_OFFSET) >> 2;  // Convert to DWORD index
-    current_value = msix_pba[pba_addr];
+        // Apply byte enables
+        if (byte_enable[0]) current_value[7:0] = data[7:0];
+        if (byte_enable[1]) current_value[15:8] = data[15:8];
+        if (byte_enable[2]) current_value[23:16] = data[23:16];
+        if (byte_enable[3]) current_value[31:24] = data[31:24];
 
-    // Apply byte enables
-    if (byte_enable[0]) current_value[7:0] = data[7:0];
-    if (byte_enable[1]) current_value[15:8] = data[15:8];
-    if (byte_enable[2]) current_value[23:16] = data[23:16];
-    if (byte_enable[3]) current_value[31:24] = data[31:24];
-
-    msix_pba[pba_addr] = current_value;
+        msix_pba[pba_addr] = current_value;
+    end
 endtask
 
 // Legacy MSI-X interrupt delivery logic (deprecated - use msix_deliver_interrupt_validated)
-task msix_deliver_interrupt(input logic [10:0] vector);
-    // Redirect to validated version for backward compatibility
-    msix_deliver_interrupt_validated(vector);
+task msix_deliver_interrupt(input [10:0] vector);
+    begin
+        // Redirect to validated version for backward compatibility
+        msix_deliver_interrupt_validated(vector);
+    end
 endtask
 
-// MSI-X table and PBA initialization is handled in reset logic
-// Add this to an always_ff block with reset handling
+// MSI-X interrupt validation and delivery
+task msix_deliver_interrupt_validated(input [10:0] vector);
+    reg [31:0] table_base_addr;
+    reg [31:0] msg_addr_lo, msg_addr_hi, msg_data, vector_control;
+    begin
+        if (msix_enabled && !msix_function_mask && vector < NUM_MSIX) begin
+            // Calculate table entry address (16 bytes per entry)
+            table_base_addr = vector * 4;  // 4 DWORDs per entry
+            
+            // Read message address and data from table
+            msg_addr_lo = msix_table[table_base_addr];
+            msg_addr_hi = msix_table[table_base_addr + 1];
+            msg_data = msix_table[table_base_addr + 2];
+            vector_control = msix_table[table_base_addr + 3];
+            
+            // Check if vector is not masked (bit 0 of vector control)
+            if (!(vector_control[0])) begin
+                // Generate interrupt
+                msix_interrupt = 1'b1;
+                msix_vector = vector;
+                msix_msg_addr = {msg_addr_hi, msg_addr_lo};
+                msix_msg_data = msg_data;
+            end
+        end
+    end
+endtask
+
+// BAR access logic for MSI-X table and PBA
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        bar_rdata <= 32'h0;
+        bar_ack <= 1'b0;
+        msix_interrupt <= 1'b0;
+        msix_vector <= 11'h0;
+        msix_msg_addr <= 64'h0;
+        msix_msg_data <= 32'h0;
+        
+        // Initialize MSI-X table
+        for (integer i = 0; i < NUM_MSIX * 4; i = i + 1) begin
+            msix_table[i] <= 32'h0;
+        end
+        
+        // Initialize MSI-X PBA
+        for (integer i = 0; i <= {{ pba_size_minus_one }}; i = i + 1) begin
+            msix_pba[i] <= 32'h0;
+        end
+    end else begin
+        // Clear interrupt pulse
+        msix_interrupt <= 1'b0;
+        bar_ack <= 1'b0;
+        
+        // Handle BAR access
+        if (bar_rd || bar_wr) begin
+            if (is_msix_table_access(bar_addr, bar_index)) begin
+                if (bar_rd) begin
+                    bar_rdata <= msix_table_read(bar_addr);
+                end else if (bar_wr) begin
+                    msix_table_write(bar_addr, bar_wdata, bar_be);
+                end
+                bar_ack <= 1'b1;
+            end else if (is_msix_pba_access(bar_addr, bar_index)) begin
+                if (bar_rd) begin
+                    bar_rdata <= msix_pba_read(bar_addr);
+                end else if (bar_wr) begin
+                    msix_pba_write(bar_addr, bar_wdata, bar_be);
+                end
+                bar_ack <= 1'b1;
+            end
+        end
+    end
+end
+
+endmodule
