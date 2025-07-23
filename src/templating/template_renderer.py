@@ -415,7 +415,7 @@ class TemplateRenderer:
 
             # Ensure all required context keys have safe defaults
             safe_defaults = {
-                "build_system_version": "0.7.3",  # Default version for build system
+                "build_system_version": "0.7.5",  # Default version for build system
                 "integration_type": "pcileech",
                 "pcileech_modules": [],
             }

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0
 - [Version 0.5.8 (2025-06-09)](#020---2025-06-09)
 
 ---
-## Version 0.7.3 (2025-06-09)
+## Version 0.7.5 (2025-06-09)
 
 - Added TUI integration tests using `textual.testing`.
 
