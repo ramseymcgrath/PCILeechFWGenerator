@@ -2,8 +2,8 @@
 layout: null
 ---
 [
-  {% for page in site.pages %}
-    {% if page.title %}
+  {% for page in site.html_pages %}
+    {% if page.title and page.url != '/debug.txt' %}
     {
       "title"    : "{{ page.title | escape }}",
       "category" : "{{ page.category }}",
