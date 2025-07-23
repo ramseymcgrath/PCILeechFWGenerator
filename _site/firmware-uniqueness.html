@@ -3,22 +3,22 @@
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
-<title>Firmware Authenticity &amp; Stability | PCILeech Firmware Generator</title>
+<title>Firmware Uniqueness | PCILeech Firmware Generator</title>
 <meta name="generator" content="Jekyll v3.10.0" />
-<meta property="og:title" content="Firmware Authenticity &amp; Stability" />
+<meta property="og:title" content="Firmware Uniqueness" />
 <meta property="og:locale" content="en_US" />
 <meta name="description" content="Generate custom PCIe firmware for PCILeech" />
 <meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
-<link rel="canonical" href="http://localhost:4000/firmware-uniqueness.html" />
-<meta property="og:url" content="http://localhost:4000/firmware-uniqueness.html" />
+<link rel="canonical" href="http://localhost:4001/firmware-uniqueness.html" />
+<meta property="og:url" content="http://localhost:4001/firmware-uniqueness.html" />
 <meta property="og:site_name" content="PCILeech Firmware Generator" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
-<meta property="twitter:title" content="Firmware Authenticity &amp; Stability" />
+<meta property="twitter:title" content="Firmware Uniqueness" />
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Firmware Authenticity &amp; Stability","url":"http://localhost:4000/firmware-uniqueness.html"}</script>
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Firmware Uniqueness","url":"http://localhost:4001/firmware-uniqueness.html"}</script>
 <!-- End Jekyll SEO tag -->
-<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4001/feed.xml" title="PCILeech Firmware Generator" /></head>
 <body><header class="site-header" role="banner">
 
   <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
@@ -39,35 +39,16 @@
         <article class="post">
 
   <header class="post-header">
-    <h1 class="post-title">Firmware Authenticity &amp;amp; Stability</h1>
+    <h1 class="post-title">Firmware Uniqueness</h1>
   </header>
 
   <div class="post-content">
-    <h2 id="firmware-authenticity--stability">Firmware Authenticity &amp; Stability</h2>
-
-<p><em>“If the OS can’t tell the difference, you win.”</em></p>
-
-<h2 id="table-of-contents">Table of Contents</h2>
-<ul>
-  <li><a href="#overview">Overview</a></li>
-  <li><a href="#deep-cloned-device-anatomy">Deep-Cloned Device Anatomy</a></li>
-  <li><a href="#build-time-security-features">Build-Time Security Features</a></li>
-  <li><a href="#detection-resistance-validation">Detection-Resistance Validation</a></li>
-  <li><a href="#immutable-core-architecture">Immutable Core Architecture</a></li>
-  <li><a href="#performance-metrics">Performance Metrics</a></li>
-  <li><a href="#security--research-applications">Security &amp; Research Applications</a></li>
-  <li><a href="#troubleshooting--error-handling">Troubleshooting &amp; Error Handling</a></li>
-  <li><a href="#best-practices">Best Practices</a></li>
-  <li><a href="#legal--ethical-considerations">Legal &amp; Ethical Considerations</a></li>
-</ul>
-
-<hr />
-
-<h2 id="overview">Overview</h2>
+    <h1 id="uniqueness-overview">Uniqueness Overview</h1>
 
 <p>The PCILeech firmware generator creates authentic hardware clones by performing byte-perfect replication of donor device characteristics while maintaining a stable, reusable core architecture. The result is hardware that appears identical to the original device from the host OS perspective while providing consistent, predictable behavior across builds.</p>
 
-<h3 id="key-benefits">Key Benefits</h3>
+<h2 id="key-benefits">Key Benefits</h2>
+
 <ul>
   <li><strong>Perfect Stealth</strong>: Identical PCIe fingerprints to donor hardware</li>
   <li><strong>Build Consistency</strong>: Same core IP across all generated firmware</li>
@@ -124,7 +105,8 @@
   </tbody>
 </table>
 
-<h3 id="configuration-space-layout">Configuration Space Layout</h3>
+<h2 id="configuration-space-layout">Configuration Space Layout</h2>
+
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Offset 0x00-0xFF: Standard PCIe Header (256 bytes)
 ├── 0x00-0x3F: Type 0/1 Configuration Header
 ├── 0x40-0xFF: Capability Structures
@@ -143,6 +125,7 @@ Extended Capabilities Chain:
 <h2 id="build-time-security-features">Build-Time Security Features</h2>
 
 <h3 id="entropy-generation">Entropy Generation</h3>
+
 <ul>
   <li><strong>Unique Bitstreams</strong>: SHA-256 hash of donor configuration salted into unused BRAM</li>
   <li><strong>Forensic Tracking</strong>: Vivado version and build timestamp embedded in hidden VSEC</li>
@@ -151,6 +134,7 @@ Extended Capabilities Chain:
 </ul>
 
 <h3 id="implementation-details">Implementation Details</h3>
+
 <div class="language-verilog highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Build-time entropy injection</span>
 <span class="k">localparam</span> <span class="p">[</span><span class="mi">255</span><span class="o">:</span><span class="mi">0</span><span class="p">]</span> <span class="n">BUILD_ENTROPY</span> <span class="o">=</span> <span class="mi">256</span><span class="err">'</span><span class="n">h</span><span class="o">{</span><span class="n">SHA256_HASH</span><span class="o">}</span><span class="p">;</span>
 <span class="k">localparam</span> <span class="p">[</span><span class="mi">63</span><span class="o">:</span><span class="mi">0</span><span class="p">]</span>  <span class="n">BUILD_TIMESTAMP</span> <span class="o">=</span> <span class="mi">64</span><span class="err">'</span><span class="n">h</span><span class="o">{</span><span class="n">UNIX_TIMESTAMP</span><span class="o">}</span><span class="p">;</span>
@@ -210,6 +194,7 @@ Extended Capabilities Chain:
 </table>
 
 <h3 id="validation-scripts">Validation Scripts</h3>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
 <span class="c"># Basic validation suite</span>
 <span class="nb">echo</span> <span class="s2">"=== PCIe Device Validation ==="</span>
@@ -262,6 +247,7 @@ diff <span class="nt">-u</span> donor_config.txt current_config.txt
 </code></pre></div></div>
 
 <h3 id="core-ip-benefits">Core IP Benefits</h3>
+
 <ul>
   <li><strong>Timing Closure</strong>: Single PLL domain, pre-verified timing constraints</li>
   <li><strong>Test Coverage</strong>: Shared test benches across all device variants</li>
@@ -331,6 +317,7 @@ diff <span class="nt">-u</span> donor_config.txt current_config.txt
 </table>
 
 <h3 id="timing-analysis">Timing Analysis</h3>
+
 <div class="language-tcl highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Critical path constraints</span>
 create_clock -period 6.667 -name pcie_clk <span class="p">[</span>get_ports pcie_clk_p<span class="p">]</span>
 set_input_delay -clock pcie_clk -max 2.0 <span class="p">[</span>get_ports pcie_rx_p<span class="p">]</span>
@@ -390,6 +377,7 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 </table>
 
 <h3 id="research-scenarios">Research Scenarios</h3>
+
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Example: DMA attack simulation
 </span><span class="k">class</span> <span class="nc">DMAAttackSimulator</span><span class="p">:</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_device</span><span class="p">):</span>
@@ -415,21 +403,79 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 <h3 id="common-issues--solutions">Common Issues &amp; Solutions</h3>
 
 <h4 id="build-time-errors">Build-Time Errors</h4>
-<p>| Error | Cause | Solution | Prevention |
-|——-|——-|———-|———–|
-| <strong>Timing Closure Failure</strong> | Complex donor BAR decode logic | Reduce Fmax target, pipeline critical paths | Pre-validate donor complexity |
-| <strong>Resource Overflow</strong> | Large MSI-X tables on small FPGAs | Use external memory for tables | Check resource requirements early |
-| <strong>P&amp;R Failure</strong> | IO pin conflicts | Adjust pin assignments, use different package | Validate pinout before synthesis |</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Error</th>
+      <th>Cause</th>
+      <th>Solution</th>
+      <th>Prevention</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Timing Closure Failure</strong></td>
+      <td>Complex donor BAR decode logic</td>
+      <td>Reduce Fmax target, pipeline critical paths</td>
+      <td>Pre-validate donor complexity</td>
+    </tr>
+    <tr>
+      <td><strong>Resource Overflow</strong></td>
+      <td>Large MSI-X tables on small FPGAs</td>
+      <td>Use external memory for tables</td>
+      <td>Check resource requirements early</td>
+    </tr>
+    <tr>
+      <td><strong>P&amp;R Failure</strong></td>
+      <td>IO pin conflicts</td>
+      <td>Adjust pin assignments, use different package</td>
+      <td>Validate pinout before synthesis</td>
+    </tr>
+  </tbody>
+</table>
 
 <h4 id="runtime-issues">Runtime Issues</h4>
-<p>| Symptom | Likely Cause | Diagnostic Steps | Fix |
-|———|————–|——————|—–|
-| <strong>Code 10 Error</strong> | Missing/incorrect capabilities | Compare <a href="https://linux.die.net/man/8/lspci"><code class="language-plaintext highlighter-rouge">lspci</code></a> output with donor | Update capability chain |
-| <strong>IRQ Storm</strong> | MSI-X table corruption | Check interrupt vectors with <a href="https://www.kernel.org/doc/Documentation/filesystems/proc.txt"><code class="language-plaintext highlighter-rouge">/proc/interrupts</code></a> | Rebuild MSI-X configuration |
-| <strong>DMA Timeout</strong> | Incorrect BAR mapping | Verify memory regions with <a href="https://www.kernel.org/doc/Documentation/filesystems/proc.txt"><code class="language-plaintext highlighter-rouge">/proc/iomem</code></a> | Fix BAR size/alignment |
-| <strong>Link Training Failure</strong> | PCIe electrical issues | Check link status with <a href="https://linux.die.net/man/8/setpci"><code class="language-plaintext highlighter-rouge">setpci</code></a> | Verify signal integrity |</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Symptom</th>
+      <th>Likely Cause</th>
+      <th>Diagnostic Steps</th>
+      <th>Fix</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Code 10 Error</strong></td>
+      <td>Missing/incorrect capabilities</td>
+      <td>Compare <a href="https://linux.die.net/man/8/lspci"><code class="language-plaintext highlighter-rouge">lspci</code></a> output with donor</td>
+      <td>Update capability chain</td>
+    </tr>
+    <tr>
+      <td><strong>IRQ Storm</strong></td>
+      <td>MSI-X table corruption</td>
+      <td>Check interrupt vectors with <a href="https://www.kernel.org/doc/Documentation/filesystems/proc.txt"><code class="language-plaintext highlighter-rouge">/proc/interrupts</code></a></td>
+      <td>Rebuild MSI-X configuration</td>
+    </tr>
+    <tr>
+      <td><strong>DMA Timeout</strong></td>
+      <td>Incorrect BAR mapping</td>
+      <td>Verify memory regions with <a href="https://www.kernel.org/doc/Documentation/filesystems/proc.txt"><code class="language-plaintext highlighter-rouge">/proc/iomem</code></a></td>
+      <td>Fix BAR size/alignment</td>
+    </tr>
+    <tr>
+      <td><strong>Link Training Failure</strong></td>
+      <td>PCIe electrical issues</td>
+      <td>Check link status with <a href="https://linux.die.net/man/8/setpci"><code class="language-plaintext highlighter-rouge">setpci</code></a></td>
+      <td>Verify signal integrity</td>
+    </tr>
+  </tbody>
+</table>
 
 <h3 id="debug-infrastructure">Debug Infrastructure</h3>
+
 <div class="language-verilog highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Integrated debug features</span>
 <span class="k">module</span> <span class="n">debug_controller</span> <span class="p">(</span>
     <span class="kt">input</span> <span class="kt">wire</span> <span class="n">clk</span><span class="p">,</span>
@@ -459,35 +505,12 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 <span class="k">end</span>
 </code></pre></div></div>
 
-<h3 id="diagnostic-tools">Diagnostic Tools</h3>
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
-<span class="c"># Comprehensive diagnostic script</span>
-
-<span class="nb">echo</span> <span class="s2">"=== PCILeech Firmware Diagnostics ==="</span>
-
-<span class="c"># Check PCIe link status</span>
-<span class="nv">DEVICE_BDF</span><span class="o">=</span><span class="s2">"01:00.0"</span>  <span class="c"># Update with actual BDF</span>
-<span class="nv">LINK_STATUS</span><span class="o">=</span><span class="si">$(</span>setpci <span class="nt">-s</span> <span class="nv">$DEVICE_BDF</span> CAP_EXP+12.w<span class="si">)</span>
-<span class="nb">echo</span> <span class="s2">"Link Status: 0x</span><span class="nv">$LINK_STATUS</span><span class="s2">"</span>
-
-<span class="c"># Monitor interrupt activity</span>
-<span class="nb">echo</span> <span class="s2">"Interrupt activity:"</span>
-<span class="nb">grep</span> <span class="nv">$DEVICE_BDF</span> /proc/interrupts
-
-<span class="c"># Check DMA coherency</span>
-<span class="nb">echo</span> <span class="s2">"Testing DMA coherency..."</span>
-./dma_coherency_test <span class="nv">$DEVICE_BDF</span>
-
-<span class="c"># Validate configuration space</span>
-<span class="nb">echo</span> <span class="s2">"Configuration space validation:"</span>
-./validate_config_space.py <span class="nv">$DEVICE_BDF</span> donor_config.json
-</code></pre></div></div>
-
 <hr />
 
 <h2 id="best-practices">Best Practices</h2>
 
 <h3 id="development-workflow">Development Workflow</h3>
+
 <ol>
   <li><strong>Donor Analysis</strong>: Thoroughly characterize donor device before cloning</li>
   <li><strong>Incremental Testing</strong>: Validate each capability block individually</li>
@@ -497,6 +520,7 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 </ol>
 
 <h3 id="security-considerations">Security Considerations</h3>
+
 <ul>
   <li><strong>Isolation</strong>: Test in air-gapped environments</li>
   <li><strong>Backup</strong>: Always preserve original donor firmware</li>
@@ -504,34 +528,6 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
   <li><strong>Monitoring</strong>: Log all device interactions for analysis</li>
   <li><strong>Updates</strong>: Regularly update against new detection methods</li>
 </ul>
-
-<h3 id="code-quality">Code Quality</h3>
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Example: Robust configuration validation
-</span><span class="k">class</span> <span class="nc">ConfigSpaceValidator</span><span class="p">:</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">donor_config</span><span class="p">,</span> <span class="n">generated_config</span><span class="p">):</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">donor</span> <span class="o">=</span> <span class="n">donor_config</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">generated</span> <span class="o">=</span> <span class="n">generated_config</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">errors</span> <span class="o">=</span> <span class="p">[]</span>
-    
-    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="s">"""Comprehensive configuration validation"""</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">_validate_header</span><span class="p">()</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">_validate_capabilities</span><span class="p">()</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">_validate_bars</span><span class="p">()</span>
-        <span class="bp">self</span><span class="p">.</span><span class="n">_validate_msix</span><span class="p">()</span>
-        
-        <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">errors</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s">"Validation failed: </span><span class="si">{</span><span class="bp">self</span><span class="p">.</span><span class="n">errors</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
-        
-        <span class="k">return</span> <span class="bp">True</span>
-    
-    <span class="k">def</span> <span class="nf">_validate_header</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="s">"""Validate standard PCIe header"""</span>
-        <span class="n">critical_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s">'vendor_id'</span><span class="p">,</span> <span class="s">'device_id'</span><span class="p">,</span> <span class="s">'class_code'</span><span class="p">,</span> <span class="s">'revision'</span><span class="p">]</span>
-        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">critical_fields</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">donor</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="p">.</span><span class="n">generated</span><span class="p">[</span><span class="n">field</span><span class="p">]:</span>
-                <span class="bp">self</span><span class="p">.</span><span class="n">errors</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s">"Header mismatch: </span><span class="si">{</span><span class="n">field</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
-</code></pre></div></div>
 
 <hr />
 
@@ -572,6 +568,7 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 </table>
 
 <h3 id="responsible-use-guidelines">Responsible Use Guidelines</h3>
+
 <ul>
   <li><strong>Authorization</strong>: Obtain explicit permission before deploying on any network</li>
   <li><strong>Disclosure</strong>: Follow responsible disclosure for security vulnerabilities</li>
@@ -581,6 +578,7 @@ set_clock_groups -asynchronous -group <span class="p">[</span>get_clocks pcie_cl
 </ul>
 
 <h3 id="emergency-procedures">Emergency Procedures</h3>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
 <span class="c"># Emergency recovery procedures</span>
 
@@ -608,22 +606,12 @@ dmesg | <span class="nb">tail</span> <span class="nt">-20</span>
 <p>The PCILeech firmware generator provides a robust foundation for security research and hardware analysis through authentic device cloning. By maintaining perfect external compatibility while ensuring internal consistency, it enables safe, reproducible testing scenarios that would be impossible with original hardware.</p>
 
 <p><strong>Key Takeaways:</strong></p>
+
 <ul>
   <li>Byte-perfect cloning ensures undetectable operation</li>
   <li>Immutable core architecture provides build consistency</li>
   <li>Comprehensive validation prevents deployment issues</li>
   <li>Responsible use requires proper authorization and safety measures</li>
-</ul>
-
-<p><em>Remember: With great power comes great responsibility. Use these capabilities ethically and legally.</em></p>
-
-<hr />
-
-<p><strong>Related Documentation:</strong></p>
-<ul>
-  <li><a href="/config-space-shadow.html">Configuration Space Shadow</a> - Deep dive into PCIe configuration cloning</li>
-  <li><a href="/manual-donor-dump.html">Manual Donor Dump</a> - Step-by-step donor analysis procedures</li>
-  <li><a href="/development.html">Development Guide</a> - Build system and development workflow</li>
 </ul>
 
   </div>

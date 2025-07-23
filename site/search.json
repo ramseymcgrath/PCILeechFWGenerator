@@ -3,6 +3,7 @@ layout: null
 ---
 [
   {% for page in site.pages %}
+    {% if page.title %}
     {
       "title"    : "{{ page.title | escape }}",
       "category" : "{{ page.category }}",
@@ -10,6 +11,7 @@ layout: null
       "url"      : "{{ site.baseurl }}{{ page.url }}",
       "date"     : "{{ page.date }}",
       "content"  : "{{ page.content | strip_html | strip_newlines | jsonify }}"
-    } {% unless forloop.last %},{% endunless %}
+    }{% unless forloop.last %},{% endunless %}
+    {% endif %}
   {% endfor %}
 ]

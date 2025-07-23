@@ -3,22 +3,22 @@
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
-<title>🖥️ PCILeech Firmware Generator TUI | PCILeech Firmware Generator</title>
+<title>TUI Interface | PCILeech Firmware Generator</title>
 <meta name="generator" content="Jekyll v3.10.0" />
-<meta property="og:title" content="🖥️ PCILeech Firmware Generator TUI" />
+<meta property="og:title" content="TUI Interface" />
 <meta property="og:locale" content="en_US" />
 <meta name="description" content="Generate custom PCIe firmware for PCILeech" />
 <meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
-<link rel="canonical" href="http://localhost:4000/tui-readme.html" />
-<meta property="og:url" content="http://localhost:4000/tui-readme.html" />
+<link rel="canonical" href="http://localhost:4001/tui-readme.html" />
+<meta property="og:url" content="http://localhost:4001/tui-readme.html" />
 <meta property="og:site_name" content="PCILeech Firmware Generator" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
-<meta property="twitter:title" content="🖥️ PCILeech Firmware Generator TUI" />
+<meta property="twitter:title" content="TUI Interface" />
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"🖥️ PCILeech Firmware Generator TUI","url":"http://localhost:4000/tui-readme.html"}</script>
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"TUI Interface","url":"http://localhost:4001/tui-readme.html"}</script>
 <!-- End Jekyll SEO tag -->
-<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4001/feed.xml" title="PCILeech Firmware Generator" /></head>
 <body><header class="site-header" role="banner">
 
   <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
@@ -39,7 +39,7 @@
         <article class="post">
 
   <header class="post-header">
-    <h1 class="post-title">🖥️ PCILeech Firmware Generator TUI</h1>
+    <h1 class="post-title">TUI Interface</h1>
   </header>
 
   <div class="post-content">
@@ -157,16 +157,13 @@ pip <span class="nb">install </span>textual rich psutil watchdog pydantic
 
 <p>There are several ways to launch the TUI:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Method 1: Using the dedicated TUI script</span>
-python3 pcileech.py tui
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Method 1: Using the unified entrypoint (recommended)</span>
+<span class="nb">sudo </span>python3 pcileech.py tui
 
-<span class="c"># Method 2: Direct execution</span>
-<span class="nb">sudo </span>python3 -m src.tui.main
-
-<span class="c"># Method 3: Direct execution</span>
+<span class="c"># Method 2: Direct execution </span>
 <span class="nb">sudo </span>python3 <span class="nt">-m</span> src.tui.main
 
-<span class="c"># Method 4: Using the sudo wrapper (recommended for root access)</span>
+<span class="c"># Method 3: Using the sudo wrapper (if installed)</span>
 ./install-sudo-wrapper.sh  <span class="c"># Install the wrapper first (one-time setup)</span>
 pcileech-tui-sudo
 </code></pre></div></div>
@@ -295,8 +292,7 @@ pcileech-tui-sudo
 <h4 id="quick-development">Quick Development</h4>
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Quick Development"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"35t"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"device_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"generic"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pcileech_35t325_x1"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"advanced_sv"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
   </span><span class="nl">"enable_variance"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
   </span><span class="nl">"flash_after_build"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
@@ -307,8 +303,7 @@ pcileech-tui-sudo
 <h4 id="local-build">Local Build</h4>
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Local Build"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"75t"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"device_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"generic"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"board_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pcileech_35t325_x1"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"advanced_sv"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
   </span><span class="nl">"enable_variance"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
   </span><span class="nl">"donor_dump"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Donor Info Template | PCILeech Firmware Generator</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Donor Info Template" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Generate custom PCIe firmware for PCILeech" />
+<meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
+<link rel="canonical" href="http://localhost:4001/donor-info-template.html" />
+<meta property="og:url" content="http://localhost:4001/donor-info-template.html" />
+<meta property="og:site_name" content="PCILeech Firmware Generator" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Donor Info Template" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Donor Info Template","url":"http://localhost:4001/donor-info-template.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4001/feed.xml" title="PCILeech Firmware Generator" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">Donor Info Template</h1>
+  </header>
+
+  <div class="post-content">
+    <h1 id="donor-info-template">Donor Info Template</h1>
+
+<p>The Donor Info Template feature allows you to generate comprehensive JSON templates for capturing detailed device information, behavioral profiles, and advanced configuration parameters. This enables more precise device cloning and optimization.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The donor info template is a structured JSON file that captures:</p>
+<ul>
+  <li>Device identification and capabilities</li>
+  <li>Behavioral profiling data</li>
+  <li>Timing characteristics</li>
+  <li>Access patterns</li>
+  <li>Interrupt and DMA configurations</li>
+  <li>PCILeech-specific optimizations</li>
+  <li>Manufacturing variance data</li>
+</ul>
+
+<h2 id="generating-a-template">Generating a Template</h2>
+
+<h3 id="using-the-cli">Using the CLI</h3>
+
+<p>Generate a donor info template using the command line:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Generate comprehensive template with all fields</span>
+python3 <span class="nt">-c</span> <span class="s2">"
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+DonorInfoTemplateGenerator.save_template(Path('donor_info_template.json'))
+"</span>
+
+<span class="c"># Generate minimal template with only essential fields</span>
+python3 <span class="nt">-c</span> <span class="s2">"
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+template = DonorInfoTemplateGenerator.generate_minimal_template()
+DonorInfoTemplateGenerator.save_template_dict(template, Path('minimal_template.json'))
+"</span>
+
+<span class="c"># Pre-fill template with device information (requires sudo and valid device)</span>
+python3 <span class="nt">-c</span> <span class="s2">"
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+from pathlib import Path
+generator = DonorInfoTemplateGenerator()
+template = generator.generate_template_from_device('0000:03:00.0')
+DonorInfoTemplateGenerator.save_template_dict(template, Path('device_template.json'))
+"</span>
+
+<span class="c"># Validate an existing donor info file</span>
+python3 <span class="nt">-c</span> <span class="s2">"
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+generator = DonorInfoTemplateGenerator()
+is_valid, errors = generator.validate_template_file('my_device.json')
+if not is_valid:
+    for error in errors:
+        print(f'Error: {error}')
+else:
+    print('Template is valid')
+"</span>
+</code></pre></div></div>
+
+<h3 id="generating-template-during-build">Generating Template During Build</h3>
+
+<p>Currently, template generation is handled separately from the build process. To integrate behavioral profiling data:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># First generate the template from device discovery</span>
+python3 <span class="nt">-c</span> <span class="s2">"
+from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+generator = DonorInfoTemplateGenerator()
+template = generator.generate_template_from_device('0000:03:00.0')
+DonorInfoTemplateGenerator.save_template_dict(template, Path('device_template.json'))
+"</span>
+
+<span class="c"># Then use existing behavioral profiling during build</span>
+<span class="nb">sudo </span>python3 pcileech.py build <span class="nt">--bdf</span> 0000:03:00.0 <span class="nt">--board</span> pcileech_35t325_x1 <span class="nt">--enable-behavioral-profiling</span>
+</code></pre></div></div>
+
+<p>This approach allows you to:</p>
+
+<ul>
+  <li>Get detailed device information from lspci and sysfs</li>
+  <li>Capture behavioral data during the build process</li>
+  <li>Maintain separate templates for different device configurations</li>
+  <li>Combine discovered and behavioral data for optimal firmware generation</li>
+</ul>
+
+<h3 id="using-the-tui">Using the TUI</h3>
+
+<p>Currently, template generation through the TUI would need to be implemented. For now, use the programmatic approach:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">src.device_clone.donor_info_template</span> <span class="kn">import</span> <span class="n">DonorInfoTemplateGenerator</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="c1"># Generate and save template
+</span><span class="n">DonorInfoTemplateGenerator</span><span class="p">.</span><span class="n">save_template</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s">"donor_info_template.json"</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h3 id="programmatic-usage">Programmatic Usage</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">src.device_clone.donor_info_template</span> <span class="kn">import</span> <span class="n">DonorInfoTemplateGenerator</span>
+
+<span class="c1"># Generate full template dictionary
+</span><span class="n">template</span> <span class="o">=</span> <span class="n">DonorInfoTemplateGenerator</span><span class="p">.</span><span class="n">generate_blank_template</span><span class="p">()</span>
+
+<span class="c1"># Generate minimal template dictionary
+</span><span class="n">minimal_template</span> <span class="o">=</span> <span class="n">DonorInfoTemplateGenerator</span><span class="p">.</span><span class="n">generate_minimal_template</span><span class="p">()</span>
+
+<span class="c1"># Save to file
+</span><span class="n">DonorInfoTemplateGenerator</span><span class="p">.</span><span class="n">save_template</span><span class="p">(</span><span class="s">"my_template.json"</span><span class="p">,</span> <span class="n">pretty</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="template-types">Template Types</h2>
+
+<h3 id="full-template">Full Template</h3>
+
+<p>The default template includes comprehensive sections for:</p>
+
+<ul>
+  <li>Complete device identification and capabilities</li>
+  <li>Behavioral profiling and timing characteristics</li>
+  <li>Access patterns and interrupt configurations</li>
+  <li>DMA characteristics and performance profiles</li>
+  <li>Advanced features (virtualization, security, error handling)</li>
+  <li>PCILeech-specific optimizations</li>
+  <li>Manufacturing variance data</li>
+</ul>
+
+<p>Use the full template when you need:</p>
+
+<ul>
+  <li>Detailed behavioral profiling</li>
+  <li>Advanced performance tuning</li>
+  <li>Complete device emulation</li>
+  <li>Manufacturing variance simulation</li>
+</ul>
+
+<h3 id="minimal-template">Minimal Template</h3>
+
+<p>The minimal template (generated with <code class="language-plaintext highlighter-rouge">generate_minimal_template()</code>) includes only essential fields:</p>
+
+<ul>
+  <li>Basic device identification (vendor/device IDs, class code)</li>
+  <li>Core PCIe capabilities (version, link width/speed)</li>
+  <li>BAR configuration</li>
+</ul>
+
+<p>Use the minimal template when you need:</p>
+
+<ul>
+  <li>Quick device cloning without advanced features</li>
+  <li>Simple device identification</li>
+  <li>Basic functionality testing</li>
+  <li>A starting point for custom configurations</li>
+</ul>
+
+<h2 id="template-structure">Template Structure</h2>
+
+<p>The template contains the following main sections:</p>
+
+<h3 id="1-metadata">1. Metadata</h3>
+
+<p>Contains information about when and how the template was generated:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"generated_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2025-01-19T12:30:45Z"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"device_bdf"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Fill</span><span class="w"> </span><span class="err">in:</span><span class="w"> </span><span class="err">e.g.</span><span class="p">,</span><span class="w"> </span><span class="s2">"0000:03:00.0"</span><span class="w">
+    </span><span class="nl">"kernel_version"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Fill</span><span class="w"> </span><span class="err">in:</span><span class="w"> </span><span class="err">e.g.</span><span class="p">,</span><span class="w"> </span><span class="s2">"6.1.0-15-amd64"</span><span class="w">
+    </span><span class="nl">"generator_version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"enhanced-v2.0"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"behavioral_data_included"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"profile_capture_duration"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Fill</span><span class="w"> </span><span class="err">in:</span><span class="w"> </span><span class="err">seconds</span><span class="w">
+    </span><span class="nl">"comments"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Any</span><span class="w"> </span><span class="err">additional</span><span class="w"> </span><span class="err">notes</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="2-device-info">2. Device Info</h3>
+
+<p>Comprehensive device identification and configuration:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"device_info"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"identification"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"vendor_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">e.g.</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="err">x</span><span class="mi">8086</span><span class="w"> </span><span class="err">for</span><span class="w"> </span><span class="err">Intel</span><span class="w">
+      </span><span class="nl">"device_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"subsystem_vendor_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"subsystem_device_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"class_code"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">e.g.</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="err">x</span><span class="mi">020000</span><span class="w"> </span><span class="err">for</span><span class="w"> </span><span class="err">Ethernet</span><span class="w">
+      </span><span class="nl">"revision_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"device_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Human-readable</span><span class="w"> </span><span class="err">name</span><span class="w">
+      </span><span class="nl">"manufacturer"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"capabilities"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"max_payload_size"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="mi">128</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">,</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span><span class="w"> </span><span class="err">etc.</span><span class="w">
+      </span><span class="nl">"link_width"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">16</span><span class="w">
+      </span><span class="nl">"link_speed"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"2.5GT/s"</span><span class="p">,</span><span class="w"> </span><span class="s2">"5GT/s"</span><span class="p">,</span><span class="w"> </span><span class="err">etc.</span><span class="w">
+      </span><span class="nl">"supports_msi"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"msi_vectors"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"supports_msix"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"msix_vectors"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">more</span><span class="w"> </span><span class="err">capabilities</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"bars"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+      </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"bar_number"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"memory"</span><span class="w"> </span><span class="err">or</span><span class="w"> </span><span class="s2">"io"</span><span class="w">
+        </span><span class="nl">"size"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">size</span><span class="w"> </span><span class="err">in</span><span class="w"> </span><span class="err">bytes</span><span class="w">
+        </span><span class="nl">"prefetchable"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="kc">true</span><span class="err">/</span><span class="kc">false</span><span class="w">
+        </span><span class="nl">"64bit"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="kc">true</span><span class="err">/</span><span class="kc">false</span><span class="w">
+        </span><span class="nl">"purpose"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="err">Description</span><span class="w"> </span><span class="err">of</span><span class="w"> </span><span class="err">BAR</span><span class="w"> </span><span class="err">usage</span><span class="w">
+        </span><span class="nl">"typical_access_pattern"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"sequential"</span><span class="p">,</span><span class="w"> </span><span class="s2">"random"</span><span class="p">,</span><span class="w"> </span><span class="err">etc.</span><span class="w">
+      </span><span class="p">}</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">User</span><span class="w"> </span><span class="err">should</span><span class="w"> </span><span class="err">duplicate</span><span class="w"> </span><span class="err">this</span><span class="w"> </span><span class="err">structure</span><span class="w"> </span><span class="err">for</span><span class="w"> </span><span class="err">each</span><span class="w"> </span><span class="err">BAR</span><span class="w"> </span><span class="err">(</span><span class="mi">1-5</span><span class="err">)</span><span class="w">
+    </span><span class="p">]</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="3-behavioral-profile">3. Behavioral Profile</h3>
+
+<p>Captures runtime behavior and performance characteristics:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"behavioral_profile"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"timing_characteristics"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"register_access_latency_us"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"min"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"max"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"average"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"std_deviation"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
+      </span><span class="p">},</span><span class="w">
+      </span><span class="nl">"interrupt_response_time_us"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"min"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"max"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"average"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
+      </span><span class="p">},</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">more</span><span class="w"> </span><span class="err">timing</span><span class="w"> </span><span class="err">data</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"access_patterns"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"frequent_registers"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+        </span><span class="p">{</span><span class="w">
+          </span><span class="nl">"offset"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+          </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">
+          </span><span class="nl">"access_count"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+          </span><span class="nl">"read_write_ratio"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+          </span><span class="nl">"typical_values"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+      </span><span class="p">],</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">access</span><span class="w"> </span><span class="err">sequences</span><span class="w"> </span><span class="err">and</span><span class="w"> </span><span class="err">patterns</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"interrupt_patterns"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"interrupt_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"msi"</span><span class="p">,</span><span class="w"> </span><span class="s2">"msix"</span><span class="p">,</span><span class="w"> </span><span class="err">or</span><span class="w"> </span><span class="s2">"intx"</span><span class="w">
+      </span><span class="nl">"vector_count"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"coalescing_enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">interrupt</span><span class="w"> </span><span class="err">configuration</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"dma_characteristics"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"supports_dma"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"max_dma_size_bytes"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"scatter_gather_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">DMA</span><span class="w"> </span><span class="err">configuration</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="4-pcileech-optimizations">4. PCILeech Optimizations</h3>
+
+<p>Specific optimizations for PCILeech firmware:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"pcileech_optimizations"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"recommended_payload_size"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"optimal_read_strategy"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"burst"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sequential"</span><span class="p">,</span><span class="w"> </span><span class="err">etc.</span><span class="w">
+    </span><span class="nl">"optimal_write_strategy"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"tlp_processing_hints"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"prefer_32bit_addresses"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"support_64bit_addresses"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"max_outstanding_requests"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"completion_timeout_us"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"memory_window_strategy"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"window_size"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"window_count"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"access_pattern"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="w">  </span><span class="err">//</span><span class="w"> </span><span class="s2">"linear"</span><span class="p">,</span><span class="w"> </span><span class="s2">"random"</span><span class="p">,</span><span class="w"> </span><span class="err">etc.</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="5-advanced-features">5. Advanced Features</h3>
+
+<p>Support for virtualization, security, and performance features:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"advanced_features"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"virtualization"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"sr_iov_capable"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"max_vfs"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">SR-IOV</span><span class="w"> </span><span class="err">configuration</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"security_features"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"ats_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"pri_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"pasid_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">security</span><span class="w"> </span><span class="err">features</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"error_handling"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"aer_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"ecrc_support"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">error</span><span class="w"> </span><span class="err">handling</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"performance_features"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"relaxed_ordering"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"no_snoop"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+      </span><span class="err">//</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="err">performance</span><span class="w"> </span><span class="err">features</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="filling-out-the-template">Filling Out the Template</h2>
+
+<h3 id="step-1-basic-device-information">Step 1: Basic Device Information</h3>
+
+<p>Start by filling in the device identification:</p>
+
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">lspci -nn</code> to get vendor/device IDs</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">lspci -vvv</code> for detailed capability information</li>
+  <li>Check <code class="language-plaintext highlighter-rouge">/sys/bus/pci/devices/[BDF]/</code> for additional details</li>
+</ul>
+
+<h3 id="step-2-behavioral-profiling">Step 2: Behavioral Profiling</h3>
+
+<p>Run behavioral profiling to capture timing and access patterns:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable behavioral profiling in your build</span>
+<span class="nb">sudo </span>python3 pcileech.py build <span class="nt">--bdf</span> 0000:03:00.0 <span class="nt">--board</span> pcileech_35t325_x1 <span class="nt">--enable-behavioral-profiling</span>
+</code></pre></div></div>
+
+<h3 id="step-3-manual-testing">Step 3: Manual Testing</h3>
+
+<p>For advanced features:</p>
+
+<ul>
+  <li>Test interrupt behavior under load</li>
+  <li>Measure DMA transfer characteristics</li>
+  <li>Profile register access patterns</li>
+  <li>Document any device-specific quirks</li>
+</ul>
+
+<h3 id="step-4-validation">Step 4: Validation</h3>
+
+<p>Validate your completed template:</p>
+
+<ul>
+  <li>Ensure all critical fields are filled</li>
+  <li>Test with actual device cloning</li>
+  <li>Verify timing parameters are realistic</li>
+  <li>Document any assumptions or limitations</li>
+</ul>
+
+<h2 id="using-the-completed-template">Using the Completed Template</h2>
+
+<p>Once filled out, the donor info template can be used for:</p>
+
+<ol>
+  <li><strong>Advanced Device Cloning</strong>: Provide the template during build for optimized firmware</li>
+  <li><strong>Performance Tuning</strong>: Use timing data to optimize access patterns</li>
+  <li><strong>Compatibility Testing</strong>: Share templates for similar devices</li>
+  <li><strong>Documentation</strong>: Maintain a library of device profiles</li>
+</ol>
+
+<h3 id="using-templates-during-build">Using Templates During Build</h3>
+
+<p>Currently, templates can be used for override and merge operations using the programmatic interface:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">src.device_clone.donor_info_template</span> <span class="kn">import</span> <span class="n">DonorInfoTemplateGenerator</span>
+
+<span class="c1"># Load template and merge with discovered values
+</span><span class="n">template</span> <span class="o">=</span> <span class="n">DonorInfoTemplateGenerator</span><span class="p">.</span><span class="n">load_template</span><span class="p">(</span><span class="s">"my_device_profile.json"</span><span class="p">)</span>
+<span class="c1"># Use template during build process for value overrides
+</span></code></pre></div></div>
+
+<p>When using templates during build:</p>
+
+<ul>
+  <li>Template values override any discovered values when there’s a conflict</li>
+  <li>Null values in the template are ignored (discovered values are used)</li>
+  <li>This allows you to selectively override specific device characteristics</li>
+  <li>The template provides additional behavioral and configuration data</li>
+</ul>
+
+<p>Example scenarios:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Override device IDs while keeping discovered BAR configuration</span>
+<span class="c"># (set device IDs in template, leave BARs as null)</span>
+<span class="c"># Implementation would be in the build system integration</span>
+
+<span class="c"># Use template and also output a new template with merged values</span>
+<span class="c"># This functionality would be added to the build orchestrator</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<ol>
+  <li><strong>Version Control</strong>: Keep templates in version control to track changes</li>
+  <li><strong>Device Variations</strong>: Create separate templates for different device revisions</li>
+  <li><strong>Testing</strong>: Validate templates with actual hardware before production use</li>
+  <li><strong>Documentation</strong>: Add detailed comments in the “comments” field</li>
+  <li><strong>Sharing</strong>: Consider contributing templates for common devices</li>
+</ol>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<ol>
+  <li><strong>Invalid JSON</strong>: Use a JSON validator to check syntax</li>
+  <li><strong>Missing Required Fields</strong>: Some fields may be required for specific features</li>
+  <li><strong>Incorrect Data Types</strong>: Ensure numbers aren’t quoted as strings</li>
+  <li><strong>Timing Values</strong>: Use appropriate units (microseconds, milliseconds)</li>
+</ol>
+
+<h3 id="getting-help">Getting Help</h3>
+
+<ul>
+  <li>Check existing templates for examples</li>
+  <li>Use the template validation methods for field explanations</li>
+  <li>Consult device datasheets for capability details</li>
+  <li>Ask in community forums for device-specific guidance</li>
+</ul>
+
+<h2 id="related-documentation">Related Documentation</h2>
+
+<ul>
+  <li><a href="/device-cloning.html">Device Cloning</a></li>
+  <li><a href="/firmware-uniqueness.html">Behavioral Profiling</a></li>
+  <li><a href="/manual-donor-dump.html">Manual Donor Dump</a></li>
+  <li><a href="/template-architecture.html">Template Architecture</a></li>
+</ul>
+
+  </div>
+
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">PCILeech Firmware Generator</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">PCILeech Firmware Generator</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Generate custom PCIe firmware for PCILeech</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

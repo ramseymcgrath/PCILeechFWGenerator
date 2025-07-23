@@ -1,3 +1,8 @@
+---
+layout: default
+title: "Home"
+---
+
 # PCILeech Firmware Generator
 
 [![CI](https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions)
@@ -23,7 +28,7 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)**
+📚 **[Complete Documentation](.)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)**
 
 ## 🚀 Quick Start
 
@@ -150,7 +155,7 @@ podman info | grep rootless
 
 ## 📚 Documentation
 
-For detailed information, please visit our **[Documentation Site](https://pcileechfwgenerator.ramseymcgrath.com)**:
+For detailed information, browse the sections below or visit our complete documentation:
 
 - **[Device Cloning Process](device-cloning.md)** - Complete guide to the cloning workflow
 - **[Firmware Uniqueness](firmware-uniqueness.md)** - How authenticity is achieved

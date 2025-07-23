@@ -1,3 +1,8 @@
+---
+layout: page
+title: "Site Map"
+---
+
 # Site Map
 
 ## 🏠 Main Pages

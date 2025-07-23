@@ -1,3 +1,8 @@
+---
+layout: page
+title: "Configuration Space Shadow BRAM"
+---
+
 # Configuration Space Shadow BRAM Implementation
 
 This document describes the implementation of the full 4 KB configuration space shadow in BRAM for the PCILeech FPGA firmware generator.

@@ -1,3 +1,8 @@
+---
+layout: page
+title: "Manual Donor Dump"
+---
+
 ## Overview
 
 ### What is a Donor Dump?
@@ -304,6 +309,7 @@ fi
 ### Step 5: Cleanup and Verification
 
 #### Safe Module Unloading
+
 ```bash
 # Unload module with verification
 cleanup_module() {
@@ -640,6 +646,7 @@ batch_donor_dump() {
 ### Custom Data Extraction
 
 #### Extended Information Gathering
+
 ```bash
 # Enhanced donor dump with additional system context
 create_extended_donor_dump() {

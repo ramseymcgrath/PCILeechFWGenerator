@@ -9,16 +9,16 @@
 <meta property="og:locale" content="en_US" />
 <meta name="description" content="Generate custom PCIe firmware for PCILeech" />
 <meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
-<link rel="canonical" href="http://localhost:4000/device-cloning.html" />
-<meta property="og:url" content="http://localhost:4000/device-cloning.html" />
+<link rel="canonical" href="http://localhost:4001/device-cloning.html" />
+<meta property="og:url" content="http://localhost:4001/device-cloning.html" />
 <meta property="og:site_name" content="PCILeech Firmware Generator" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
 <meta property="twitter:title" content="Device Cloning" />
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Device Cloning","url":"http://localhost:4000/device-cloning.html"}</script>
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Device Cloning","url":"http://localhost:4001/device-cloning.html"}</script>
 <!-- End Jekyll SEO tag -->
-<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4001/feed.xml" title="PCILeech Firmware Generator" /></head>
 <body><header class="site-header" role="banner">
 
   <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
@@ -43,12 +43,11 @@
   </header>
 
   <div class="post-content">
-    
-<h2 id="device-cloning">Device Cloning</h2>
+    <h1 id="device-cloning">Device Cloning</h1>
 
 <p>The device cloning process creates an FPGA-based replica of a PCIe device through systematic hardware analysis and template generation. This section details the multi-stage process and error handling mechanisms.</p>
 
-<h3 id="prerequisites-and-system-requirements">Prerequisites and System Requirements</h3>
+<h2 id="prerequisites-and-system-requirements">Prerequisites and System Requirements</h2>
 
 <p>Before cloning begins, the system must meet specific requirements:</p>
 
@@ -59,7 +58,7 @@
   <li><strong>Fallback Mode</strong>: For testing environments without IOMMU, use <code class="language-plaintext highlighter-rouge">iommu=pt</code> or <code class="language-plaintext highlighter-rouge">vfio.enable_unsafe_noiommu_mode=1</code></li>
 </ul>
 
-<h3 id="stage-1-vfio-device-acquisition">Stage 1: VFIO Device Acquisition</h3>
+<h2 id="stage-1-vfio-device-acquisition">Stage 1: VFIO Device Acquisition</h2>
 
 <p>The generator establishes exclusive control over the target PCIe device through Linux VFIO:</p>
 
@@ -78,11 +77,11 @@
   <li><strong>Permission Errors</strong>: Provides clear diagnostic messages for privilege escalation</li>
 </ul>
 
-<h3 id="stage-2-configuration-space-analysis">Stage 2: Configuration Space Analysis</h3>
+<h2 id="stage-2-configuration-space-analysis">Stage 2: Configuration Space Analysis</h2>
 
 <p>The generator performs comprehensive configuration space extraction:</p>
 
-<h4 id="standard-pci-header-0x00-0xff">Standard PCI Header (0x00-0xFF)</h4>
+<h3 id="standard-pci-header-0x00-0xff">Standard PCI Header (0x00-0xFF)</h3>
 
 <ul>
   <li><strong>Device Identity</strong>: Vendor ID, Device ID, Subsystem IDs, Class Code, Revision</li>
@@ -91,7 +90,7 @@
   <li><strong>Interrupt Configuration</strong>: Legacy INTx pin assignments</li>
 </ul>
 
-<h4 id="extended-configuration-space-0x100-0xfff">Extended Configuration Space (0x100-0xFFF)</h4>
+<h3 id="extended-configuration-space-0x100-0xfff">Extended Configuration Space (0x100-0xFFF)</h3>
 
 <ul>
   <li><strong>Capability Structures</strong>: MSI/MSI-X, Power Management, PCIe-specific capabilities</li>
@@ -107,7 +106,7 @@
   <li><strong>Sanitization</strong>: Removes potentially sensitive vendor-specific data when requested</li>
 </ul>
 
-<h3 id="stage-3-bar-discovery-and-memory-mapping">Stage 3: BAR Discovery and Memory Mapping</h3>
+<h2 id="stage-3-bar-discovery-and-memory-mapping">Stage 3: BAR Discovery and Memory Mapping</h2>
 
 <p>Systematic analysis of Base Address Registers determines memory layout:</p>
 
@@ -136,11 +135,11 @@
   <li><strong>Manual Override</strong>: Allows explicit BAR configuration via command-line parameters</li>
 </ul>
 
-<h3 id="stage-4-interrupt-architecture-analysis">Stage 4: Interrupt Architecture Analysis</h3>
+<h2 id="stage-4-interrupt-architecture-analysis">Stage 4: Interrupt Architecture Analysis</h2>
 
 <p>The generator determines optimal interrupt emulation strategy:</p>
 
-<h4 id="priority-order-highest-to-lowest">Priority Order (Highest to Lowest)</h4>
+<h3 id="priority-order-highest-to-lowest">Priority Order (Highest to Lowest)</h3>
 
 <ol>
   <li><strong>MSI-X</strong>: Multi-vector message signaled interrupts
@@ -172,11 +171,11 @@
   <li><strong>Interrupt Routing</strong>: Validates interrupt pin assignments</li>
 </ul>
 
-<h3 id="stage-5-template-context-generation">Stage 5: Template Context Generation</h3>
+<h2 id="stage-5-template-context-generation">Stage 5: Template Context Generation</h2>
 
 <p>All extracted data is consolidated into a comprehensive template context:</p>
 
-<h4 id="core-components">Core Components</h4>
+<h3 id="core-components">Core Components</h3>
 
 <ul>
   <li><strong>Device Identity</strong>: Complete PCI configuration header</li>
@@ -186,7 +185,7 @@
   <li><strong>Feature Flags</strong>: DMA capabilities, error handling, debug interfaces</li>
 </ul>
 
-<h4 id="validation-pipeline">Validation Pipeline</h4>
+<h3 id="validation-pipeline">Validation Pipeline</h3>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Context Validation:
 ├── Required Fields Check
@@ -211,11 +210,11 @@
   <li><strong>Corrupted Data</strong>: Attempts repair or fails with detailed diagnostics</li>
 </ul>
 
-<h3 id="stage-6-firmware-generation">Stage 6: Firmware Generation</h3>
+<h2 id="stage-6-firmware-generation">Stage 6: Firmware Generation</h2>
 
 <p>The validated context drives the Jinja2/SystemVerilog template engine:</p>
 
-<h4 id="output-artifacts">Output Artifacts</h4>
+<h3 id="output-artifacts">Output Artifacts</h3>
 
 <ul>
   <li><strong>FPGA Bitstream</strong>: Device-specific <code class="language-plaintext highlighter-rouge">.bit</code> or <code class="language-plaintext highlighter-rouge">.bin</code> file</li>
@@ -224,7 +223,7 @@
   <li><strong>Build Reports</strong>: Synthesis timing, resource utilization, verification results</li>
 </ul>
 
-<h4 id="quality-assurance">Quality Assurance</h4>
+<h3 id="quality-assurance">Quality Assurance</h3>
 
 <ul>
   <li><strong>Template Validation</strong>: Ensures generated Verilog is syntactically correct</li>
@@ -232,7 +231,7 @@
   <li><strong>Timing Analysis</strong>: Validates clock domain crossings and setup/hold times</li>
 </ul>
 
-<h3 id="quick-start-command">Quick Start Command</h3>
+<h2 id="quick-start-command">Quick Start Command</h2>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable IOMMU and run generator</span>
 <span class="nb">sudo </span>python3 pcileech.py build <span class="nt">--bdf</span> 0000:01:00.0 <span class="nt">--board</span> pcileech_35t325_x4

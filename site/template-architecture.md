@@ -1,3 +1,8 @@
+---
+layout: page
+title: "Template Architecture"
+---
+
 # PCIe Capabilities and Template Architecture
 
 This document describes the PCIe capabilities handled by the PCILeech Firmware Generator and provides detailed information about how the SystemVerilog templates are created, filled, and integrated into the final firmware.

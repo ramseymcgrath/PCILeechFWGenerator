@@ -1,3 +1,8 @@
+---
+layout: page
+title: "Supported Devices"
+---
+
 # Supported Devices
 
 PCILeech Firmware Generator supports a wide range of PCIe devices as donors for firmware generation. This page provides detailed information about device compatibility, requirements, and recommendations.

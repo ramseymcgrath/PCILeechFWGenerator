@@ -1,15 +1,9 @@
-# 🛠️ Development Guide
-
-[![PyPI version](https://badge.fury.io/py/pcileech-fw-generator.svg)](https://badge.fury.io/py/pcileech-fw-generator)
-[![Python Support](https://img.shields.io/pypi/pyversions/pcileech-fw-generator.svg)](https://pypi.org/project/pcileech-fw-generator/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-This document provides instructions for setting up a development environment for the PCILeech Firmware Generator project.
-
-
+---
+layout: page
+title: "Development Guide"
 ---
 
-## 🚀 Development Setup
+# 🛠️ Development Guide
 
 The code needs to run on linux but can be developed anywhere with a python vers >3.9
 

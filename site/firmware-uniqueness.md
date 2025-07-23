@@ -1,26 +1,14 @@
-## Firmware Authenticity & Stability
-
-_"If the OS can't tell the difference, you win."_
-
-## Table of Contents
-- [Overview](#overview)
-- [Deep-Cloned Device Anatomy](#deep-cloned-device-anatomy)
-- [Build-Time Security Features](#build-time-security-features)
-- [Detection-Resistance Validation](#detection-resistance-validation)
-- [Immutable Core Architecture](#immutable-core-architecture)
-- [Performance Metrics](#performance-metrics)
-- [Security & Research Applications](#security--research-applications)
-- [Troubleshooting & Error Handling](#troubleshooting--error-handling)
-- [Best Practices](#best-practices)
-- [Legal & Ethical Considerations](#legal--ethical-considerations)
-
+---
+layout: page
+title: "Firmware Uniqueness"
 ---
 
-## Overview
+# Uniqueness Overview
 
 The PCILeech firmware generator creates authentic hardware clones by performing byte-perfect replication of donor device characteristics while maintaining a stable, reusable core architecture. The result is hardware that appears identical to the original device from the host OS perspective while providing consistent, predictable behavior across builds.
 
-### Key Benefits
+## Key Benefits
+
 - **Perfect Stealth**: Identical PCIe fingerprints to donor hardware
 - **Build Consistency**: Same core IP across all generated firmware
 - **Research Flexibility**: Safe testing environment for security research
@@ -40,7 +28,8 @@ The cloning process replicates critical hardware characteristics across multiple
 | **Link Behavior** | L0s/L1 timings, Max_Read_Request, advanced PCIe features | Advanced fingerprinting | ASPM, OBFF, Hot-plug states |
 | **Power & Error Handling** | ASPM policies, PME support, D-states, AER masks | Enterprise compliance | Byte-perfect POST auditing |
 
-### Configuration Space Layout
+## Configuration Space Layout
+
 ```
 Offset 0x00-0xFF: Standard PCIe Header (256 bytes)
 ├── 0x00-0x3F: Type 0/1 Configuration Header
@@ -60,12 +49,14 @@ Extended Capabilities Chain:
 ## Build-Time Security Features
 
 ### Entropy Generation
+
 - **Unique Bitstreams**: SHA-256 hash of donor configuration salted into unused BRAM
 - **Forensic Tracking**: Vivado version and build timestamp embedded in hidden VSEC
 - **P&R Randomization**: IO placement randomized within timing constraints
 - **Anti-Analysis**: Defeats simple bitstream diffing and pattern recognition
 
 ### Implementation Details
+
 ```verilog
 // Example: Build-time entropy injection
 localparam [255:0] BUILD_ENTROPY = 256'h{SHA256_HASH};
@@ -91,6 +82,7 @@ assign vsec_timestamp_reg = BUILD_TIMESTAMP[31:0];
 | **Power Management** | ASPM state transitions, D-state cycling | Identical power behavior to donor | PME assertion failures, ASPM violations |
 
 ### Validation Scripts
+
 ```bash
 #!/bin/bash
 # Basic validation suite
@@ -145,6 +137,7 @@ The firmware maintains a stable core while adapting the peripheral interface:
 ```
 
 ### Core IP Benefits
+
 - **Timing Closure**: Single PLL domain, pre-verified timing constraints
 - **Test Coverage**: Shared test benches across all device variants
 - **Debug Consistency**: Identical register map for all builds
@@ -165,6 +158,7 @@ The firmware maintains a stable core while adapting the peripheral interface:
 | **Static Power** | 180mW | 200mW | 220mW | ±20mW | Temperature dependent |
 
 ### Timing Analysis
+
 ```tcl
 # Critical path constraints
 create_clock -period 6.667 -name pcie_clk [get_ports pcie_clk_p]
@@ -190,6 +184,7 @@ set_clock_groups -asynchronous -group [get_clocks pcie_clk] -group [get_clocks u
 | **Forensics** | Evidence preservation | Bit-perfect hardware replication for analysis | Chain of custody, legal admissibility |
 
 ### Research Scenarios
+
 ```python
 # Example: DMA attack simulation
 class DMAAttackSimulator:
@@ -216,6 +211,7 @@ class DMAAttackSimulator:
 ### Common Issues & Solutions
 
 #### Build-Time Errors
+
 | Error | Cause | Solution | Prevention |
 |-------|-------|----------|-----------|
 | **Timing Closure Failure** | Complex donor BAR decode logic | Reduce Fmax target, pipeline critical paths | Pre-validate donor complexity |
@@ -223,6 +219,7 @@ class DMAAttackSimulator:
 | **P&R Failure** | IO pin conflicts | Adjust pin assignments, use different package | Validate pinout before synthesis |
 
 #### Runtime Issues
+
 | Symptom | Likely Cause | Diagnostic Steps | Fix |
 |---------|--------------|------------------|-----|
 | **Code 10 Error** | Missing/incorrect capabilities | Compare [`lspci`](https://linux.die.net/man/8/lspci) output with donor | Update capability chain |
@@ -231,6 +228,7 @@ class DMAAttackSimulator:
 | **Link Training Failure** | PCIe electrical issues | Check link status with [`setpci`](https://linux.die.net/man/8/setpci) | Verify signal integrity |
 
 ### Debug Infrastructure
+
 ```verilog
 // Integrated debug features
 module debug_controller (
@@ -261,36 +259,12 @@ always @(posedge clk) begin
 end
 ```
 
-### Diagnostic Tools
-```bash
-#!/bin/bash
-# Comprehensive diagnostic script
-
-echo "=== PCILeech Firmware Diagnostics ==="
-
-# Check PCIe link status
-DEVICE_BDF="01:00.0"  # Update with actual BDF
-LINK_STATUS=$(setpci -s $DEVICE_BDF CAP_EXP+12.w)
-echo "Link Status: 0x$LINK_STATUS"
-
-# Monitor interrupt activity
-echo "Interrupt activity:"
-grep $DEVICE_BDF /proc/interrupts
-
-# Check DMA coherency
-echo "Testing DMA coherency..."
-./dma_coherency_test $DEVICE_BDF
-
-# Validate configuration space
-echo "Configuration space validation:"
-./validate_config_space.py $DEVICE_BDF donor_config.json
-```
-
 ---
 
 ## Best Practices
 
 ### Development Workflow
+
 1. **Donor Analysis**: Thoroughly characterize donor device before cloning
 2. **Incremental Testing**: Validate each capability block individually
 3. **Regression Testing**: Maintain test suite for all supported donors
@@ -298,40 +272,12 @@ echo "Configuration space validation:"
 5. **Documentation**: Maintain detailed build logs and test results
 
 ### Security Considerations
+
 - **Isolation**: Test in air-gapped environments
 - **Backup**: Always preserve original donor firmware
 - **Validation**: Verify cloned behavior matches donor exactly
 - **Monitoring**: Log all device interactions for analysis
 - **Updates**: Regularly update against new detection methods
-
-### Code Quality
-```python
-# Example: Robust configuration validation
-class ConfigSpaceValidator:
-    def __init__(self, donor_config, generated_config):
-        self.donor = donor_config
-        self.generated = generated_config
-        self.errors = []
-    
-    def validate(self):
-        """Comprehensive configuration validation"""
-        self._validate_header()
-        self._validate_capabilities()
-        self._validate_bars()
-        self._validate_msix()
-        
-        if self.errors:
-            raise ValidationError(f"Validation failed: {self.errors}")
-        
-        return True
-    
-    def _validate_header(self):
-        """Validate standard PCIe header"""
-        critical_fields = ['vendor_id', 'device_id', 'class_code', 'revision']
-        for field in critical_fields:
-            if self.donor[field] != self.generated[field]:
-                self.errors.append(f"Header mismatch: {field}")
-```
 
 ---
 
@@ -347,6 +293,7 @@ class ConfigSpaceValidator:
 | **Safety** | Malformed firmware can damage hardware | Maintain serial console access, backup procedures |
 
 ### Responsible Use Guidelines
+
 - **Authorization**: Obtain explicit permission before deploying on any network
 - **Disclosure**: Follow responsible disclosure for security vulnerabilities
 - **Documentation**: Maintain detailed logs of all testing activities
@@ -354,6 +301,7 @@ class ConfigSpaceValidator:
 - **Backup**: Always preserve original firmware before modifications
 
 ### Emergency Procedures
+
 ```bash
 #!/bin/bash
 # Emergency recovery procedures
@@ -382,16 +330,8 @@ dmesg | tail -20
 The PCILeech firmware generator provides a robust foundation for security research and hardware analysis through authentic device cloning. By maintaining perfect external compatibility while ensuring internal consistency, it enables safe, reproducible testing scenarios that would be impossible with original hardware.
 
 **Key Takeaways:**
+
 - Byte-perfect cloning ensures undetectable operation
 - Immutable core architecture provides build consistency  
 - Comprehensive validation prevents deployment issues
 - Responsible use requires proper authorization and safety measures
-
-*Remember: With great power comes great responsibility. Use these capabilities ethically and legally.*
-
----
-
-**Related Documentation:**
-- [Configuration Space Shadow](config-space-shadow.md) - Deep dive into PCIe configuration cloning
-- [Manual Donor Dump](manual-donor-dump.md) - Step-by-step donor analysis procedures
-- [Development Guide](development.md) - Build system and development workflow

@@ -3,22 +3,22 @@
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
-<title>Overview | PCILeech Firmware Generator</title>
+<title>Manual Donor Dump | PCILeech Firmware Generator</title>
 <meta name="generator" content="Jekyll v3.10.0" />
-<meta property="og:title" content="Overview" />
+<meta property="og:title" content="Manual Donor Dump" />
 <meta property="og:locale" content="en_US" />
 <meta name="description" content="Generate custom PCIe firmware for PCILeech" />
 <meta property="og:description" content="Generate custom PCIe firmware for PCILeech" />
-<link rel="canonical" href="http://localhost:4000/manual-donor-dump.html" />
-<meta property="og:url" content="http://localhost:4000/manual-donor-dump.html" />
+<link rel="canonical" href="http://localhost:4001/manual-donor-dump.html" />
+<meta property="og:url" content="http://localhost:4001/manual-donor-dump.html" />
 <meta property="og:site_name" content="PCILeech Firmware Generator" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
-<meta property="twitter:title" content="Overview" />
+<meta property="twitter:title" content="Manual Donor Dump" />
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Overview","url":"http://localhost:4000/manual-donor-dump.html"}</script>
+{"@context":"https://schema.org","@type":"WebPage","description":"Generate custom PCIe firmware for PCILeech","headline":"Manual Donor Dump","url":"http://localhost:4001/manual-donor-dump.html"}</script>
 <!-- End Jekyll SEO tag -->
-<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="PCILeech Firmware Generator" /></head>
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4001/feed.xml" title="PCILeech Firmware Generator" /></head>
 <body><header class="site-header" role="banner">
 
   <div class="wrapper"><a class="site-title" rel="author" href="/">PCILeech Firmware Generator</a><nav class="site-nav">
@@ -39,7 +39,7 @@
         <article class="post">
 
   <header class="post-header">
-    <h1 class="post-title">Overview</h1>
+    <h1 class="post-title">Manual Donor Dump</h1>
   </header>
 
   <div class="post-content">
@@ -387,6 +387,7 @@ convert_to_json<span class="o">()</span> <span class="o">{</span>
 <h3 id="step-5-cleanup-and-verification">Step 5: Cleanup and Verification</h3>
 
 <h4 id="safe-module-unloading">Safe Module Unloading</h4>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Unload module with verification</span>
 cleanup_module<span class="o">()</span> <span class="o">{</span>
     <span class="k">if </span>lsmod | <span class="nb">grep</span> <span class="nt">-q</span> donor_dump<span class="p">;</span> <span class="k">then
@@ -552,7 +553,7 @@ validate_donor_dump<span class="o">()</span> <span class="o">{</span>
 
 test_donor_integration<span class="o">()</span> <span class="o">{</span>
     <span class="nb">local </span><span class="nv">donor_file</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>
-    <span class="nb">local </span><span class="nv">test_board</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">2</span><span class="k">:-</span><span class="nv">75t</span><span class="k">}</span><span class="s2">"</span>
+    <span class="nb">local </span><span class="nv">test_board</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">2</span><span class="k">:-</span><span class="nv">pcileech_35t325_x1</span><span class="k">}</span><span class="s2">"</span>
     <span class="nb">local </span><span class="nv">test_bdf</span><span class="o">=</span><span class="s2">"</span><span class="k">${</span><span class="nv">3</span><span class="k">:-</span><span class="nv">0000</span>:03:00.0<span class="k">}</span><span class="s2">"</span>
     
     <span class="nb">echo</span> <span class="s2">"Testing donor dump integration..."</span>
@@ -715,6 +716,7 @@ batch_donor_dump<span class="o">()</span> <span class="o">{</span>
 <h3 id="custom-data-extraction">Custom Data Extraction</h3>
 
 <h4 id="extended-information-gathering">Extended Information Gathering</h4>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enhanced donor dump with additional system context</span>
 create_extended_donor_dump<span class="o">()</span> <span class="o">{</span>
     <span class="nb">local </span><span class="nv">bdf</span><span class="o">=</span><span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span>

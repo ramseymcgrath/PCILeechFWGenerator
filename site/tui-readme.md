@@ -1,3 +1,8 @@
+---
+layout: page
+title: "TUI Interface"
+---
+
 # 🖥️ PCILeech Firmware Generator TUI
 
 [![PyPI version](https://badge.fury.io/py/pcileechfwgenerator.svg)](https://badge.fury.io/py/pcileechfwgenerator)
