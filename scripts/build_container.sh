@@ -244,7 +244,7 @@ while [[ $# -gt 0 ]]; do
             echo "Examples:"
             echo "  $0                           # Build container"
             echo "  $0 --test                    # Build and test container"
-            echo "  $0 --tag myregistry/pcileech:v0.7.3 --push  # Build, tag, and push"
+            echo "  $0 --tag myregistry/pcileech:v0.7.4 --push  # Build, tag, and push"
             exit 0
             ;;
         *)

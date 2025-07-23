@@ -393,13 +393,13 @@ class TestPCILeechBuildIntegration(unittest.TestCase):
             )
             mock_integration.validate_board_compatibility.return_value = (True, [])
 
-            # Call the function
+            # Call the function without device config
             result = integrate_pcileech_build("artix7", self.output_dir)
 
             # Check results
             self.assertEqual(result, Path("/tmp/output/artix7/build_all.tcl"))
 
-            # Verify method calls
+            # Verify method calls - validate_board_compatibility should NOT be called when device_config is None
             mock_integration_class.assert_called_once_with(self.output_dir, None)
             mock_integration.create_unified_build_script.assert_called_once_with(
                 "artix7", None
@@ -418,10 +418,14 @@ class TestPCILeechBuildIntegration(unittest.TestCase):
 
             result = integrate_pcileech_build("artix7", self.output_dir, device_config)
 
+            # When device_config is provided, validate_board_compatibility should be called
             mock_integration.validate_board_compatibility.assert_called_once_with(
                 "artix7", device_config
             )
-            mock_logger.warning.assert_called_once_with("Warning 1")
+            # Check that the warning was logged (with formatted message)
+            mock_logger.warning.assert_called_once()
+            warning_call_args = mock_logger.warning.call_args[0][0]
+            self.assertIn("Warning 1", warning_call_args)
             mock_logger.error.assert_called_once()
 
 

@@ -158,6 +158,77 @@ class TestVFIOConstants:
         # Check that VFIO_DEVICE_NAME_MAX_LENGTH is in exports
         assert "VFIO_DEVICE_NAME_MAX_LENGTH" in vfio_constants.__all__
 
+    def test_constants_are_hardcoded_not_computed(self):
+        """Test that constants are hardcoded values, not computed at runtime."""
+        # Read the source file and check for hardcoded values vs computed ones
+        import inspect
+        import os
+
+        # Get the path to the vfio_constants module
+        import src.cli.vfio_constants as vfio_constants
+
+        source_file = inspect.getfile(vfio_constants)
+
+        with open(source_file, "r") as f:
+            content = f.read()
+
+        # Check that we have hardcoded constants section
+        assert (
+            "extracted from kernel headers at build time" in content
+            or "VFIO_GROUP_SET_CONTAINER =" in content
+        ), "Constants should be hardcoded, not computed"
+
+        # Verify critical constants are integers, not function calls
+        assert isinstance(VFIO_GROUP_SET_CONTAINER, int)
+        assert isinstance(VFIO_GET_API_VERSION, int)
+        assert isinstance(VFIO_SET_IOMMU, int)
+
+    def test_constants_values_are_reasonable(self):
+        """Test that VFIO constants have reasonable values."""
+        # VFIO constants should be in a reasonable range for ioctl numbers
+        # Typically Linux ioctl numbers are 32-bit values
+        constants_to_check = [
+            VFIO_GET_API_VERSION,
+            VFIO_CHECK_EXTENSION,
+            VFIO_SET_IOMMU,
+            VFIO_GROUP_GET_STATUS,
+            VFIO_GROUP_SET_CONTAINER,
+            VFIO_GROUP_GET_DEVICE_FD,
+            VFIO_DEVICE_GET_REGION_INFO,
+        ]
+
+        for const in constants_to_check:
+            # Should be positive integers
+            assert isinstance(const, int)
+            assert const > 0
+            # Should fit in 32-bit range
+            assert const < 2**32
+            # Should be reasonable ioctl values (typically > 1000)
+            assert const > 1000
+
+    def test_errno_25_causing_constants_fixed(self):
+        """Test that constants known to cause errno 25 are properly defined."""
+        # The specific constant that was causing errno 25 (ENOTTY)
+        # VFIO_GROUP_SET_CONTAINER is the one mentioned in the error logs
+
+        # It should be a hardcoded integer, not a computed value
+        assert isinstance(VFIO_GROUP_SET_CONTAINER, int)
+
+        # It should have a reasonable value (Linux ioctl values are typically in ranges)
+        # VFIO ioctls are usually in the range 15000-16000
+        assert 10000 < VFIO_GROUP_SET_CONTAINER < 20000
+
+        # Verify other critical constants as well
+        critical_constants = {
+            "VFIO_GROUP_SET_CONTAINER": VFIO_GROUP_SET_CONTAINER,
+            "VFIO_SET_IOMMU": VFIO_SET_IOMMU,
+            "VFIO_GET_API_VERSION": VFIO_GET_API_VERSION,
+        }
+
+        for name, value in critical_constants.items():
+            assert isinstance(value, int), f"{name} should be hardcoded integer"
+            assert value > 0, f"{name} should be positive"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

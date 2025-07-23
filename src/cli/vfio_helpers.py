@@ -331,6 +331,17 @@ def get_device_fd(bdf: str) -> tuple[int, int]:
                         "EBUSY: Group is busy - may be in use by another container",
                         prefix="VFIO",
                     )
+                elif e.errno == errno.ENOTTY:
+                    log_error_safe(
+                        logger,
+                        "ENOTTY: Inappropriate ioctl - ioctl constant may be incorrect for this kernel version",
+                        prefix="VFIO",
+                    )
+                    log_error_safe(
+                        logger,
+                        "This usually indicates mismatched VFIO ioctl constants between userspace and kernel",
+                        prefix="VFIO",
+                    )
                 raise OSError(f"Failed to link group {group} to container: {e}")
 
             # Set the IOMMU type for the container

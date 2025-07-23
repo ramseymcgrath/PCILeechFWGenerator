@@ -300,7 +300,7 @@ def check_sudo():
 
 
 def check_vfio_requirements():
-    """Check if VFIO modules are loaded."""
+    """Check if VFIO modules are loaded and rebuild constants."""
     logger = get_logger(__name__)
     try:
         # Check if VFIO modules are loaded
@@ -313,7 +313,53 @@ def check_vfio_requirements():
     except FileNotFoundError:
         # /proc/modules not available, skip check
         pass
+
+    # Always rebuild VFIO constants to ensure they match the current kernel
+    log_info_safe(
+        logger, "Rebuilding VFIO constants for current kernel...", prefix="VFIO"
+    )
+    if not rebuild_vfio_constants():
+        log_warning_safe(
+            logger,
+            "VFIO constants rebuild failed - may cause ioctl errors",
+            prefix="VFIO",
+        )
+
     return True
+
+
+def rebuild_vfio_constants():
+    """Rebuild VFIO constants using the build script."""
+    logger = get_logger(__name__)
+    try:
+        result = subprocess.run(
+            ["./build_vfio_constants.sh"],
+            capture_output=True,
+            text=True,
+            cwd=project_root,
+            timeout=60,
+        )
+
+        if result.returncode == 0:
+            log_info_safe(logger, "VFIO constants rebuilt successfully", prefix="VFIO")
+            return True
+        else:
+            log_warning_safe(
+                logger,
+                "VFIO constants rebuild failed: {error}",
+                prefix="VFIO",
+                error=result.stderr,
+            )
+            return False
+
+    except subprocess.TimeoutExpired:
+        log_warning_safe(logger, "VFIO constants rebuild timed out", prefix="VFIO")
+        return False
+    except Exception as e:
+        log_warning_safe(
+            logger, "VFIO constants rebuild error: {error}", prefix="VFIO", error=str(e)
+        )
+        return False
 
 
 def create_parser():
@@ -354,7 +400,7 @@ Environment Variables:
 
     # Add global options
     parser.add_argument(
-        "--version", action="version", version="PCILeech Firmware Generator v0.7.3"
+        "--version", action="version", version="PCILeech Firmware Generator v0.7.4"
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
@@ -756,7 +802,7 @@ def handle_check(args):
 def handle_version(args):
     """Handle version information."""
     logger = get_logger(__name__)
-    log_info_safe(logger, "PCILeech Firmware Generator v0.7.3", prefix="VERSION")
+    log_info_safe(logger, "PCILeech Firmware Generator v0.7.4", prefix="VERSION")
     log_info_safe(logger, "Copyright (c) 2024 PCILeech Project", prefix="VERSION")
     log_info_safe(logger, "Licensed under MIT License", prefix="VERSION")
 

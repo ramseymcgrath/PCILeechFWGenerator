@@ -27,24 +27,7 @@ assignees: ''
 
 ## 📦 Environment Details
 
-**Host System:**
-- OS: <!-- e.g., Ubuntu 22.04 LTS, Windows 11 WSL2, Arch Linux, macOS 14.0 -->
-- Architecture: <!-- e.g., x86_64, arm64 -->
-- Shell: <!-- e.g., bash, zsh, PowerShell -->
-
-**Software Versions:**
-- Python: <!-- e.g., 3.11.8 -->
-- Vivado: <!-- e.g., 2022.2, 2023.1 -->
-- PCILeech FW Generator: <!-- version or commit hash -->
-
-**Hardware Configuration:**
-- Board Target: <!-- e.g., pcileech_35t325_x4, pcileech_75t, pcileech_100t484_x1 -->
-- Target Device Type: <!-- e.g., Audio Controller, Network Adapter, GPU, Storage Controller -->
-- Host Interface: <!-- e.g., PCIe Gen3 x4, PCIe Gen4 x16 -->
-
-**Container Environment (if applicable):**
-- Docker/Podman Version: <!-- e.g., Docker 24.0.7 -->
-- Container Runtime: <!-- e.g., Docker Desktop, Podman -->
+Run help_ticket.sh and give the output
 
 ## 🚨 Problem Description
 
