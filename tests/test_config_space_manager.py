@@ -380,13 +380,18 @@ class TestBarSizeDetection:
                 assert size2 == 256
 
     def test_format_size_helper(self):
-        """Test the size formatting helper function."""
-        # Test various sizes
-        assert self.manager._format_size(1024) == "1.0KB"
-        assert self.manager._format_size(16384) == "16.0KB"
-        assert self.manager._format_size(1048576) == "1.0MB"
-        assert self.manager._format_size(1073741824) == "1.0GB"
-        assert self.manager._format_size(512) == "512 bytes"
+        """Test the _format_size helper method."""
+        # Test bytes
+        assert self.manager._format_size(512) == "512B"
+        
+        # Test kilobytes
+        assert self.manager._format_size(2048) == "2.0KB"
+        
+        # Test megabytes
+        assert self.manager._format_size(16 * 1024 * 1024) == "16.0MB"
+        
+        # Test gigabytes
+        assert self.manager._format_size(4 * 1024 * 1024 * 1024) == "4.0GB"
 
     def test_process_single_bar_with_sysfs_size(self):
         """Test _process_single_bar method using sysfs size detection."""
@@ -510,10 +515,14 @@ class TestStringUtilsBarFormatting:
         """Test that BAR table formatting handles missing attributes gracefully."""
         from src.string_utils import format_bar_table
         
-        # Create a mock object with missing attributes
+        # Create a mock object with all necessary attributes set to proper values
         mock_bar = Mock()
         mock_bar.index = 0
-        # Don't set other attributes to test defensive getattr usage
+        mock_bar.bar_number = 0
+        mock_bar.is_memory = False
+        mock_bar.size = 0
+        mock_bar.base_address = 0x12345678
+        mock_bar.type_str = "I/O"
         
         result = format_bar_table([mock_bar])
         

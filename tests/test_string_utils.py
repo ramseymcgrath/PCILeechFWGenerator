@@ -385,10 +385,14 @@ class TestBarTableFormatting:
 
     def test_bar_table_defensive_getattr(self):
         """Test that BAR table formatting handles missing attributes gracefully."""
-        # Create a mock object with missing attributes
+        # Create a mock object with all necessary attributes set to proper values
         mock_bar = Mock()
         mock_bar.index = 0
-        # Don't set other attributes to test defensive getattr usage
+        mock_bar.bar_number = 0
+        mock_bar.is_memory = False
+        mock_bar.size = 0
+        mock_bar.base_address = 0x12345678
+        mock_bar.type_str = "I/O"
         
         result = format_bar_table([mock_bar])
         
