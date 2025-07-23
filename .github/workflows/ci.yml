@@ -34,7 +34,7 @@ jobs:
         python -c "
         import sys
         sys.path.append('src')
-        from templating.renderer import TemplateRenderer
+        from templating import TemplateRenderer
         import tempfile
         import os
         
