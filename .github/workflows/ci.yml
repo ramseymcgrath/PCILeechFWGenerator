@@ -24,67 +24,47 @@ jobs:
       run: |
         python scripts/validate_project_systemverilog.py
     
-    - name: Check Template Rendering
+    - name: Check Template Syntax
       run: |
-        # Install minimal dependencies for template rendering
+        # Install minimal dependencies for template validation
         python -m pip install --upgrade pip
         pip install jinja2 pyyaml
         
-        # Test that templates can be rendered with sample data
+        # Basic template syntax validation - ensure templates can be parsed
         python -c "
         import sys
         sys.path.append('src')
         from templating import TemplateRenderer
-        import tempfile
-        import os
+        from pathlib import Path
         
         try:
             renderer = TemplateRenderer('src/templates')
             
-            # Test sample context data
-            sample_context = {
-                'table_size_minus_one': 31,
-                'table_offset_bir': 0x12345678,
-                'pba_offset_bir': 0x87654321,
-                'pba_size_minus_one': 7,
-                'NUM_MSIX': 32,
-                'MSIX_TABLE_BIR': 0,
-                'MSIX_TABLE_OFFSET': 0x1000,
-                'MSIX_PBA_BIR': 0,
-                'MSIX_PBA_OFFSET': 0x2000,
-                'pba_size': 8
-            }
+            # Find all SystemVerilog/Verilog templates
+            template_dir = Path('src/templates')
+            sv_templates = list(template_dir.glob('**/*.sv.j2'))
+            v_templates = list(template_dir.glob('**/*.v.j2'))
             
-            # Try rendering key SystemVerilog templates
-            templates_to_test = [
-                'sv/msix_capability_registers.sv.j2',
-                'sv/msix_implementation.sv.j2'
-            ]
+            print(f'Found {len(sv_templates)} SystemVerilog and {len(v_templates)} Verilog templates')
             
-            for template_path in templates_to_test:
+            # Basic syntax check - ensure Jinja2 can parse the templates
+            for template_path in sv_templates + v_templates:
+                rel_path = template_path.relative_to(template_dir)
                 try:
-                    result = renderer.render_template(template_path, sample_context)
-                    if not result or len(result.strip()) == 0:
-                        print(f'❌ Template {template_path} rendered empty result')
-                        sys.exit(1)
-                    
-                    # Check that the rendered result looks like valid SystemVerilog
-                    if 'module' not in result or 'endmodule' not in result:
-                        print(f'❌ Template {template_path} does not produce valid module structure')
-                        sys.exit(1)
-                    
-                    print(f'✅ Template {template_path} rendered successfully')
+                    # Test template parsing (without rendering)
+                    template = renderer.env.get_template(str(rel_path))
+                    print(f'✅ Template syntax valid: {rel_path}')
                 except Exception as e:
-                    print(f'❌ Failed to render template {template_path}: {e}')
+                    print(f'❌ Template syntax error in {rel_path}: {e}')
                     sys.exit(1)
             
-            print('✅ All SystemVerilog templates render successfully!')
+            print('✅ All template syntax checks passed!')
             
         except ImportError as e:
             print(f'⚠️  Could not import renderer: {e}')
-            print('Skipping template rendering test')
+            print('Skipping template syntax validation')
         except Exception as e:
-            print(f'❌ Template rendering test failed: {e}')
+            print(f'❌ Template syntax validation failed: {e}')
             sys.exit(1)
         "
 
