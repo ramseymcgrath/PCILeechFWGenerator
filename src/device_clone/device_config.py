@@ -24,10 +24,10 @@ except ImportError:
     YAML_AVAILABLE = False
 
 from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
     log_info_safe,
     log_warning_safe,
-    log_error_safe,
-    log_debug_safe,
 )
 
 logger = logging.getLogger(__name__)

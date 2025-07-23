@@ -1097,6 +1097,7 @@ class ConfigSpaceManager:
                 bar_info.size = size_found
                 # Generate proper encoding for the size
                 from src.device_clone.bar_size_converter import BarSizeConverter
+
                 try:
                     bar_info.size_encoding = BarSizeConverter.size_to_encoding(
                         size_found, bar_type, bar_64bit, bar_prefetchable
@@ -1204,9 +1205,9 @@ class ConfigSpaceManager:
                 )
                 return 0
 
-            with open(resource_path, 'r') as f:
+            with open(resource_path, "r") as f:
                 lines = f.readlines()
-                
+
             if bar_index >= len(lines):
                 log_debug_safe(
                     logger,
@@ -1215,9 +1216,12 @@ class ConfigSpaceManager:
                     prefix="BARX",
                 )
                 return 0
-                
+
             line = lines[bar_index].strip()
-            if not line or line == "0x0000000000000000 0x0000000000000000 0x0000000000000000":
+            if (
+                not line
+                or line == "0x0000000000000000 0x0000000000000000 0x0000000000000000"
+            ):
                 log_debug_safe(
                     logger,
                     "BAR {index} is empty in resource file",
@@ -1225,7 +1229,7 @@ class ConfigSpaceManager:
                     prefix="BARX",
                 )
                 return 0
-                
+
             parts = line.split()
             if len(parts) < 3:
                 log_debug_safe(
@@ -1236,14 +1240,14 @@ class ConfigSpaceManager:
                     prefix="BARX",
                 )
                 return 0
-                
+
             start = int(parts[0], 16)
             end = int(parts[1], 16)
             # flags = int(parts[2], 16)  # Not used for size calculation
-            
+
             if start == 0 and end == 0:
                 return 0
-                
+
             size = end - start + 1 if end > start else 0
             log_debug_safe(
                 logger,
@@ -1255,7 +1259,7 @@ class ConfigSpaceManager:
                 prefix="BARX",
             )
             return size
-            
+
         except Exception as e:
             log_debug_safe(
                 logger,

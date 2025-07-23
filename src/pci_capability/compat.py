@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from .core import CapabilityWalker, ConfigSpace
 from .processor import CapabilityProcessor
 from .rules import RuleEngine
-from .types import CapabilityType, PatchInfo, PruningAction, EmulationCategory
+from .types import CapabilityType, EmulationCategory, PatchInfo, PruningAction
 
 try:
     from ..string_utils import (
@@ -24,8 +24,8 @@ try:
         safe_format,
     )
 except ImportError:
-    import sys
     import os
+    import sys
     from pathlib import Path
 
     # Add parent directory to sys.path for direct import if needed

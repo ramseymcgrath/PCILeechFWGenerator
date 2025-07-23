@@ -277,13 +277,13 @@ class TestVFIOConstantsPatching:
     def test_constants_are_unique(self):
         """Test that all VFIO constants have unique values."""
         from src.cli.vfio_constants import (
-            VFIO_GET_API_VERSION,
             VFIO_CHECK_EXTENSION,
-            VFIO_SET_IOMMU,
+            VFIO_DEVICE_GET_REGION_INFO,
+            VFIO_GET_API_VERSION,
+            VFIO_GROUP_GET_DEVICE_FD,
             VFIO_GROUP_GET_STATUS,
             VFIO_GROUP_SET_CONTAINER,
-            VFIO_GROUP_GET_DEVICE_FD,
-            VFIO_DEVICE_GET_REGION_INFO,
+            VFIO_SET_IOMMU,
         )
 
         constants = [

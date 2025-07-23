@@ -8,9 +8,10 @@ for console builds.
 
 import argparse
 import logging
-from ..string_utils import log_info_safe, log_error_safe
 import sys
 from pathlib import Path
+
+from ..string_utils import log_error_safe, log_info_safe
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
