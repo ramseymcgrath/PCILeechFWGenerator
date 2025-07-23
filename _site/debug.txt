@@ -1,0 +1,35 @@
+Debug info:
+- Pages: 0
+- HTML Pages: 12
+- Documents: 0
+- Static files: 4
+
+HTML Pages:
+
+- Path: config-space-shadow.md | Title: "Configuration Space Shadow BRAM" | URL: /config-space-shadow.html
+
+- Path: development.md | Title: "Development Guide" | URL: /development.html
+
+- Path: device-cloning.md | Title: "Device Cloning" | URL: /device-cloning.html
+
+- Path: firmware-uniqueness.md | Title: "Firmware Uniqueness" | URL: /firmware-uniqueness.html
+
+- Path: index.md | Title: "Home" | URL: /
+
+- Path: manual-donor-dump.md | Title: "Manual Donor Dump" | URL: /manual-donor-dump.html
+
+- Path: search.md | Title: "Search" | URL: /search/
+
+- Path: sitemap.md | Title: "Site Map" | URL: /sitemap.html
+
+- Path: supported-devices.md | Title: "Supported Devices" | URL: /supported-devices.html
+
+- Path: template-architecture.md | Title: "Template Architecture" | URL: /template-architecture.html
+
+- Path: tui-readme.md | Title: "TUI Interface" | URL: /tui-readme.html
+
+- Path: donor-info-template.md | Title: "Donor Info Template" | URL: /donor-info-template.html
+
+
+Pages:
+

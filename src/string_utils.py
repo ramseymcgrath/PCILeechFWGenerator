@@ -512,19 +512,27 @@ def format_bar_table(bar_configs: List[Any], primary_bar: Any = None) -> str:
     # Prepare data rows
     rows = []
     for bar_info in bar_configs:
-        is_candidate = bar_info.is_memory and bar_info.size > 0
-        is_primary = primary_bar and bar_info.index == primary_bar.index
+        is_candidate = (
+            getattr(bar_info, "is_memory", False) and getattr(bar_info, "size", 0) > 0
+        )
+        is_primary = primary_bar and getattr(bar_info, "index", None) == getattr(
+            primary_bar, "index", None
+        )
 
-        size_mb = bar_info.size / (1024 * 1024) if bar_info.size > 0 else 0
+        size_mb = (
+            getattr(bar_info, "size", 0) / (1024 * 1024)
+            if getattr(bar_info, "size", 0) > 0
+            else 0
+        )
 
         row = [
-            str(bar_info.index),
-            f"0x{bar_info.base_address:08X}",
-            f"{bar_info.size:,}",
+            str(getattr(bar_info, "index", "unknown")),
+            f"0x{getattr(bar_info, 'base_address', 0):08X}",
+            f"{getattr(bar_info, 'size', 0):,}",
             f"{size_mb:.2f}" if size_mb > 0 else "0.00",
-            "memory" if bar_info.is_memory else "io",
-            "yes" if bar_info.prefetchable else "no",
-            "yes" if bar_info.is_memory else "no",
+            "memory" if getattr(bar_info, "is_memory", False) else "io",
+            "yes" if getattr(bar_info, "prefetchable", False) else "no",
+            "yes" if getattr(bar_info, "is_memory", False) else "no",
             "yes" if is_candidate else "no",
             "★" if is_primary else "",
         ]
@@ -592,28 +600,36 @@ def format_bar_summary_table(bar_configs: List[Any], primary_bar: Any = None) ->
     # Prepare data rows
     rows = []
     for bar_info in bar_configs:
-        is_candidate = bar_info.is_memory and bar_info.size > 0
-        is_primary = primary_bar and bar_info.index == primary_bar.index
+        is_candidate = (
+            getattr(bar_info, "is_memory", False) and getattr(bar_info, "size", 0) > 0
+        )
+        is_primary = primary_bar and getattr(bar_info, "index", None) == getattr(
+            primary_bar, "index", None
+        )
 
-        size_mb = bar_info.size / (1024 * 1024) if bar_info.size > 0 else 0
+        size_mb = (
+            getattr(bar_info, "size", 0) / (1024 * 1024)
+            if getattr(bar_info, "size", 0) > 0
+            else 0
+        )
 
         # Determine status
         if is_primary:
             status = "PRIMARY ★"
         elif is_candidate:
             status = "candidate"
-        elif bar_info.size == 0:
+        elif getattr(bar_info, "size", 0) == 0:
             status = "empty"
-        elif not bar_info.is_memory:
+        elif not getattr(bar_info, "is_memory", False):
             status = "I/O port"
         else:
             status = "skipped"
 
         row = [
-            str(bar_info.index),
-            f"0x{bar_info.base_address:08X}",
+            str(getattr(bar_info, "index", "unknown")),
+            f"0x{getattr(bar_info, 'base_address', 0):08X}",
             f"{size_mb:.2f}" if size_mb > 0 else "0.00",
-            "memory" if bar_info.is_memory else "io",
+            "memory" if getattr(bar_info, "is_memory", False) else "io",
             status,
         ]
         rows.append(row)

@@ -1081,33 +1081,39 @@ class ConfigSpaceManager:
             is_64bit=bar_64bit,
         )
 
-        # Try to determine BAR size from the address pattern
-        # This is a heuristic approach when we can't probe the actual hardware
+        # Try to determine BAR size using reliable methods
         if bar_addr != 0:
-            from src.device_clone.bar_size_converter import BarSizeConverter
-
-            try:
-                # Attempt to infer size from address alignment
-                estimated_size = BarSizeConverter.address_to_size(bar_addr, bar_type)
-                if estimated_size > 0:
-                    bar_info.size = estimated_size
+            # Method 1: Try to get size from sysfs resource file (most reliable)
+            size_found = self._get_bar_size_from_sysfs(bar_index)
+            if size_found > 0:
+                log_info_safe(
+                    logger,
+                    "BAR {index} size from sysfs: {size} bytes ({size_str})",
+                    index=bar_index,
+                    size=size_found,
+                    size_str=self._format_size(size_found),
+                    prefix="BARX",
+                )
+                bar_info.size = size_found
+                # Generate proper encoding for the size
+                from src.device_clone.bar_size_converter import BarSizeConverter
+                try:
                     bar_info.size_encoding = BarSizeConverter.size_to_encoding(
-                        estimated_size, bar_type, bar_64bit, bar_prefetchable
+                        size_found, bar_type, bar_64bit, bar_prefetchable
                     )
-                    log_info_safe(
+                except Exception as e:
+                    log_warning_safe(
                         logger,
-                        "BAR {index} estimated size: {size} bytes ({size_str})",
+                        "Could not generate BAR {index} size encoding: {error}",
                         index=bar_index,
-                        size=estimated_size,
-                        size_str=BarSizeConverter.format_size(estimated_size),
+                        error=str(e),
                         prefix="BARX",
                     )
-            except Exception as e:
-                log_debug_safe(
+            else:
+                log_warning_safe(
                     logger,
-                    "Could not estimate BAR {index} size: {error}",
+                    "Could not determine BAR {index} size from sysfs, leaving at 0",
                     index=bar_index,
-                    error=str(e),
                     prefix="BARX",
                 )
 
@@ -1184,3 +1190,89 @@ class ConfigSpaceManager:
             class_code=class_code,
             prefix="DEVI",
         )
+
+    def _get_bar_size_from_sysfs(self, bar_index: int) -> int:
+        """Get BAR size from sysfs resource file."""
+        try:
+            resource_path = f"/sys/bus/pci/devices/{self.bdf}/resource"
+            if not os.path.exists(resource_path):
+                log_debug_safe(
+                    logger,
+                    "Sysfs resource file not found: {path}",
+                    path=resource_path,
+                    prefix="BARX",
+                )
+                return 0
+
+            with open(resource_path, 'r') as f:
+                lines = f.readlines()
+                
+            if bar_index >= len(lines):
+                log_debug_safe(
+                    logger,
+                    "BAR index {index} out of range in resource file",
+                    index=bar_index,
+                    prefix="BARX",
+                )
+                return 0
+                
+            line = lines[bar_index].strip()
+            if not line or line == "0x0000000000000000 0x0000000000000000 0x0000000000000000":
+                log_debug_safe(
+                    logger,
+                    "BAR {index} is empty in resource file",
+                    index=bar_index,
+                    prefix="BARX",
+                )
+                return 0
+                
+            parts = line.split()
+            if len(parts) < 3:
+                log_debug_safe(
+                    logger,
+                    "Invalid resource line format for BAR {index}: {line}",
+                    index=bar_index,
+                    line=line,
+                    prefix="BARX",
+                )
+                return 0
+                
+            start = int(parts[0], 16)
+            end = int(parts[1], 16)
+            # flags = int(parts[2], 16)  # Not used for size calculation
+            
+            if start == 0 and end == 0:
+                return 0
+                
+            size = end - start + 1 if end > start else 0
+            log_debug_safe(
+                logger,
+                "BAR {index} sysfs resource: start=0x{start:x}, end=0x{end:x}, size={size}",
+                index=bar_index,
+                start=start,
+                end=end,
+                size=size,
+                prefix="BARX",
+            )
+            return size
+            
+        except Exception as e:
+            log_debug_safe(
+                logger,
+                "Failed to read BAR {index} size from sysfs: {error}",
+                index=bar_index,
+                error=str(e),
+                prefix="BARX",
+            )
+            return 0
+
+    def _format_size(self, size: int) -> str:
+        """Format size in human-readable format."""
+        if size >= 1024 * 1024 * 1024:
+            return f"{size / (1024 * 1024 * 1024):.1f}GB"
+        elif size >= 1024 * 1024:
+            return f"{size / (1024 * 1024):.1f}MB"
+        elif size >= 1024:
+            return f"{size / 1024:.1f}KB"
+        else:
+            return f"{size}B"

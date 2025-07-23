@@ -1,0 +1,18 @@
+---
+layout: null
+---
+Debug info:
+- Pages: {{ site.pages.size }}
+- HTML Pages: {{ site.html_pages.size }}
+- Documents: {{ site.documents.size }}
+- Static files: {{ site.static_files.size }}
+
+HTML Pages:
+{% for page in site.html_pages %}
+- Path: {{ page.path }} | Title: "{{ page.title }}" | URL: {{ page.url }}
+{% endfor %}
+
+Pages:
+{% for page in site.pages %}
+- Path: {{ page.path }} | Title: "{{ page.title }}" | URL: {{ page.url }}
+{% endfor %}

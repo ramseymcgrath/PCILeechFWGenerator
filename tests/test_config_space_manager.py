@@ -312,3 +312,211 @@ class TestExceptions:
         """Test SysfsError inherits from ConfigSpaceError."""
         with pytest.raises(ConfigSpaceError):
             raise SysfsError("Sysfs test error")
+
+
+class TestBarSizeDetection:
+    """Test cases for BAR size detection methods - testing the sysfs fix."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.bdf = "0000:04:00.0"
+        self.manager = ConfigSpaceManager(self.bdf)
+
+    def test_get_bar_size_from_sysfs_success(self):
+        """Test successful BAR size retrieval from sysfs."""
+        # Mock sysfs resource file content
+        # Format: start_address end_address flags
+        # Intel Wi-Fi 6 AX200 device with 16KB BAR
+        sysfs_content = "0xf6600000 0xf6603fff 0x00040200\n"
+        
+        with patch("builtins.open", mock_open(read_data=sysfs_content)):
+            with patch("os.path.exists", return_value=True):
+                size = self.manager._get_bar_size_from_sysfs(0)
+                
+        # 0xf6603fff - 0xf6600000 + 1 = 16384 bytes (16KB)
+        assert size == 16384
+
+    def test_get_bar_size_from_sysfs_empty_bar(self):
+        """Test BAR size retrieval for empty/disabled BAR."""
+        # Empty BAR entry
+        sysfs_content = "0x0000000000000000 0x0000000000000000 0x0000000000000000\n"
+        
+        with patch("builtins.open", mock_open(read_data=sysfs_content)):
+            with patch("os.path.exists", return_value=True):
+                size = self.manager._get_bar_size_from_sysfs(0)
+                
+        assert size == 0
+
+    def test_get_bar_size_from_sysfs_file_not_found(self):
+        """Test BAR size retrieval when sysfs file doesn't exist."""
+        with patch("os.path.exists", return_value=False):
+            size = self.manager._get_bar_size_from_sysfs(0)
+            
+        assert size == 0
+
+    def test_get_bar_size_from_sysfs_multiple_bars(self):
+        """Test BAR size retrieval for multiple BARs."""
+        # Multiple BAR entries in resource file
+        sysfs_content = """0xf6600000 0xf6603fff 0x00040200
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000e000 0x0000e0ff 0x00000101
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+"""
+        
+        with patch("builtins.open", mock_open(read_data=sysfs_content)):
+            with patch("os.path.exists", return_value=True):
+                # BAR 0: 16KB memory BAR
+                size0 = self.manager._get_bar_size_from_sysfs(0)
+                assert size0 == 16384
+                
+                # BAR 1: Empty
+                size1 = self.manager._get_bar_size_from_sysfs(1)
+                assert size1 == 0
+                
+                # BAR 2: 256 byte I/O BAR (0x0000e0ff - 0x0000e000 + 1 = 256)
+                size2 = self.manager._get_bar_size_from_sysfs(2)
+                assert size2 == 256
+
+    def test_format_size_helper(self):
+        """Test the size formatting helper function."""
+        # Test various sizes
+        assert self.manager._format_size(1024) == "1.0KB"
+        assert self.manager._format_size(16384) == "16.0KB"
+        assert self.manager._format_size(1048576) == "1.0MB"
+        assert self.manager._format_size(1073741824) == "1.0GB"
+        assert self.manager._format_size(512) == "512 bytes"
+
+    def test_process_single_bar_with_sysfs_size(self):
+        """Test _process_single_bar method using sysfs size detection."""
+        # Create mock config space with Intel Wi-Fi 6 AX200 BAR
+        config_space = bytearray(256)
+        
+        # BAR 0 at offset 0x10: memory BAR with address 0xf6600000
+        # Memory BAR format: bits [31:4] = address, bits [3:0] = flags
+        # 0xf6600000 | 0x0 (32-bit, non-prefetchable memory BAR)
+        bar_value = 0xf6600000
+        config_space[16:20] = bar_value.to_bytes(4, "little")
+        
+        # Mock sysfs to return 16KB size
+        with patch.object(self.manager, '_get_bar_size_from_sysfs', return_value=16384):
+            with patch.object(self.manager, '_format_size', return_value="16.0KB"):
+                bar_info = self.manager._process_single_bar(bytes(config_space), 0)
+        
+        assert bar_info is not None
+        assert bar_info.index == 0
+        assert bar_info.address == 0xf6600000
+        assert bar_info.size == 16384
+        assert bar_info.bar_type == "memory"
+        assert bar_info.is_64bit is False
+        assert bar_info.prefetchable is False
+
+    def test_intel_wifi_ax200_real_scenario(self):
+        """Test real-world scenario with Intel Wi-Fi 6 AX200 device."""
+        # Simulate the exact scenario from the user's issue
+        config_space = bytearray(256)
+        
+        # Intel Wi-Fi 6 AX200 BAR 0: 16KB memory BAR at 0xf6600000
+        bar_value = 0xf6600000  # Non-prefetchable 32-bit memory BAR
+        config_space[16:20] = bar_value.to_bytes(4, "little")
+        
+        # All other BARs are empty
+        for i in range(1, 6):
+            offset = 16 + (i * 4)
+            config_space[offset:offset+4] = (0).to_bytes(4, "little")
+        
+        # Mock sysfs resource file content for Intel Wi-Fi 6 AX200
+        sysfs_content = """0xf6600000 0xf6603fff 0x00040200
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+"""
+        
+        with patch("builtins.open", mock_open(read_data=sysfs_content)):
+            with patch("os.path.exists", return_value=True):
+                # Test BAR 0 extraction
+                bar_info = self.manager._process_single_bar(bytes(config_space), 0)
+                
+        assert bar_info is not None
+        assert bar_info.index == 0
+        assert bar_info.address == 0xf6600000
+        assert bar_info.size == 16384  # 16KB - the correct size!
+        assert bar_info.bar_type == "memory"
+        assert bar_info.is_64bit is False
+        assert bar_info.prefetchable is False
+        
+        # Test that this is now >= minimum size requirement
+        from src.device_clone.constants import BAR_SIZE_CONSTANTS
+        assert bar_info.size >= BAR_SIZE_CONSTANTS["MIN_MEMORY_SIZE"]  # 128 bytes
+        
+        # Verify this would now be detected as a valid MMIO BAR
+        assert bar_info.size > 0
+        assert bar_info.bar_type == "memory"
+
+    def test_broken_address_to_size_comparison(self):
+        """Test that our fix produces correct results vs the broken method."""
+        from src.device_clone.bar_size_converter import BarSizeConverter
+        
+        # Test the broken address_to_size method
+        broken_size = BarSizeConverter.address_to_size(0xf6600000, "memory")
+        
+        # The broken method returns 16 bytes
+        assert broken_size == 16
+        
+        # Our sysfs method returns the correct 16KB
+        sysfs_content = "0xf6600000 0xf6603fff 0x00040200\n"
+        
+        with patch("builtins.open", mock_open(read_data=sysfs_content)):
+            with patch("os.path.exists", return_value=True):
+                correct_size = self.manager._get_bar_size_from_sysfs(0)
+                
+        assert correct_size == 16384
+        
+        # Verify our fix is 1024x larger (16KB vs 16 bytes)
+        assert correct_size == broken_size * 1024
+
+
+class TestStringUtilsBarFormatting:
+    """Test cases for BAR table formatting in string_utils."""
+
+    def test_format_bar_table_with_mock_bars(self):
+        """Test BAR table formatting with mock BAR data."""
+        from src.string_utils import format_bar_table
+        
+        # Create mock BAR objects
+        mock_bar = Mock()
+        mock_bar.index = 0
+        mock_bar.base_address = 0xf6600000
+        mock_bar.size = 16384
+        mock_bar.is_memory = True
+        mock_bar.prefetchable = False
+        
+        result = format_bar_table([mock_bar])
+        
+        # Check table structure
+        assert "┌" in result and "┐" in result  # Top border
+        assert "└" in result and "┘" in result  # Bottom border
+        assert "│" in result  # Column separators
+        
+        # Check data content
+        assert "0xF6600000" in result or "0xf6600000" in result.lower()
+        assert "16,384" in result  # Size with comma separator
+        assert "memory" in result
+
+    def test_format_bar_table_defensive_getattr(self):
+        """Test that BAR table formatting handles missing attributes gracefully."""
+        from src.string_utils import format_bar_table
+        
+        # Create a mock object with missing attributes
+        mock_bar = Mock()
+        mock_bar.index = 0
+        # Don't set other attributes to test defensive getattr usage
+        
+        result = format_bar_table([mock_bar])
+        
+        # Should not crash and should show default values
+        assert "unknown" in result or "0" in result
+        assert "┌" in result  # Table structure should still be present
