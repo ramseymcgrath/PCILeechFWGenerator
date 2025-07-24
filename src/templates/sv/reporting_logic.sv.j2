@@ -1,8 +1,29 @@
 {#- Reporting Logic Template -#}
 {#- Generates performance reporting logic -#}
+{{ header | safe }}
+
+module reporting_logic #(
+    parameter COUNTER_WIDTH = {{ config.counter_width | default(32) }},
+    parameter NUM_METRICS = {{ config.metrics_to_monitor|length | default(4) }}
+) (
+    input  logic clk,
+    input  logic rst_n,
+    
+    // Data inputs
+    input  logic [COUNTER_WIDTH-1:0] sample_data [NUM_METRICS-1:0],
+    input  logic sample_valid,
+    input  logic [COUNTER_WIDTH-1:0] transaction_count,
+    input  logic [COUNTER_WIDTH-1:0] threshold,
+    input  logic report_ack,
+    input  logic [3:0] report_select,
+    
+    // Report outputs
+    output logic report_ready,
+    output logic [COUNTER_WIDTH-1:0] report_data
+);
 
 // Performance Reporting Logic
-logic [{{ config.counter_width - 1 }}:0] report_buffer [{{ config.metrics_to_monitor|length - 1 }}:0];
+logic [COUNTER_WIDTH-1:0] report_buffer [NUM_METRICS-1:0];
 logic report_pending;
 logic [3:0] report_state;
 
@@ -18,7 +39,7 @@ always_ff @(posedge clk or negedge rst_n) begin
         report_pending <= 1'b0;
         report_ready <= 1'b0;
         {% for i in range(config.metrics_to_monitor|length) -%}
-        report_buffer[{{ i }}] <= {{ config.counter_width }}'h0;
+        report_buffer[{{ i }}] <= COUNTER_WIDTH'h0;
         {% endfor %}
     end else begin
         case (report_state)
@@ -61,12 +82,14 @@ end
 // Report data multiplexer
 always_comb begin
     case (report_select)
-        {% for metric in config.metrics_to_monitor -%}
-        {{ loop.index0 }}: report_data = report_buffer[{{ loop.index0 }}]; // {{ metric.value }}
+        {% for i in range(config.metrics_to_monitor|length) -%}
+        4'h{{ "%x" % i }}: report_data = report_buffer[{{ i }}];
         {% endfor %}
-        default: report_data = {{ config.counter_width }}'h0;
+        default: report_data = COUNTER_WIDTH'h0;
     endcase
 end
+
+endmodule
 
 // Report summary for quick access
 assign report_summary = {

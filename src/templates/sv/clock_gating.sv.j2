@@ -1,5 +1,22 @@
 {#- Clock Gating Logic Template -#}
 {#- Generates clock gating logic for power management -#}
+{{ header | safe }}
+
+module clock_gating #(
+    parameter IDLE_THRESHOLD = {{ config.idle_threshold | default(1000) }}
+) (
+    input  logic clk,
+    input  logic rst_n,
+    
+    // Control inputs
+    input  logic [2:0] current_state,
+    input  logic transaction_valid,
+    input  logic power_up_req,
+    input  logic power_save_mode,
+    
+    // Clock output
+    output logic gated_clk
+);
 
 {% if config.enable_clock_gating -%}
 // Clock Gating Logic
@@ -17,7 +34,7 @@ always_ff @(posedge clk or negedge rst_n) begin
         if (transaction_valid || power_up_req) begin
             idle_counter <= 16'h0;
             idle_counter_expired <= 1'b0;
-        end else if (idle_counter < {{ config.idle_threshold }}) begin
+        end else if (idle_counter < IDLE_THRESHOLD) begin
             idle_counter <= idle_counter + 1'b1;
             idle_counter_expired <= 1'b0;
         end else begin
@@ -69,3 +86,5 @@ assert property (clock_enable_stable) else $error("Clock enable unstable during 
 // Clock gating disabled in configuration
 assign gated_clk = clk;
 {% endif %}
+
+endmodule

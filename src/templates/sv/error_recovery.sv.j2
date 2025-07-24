@@ -1,9 +1,25 @@
 // Error Recovery Logic Template
 // Handles recovery from detected errors based on configuration
+{{ header | safe }}
+
+module error_recovery #(
+    parameter MAX_RETRY_COUNT = {{ config.max_retry_count | default(3) }}
+) (
+    input  logic clk,
+    input  logic rst_n,
+    
+    // Error inputs
+    input  logic error_detected,
+    input  logic [7:0] error_type,
+    
+    // Recovery outputs
+    output logic recovery_active,
+    output logic recovery_complete,
+    output logic [7:0] retry_count,
+    output logic [31:0] recovery_timer
+);
 
 logic [7:0] recovery_state;
-logic [7:0] retry_count;
-logic [31:0] recovery_timer;
 
 // Error type classification
 logic is_recoverable_error;
@@ -141,3 +157,5 @@ end
 
 assign {{ error_type.name.lower() }}_threshold_exceeded = ({{ error_type.name.lower() }}_count >= 16'd{{ threshold }});
 {% endfor %}
+
+endmodule

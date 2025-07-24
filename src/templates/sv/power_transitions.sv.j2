@@ -1,9 +1,27 @@
 {#- Power Transitions Logic Template -#}
 {#- Generates power state transition timing and control logic -#}
+{{ header | safe }}
+
+module power_transitions #(
+    parameter NUM_STATES = 8
+) (
+    input  logic clk,
+    input  logic rst_n,
+    
+    // State inputs
+    input  logic [2:0] current_state,
+    input  logic [2:0] next_state,
+    
+    // Transition outputs
+    output logic [15:0] transition_counter,
+    output logic transition_complete,
+    output logic transition_in_progress,
+    output logic [7:0] transition_progress_percent,
+    output logic power_domain_enable,
+    output logic aux_power_enable
+);
 
 // Power Transition Logic
-logic [15:0] transition_counter;
-logic transition_in_progress;
 logic [2:0] transition_source_state;
 logic [2:0] transition_target_state;
 
@@ -88,3 +106,5 @@ always_comb begin
         end
     endcase
 end
+
+endmodule
