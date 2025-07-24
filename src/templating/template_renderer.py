@@ -25,11 +25,26 @@ try:
         StrictUndefined,
         Template,
         TemplateError,
+        BaseLoader,
     )
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"
     )
+
+
+class MappingFileSystemLoader(FileSystemLoader):
+    """
+    Custom Jinja2 loader that applies template path mapping for both direct
+    template loading and includes/extends.
+    """
+
+    def get_source(self, environment, template):
+        """Override get_source to apply template path mapping."""
+        # Apply template mapping
+        mapped_template = update_template_path(template)
+        return super().get_source(environment, mapped_template)
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +74,7 @@ class TemplateRenderer:
 
         # Initialize Jinja2 environment
         self.env = Environment(
-            loader=FileSystemLoader(str(self.template_dir)),
+            loader=MappingFileSystemLoader(str(self.template_dir)),
             trim_blocks=False,
             lstrip_blocks=False,
             keep_trailing_newline=True,
@@ -323,8 +338,12 @@ class TemplateRenderer:
         Returns:
             True if template exists, False otherwise
         """
-        template_path = self.template_dir / template_name
-        return template_path.exists()
+        try:
+            # Use the Jinja2 loader to check existence (applies mapping)
+            self.env.get_template(template_name)
+            return True
+        except TemplateError:
+            return False
 
     def list_templates(self, pattern: str = "*.j2") -> list[str]:
         """
