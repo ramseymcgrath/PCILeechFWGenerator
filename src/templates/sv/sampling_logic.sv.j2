@@ -18,8 +18,8 @@ module sampling_logic #(
     input  logic [COUNTER_WIDTH-1:0] performance_data,
     
     // Sample outputs
-    output logic [COUNTER_WIDTH-1:0] sample_data [NUM_METRICS-1:0],
-    output logic sample_trigger
+    output logic sample_trigger,
+    output logic [COUNTER_WIDTH-1:0] sample_data [NUM_METRICS-1:0]
 );
 
 // Performance Sampling Logic
