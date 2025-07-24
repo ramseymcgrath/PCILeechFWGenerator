@@ -1,0 +1,49 @@
+{#- Sampling Logic Template -#}
+{#- Generates performance sampling logic -#}
+
+// Performance Sampling Logic
+logic [{{ config.counter_width - 1 }}:0] sample_counter;
+logic [{{ config.counter_width - 1 }}:0] sample_data [{{ config.metrics_to_monitor|length - 1 }}:0];
+logic sample_valid;
+
+// Sample counter for periodic sampling
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        sample_counter <= {{ config.counter_width }}'h0;
+        sample_valid <= 1'b0;
+    end else begin
+        if (sample_counter >= {{ config.sampling_period }}) begin
+            sample_counter <= {{ config.counter_width }}'h0;
+            sample_valid <= 1'b1;
+        end else begin
+            sample_counter <= sample_counter + 1'b1;
+            sample_valid <= 1'b0;
+        end
+    end
+end
+
+// Sample data capture
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        {% for i in range(config.metrics_to_monitor|length) -%}
+        sample_data[{{ i }}] <= {{ config.counter_width }}'h0;
+        {% endfor %}
+    end else if (sample_valid) begin
+        {% for metric in config.metrics_to_monitor -%}
+        {% if metric.value == "tlp_count" -%}
+        sample_data[{{ loop.index0 }}] <= transaction_count;
+        {% elif metric.value == "completion_latency" -%}
+        sample_data[{{ loop.index0 }}] <= latency_accumulator;
+        {% elif metric.value == "bandwidth_utilization" -%}
+        sample_data[{{ loop.index0 }}] <= bandwidth_counter;
+        {% elif metric.value == "error_rate" -%}
+        sample_data[{{ loop.index0 }}] <= error_count;
+        {% else -%}
+        sample_data[{{ loop.index0 }}] <= performance_data;
+        {% endif %}
+        {% endfor %}
+    end
+end
+
+// Sample trigger output
+assign sample_trigger = sample_valid;

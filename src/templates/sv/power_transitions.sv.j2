@@ -1,0 +1,90 @@
+{#- Power Transitions Logic Template -#}
+{#- Generates power state transition timing and control logic -#}
+
+// Power Transition Logic
+logic [15:0] transition_counter;
+logic transition_in_progress;
+logic [2:0] transition_source_state;
+logic [2:0] transition_target_state;
+
+// Transition delay lookup
+function automatic [15:0] get_transition_delay(logic [2:0] from_state, logic [2:0] to_state);
+    case ({from_state, to_state})
+        {% for (from_state, to_state), delay in config.transition_delays.items() -%}
+        {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: return 16'd{{ delay }};
+        {% endfor %}
+        default: return 16'd100; // Default transition delay
+    endcase
+endfunction
+
+// Transition state machine
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        transition_counter <= 16'h0;
+        transition_complete <= 1'b0;
+        transition_in_progress <= 1'b0;
+        transition_source_state <= 3'h0;
+        transition_target_state <= 3'h0;
+    end else begin
+        if (current_state != next_state && !transition_in_progress) begin
+            // Start new transition
+            transition_counter <= 16'h0;
+            transition_complete <= 1'b0;
+            transition_in_progress <= 1'b1;
+            transition_source_state <= current_state;
+            transition_target_state <= next_state;
+        end else if (transition_in_progress) begin
+            logic [15:0] required_delay = get_transition_delay(transition_source_state, transition_target_state);
+            
+            if (transition_counter < required_delay) begin
+                transition_counter <= transition_counter + 1'b1;
+                transition_complete <= 1'b0;
+            end else begin
+                transition_counter <= 16'h0;
+                transition_complete <= 1'b1;
+                transition_in_progress <= 1'b0;
+            end
+        end else begin
+            transition_complete <= 1'b0;
+        end
+    end
+end
+
+// Transition progress indicator (for debugging/monitoring)
+logic [7:0] transition_progress_percent;
+always_comb begin
+    if (transition_in_progress) begin
+        logic [15:0] required_delay = get_transition_delay(transition_source_state, transition_target_state);
+        if (required_delay > 0) begin
+            transition_progress_percent = (transition_counter * 8'd100) / required_delay;
+        end else begin
+            transition_progress_percent = 8'd100;
+        end
+    end else begin
+        transition_progress_percent = 8'd0;
+    end
+end
+
+// Power domain control signals during transitions
+always_comb begin
+    case ({transition_source_state, transition_target_state})
+        {% for (from_state, to_state), delay in config.transition_delays.items() -%}
+        {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: begin
+            {% if from_state.value == "D0" and to_state.value == "D3_HOT" -%}
+            power_domain_enable = transition_complete ? 1'b0 : 1'b1;
+            aux_power_enable = 1'b1;
+            {% elif from_state.value == "D3_HOT" and to_state.value == "D0" -%}
+            power_domain_enable = transition_complete ? 1'b1 : 1'b0;
+            aux_power_enable = 1'b1;
+            {% else -%}
+            power_domain_enable = 1'b1;
+            aux_power_enable = 1'b1;
+            {% endif %}
+        end
+        {% endfor %}
+        default: begin
+            power_domain_enable = 1'b1;
+            aux_power_enable = 1'b1;
+        end
+    endcase
+end

@@ -7,12 +7,36 @@ error handling, performance monitoring, and power management into a single,
 cohesive module to reduce import complexity.
 """
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
-# Import from utils instead of scattered locations
-from src.string_utils import generate_sv_header_comment
+# Import standard utilities
+try:
+    from ..string_utils import (
+        generate_sv_header_comment,
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
+    from .template_renderer import TemplateRenderer, TemplateRenderError
+except ImportError:
+    # Fallback for standalone usage
+    from src.string_utils import (
+        generate_sv_header_comment,
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
+    from src.templating.template_renderer import TemplateRenderer, TemplateRenderError
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
 class PowerState(Enum):
@@ -133,243 +157,402 @@ class AdvancedSVFeatureGenerator:
 
     def __init__(self, config: AdvancedFeatureConfig):
         self.config = config
+        self.renderer = TemplateRenderer()
+        log_info_safe(
+            logger,
+            "Initialized AdvancedSVFeatureGenerator with config",
+            prefix="GENERATOR",
+        )
 
     def generate_error_handling_module(self) -> str:
         """Generate complete error handling module."""
         if not self.config.error_handling.enable_error_detection:
+            log_debug_safe(
+                logger,
+                "Error handling disabled, returning empty module",
+                prefix="ERROR_GEN",
+            )
             return ""
 
-        # Import here to avoid circular imports
-        from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
+        log_info_safe(logger, "Generating error handling module", prefix="ERROR_GEN")
 
-        # Create error handling configuration from our config
-        error_config = ErrorHandlingConfig(
-            enable_ecc=self.config.error_handling.enable_error_detection,
-            enable_parity_check=self.config.error_handling.enable_error_detection,
-            enable_crc_check=self.config.error_handling.enable_error_detection,
-            enable_timeout_detection=self.config.error_handling.enable_error_detection,
-            enable_auto_retry=True,
-            max_retry_count=3,
-            enable_error_logging=self.config.error_handling.enable_error_logging,
-            enable_error_injection=self.config.error_handling.enable_error_injection,
-        )
+        try:
+            # Import here to avoid circular imports
+            from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
 
-        # Create error handling generator
-        error_generator = ErrorHandlingGenerator(error_config)
+            # Create error handling configuration from our config
+            error_config = ErrorHandlingConfig(
+                enable_ecc=self.config.error_handling.enable_error_detection,
+                enable_parity_check=self.config.error_handling.enable_error_detection,
+                enable_crc_check=self.config.error_handling.enable_error_detection,
+                enable_timeout_detection=self.config.error_handling.enable_error_detection,
+                enable_auto_retry=True,
+                max_retry_count=3,
+                enable_error_logging=self.config.error_handling.enable_error_logging,
+                enable_error_injection=self.config.error_handling.enable_error_injection,
+            )
 
-        # Generate error handling components
-        error_detection = error_generator.generate_error_detection()
-        error_state_machine = error_generator.generate_error_state_machine()
-        error_logging = error_generator.generate_error_logging()
-        error_counters = error_generator.generate_error_counters()
+            # Create error handling generator
+            error_generator = ErrorHandlingGenerator(error_config)
 
-        # Add error injection if enabled
-        error_injection = ""
-        if self.config.error_handling.enable_error_injection:
-            error_injection = error_generator.generate_error_injection()
+            # Generate error handling components using templates
+            context = {"config": self.config.error_handling}
 
-        # Generate the complete module
-        return self._generate_module_template(
-            "error_handler",
-            error_detection,
-            error_state_machine,
-            error_logging,
-            error_counters,
-            error_injection,
-        )
+            error_detection = error_generator.generate_error_detection()
+            error_state_machine = error_generator.generate_error_state_machine()
+            error_logging = error_generator.generate_error_logging()
+            error_counters = error_generator.generate_error_counters()
+
+            # Add error injection if enabled
+            error_injection = ""
+            if self.config.error_handling.enable_error_injection:
+                error_injection = error_generator.generate_error_injection()
+                log_debug_safe(
+                    logger, "Added error injection logic", prefix="ERROR_GEN"
+                )
+
+            # Generate the complete module using template
+            return self._generate_module_template(
+                "error_handler",
+                context,
+                error_detection,
+                error_state_machine,
+                error_logging,
+                error_counters,
+                error_injection,
+            )
+
+        except ImportError as e:
+            log_error_safe(
+                logger,
+                "Failed to import error handling generator: {error}",
+                prefix="ERROR_GEN",
+                error=str(e),
+            )
+            return self._generate_fallback_error_module()
+        except Exception as e:
+            log_error_safe(
+                logger,
+                "Error generating error handling module: {error}",
+                prefix="ERROR_GEN",
+                error=str(e),
+            )
+            return self._generate_fallback_error_module()
 
     def generate_performance_monitor_module(self) -> str:
         """Generate performance monitoring module."""
         if not self.config.performance.enable_performance_counters:
+            log_debug_safe(
+                logger,
+                "Performance monitoring disabled, returning empty module",
+                prefix="PERF_GEN",
+            )
             return ""
 
-        return self._generate_module_template(
+        log_info_safe(
+            logger, "Generating performance monitoring module", prefix="PERF_GEN"
+        )
+
+        try:
+            context = {
+                "config": self.config.performance,
+                "counter_width": self.config.performance.counter_width,
+                "sampling_period": self.config.performance.sampling_period,
+                "metrics": list(self.config.performance.metrics_to_monitor),
+            }
+
+            return self._generate_module_template(
+                "performance_monitor",
+                context,
+                self._generate_counter_logic(),
+                self._generate_sampling_logic(),
+                self._generate_reporting_logic(),
+            )
+        except Exception as e:
+            log_error_safe(
+                logger,
+                "Error generating performance monitor module: {error}",
+                prefix="PERF_GEN",
+                error=str(e),
+            )
+            return self._generate_fallback_performance_module()
+
+    def generate_power_management_module(self) -> str:
+        """Generate power management module."""
+        if not self.config.power_management.enable_power_management:
+            log_debug_safe(
+                logger,
+                "Power management disabled, returning empty module",
+                prefix="POWER_GEN",
+            )
+            return ""
+
+        log_info_safe(logger, "Generating power management module", prefix="POWER_GEN")
+
+        try:
+            context = {
+                "config": self.config.power_management,
+                "supported_states": list(self.config.power_management.supported_states),
+                "enable_clock_gating": self.config.power_management.enable_clock_gating,
+                "enable_power_gating": self.config.power_management.enable_power_gating,
+            }
+
+            return self._generate_module_template(
+                "power_manager",
+                context,
+                self._generate_state_machine(),
+                self._generate_clock_gating_logic(),
+                self._generate_transition_logic(),
+            )
+        except Exception as e:
+            log_error_safe(
+                logger,
+                "Error generating power management module: {error}",
+                prefix="POWER_GEN",
+                error=str(e),
+            )
+            return self._generate_fallback_power_module()
+
+    def _generate_fallback_error_module(self) -> str:
+        """Generate a fallback error handling module when template generation fails."""
+        log_warning_safe(
+            logger, "Using fallback error handling module", prefix="FALLBACK"
+        )
+
+        context = {"config": self.config.error_handling}
+        return self._generate_fallback_module(
+            "error_handler",
+            context,
+            self._generate_error_recovery_logic(),
+            self._generate_error_logging_logic(),
+        )
+
+    def _generate_fallback_performance_module(self) -> str:
+        """Generate a fallback performance monitoring module when template generation fails."""
+        log_warning_safe(
+            logger, "Using fallback performance monitoring module", prefix="FALLBACK"
+        )
+
+        context = {"config": self.config.performance}
+        return self._generate_fallback_module(
             "performance_monitor",
+            context,
             self._generate_counter_logic(),
             self._generate_sampling_logic(),
             self._generate_reporting_logic(),
         )
 
-    def generate_power_management_module(self) -> str:
-        """Generate power management module."""
-        if not self.config.power_management.enable_power_management:
-            return ""
+    def _generate_fallback_power_module(self) -> str:
+        """Generate a fallback power management module when template generation fails."""
+        log_warning_safe(
+            logger, "Using fallback power management module", prefix="FALLBACK"
+        )
 
-        return self._generate_module_template(
+        context = {"config": self.config.power_management}
+        return self._generate_fallback_module(
             "power_manager",
+            context,
             self._generate_state_machine(),
             self._generate_clock_gating_logic(),
             self._generate_transition_logic(),
         )
 
-    def _generate_module_template(self, module_name: str, *components: str) -> str:
-        """Generate a module template with the given components."""
+    def _generate_module_template(
+        self, module_name: str, context: Dict, *components: str
+    ) -> str:
+        """Generate a module template with the given components using Jinja2 templates."""
+        try:
+            log_debug_safe(
+                logger,
+                "Generating module template for {module}",
+                prefix="TEMPLATE",
+                module=module_name,
+            )
+
+            # Try to use Jinja2 template first
+            template_name = safe_format(
+                "sv/advanced/{module_name}.sv.j2", module_name=module_name
+            )
+
+            try:
+                return self.renderer.render_template(template_name, context)
+            except TemplateRenderError:
+                log_warning_safe(
+                    logger,
+                    "Template {template_name} not found, using fallback generation",
+                    prefix="TEMPLATE",
+                    template_name=template_name,
+                )
+                return self._generate_fallback_module(module_name, context, *components)
+
+        except Exception as e:
+            log_error_safe(
+                logger,
+                "Error in template generation: {error}",
+                prefix="TEMPLATE",
+                error=str(e),
+            )
+            return self._generate_fallback_module(module_name, context, *components)
+
+    def _generate_fallback_module(
+        self, module_name: str, context: Dict, *components: str
+    ) -> str:
+        """Generate a fallback module when templates are not available."""
+        log_info_safe(
+            logger,
+            "Using fallback module generation for {module}",
+            prefix="FALLBACK",
+            module=module_name,
+        )
+
         header = generate_sv_header_comment(
-            f"{module_name.replace('_', ' ').title()} Module",
+            safe_format(
+                "{module_name} Module",
+                module_name=module_name.replace("_", " ").title(),
+            ),
             generator="AdvancedSVFeatureGenerator",
             version="0.7.5",
         )
 
         module_body = "\n\n".join(filter(None, components))
 
-        return f"""{header}
+        # Generate appropriate ports based on module type
+        port_definitions = self._generate_module_ports(module_name)
+
+        return safe_format(
+            """{header}
 
 module {module_name} #(
     parameter FEATURE_ENABLED = 1
 ) (
+    // Clock and Reset
     input  logic        clk,
     input  logic        rst_n,
-    // Additional ports would be defined here
+{port_definitions}
 );
 
 {module_body}
 
 endmodule
-"""
+""",
+            header=header,
+            module_name=module_name,
+            port_definitions=port_definitions,
+            module_body=module_body,
+        )
+
+    def _generate_module_ports(self, module_name: str) -> str:
+        """Generate appropriate ports based on module type."""
+        log_debug_safe(
+            logger,
+            "Generating ports for {module_name}",
+            prefix="PORTS",
+            module_name=module_name,
+        )
+
+        if module_name == "error_handler":
+            return """
+    // Error signals
+    input  logic        error_detected,
+    input  logic [7:0]  error_type,
+    output logic        recovery_active"""
+        elif module_name == "performance_monitor":
+            return """
+    // Performance monitoring signals
+    input  logic        transaction_valid,
+    input  logic [31:0] performance_data,
+    input  logic        sample_trigger,
+    input  logic [31:0] threshold,
+    output logic        report_ready,
+    output logic [31:0] report_data"""
+        elif module_name == "power_manager":
+            return """
+    // Power management signals
+    input  logic        power_down_req,
+    input  logic        power_up_req,
+    input  logic        power_off_req,
+    input  logic        power_save_mode,
+    output logic        gated_clk,
+    output logic        transition_complete"""
+        else:
+            log_warning_safe(
+                logger,
+                "Unknown module type {module_name}, using default ports",
+                prefix="PORTS",
+                module_name=module_name,
+            )
+            return ""
 
     def _generate_error_recovery_logic(self) -> str:
         """Generate error recovery logic."""
-        return """
-    // Error recovery logic
-    logic error_detected;
-    logic recovery_active;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            recovery_active <= 1'b0;
-        end else if (error_detected) begin
-            recovery_active <= 1'b1;
-        end else begin
-            recovery_active <= 1'b0;
-        end
-    end"""
+        log_debug_safe(logger, "Generating error recovery logic", prefix="ERROR_LOGIC")
+
+        context = {
+            "config": self.config.error_handling,
+            "recoverable_errors": list(self.config.error_handling.recoverable_errors),
+            "fatal_errors": list(self.config.error_handling.fatal_errors),
+            "error_thresholds": self.config.error_handling.error_thresholds,
+        }
+        return self.renderer.render_template("sv/error_recovery.sv.j2", context)
 
     def _generate_error_logging_logic(self) -> str:
         """Generate error logging logic."""
-        return """
-    // Error logging logic
-    logic [31:0] error_count;
-    logic [7:0] last_error_type;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            error_count <= 32'h0;
-            last_error_type <= 8'h0;
-        end else if (error_detected) begin
-            error_count <= error_count + 1'b1;
-            last_error_type <= error_type;
-        end
-    end"""
+        log_debug_safe(logger, "Generating error logging logic", prefix="ERROR_LOGIC")
+
+        context = {"config": self.config.error_handling}
+        return self.renderer.render_template("sv/error_logging.sv.j2", context)
 
     def _generate_counter_logic(self) -> str:
         """Generate performance counter logic."""
-        return """
-    // Performance counter logic
-    logic [31:0] transaction_count;
-    logic [31:0] cycle_count;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            transaction_count <= 32'h0;
-            cycle_count <= 32'h0;
-        end else begin
-            cycle_count <= cycle_count + 1'b1;
-            if (transaction_valid) begin
-                transaction_count <= transaction_count + 1'b1;
-            end
-        end
-    end"""
+        log_debug_safe(
+            logger, "Generating performance counter logic", prefix="PERF_LOGIC"
+        )
+
+        context = {"config": self.config.performance}
+        return self.renderer.render_template("sv/performance_counters.sv.j2", context)
 
     def _generate_sampling_logic(self) -> str:
         """Generate sampling logic."""
-        return """
-    // Sampling logic
-    logic sample_trigger;
-    logic [31:0] sample_data;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            sample_data <= 32'h0;
-        end else if (sample_trigger) begin
-            sample_data <= performance_data;
-        end
-    end"""
+        log_debug_safe(logger, "Generating sampling logic", prefix="PERF_LOGIC")
+
+        context = {"config": self.config.performance}
+        return self.renderer.render_template("sv/sampling_logic.sv.j2", context)
 
     def _generate_reporting_logic(self) -> str:
         """Generate reporting logic."""
-        return """
-    // Reporting logic
-    logic report_ready;
-    logic [31:0] report_data;
-    
-    always_comb begin
-        report_ready = (error_count > 0) || (transaction_count > threshold);
-        report_data = {error_count[15:0], transaction_count[15:0]};
-    end"""
+        log_debug_safe(logger, "Generating reporting logic", prefix="PERF_LOGIC")
+
+        context = {"config": self.config.performance}
+        return self.renderer.render_template("sv/reporting_logic.sv.j2", context)
 
     def _generate_state_machine(self) -> str:
         """Generate power state machine."""
-        return """
-    // Power state machine
-    typedef enum logic [1:0] {
-        POWER_ON  = 2'b00,
-        POWER_LOW = 2'b01,
-        POWER_OFF = 2'b10
-    } power_state_t;
-    
-    power_state_t current_state, next_state;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            current_state <= POWER_ON;
-        end else begin
-            current_state <= next_state;
-        end
-    end
-    
-    always_comb begin
-        case (current_state)
-            POWER_ON:  next_state = power_down_req ? POWER_LOW : POWER_ON;
-            POWER_LOW: next_state = power_up_req ? POWER_ON : (power_off_req ? POWER_OFF : POWER_LOW);
-            POWER_OFF: next_state = power_up_req ? POWER_ON : POWER_OFF;
-            default:   next_state = POWER_ON;
-        endcase
-    end"""
+        log_debug_safe(logger, "Generating power state machine", prefix="POWER_LOGIC")
+
+        context = {"config": self.config.power_management}
+        return self.renderer.render_template("sv/power_management.sv.j2", context)
 
     def _generate_clock_gating_logic(self) -> str:
         """Generate clock gating logic."""
-        return """
-    // Clock gating logic
-    logic gated_clk;
-    logic clock_enable;
-    
-    always_comb begin
-        clock_enable = (current_state == POWER_ON) && !power_save_mode;
-    end
-    
-    // Clock gating cell (implementation depends on target technology)
-    assign gated_clk = clk & clock_enable;"""
+        log_debug_safe(logger, "Generating clock gating logic", prefix="POWER_LOGIC")
+
+        if not self.config.power_management.enable_clock_gating:
+            log_debug_safe(
+                logger, "Clock gating disabled, skipping", prefix="POWER_LOGIC"
+            )
+            return ""
+
+        context = {"config": self.config.power_management}
+        return self.renderer.render_template("sv/clock_gating.sv.j2", context)
 
     def _generate_transition_logic(self) -> str:
         """Generate power transition logic."""
-        return """
-    // Power transition logic
-    logic transition_complete;
-    logic [7:0] transition_counter;
-    
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            transition_counter <= 8'h0;
-            transition_complete <= 1'b0;
-        end else if (current_state != next_state) begin
-            transition_counter <= 8'h0;
-            transition_complete <= 1'b0;
-        end else if (transition_counter < 8'hFF) begin
-            transition_counter <= transition_counter + 1'b1;
-        end else begin
-            transition_complete <= 1'b1;
-        end
-    end"""
+        log_debug_safe(
+            logger, "Generating power transition logic", prefix="POWER_LOGIC"
+        )
+
+        context = {"config": self.config.power_management}
+        return self.renderer.render_template("sv/power_transitions.sv.j2", context)
 
 
 # Export the main components

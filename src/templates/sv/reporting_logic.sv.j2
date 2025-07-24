@@ -1,0 +1,80 @@
+{#- Reporting Logic Template -#}
+{#- Generates performance reporting logic -#}
+
+// Performance Reporting Logic
+logic [{{ config.counter_width - 1 }}:0] report_buffer [{{ config.metrics_to_monitor|length - 1 }}:0];
+logic report_pending;
+logic [3:0] report_state;
+
+// Report state machine
+localparam REPORT_IDLE     = 4'h0;
+localparam REPORT_PREPARE  = 4'h1;
+localparam REPORT_READY    = 4'h2;
+localparam REPORT_TRANSMIT = 4'h3;
+
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        report_state <= REPORT_IDLE;
+        report_pending <= 1'b0;
+        report_ready <= 1'b0;
+        {% for i in range(config.metrics_to_monitor|length) -%}
+        report_buffer[{{ i }}] <= {{ config.counter_width }}'h0;
+        {% endfor %}
+    end else begin
+        case (report_state)
+            REPORT_IDLE: begin
+                report_ready <= 1'b0;
+                if (sample_valid || (transaction_count > threshold)) begin
+                    report_state <= REPORT_PREPARE;
+                    report_pending <= 1'b1;
+                end
+            end
+            
+            REPORT_PREPARE: begin
+                // Copy current metrics to report buffer
+                {% for i in range(config.metrics_to_monitor|length) -%}
+                report_buffer[{{ i }}] <= sample_data[{{ i }}];
+                {% endfor %}
+                report_state <= REPORT_READY;
+            end
+            
+            REPORT_READY: begin
+                report_ready <= 1'b1;
+                if (report_ack) begin
+                    report_state <= REPORT_TRANSMIT;
+                end
+            end
+            
+            REPORT_TRANSMIT: begin
+                report_ready <= 1'b0;
+                report_pending <= 1'b0;
+                report_state <= REPORT_IDLE;
+            end
+            
+            default: begin
+                report_state <= REPORT_IDLE;
+            end
+        endcase
+    end
+end
+
+// Report data multiplexer
+always_comb begin
+    case (report_select)
+        {% for metric in config.metrics_to_monitor -%}
+        {{ loop.index0 }}: report_data = report_buffer[{{ loop.index0 }}]; // {{ metric.value }}
+        {% endfor %}
+        default: report_data = {{ config.counter_width }}'h0;
+    endcase
+end
+
+// Report summary for quick access
+assign report_summary = {
+    {% for i in range(config.metrics_to_monitor|length) -%}
+    {% if not loop.last -%}
+    report_buffer[{{ i }}][7:0],
+    {% else -%}
+    report_buffer[{{ i }}][7:0]
+    {% endif %}
+    {% endfor %}
+};

@@ -416,7 +416,9 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     ]
     missing_fields = [field for field in required_fields if field not in msix_info]
     if missing_fields:
-        log_error_safe(logger, f"Missing required MSI-X fields: {missing_fields}")
+        log_error_safe(
+            logger, "Missing required MSI-X fields: {fields}", fields=missing_fields
+        )
         # Return a disabled MSI-X module instead of failing
         msix_info = {
             "table_size": 1,
