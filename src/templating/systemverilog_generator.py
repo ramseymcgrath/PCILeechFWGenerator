@@ -182,7 +182,7 @@ class AdvancedSVGenerator:
             log_error_safe(
                 self.logger,
                 "Failed to render device-specific ports template: {error}",
-                error=e
+                error=e,
             )
             # Return a minimal valid SystemVerilog module instead of a comment
             return """// Device-specific ports module (template error fallback)
