@@ -179,8 +179,20 @@ class AdvancedSVGenerator:
                 "systemverilog/components/device_specific_ports.sv.j2", context
             )
         except TemplateRenderError as e:
-            self.logger.error(f"Failed to render device-specific ports: {e}")
-            return "// Error generating device-specific ports"
+            log_error_safe(
+                self.logger,
+                "Failed to render device-specific ports template: {error}",
+                error=e
+            )
+            # Return a minimal valid SystemVerilog module instead of a comment
+            return """// Device-specific ports module (template error fallback)
+module device_specific_ports (
+    // Minimal fallback implementation
+    input wire clk,
+    input wire rst_n
+);
+    // Error: Template rendering failed, using minimal fallback
+endmodule"""
 
     def generate_systemverilog_modules(
         self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None

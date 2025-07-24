@@ -24,6 +24,10 @@ jobs:
       run: |
         python scripts/validate_project_systemverilog.py
     
+    - name: Validate Generation Patterns
+      run: |
+        python scripts/validate_generation_patterns.py
+    
     - name: Check Template Syntax
       run: |
         # Install minimal dependencies for template validation

@@ -229,35 +229,147 @@ endmodule
 
     def _generate_error_recovery_logic(self) -> str:
         """Generate error recovery logic."""
-        return "// Error recovery logic"
+        return """
+    // Error recovery logic
+    logic error_detected;
+    logic recovery_active;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            recovery_active <= 1'b0;
+        end else if (error_detected) begin
+            recovery_active <= 1'b1;
+        end else begin
+            recovery_active <= 1'b0;
+        end
+    end"""
 
     def _generate_error_logging_logic(self) -> str:
         """Generate error logging logic."""
-        return "// Error logging logic"
+        return """
+    // Error logging logic
+    logic [31:0] error_count;
+    logic [7:0] last_error_type;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            error_count <= 32'h0;
+            last_error_type <= 8'h0;
+        end else if (error_detected) begin
+            error_count <= error_count + 1'b1;
+            last_error_type <= error_type;
+        end
+    end"""
 
     def _generate_counter_logic(self) -> str:
         """Generate performance counter logic."""
-        return "// Performance counter logic"
+        return """
+    // Performance counter logic
+    logic [31:0] transaction_count;
+    logic [31:0] cycle_count;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            transaction_count <= 32'h0;
+            cycle_count <= 32'h0;
+        end else begin
+            cycle_count <= cycle_count + 1'b1;
+            if (transaction_valid) begin
+                transaction_count <= transaction_count + 1'b1;
+            end
+        end
+    end"""
 
     def _generate_sampling_logic(self) -> str:
         """Generate sampling logic."""
-        return "// Sampling logic"
+        return """
+    // Sampling logic
+    logic sample_trigger;
+    logic [31:0] sample_data;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            sample_data <= 32'h0;
+        end else if (sample_trigger) begin
+            sample_data <= performance_data;
+        end
+    end"""
 
     def _generate_reporting_logic(self) -> str:
         """Generate reporting logic."""
-        return "// Reporting logic"
+        return """
+    // Reporting logic
+    logic report_ready;
+    logic [31:0] report_data;
+    
+    always_comb begin
+        report_ready = (error_count > 0) || (transaction_count > threshold);
+        report_data = {error_count[15:0], transaction_count[15:0]};
+    end"""
 
     def _generate_state_machine(self) -> str:
         """Generate power state machine."""
-        return "// Power state machine"
+        return """
+    // Power state machine
+    typedef enum logic [1:0] {
+        POWER_ON  = 2'b00,
+        POWER_LOW = 2'b01,
+        POWER_OFF = 2'b10
+    } power_state_t;
+    
+    power_state_t current_state, next_state;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            current_state <= POWER_ON;
+        end else begin
+            current_state <= next_state;
+        end
+    end
+    
+    always_comb begin
+        case (current_state)
+            POWER_ON:  next_state = power_down_req ? POWER_LOW : POWER_ON;
+            POWER_LOW: next_state = power_up_req ? POWER_ON : (power_off_req ? POWER_OFF : POWER_LOW);
+            POWER_OFF: next_state = power_up_req ? POWER_ON : POWER_OFF;
+            default:   next_state = POWER_ON;
+        endcase
+    end"""
 
     def _generate_clock_gating_logic(self) -> str:
         """Generate clock gating logic."""
-        return "// Clock gating logic"
+        return """
+    // Clock gating logic
+    logic gated_clk;
+    logic clock_enable;
+    
+    always_comb begin
+        clock_enable = (current_state == POWER_ON) && !power_save_mode;
+    end
+    
+    // Clock gating cell (implementation depends on target technology)
+    assign gated_clk = clk & clock_enable;"""
 
     def _generate_transition_logic(self) -> str:
         """Generate power transition logic."""
-        return "// Power transition logic"
+        return """
+    // Power transition logic
+    logic transition_complete;
+    logic [7:0] transition_counter;
+    
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            transition_counter <= 8'h0;
+            transition_complete <= 1'b0;
+        end else if (current_state != next_state) begin
+            transition_counter <= 8'h0;
+            transition_complete <= 1'b0;
+        end else if (transition_counter < 8'hFF) begin
+            transition_counter <= transition_counter + 1'b1;
+        end else begin
+            transition_complete <= 1'b1;
+        end
+    end"""
 
 
 # Export the main components
