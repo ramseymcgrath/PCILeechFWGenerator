@@ -493,7 +493,68 @@ class AdvancedSVGenerator:
                 msix_template_context = enhanced_context.copy()
                 msix_template_context.update(msix_config)
 
+                # Validate MSI-X template context to prevent rendering errors
+                required_msix_vars = [
+                    "table_size",
+                    "table_bir",
+                    "table_offset",
+                    "pba_bir",
+                    "pba_offset",
+                    "enabled_val",
+                    "function_mask_val",
+                    "pba_size",
+                    "pba_size_minus_one",
+                    "alignment_warning",
+                ]
+                missing_vars = [
+                    var
+                    for var in required_msix_vars
+                    if var not in msix_template_context
+                ]
+                if missing_vars:
+                    log_warning_safe(
+                        self.logger,
+                        "Missing MSI-X template variables: {vars}, using defaults",
+                        vars=missing_vars,
+                    )
+                    # Add default values to prevent template errors
+                    defaults = {
+                        "table_size": 1,
+                        "table_bir": 0,
+                        "table_offset": 0x1000,
+                        "pba_bir": 0,
+                        "pba_offset": 0x2000,
+                        "enabled_val": 0,
+                        "function_mask_val": 1,
+                        "pba_size": 1,
+                        "pba_size_minus_one": 0,
+                        "alignment_warning": "// MSI-X template context incomplete - using defaults",
+                    }
+                    for var in missing_vars:
+                        msix_template_context[var] = defaults.get(var, 0)
+
                 # Generate MSI-X capability registers
+                # Add capability-specific context validation
+                cap_required_vars = [
+                    "table_size_minus_one",
+                    "table_offset_bir",
+                    "pba_offset_bir",
+                ]
+                for var in cap_required_vars:
+                    if var not in msix_template_context:
+                        if var == "table_size_minus_one":
+                            msix_template_context[var] = max(
+                                0, msix_template_context.get("table_size", 1) - 1
+                            )
+                        elif var == "table_offset_bir":
+                            offset = msix_template_context.get("table_offset", 0x1000)
+                            bir = msix_template_context.get("table_bir", 0)
+                            msix_template_context[var] = f"32'h{(offset | bir):08X}"
+                        elif var == "pba_offset_bir":
+                            offset = msix_template_context.get("pba_offset", 0x2000)
+                            bir = msix_template_context.get("pba_bir", 0)
+                            msix_template_context[var] = f"32'h{(offset | bir):08X}"
+
                 modules["msix_capability_registers"] = self.renderer.render_template(
                     "systemverilog/msix_capability_registers.sv.j2",
                     msix_template_context,

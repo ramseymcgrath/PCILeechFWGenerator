@@ -404,19 +404,54 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     Returns:
         SystemVerilog code for the MSI-X table and PBA
     """
+    # Validate required fields to prevent template rendering errors
+    required_fields = [
+        "table_size",
+        "table_bir",
+        "table_offset",
+        "pba_bir",
+        "pba_offset",
+        "enabled",
+        "function_mask",
+    ]
+    missing_fields = [field for field in required_fields if field not in msix_info]
+    if missing_fields:
+        log_error_safe(logger, f"Missing required MSI-X fields: {missing_fields}")
+        # Return a disabled MSI-X module instead of failing
+        msix_info = {
+            "table_size": 1,
+            "table_bir": 0,
+            "table_offset": 0x1000,
+            "pba_bir": 0,
+            "pba_offset": 0x2000,
+            "enabled": False,
+            "function_mask": True,
+            **{k: v for k, v in msix_info.items() if k not in missing_fields},
+        }
+
     if msix_info["table_size"] == 0:
-        return "MSI-X not supported or no entries"
-    log_debug_safe(
-        logger, "MSI-X: Found, generating SystemVerilog code for MSI-X table"
-    )
+        log_debug_safe(
+            logger, "MSI-X: Table size is 0, generating disabled MSI-X module"
+        )
+        # Generate a proper disabled module instead of returning a comment
+        table_size = 1  # Minimum size for valid SystemVerilog
+        pba_size = 1
+        alignment_warning = "// MSI-X disabled - no interrupt vectors configured"
+        enabled_val = 0
+        function_mask_val = 1  # Force masked when disabled
+    else:
+        log_debug_safe(
+            logger, "MSI-X: Found, generating SystemVerilog code for MSI-X table"
+        )
+        table_size = msix_info["table_size"]
+        pba_size = (table_size + 31) // 32  # Number of 32-bit words needed for PBA
+        enabled_val = 1 if msix_info["enabled"] else 0
+        function_mask_val = 1 if msix_info["function_mask"] else 0
 
-    table_size = msix_info["table_size"]
-    pba_size = (table_size + 31) // 32  # Number of 32-bit words needed for PBA
-
-    # Generate alignment warning if needed
-    alignment_warning = ""
-    if msix_info["table_offset"] % 8 != 0:
-        alignment_warning = f"// Warning: MSI-X table offset 0x{msix_info['table_offset']:x} is not 8-byte aligned"
+        # Generate alignment warning if needed
+        alignment_warning = ""
+        if msix_info["table_offset"] % 8 != 0:
+            alignment_warning = f"// Warning: MSI-X table offset 0x{msix_info['table_offset']:x} is not 8-byte aligned"
 
     # Prepare template context
     context = {
@@ -425,8 +460,8 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
         "table_offset": msix_info["table_offset"],
         "pba_bir": msix_info["pba_bir"],
         "pba_offset": msix_info["pba_offset"],
-        "enabled_val": 1 if msix_info["enabled"] else 0,
-        "function_mask_val": 1 if msix_info["function_mask"] else 0,
+        "enabled_val": enabled_val,
+        "function_mask_val": function_mask_val,
         "pba_size": pba_size,
         "pba_size_minus_one": pba_size - 1,
         "alignment_warning": alignment_warning,
@@ -507,16 +542,16 @@ def generate_msix_capability_registers(msix_info: Dict[str, Any]) -> str:
     Returns:
         SystemVerilog code for MSI-X capability register management
     """
-    if msix_info["table_size"] == 0:
-        return "// MSI-X capability registers not generated - no MSI-X support"
-
-    table_size = msix_info["table_size"]
+    # Always generate a proper module, even for disabled MSI-X
+    table_size = max(
+        1, msix_info.get("table_size", 1)
+    )  # Minimum size 1 for valid SystemVerilog
 
     # Prepare template context
     context = {
         "table_size_minus_one": table_size - 1,
-        "table_offset_bir": f"32'h{(msix_info['table_offset'] | msix_info['table_bir']):08X}",
-        "pba_offset_bir": f"32'h{(msix_info['pba_offset'] | msix_info['pba_bir']):08X}",
+        "table_offset_bir": f"32'h{(msix_info.get('table_offset', 0x1000) | msix_info.get('table_bir', 0)):08X}",
+        "pba_offset_bir": f"32'h{(msix_info.get('pba_offset', 0x2000) | msix_info.get('pba_bir', 0)):08X}",
     }
 
     # Use template renderer
