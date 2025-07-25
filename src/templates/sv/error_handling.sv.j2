@@ -67,14 +67,14 @@
             ERR_CORRECTING: begin
                 // Attempt automatic correction
                 error_recovery_active = 1'b1;
-                if (error_recovery_timer >= {{ error_handling.recovery_cycles }}) begin
+                if (error_recovery_timer >= {{ error_handling.error_recovery_cycles }}) begin
                     error_next_state = ERR_IDLE;
                 end
             end
             
             ERR_RECOVERY: begin
                 error_recovery_active = 1'b1;
-                if (error_recovery_timer >= {{ error_handling.recovery_cycles }}) begin
+                if (error_recovery_timer >= {{ error_handling.error_recovery_cycles }}) begin
                     if (retry_count < {{ error_handling.max_retry_count }}) begin
                         error_next_state = ERR_IDLE;
                     end else begin
