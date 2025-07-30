@@ -21,17 +21,22 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, Union
 
-# Import vfio_assist - make it optional
+# Import VFIO diagnostics - make it optional to avoid circular imports
 try:
-    import vfio_assist
+    from .vfio_diagnostics import Diagnostics
 
     HAS_VFIO_ASSIST = True
 except ImportError:
-    vfio_assist = None
+    Diagnostics = None
     HAS_VFIO_ASSIST = False
 
 # Import safe logging functions
-from string_utils import log_debug_safe, log_error_safe, log_info_safe, log_warning_safe
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
 from .vfio_constants import VfioGroupStatus  # legacy alias
@@ -772,7 +777,15 @@ def run_diagnostics(bdf: Optional[str] = None) -> Dict[str, Any]:
         }
 
     try:
-        diagnostics = vfio_assist.Diagnostics(bdf)
+        if not HAS_VFIO_ASSIST or Diagnostics is None:
+            return {
+                "overall": "skipped",
+                "can_proceed": True,
+                "checks": [],
+                "message": "vfio diagnostics module not available - diagnostics skipped",
+            }
+
+        diagnostics = Diagnostics(bdf)
         result = diagnostics.run()
 
         # Convert to dictionary for JSON serialization
@@ -806,8 +819,11 @@ def render_pretty(diagnostic_result: Dict[str, Any]) -> str:
         Formatted string with ANSI color codes
     """
     try:
-        # Use vfio_assist color functions if available
-        from vfio_assist import Fore, colour
+        # Use color functions from vfio_diagnostics if available
+        if HAS_VFIO_ASSIST and Diagnostics is not None:
+            from .vfio_diagnostics import Fore, colour
+        else:
+            raise ImportError("No color support available")
 
         output = []
         overall = diagnostic_result.get("overall", "unknown")

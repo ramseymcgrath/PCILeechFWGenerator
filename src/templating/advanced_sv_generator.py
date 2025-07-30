@@ -15,19 +15,19 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 # Import device configuration system
-from src.device_clone import DeviceConfiguration as NewDeviceConfiguration
-from src.device_clone import (
+from ..device_clone import DeviceConfiguration as NewDeviceConfiguration
+from ..device_clone import (
     ManufacturingVarianceSimulator,
     VarianceModel,
     get_device_config,
 )
-from src.device_clone.manufacturing_variance import DeviceClass
+from ..device_clone.manufacturing_variance import DeviceClass
 
 # Import template renderer
-from src.templating import TemplateRenderer, TemplateRenderError
+from . import TemplateRenderer, TemplateRenderError
 
 # Import from centralized utils
-from src.utils import generate_sv_header_comment
+from ..string_utils import generate_sv_header_comment
 
 
 class PowerState(Enum):

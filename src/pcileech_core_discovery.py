@@ -19,9 +19,9 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Set, Optional
 
-from src.file_management.template_discovery import TemplateDiscovery
-from src.file_management.repo_manager import RepoManager
-from src.string_utils import log_info_safe, log_warning_safe
+from .file_management.template_discovery import TemplateDiscovery
+from .file_management.repo_manager import RepoManager
+from .string_utils import log_info_safe, log_warning_safe
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def discover_pcileech_files(
     board_config = None
     if board_name:
         try:
-            from src.device_clone.board_config import get_pcileech_board_config
+            from .device_clone.board_config import get_pcileech_board_config
 
             board_config = get_pcileech_board_config(board_name, cached_repo_root)
             log_info_safe(

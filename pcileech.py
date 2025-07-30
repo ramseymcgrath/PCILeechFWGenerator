@@ -373,7 +373,7 @@ Commands:
   build          Build firmware (CLI mode)
   tui            Launch interactive TUI
   flash          Flash firmware to device
-  check          Check VFIO configuration
+  check          Check VFIO configuration and ACS bypass requirements
   donor-template Generate donor info template
   version        Show version information
 
@@ -481,7 +481,9 @@ Environment Variables:
     flash_parser.add_argument("--device", help="USB device for flashing")
 
     # Check command (VFIO)
-    check_parser = subparsers.add_parser("check", help="Check VFIO configuration")
+    check_parser = subparsers.add_parser(
+        "check", help="Check VFIO configuration and ACS bypass requirements"
+    )
     check_parser.add_argument("--device", help="Specific device to check (BDF format)")
     check_parser.add_argument(
         "--interactive", "-i", action="store_true", help="Interactive remediation mode"

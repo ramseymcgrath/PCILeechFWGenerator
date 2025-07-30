@@ -10,7 +10,7 @@ shadow configuration space and validates sizes against PCIe requirements.
 import logging
 from typing import Optional, Tuple, Union
 
-from src.device_clone.constants import BAR_SIZE_CONSTANTS
+from .constants import BAR_SIZE_CONSTANTS
 
 logger = logging.getLogger(__name__)
 

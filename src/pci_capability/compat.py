@@ -33,7 +33,7 @@ except ImportError:
     parent_dir = str(current_dir)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from string_utils import (
+    from ..string_utils import (
         log_debug_safe,
         log_error_safe,
         log_info_safe,

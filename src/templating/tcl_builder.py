@@ -362,7 +362,7 @@ class TCLBuilder:
             return
 
         try:
-            from src.device_clone.device_config import get_device_config
+            from ..device_clone.device_config import get_device_config
 
             self.device_config = get_device_config(device_profile)
         except ImportError as e:

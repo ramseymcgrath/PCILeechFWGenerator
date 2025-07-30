@@ -207,7 +207,7 @@ def run_local_build(cfg: BuildConfig) -> None:
 
     # Import build module
     try:
-        from src.build import main as build_main
+        from ..build import main as build_main
     except ImportError:
         # Try alternative import path
         sys.path.insert(0, str(Path(__file__).parent.parent.parent))

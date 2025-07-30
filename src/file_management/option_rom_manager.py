@@ -8,6 +8,7 @@ and prepare it for inclusion in the FPGA firmware.
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -258,14 +259,22 @@ class OptionROMManager:
             # Enable ROM access
             logger.info(f"Enabling ROM access for {bdf}")
             try:
-                subprocess.run(
-                    ["sh", "-c", f"echo 1 > {rom_sysfs_path}"],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            except subprocess.CalledProcessError as e:
-                raise OptionROMExtractionError(f"Failed to enable ROM access: {e}")
+                # More secure approach: write directly to the sysfs file
+                with open(rom_sysfs_path, "w") as f:
+                    f.write("1")
+            except (OSError, IOError) as e:
+                # Fallback to subprocess with proper shell escaping
+                try:
+                    subprocess.run(
+                        ["sh", "-c", f"echo 1 > {shlex.quote(str(rom_sysfs_path))}"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.CalledProcessError as subprocess_e:
+                    raise OptionROMExtractionError(
+                        f"Failed to enable ROM access: {e}. Subprocess fallback also failed: {subprocess_e}"
+                    )
 
             # Extract ROM content
             try:
@@ -281,14 +290,24 @@ class OptionROMManager:
             finally:
                 # Disable ROM access
                 try:
-                    subprocess.run(
-                        ["sh", "-c", f"echo 0 > {rom_sysfs_path}"],
-                        check=True,
-                        capture_output=True,
-                        text=True,
-                    )
-                except subprocess.CalledProcessError as e:
-                    logger.warning(f"Failed to disable ROM access: {e}")
+                    # More secure approach: write directly to the sysfs file
+                    with open(rom_sysfs_path, "w") as f:
+                        f.write("0")
+                except (OSError, IOError):
+                    # Fallback to subprocess with proper shell escaping
+                    try:
+                        subprocess.run(
+                            [
+                                "sh",
+                                "-c",
+                                f"echo 0 > {shlex.quote(str(rom_sysfs_path))}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
+                    except subprocess.CalledProcessError as e:
+                        logger.warning(f"Failed to disable ROM access: {e}")
 
             # Verify ROM file was created and has content
             if not rom_path.exists():

@@ -136,6 +136,12 @@ sudo usermod -a -G vfio $USER
 sudo usermod -a -G dialout $USER  # For USB-JTAG access
 ```
 
+**5. ACS (Access Control Services) errors**
+```bash
+# Devices sharing IOMMU groups - common on Ubuntu
+# See diagnostic tool output for solutions
+```
+
 ### Installation Issues
 
 ```bash

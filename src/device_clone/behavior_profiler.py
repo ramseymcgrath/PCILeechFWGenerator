@@ -18,6 +18,7 @@ import os
 import platform
 import queue
 import re
+import shlex
 import statistics
 import subprocess
 import threading
@@ -27,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import manufacturing variance simulation
-from src.scripts.kernel_utils import setup_debugfs
+from ..scripts.kernel_utils import setup_debugfs
 
 # Import project logging and string utilities
 from ..exceptions import PlatformCompatibilityError
@@ -216,7 +217,7 @@ class BehaviorProfiler:
 
             # Check if device exists
             result = subprocess.run(
-                f"lspci -s {self.bdf}", shell=True, capture_output=True, text=True
+                ["lspci", "-s", self.bdf], capture_output=True, text=True
             )
 
             if result.returncode != 0 or not result.stdout.strip():

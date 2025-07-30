@@ -27,7 +27,7 @@ except ImportError:
     src_dir = Path(__file__).parent.parent
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
-    from string_utils import safe_format
+    from ..string_utils import safe_format
 
 from .core import ConfigSpace
 from .types import PatchInfo, PruningAction

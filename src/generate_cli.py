@@ -38,10 +38,10 @@ def main():
                 ]
                 sys.argv = help_args
 
-        # Import the pcileech_generate module from project root
-        import pcileech_generate
+        # Import the pcileech module from project root
+        import pcileech
 
-        return pcileech_generate.main()
+        return pcileech.main()
     except ImportError as e:
         print(f"Error importing generate module: {e}")
         print("Make sure you're running from the correct directory.")

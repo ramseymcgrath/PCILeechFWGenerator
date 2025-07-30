@@ -16,8 +16,10 @@ import logging
 import os
 import sys
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+# Add the project root to the path for this standalone script
+project_root = os.path.dirname(__file__)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from src.error_utils import log_error_with_root_cause
 from src.log_config import get_logger, setup_logging
@@ -91,13 +93,15 @@ PCILeech from accessing PCI devices for firmware generation.
         log_info_safe(logger, "", prefix="VFIO")
 
     try:
-        from src.cli.vfio_diagnostics import VFIODiagnostics, run_vfio_diagnostic
+        from src.cli.vfio_diagnostics import Diagnostics, render, remediation_script
 
         # Run diagnostics
-        result = run_vfio_diagnostic(
-            device_bdf=args.device_bdf,
-            interactive=args.interactive and not args.generate_script,
-        )
+        diagnostics = Diagnostics(args.device_bdf)
+        result = diagnostics.run()
+
+        # Render the results if not in quiet mode
+        if not args.quiet:
+            render(result)
 
         if args.quiet:
             # Just print summary for quiet mode
@@ -107,20 +111,20 @@ PCILeech from accessing PCI devices for firmware generation.
                 "{symbol} VFIO Status: {status}",
                 prefix="VFIO",
                 symbol=status_symbol,
-                status=result.overall_status.value.upper(),
+                status=result.overall.value.upper(),
             )
-            if result.critical_issues:
+            critical_errors = [c for c in result.checks if c.status.value == "error"]
+            if critical_errors:
                 log_info_safe(
                     logger,
                     "Critical Issues: {count}",
                     prefix="VFIO",
-                    count=len(result.critical_issues),
+                    count=len(critical_errors),
                 )
 
         # Generate script if requested
         if args.generate_script:
-            diagnostics = VFIODiagnostics(args.device_bdf)
-            script = diagnostics.get_remediation_script(result)
+            script = remediation_script(result)
             script_path = "vfio_remediation.sh"
 
             with open(script_path, "w") as f:

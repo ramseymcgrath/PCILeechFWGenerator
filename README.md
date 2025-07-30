@@ -136,6 +136,13 @@ sudo usermod -a -G vfio $USER
 sudo usermod -a -G dialout $USER  # For USB-JTAG access
 ```
 
+**5. ACS (Access Control Services) errors**
+```bash
+# Devices sharing IOMMU groups - common on Ubuntu
+# Note: Ubuntu kernels do NOT support pcie_acs_override parameter
+# See diagnostic tool output for distribution-specific solutions
+```
+
 ### Installation Issues
 
 ```bash

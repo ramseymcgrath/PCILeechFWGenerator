@@ -1,6 +1,7 @@
 """USB device management and firmware flashing utilities."""
 
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -100,8 +101,9 @@ def flash_firmware(bin_path: Path) -> None:
         logger.info(f"Selected USB device: {vid_pid}")
         print(f"[*] Flashing firmware using VID:PID {vid_pid}")
 
+        # Use safer subprocess call with proper argument list
         subprocess.run(
-            f"usbloader --vidpid {vid_pid} -f {bin_path}", shell=True, check=True
+            ["usbloader", "--vidpid", vid_pid, "-f", str(bin_path)], check=True
         )
         logger.info("Firmware flashed successfully")
         print("[✓] Firmware flashed successfully")

@@ -23,12 +23,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.error_utils import extract_root_cause
-from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
+from ..error_utils import extract_root_cause
+from ..exceptions import PCILeechGenerationError, PlatformCompatibilityError
 
 # Import from centralized locations
-from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.templating import (
+from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
+from ..templating import (
     AdvancedSVGenerator,
     BuildContext,
     TemplateRenderer,

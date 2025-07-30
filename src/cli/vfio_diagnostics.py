@@ -26,19 +26,19 @@ import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, auto
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-# Add project root to path for utils imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from log_config import get_logger, setup_logging
-from src.string_utils import (
+# Use consistent relative imports
+from ..log_config import get_logger, setup_logging
+from ..string_utils import (
     log_debug_safe,
     log_error_safe,
     log_info_safe,
@@ -82,6 +82,106 @@ except ImportError:  # colour optional - silently degrade
 if not logging.getLogger().handlers:
     setup_logging(level=logging.INFO, log_file="vfio_diagnostics.log")
 log = get_logger("vfio-assist")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Boot‑loader discovery + kernel‑arg helpers (drop‑in)
+# ──────────────────────────────────────────────────────────────────────────────
+class Boot(Enum):
+    GRUB2_LEGACY = auto()  # /boot/grub/grub.cfg
+    GRUB2_MODERN = auto()  # /boot/grub2/grub.cfg
+    GRUBBY = auto()  # grubby helper (RHEL/Fedora family)
+    SYSTEMD_BOOT = auto()  # /boot/loader/
+    UNKNOWN = auto()
+
+
+def _detect_boot() -> Boot:
+    if shutil.which("grubby"):
+        return Boot.GRUBBY
+    if Path("/boot/loader/entries").exists():
+        return Boot.SYSTEMD_BOOT
+    if Path("/boot/grub2/grub.cfg").exists():
+        return Boot.GRUB2_MODERN
+    if Path("/boot/grub/grub.cfg").exists():
+        return Boot.GRUB2_LEGACY
+    return Boot.UNKNOWN
+
+
+def _dedup(existing: str, new: Tuple[str, ...]) -> str:
+    parts = existing.strip('"').split()
+    for arg in new:
+        if arg not in parts:
+            parts.append(arg)
+    return '"' + " ".join(parts) + '"'
+
+
+def _sed_update(file: str, args: Tuple[str, ...]) -> str:
+    # gnu‑sed command that inserts args exactly once
+    return (
+        r"""sudo sed -i -E """
+        r"""'s/^(GRUB_CMDLINE_LINUX(_DEFAULT)?=)("(.*)")/\1"""
+        + _dedup(r"\3", args)
+        + r"/' "
+        "" + shlex.quote(file)
+    )
+
+
+def _cmds_for_args(args: Tuple[str, ...]) -> list[str]:
+    boot = _detect_boot()
+    joined = " ".join(args)
+
+    if boot == Boot.GRUBBY:
+        return [
+            f"sudo grubby --update-kernel=ALL --args {shlex.quote(joined)}",
+            "sudo reboot",
+        ]
+
+    if boot == Boot.GRUB2_MODERN:
+        return [
+            _sed_update("/etc/default/grub", args),
+            "sudo grub2-mkconfig -o /boot/grub2/grub.cfg",
+            "sudo reboot",
+        ]
+
+    if boot == Boot.GRUB2_LEGACY:
+        return [
+            _sed_update("/etc/default/grub", args),
+            "sudo grub-mkconfig -o /boot/grub/grub.cfg",
+            "sudo reboot",
+        ]
+
+    if boot == Boot.SYSTEMD_BOOT:
+        kcmd = Path("/etc/kernel/cmdline")
+        if kcmd.exists():
+            current = kcmd.read_text().strip().split()
+            add = [a for a in args if a not in current]
+            if add:
+                return [
+                    f"echo {' '.join(add)} | sudo tee -a /etc/kernel/cmdline",
+                    "sudo kernelstub -A || sudo bootctl update",
+                    "sudo reboot",
+                ]
+            return [
+                "# kernel args already present – reboot if you just installed a new kernel"
+            ]
+        return ["# Could not locate /etc/kernel/cmdline – edit manually"]
+
+    return ["# Unknown boot loader; append these once then reboot:", "# " + joined]
+
+
+def _kernel_param_commands() -> list[str]:
+    return _cmds_for_args(("intel_iommu=on", "amd_iommu=on", "iommu=pt"))
+
+
+def _kernel_param_commands_with_acs() -> list[str]:
+    return _cmds_for_args(
+        (
+            "intel_iommu=on",
+            "amd_iommu=on",
+            "iommu=pt",
+            "pcie_acs_override=downstream,multifunction",
+        )
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -315,15 +415,39 @@ class Diagnostics:
             iommu_params = ["intel_iommu=on", "amd_iommu=on", "iommu=pt", "iommu=on"]
             found_params = [param for param in iommu_params if param in cmdline]
 
+            # Check for ACS bypass parameters
+            acs_params = [
+                "pcie_acs_override=downstream",
+                "pcie_acs_override=multifunction",
+                "pcie_acs_override=downstream,multifunction",
+            ]
+            found_acs = [param for param in acs_params if param in cmdline]
+
             log_debug_safe(log, "Found IOMMU parameters: {params}", params=found_params)
+            log_debug_safe(
+                log, "Found ACS override parameters: {params}", params=found_acs
+            )
 
             if found_params:
                 log_debug_safe(log, "IOMMU enabled in kernel cmdline")
+                message = f"IOMMU enabled in cmdline: {', '.join(found_params)}"
+                if found_acs:
+                    # Check if ACS override is actually supported
+                    acs_supported = self._test_acs_override_support()
+                    if acs_supported:
+                        message += f", ACS override: {', '.join(found_acs)}"
+                    else:
+                        message += f", ACS override params present but kernel doesn't support them"
+
                 self._append(
                     name="Kernel cmdline",
                     status=Status.OK,
-                    message=f"IOMMU enabled in cmdline: {', '.join(found_params)}",
+                    message=message,
                 )
+
+                # Check if ACS bypass might be needed
+                if not found_acs and self.device_bdf:
+                    self._check_acs_bypass_need()
             else:
                 log_warning_safe(log, "No IOMMU parameters found in kernel cmdline")
                 fix = "Enable intel_iommu=on and/or amd_iommu=on iommu=pt in grub"
@@ -332,7 +456,7 @@ class Diagnostics:
                     status=Status.ERROR,
                     message="IOMMU not present in kernel parameters",
                     remediation=fix,
-                    commands=self._kernel_param_commands(),
+                    commands=_kernel_param_commands(),
                 )
         except Exception as e:
             log_error_safe(
@@ -344,33 +468,6 @@ class Diagnostics:
                 status=Status.ERROR,
                 message=f"Failed to read /proc/cmdline: {e}",
             )
-
-    @staticmethod
-    def _kernel_param_commands() -> List[str]:
-        cmd: list[str] = []
-        if shutil.which("grubby"):
-            cmd.append(
-                'sudo grubby --update-kernel=ALL --args "intel_iommu=on amd_iommu=on iommu=pt"'
-            )
-        elif Path("/etc/default/grub").exists():
-            # Minimal fallback; user should still review
-            cmd.extend(
-                [
-                    'sudo sed -Ei \'s/GRUB_CMDLINE_LINUX=("[^"]*)/GRUB_CMDLINE_LINUX="\\1 intel_iommu=on amd_iommu=on iommu=pt"/\' /etc/default/grub',
-                    "sudo update-grub",
-                ]
-            )
-        elif Path(
-            "/etc/kernel/cmdline"
-        ).exists():  # systemd‑boot (Fedora Silverblue, etc.)
-            cmd.extend(
-                [
-                    "echo 'intel_iommu=on amd_iommu=on iommu=pt' | sudo tee -a /etc/kernel/cmdline",
-                    "sudo rpm-ostree initramfs --enable",
-                ]
-            )
-        cmd.append("sudo reboot # required for kernel param changes")
-        return cmd
 
     def _check_modules(self):
         """Check if required VFIO kernel modules are loaded."""
@@ -732,7 +829,181 @@ class Diagnostics:
                 message=f"Failed to determine VFIO node: {e}",
             )
 
-    # Overall --------------------------------------------------------------
+    def _check_acs_bypass_need(self):
+        """Check if ACS bypass might be needed for proper IOMMU group isolation."""
+        if not self.device_bdf:
+            return
+
+        log_debug_safe(
+            log,
+            "Checking if ACS bypass might be needed for {device}",
+            device=self.device_bdf,
+            prefix="VFIO",
+        )
+
+        try:
+            # Get the target device's IOMMU group
+            group_link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+            if not group_link.exists():
+                return
+
+            group_target = os.readlink(group_link)
+            group = os.path.basename(group_target)
+
+            # Check how many devices are in this IOMMU group
+            group_devices_path = Path(f"/sys/kernel/iommu_groups/{group}/devices")
+            if not group_devices_path.exists():
+                return
+
+            devices = list(group_devices_path.iterdir())
+            device_count = len(devices)
+
+            log_debug_safe(
+                log,
+                "Device {device} is in IOMMU group {group} with {count} devices",
+                device=self.device_bdf,
+                group=group,
+                count=device_count,
+                prefix="VFIO",
+            )
+
+            if device_count > 1:
+                # Multiple devices in the same group - ACS bypass likely needed
+                device_names = [d.name for d in devices]
+
+                # Check if this looks like PCIe bridge isolation issue
+                bridges = [d for d in device_names if self._is_pci_bridge(d)]
+
+                warning_msg = f"Device shares IOMMU group {group} with {device_count-1} other device(s): {', '.join([d for d in device_names if d != self.device_bdf])}"
+
+                if bridges:
+                    warning_msg += f". PCIe bridges detected: {', '.join(bridges)}"
+
+                # Check if ACS override is actually supported by testing the parameter
+                acs_supported = self._test_acs_override_support()
+
+                if acs_supported:
+                    remediation = "Enable ACS bypass with pcie_acs_override=downstream,multifunction"
+                    commands = _kernel_param_commands_with_acs()
+                else:
+                    remediation = "Device isolation requires ACS override patch (not available in this kernel)"
+                    commands = [
+                        "# ACS override is NOT supported in this kernel",
+                        "# General solutions:",
+                        "# 1. Check if your distribution provides ACS-patched kernels",
+                        "# 2. Build custom kernel with ACS patch",
+                        "# 3. Switch to distribution with ACS support (Proxmox, Arch AUR)",
+                        "# 4. Check BIOS for ACS/PCIe override options",
+                        "# 5. Consider different hardware topology",
+                    ]
+
+                self._append(
+                    name="ACS bypass",
+                    status=Status.WARNING,
+                    message=warning_msg,
+                    remediation=remediation,
+                    commands=commands,
+                )
+            else:
+                log_debug_safe(
+                    log,
+                    "Device {device} is isolated in its own IOMMU group - ACS bypass not needed",
+                    device=self.device_bdf,
+                    prefix="VFIO",
+                )
+                self._append(
+                    name="ACS bypass",
+                    status=Status.OK,
+                    message=f"Device isolated in IOMMU group {group}",
+                )
+
+        except Exception as e:
+            log_debug_safe(
+                log,
+                "Failed to check ACS bypass need: {error}",
+                error=str(e),
+                prefix="VFIO",
+            )
+            self._append(
+                name="ACS bypass",
+                status=Status.WARNING,
+                message=f"Could not determine if ACS bypass is needed: {e}",
+            )
+
+    def _is_pci_bridge(self, bdf: str) -> bool:
+        """Check if a device is a PCIe bridge by examining its class code."""
+        try:
+            class_path = Path(f"/sys/bus/pci/devices/{bdf}/class")
+            if class_path.exists():
+                class_code = class_path.read_text().strip()
+                # PCIe bridges typically have class code 0x060400 or 0x060401
+                return class_code.startswith("0x0604")
+        except Exception:
+            pass
+        return False
+
+    def _get_kernel_version(self) -> Optional[str]:
+        """Get the current kernel version string."""
+        try:
+            result = subprocess.run(
+                ["uname", "-r"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
+
+    def _test_acs_override_support(self) -> bool:
+        """Test if the current kernel supports ACS override by checking if the parameter exists."""
+        # 1. live sysfs parameter
+        if Path("/sys/module/pci/parameters/pcie_acs_override").exists():
+            return True
+
+        # 2. kernel build config
+        kcfg = Path(f"/boot/config-{os.uname().release}")
+        try:
+            if kcfg.exists():
+                for line in kcfg.read_text().splitlines():
+                    if line.startswith("CONFIG_PCI_QUIRKS="):
+                        return line.rstrip().endswith("y")
+        except PermissionError:
+            pass
+
+        # 3. modular pci driver parameters
+        try:
+            out = subprocess.run(
+                ["modinfo", "-p", "pci"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if out.returncode == 0:
+                return "pcie_acs_override" in out.stdout
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+
+        return False
+
+    def _is_ubuntu(self) -> bool:
+        """Check if we're running on Ubuntu."""
+        try:
+            # Check /etc/os-release
+            os_release = Path("/etc/os-release")
+            if os_release.exists():
+                content = os_release.read_text()
+                return "ID=ubuntu" in content.lower() or "ubuntu" in content.lower()
+
+            # Fallback: check /etc/lsb-release
+            lsb_release = Path("/etc/lsb-release")
+            if lsb_release.exists():
+                content = lsb_release.read_text()
+                return "ubuntu" in content.lower()
+
+        except Exception:
+            pass
+        return False
+
     def _overall(self) -> Status:
         if any(c.status == Status.ERROR for c in self.checks):
             return Status.ERROR
