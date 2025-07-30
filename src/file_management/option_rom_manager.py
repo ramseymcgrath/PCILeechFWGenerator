@@ -273,7 +273,7 @@ class OptionROMManager:
                     )
                 except subprocess.CalledProcessError as subprocess_e:
                     raise OptionROMExtractionError(
-                        f"Failed to enable ROM access: {e}. Subprocess fallback also failed: {subprocess_e}"
+                        f"Subprocess fallback failed to enable ROM access: {subprocess_e}"
                     )
 
             # Extract ROM content
