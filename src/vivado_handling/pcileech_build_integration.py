@@ -312,18 +312,20 @@ puts "Adding source files..."
 """
 
         # Add source files
+        script_content += "\n# Add source files\n"
+        script_content += 'puts "Adding source files..."\n'
         for src_file in build_env["src_files"]:
-            relative_path = src_file.relative_to(build_env["output_dir"])
-            script_content += f'add_files -norecurse "{relative_path}"\n'
+            # Convert to absolute path to avoid path resolution issues in Vivado
+            abs_path = Path(src_file).resolve()
+            script_content += f'add_files -norecurse "{abs_path}"\n'
 
         # Add constraints
         script_content += "\n# Add constraint files\n"
         script_content += 'puts "Adding constraint files..."\n'
         for xdc_file in build_env["xdc_files"]:
-            relative_path = xdc_file.relative_to(build_env["output_dir"])
-            script_content += (
-                f'add_files -fileset constrs_1 -norecurse "{relative_path}"\n'
-            )
+            # Convert to absolute path to avoid path resolution issues in Vivado
+            abs_path = Path(xdc_file).resolve()
+            script_content += f'add_files -fileset constrs_1 -norecurse "{abs_path}"\n'
 
         # Add synthesis and implementation
         script_content += """

@@ -44,3 +44,38 @@ Optional Requirements
 - **Podman** (required for proper PCIe device mounting)
 - **DMA board** (pcileech_75t484_x1, pcileech_35t325_x4, or pcileech_100t484_x1)
 - **Vivado Studio** (2022.2+ for synthesis and bitstream generation)
+
+Basic Usage
+~~~~~~~~~~~
+
+Interactive TUI (recommended for first-time users)::
+
+   sudo python3 pcileech.py tui
+
+CLI interface for scripted builds::
+
+   sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1
+
+CLI build with custom Vivado settings::
+
+   sudo python3 pcileech.py build --bdf 0000:03:00.0 --board pcileech_35t325_x1 \
+       --vivado-path /tools/Xilinx/2025.1/Vivado --vivado-jobs 8 --vivado-timeout 7200
+
+Check VFIO configuration::
+
+   sudo python3 pcileech.py check --device 0000:03:00.0
+
+Flash firmware to device::
+
+   sudo python3 pcileech.py flash output/firmware.bin
+
+Vivado Configuration Options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The tool supports several command-line options for configuring Vivado builds:
+
+- ``--vivado-path PATH``: Manual path to Vivado installation directory
+- ``--vivado-jobs N``: Number of parallel jobs for Vivado builds (default: 4)
+- ``--vivado-timeout SECONDS``: Timeout for Vivado operations (default: 3600)
+
+These options replace the previous ``vivado_config.yaml`` configuration file approach.

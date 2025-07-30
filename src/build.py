@@ -114,6 +114,9 @@ class BuildConfiguration:
     max_workers: int = MAX_PARALLEL_FILE_WRITES
     output_template: Optional[str] = None
     donor_template: Optional[str] = None
+    vivado_path: Optional[str] = None
+    vivado_jobs: int = 4
+    vivado_timeout: int = 3600
 
 
 @dataclass
@@ -670,30 +673,102 @@ class ConfigurationManager:
             profile_duration=args.profile,
             output_template=getattr(args, "output_template", None),
             donor_template=getattr(args, "donor_template", None),
+            vivado_path=getattr(args, "vivado_path", None),
+            vivado_jobs=getattr(args, "vivado_jobs", 4),
+            vivado_timeout=getattr(args, "vivado_timeout", 3600),
         )
 
     def extract_device_config(
-        self, template_context: Dict[str, Any], msix_data: Dict[str, Any]
+        self, template_context: Dict[str, Any], has_msix: bool
     ) -> DeviceConfiguration:
         """
         Extract device configuration from build results.
 
         Args:
             template_context: Template context from generation
-            msix_data: MSI-X data from generation
+            has_msix: Whether the device requires MSI-X support
 
         Returns:
             DeviceConfiguration instance
+
+        Raises:
+            ConfigurationError: If required device configuration is missing or invalid
         """
-        device_config = template_context["device_config"]
+        device_config = template_context.get("device_config")
         pcie_config = template_context.get("pcie_config", {})
 
+        # Fail immediately if device config is missing or empty - no fallbacks
+        if not device_config:
+            raise ConfigurationError(
+                "Device configuration is missing from template context. "
+                "This would result in generic firmware that is not device-specific. "
+                "Ensure proper device detection and configuration space analysis."
+            )
+
+        # Validate all required fields are present and non-zero
+        required_fields = {
+            "vendor_id": "Vendor ID",
+            "device_id": "Device ID",
+            "revision_id": "Revision ID",
+            "class_code": "Class Code",
+        }
+
+        for field, display_name in required_fields.items():
+            value = device_config.get(field)
+            if value is None:
+                raise ConfigurationError(
+                    f"{display_name} is missing from device configuration. "
+                    f"Cannot generate device-specific firmware without valid {display_name}."
+                )
+
+            # Check for invalid/generic values that could create non-unique firmware
+            if isinstance(value, (int, str)):
+                int_value = int(value, 16) if isinstance(value, str) else value
+                if int_value == 0:
+                    raise ConfigurationError(
+                        f"{display_name} is zero (0x{int_value:04X}), which indicates "
+                        f"invalid device configuration. This would create generic firmware."
+                    )
+
+        # Additional validation for vendor/device ID pairs that are known generics
+        vendor_id = device_config["vendor_id"]
+        device_id = device_config["device_id"]
+
+        # Convert to int if string
+        if isinstance(vendor_id, str):
+            vendor_id = int(vendor_id, 16)
+        if isinstance(device_id, str):
+            device_id = int(device_id, 16)
+
+        # Check for common generic vendor/device combinations
+        generic_combinations = [
+            (0x10EE, 0x7021),  # Common Xilinx test IDs
+            (0x1234, 0x5678),  # Common placeholder IDs
+            (0xFFFF, 0xFFFF),  # Invalid IDs
+        ]
+
+        for generic_vendor, generic_device in generic_combinations:
+            if vendor_id == generic_vendor and device_id == generic_device:
+                raise ConfigurationError(
+                    f"Detected generic vendor/device ID combination "
+                    f"(0x{vendor_id:04X}:0x{device_id:04X}). This would create "
+                    f"non-unique firmware. Use a real device for cloning."
+                )
+
         return DeviceConfiguration(
-            vendor_id=device_config["vendor_id"],
-            device_id=device_config["device_id"],
-            revision_id=device_config["revision_id"],
-            class_code=device_config["class_code"],
-            requires_msix=bool(msix_data.get("is_valid", False)),
+            vendor_id=vendor_id,
+            device_id=device_id,
+            revision_id=(
+                int(device_config["revision_id"], 16)
+                if isinstance(device_config["revision_id"], str)
+                else device_config["revision_id"]
+            ),
+            class_code=(
+                int(device_config["class_code"], 16)
+                if isinstance(device_config["class_code"], str)
+                else device_config["class_code"]
+            ),
+            requires_msix=has_msix,
             pcie_lanes=pcie_config.get("max_lanes", 1),
         )
 
@@ -854,7 +929,7 @@ class FirmwareBuilder:
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
-        vivado = find_vivado_installation()
+        vivado = find_vivado_installation(self.config.vivado_path)
         if not vivado:
             raise VivadoIntegrationError("Vivado not found in PATH")
 
@@ -1002,6 +1077,8 @@ class FirmwareBuilder:
             vendor_id=device_config["vendor_id"],
             subsys_vendor_id=subsys_vendor_id,
             subsys_device_id=subsys_device_id,
+            build_jobs=self.config.vivado_jobs,
+            build_timeout=self.config.vivado_timeout,
         )
 
         self.logger.info(
@@ -1015,10 +1092,16 @@ class FirmwareBuilder:
 
     def _store_device_config(self, result: Dict[str, Any]) -> None:
         """Store device configuration for Vivado integration."""
-        ctx = result["template_context"]
+        ctx = result.get("template_context", {})
         msix_data = result.get("msix_data", {})
 
-        self._device_config = self.config_manager.extract_device_config(ctx, msix_data)
+        # Ensure msix_data is a dictionary and not None
+        if msix_data is None:
+            msix_data = {}
+
+        # Pass the boolean indicator for MSIX presence instead of the data itself
+        has_msix = "msix_data" in result and result["msix_data"] is not None
+        self._device_config = self.config_manager.extract_device_config(ctx, has_msix)
 
     def _generate_donor_template(self, result: Dict[str, Any]) -> None:
         """Generate and save donor info template if requested."""
@@ -1080,6 +1163,9 @@ Examples:
   # Build with Vivado integration
   %(prog)s --bdf 0000:03:00.0 --board pcileech_35t325_x4 --vivado
   
+  # Build with custom Vivado settings
+  %(prog)s --bdf 0000:03:00.0 --board pcileech_35t325_x4 --vivado-path /tools/Xilinx/2025.1/Vivado --vivado-jobs 8
+  
   # Build with behavior profiling
   %(prog)s --bdf 0000:03:00.0 --board pcileech_35t325_x4 --profile 60
   
@@ -1127,6 +1213,22 @@ Examples:
     parser.add_argument(
         "--donor-template",
         help="Use donor info JSON template to override discovered values",
+    )
+    parser.add_argument(
+        "--vivado-path",
+        help="Manual path to Vivado installation directory (e.g., /tools/Xilinx/2025.1/Vivado)",
+    )
+    parser.add_argument(
+        "--vivado-jobs",
+        type=int,
+        default=4,
+        help="Number of parallel jobs for Vivado builds (default: 4)",
+    )
+    parser.add_argument(
+        "--vivado-timeout",
+        type=int,
+        default=3600,
+        help="Timeout for Vivado operations in seconds (default: 3600)",
     )
 
     return parser.parse_args(argv)

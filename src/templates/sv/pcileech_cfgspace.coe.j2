@@ -21,7 +21,10 @@ memory_initialization_vector=
 
 ; Standard PCI Configuration Header (0x00-0x3F)
 ; Vendor ID (0x00-0x01) and Device ID (0x02-0x03)
-{{ config_space.device_id | default("15B8") | string }}{{ config_space.vendor_id | default("8086") | string }},
+{%- if not config_space.device_id or not config_space.vendor_id %}
+{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- endif %}
+{{ config_space.device_id | string }}{{ config_space.vendor_id | string }},
 
 ; Command Register (0x04-0x05) and Status Register (0x06-0x07)
 ; Command: Memory Space Enable + Bus Master Enable
@@ -30,7 +33,10 @@ memory_initialization_vector=
 0210{% else %}0200{% endif %}0006,
 
 ; Revision ID (0x08), Programming Interface (0x09), Sub Class (0x0A), Base Class (0x0B)
-{{ config_space.class_code | default("020000") | string }}{{ config_space.revision_id | default("01") | string }},
+{%- if not config_space.class_code or not config_space.revision_id %}
+{%- error "Class Code and Revision ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- endif %}
+{{ config_space.class_code | string }}{{ config_space.revision_id | string }},
 
 ; Cache Line Size (0x0C), Latency Timer (0x0D), Header Type (0x0E), BIST (0x0F)
 00001010,

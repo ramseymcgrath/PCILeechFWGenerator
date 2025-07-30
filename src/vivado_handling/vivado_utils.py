@@ -129,8 +129,43 @@ def _detect_version(dir_: Path) -> str:
 # ───────────────────────── Public API ──────────────────────────
 
 
-def find_vivado_installation() -> Optional[Dict[str, str]]:
-    """Return a dict with keys *path, bin_path, executable, version* or *None*."""
+def find_vivado_installation(
+    manual_path: Optional[str] = None,
+) -> Optional[Dict[str, str]]:
+    """Return a dict with keys *path, bin_path, executable, version* or *None*.
+
+    Args:
+        manual_path: Optional manual path to Vivado installation directory
+    """
+
+    # First, check if manual path is specified via parameter (takes highest priority)
+    if manual_path:
+        manual_path_obj = Path(manual_path)
+        if manual_path_obj.exists() and manual_path_obj.is_dir():
+            exe = _vivado_executable(manual_path_obj)
+            if exe:
+                version = get_vivado_version(str(exe)) or _detect_version(
+                    manual_path_obj
+                )
+                LOG.info("Using manually specified Vivado installation")
+                return {
+                    "path": str(manual_path_obj),
+                    "bin_path": str(manual_path_obj / "bin"),
+                    "executable": str(exe),
+                    "version": version,
+                }
+            else:
+                LOG.warning(
+                    "Manual Vivado path specified but vivado executable not found: %s",
+                    manual_path,
+                )
+        else:
+            LOG.warning(
+                "Manual Vivado path specified but directory doesn't exist: %s",
+                manual_path,
+            )
+
+    # Fallback to automatic detection
     for root in _iter_candidate_dirs():
         exe = _vivado_executable(root)
         if not exe:
@@ -143,6 +178,10 @@ def find_vivado_installation() -> Optional[Dict[str, str]]:
             "executable": str(exe),
             "version": version,
         }
+
+    LOG.warning(
+        "Vivado installation not found. Use --vivado-path to specify manual installation path."
+    )
     return None
 
 

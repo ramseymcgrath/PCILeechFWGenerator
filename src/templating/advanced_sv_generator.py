@@ -140,10 +140,21 @@ class DeviceConfig:
 
     device_type: DeviceType = DeviceType.GENERIC
     device_class: DeviceClass = DeviceClass.CONSUMER
-    vendor_id: str = "0x1234"
-    device_id: str = "0x5678"
+    vendor_id: Optional[str] = None  # Must be explicitly provided - no default
+    device_id: Optional[str] = None  # Must be explicitly provided - no default
     max_payload_size: int = 256
     msi_vectors: int = 1
+
+    def __post_init__(self):
+        """Validate that required fields are provided."""
+        if not self.vendor_id:
+            raise ValueError(
+                "vendor_id must be explicitly provided - no fallback allowed"
+            )
+        if not self.device_id:
+            raise ValueError(
+                "device_id must be explicitly provided - no fallback allowed"
+            )
 
     @classmethod
     def from_device_configuration(

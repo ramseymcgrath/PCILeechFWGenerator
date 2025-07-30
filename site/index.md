@@ -157,12 +157,26 @@ podman info | grep rootless
 
 For detailed information, browse the sections below or visit our complete documentation:
 
+### Core Features & Architecture
+
 - **[Device Cloning Process](device-cloning.md)** - Complete guide to the cloning workflow
-- **[Firmware Uniqueness](firmware-uniqueness.md)** - How authenticity is achieved
-- **[Manual Donor Dump](manual-donor-dump.md)** - Step-by-step manual extraction
-- **[Development Setup](development.md)** - Contributing and development guide
-- **[TUI Documentation](tui-readme.md)** - Interactive interface guide
-- **[Config space info](config-space-shadow.md)** - Config space shadow info
+- **[Configuration Space Shadow](config-space-shadow.md)** - Understanding the configuration space shadow mechanism
+- **[Template Architecture](template-architecture.md)** - Explore the template-based design system
+- **[Firmware Authenticity & Stability](firmware-uniqueness.md)** - Ensuring firmware integrity and reliability
+- **[Supported Devices](supported-devices.md)** - View all compatible hardware devices
+
+### Guides & Tutorials
+
+- **[Manual Donor Dump](manual-donor-dump.md)** - Step-by-step manual extraction guide
+- **[TUI Interface Guide](tui-readme.md)** - Using the Terminal User Interface
+- **[Development Guide](development.md)** - Contributing to PCILeech Firmware Generator
+
+### External Resources
+
+- **[PCILeech Main Project](https://github.com/ufrisk/pcileech)** - Visit the main PCILeech project
+- **[PCILeech FPGA](https://github.com/ufrisk/pcileech-fpga)** - PCILeech FPGA implementation
+- **[Issues Tracker](https://github.com/ramseymcgrath/PCILeechFWGenerator/issues)** - Report bugs or request features
+- **[Community Forum](https://github.com/ramseymcgrath/PCILeechFWGenerator/discussions)** - Join the community discussions
 
 ## 🧹 Cleanup & Safety
 

@@ -82,10 +82,13 @@ puts "Configuring PCIe IP Core for {{ pcie_ip_type }}..."
 # This part uses custom SystemVerilog modules instead of Xilinx IP cores
 
 # Set device-specific parameters for custom PCIe implementation
-set DEVICE_ID {{ device.device_id if device.device_id else "7021" }}
-set VENDOR_ID {{ device.vendor_id if device.vendor_id else "10EE" }}
+{%- if not device.device_id or not device.vendor_id %}
+{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- endif %}
+set DEVICE_ID {{ device.device_id }}
+set VENDOR_ID {{ device.vendor_id }}
 set REVISION_ID {{ device.revision_id if device.revision_id else "00" }}
-set SUBSYSTEM_VENDOR_ID {{ device.vendor_id if device.vendor_id else "10EE" }}
+set SUBSYSTEM_VENDOR_ID {{ device.vendor_id }}
 set SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }}
 
 puts "Using custom PCIe implementation for Artix-7 35T"
@@ -98,12 +101,15 @@ puts "Revision ID: $REVISION_ID"
 {% elif pcie_ip_type == "pcie_ultrascale" %}
 # UltraScale PCIe IP
 create_ip -name pcie4_uscale_plus -vendor xilinx.com -library ip -module_name pcie_ultrascale_bridge
+{%- if not device.device_id or not device.vendor_id %}
+{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- endif %}
 set_property -dict [list \
     CONFIG.PL_LINK_CAP_MAX_LINK_SPEED {8.0_GT/s} \
     CONFIG.PL_LINK_CAP_MAX_LINK_WIDTH {X{{ max_lanes }}} \
     CONFIG.AXISTEN_IF_EXT_512_RQ_STRADDLE {false} \
-    CONFIG.PF0_DEVICE_ID {{ device.device_id if device.device_id else "9021" }} \
-    CONFIG.PF0_VENDOR_ID {{ device.vendor_id if device.vendor_id else "10EE" }} \
+    CONFIG.PF0_DEVICE_ID {{ device.device_id }} \
+    CONFIG.PF0_VENDOR_ID {{ device.vendor_id }} \
     CONFIG.PF0_CLASS_CODE {{ device.class_code if device.class_code else "058000" }} \
     CONFIG.PF0_REVISION_ID {{ device.revision_id if device.revision_id else "00" }} \
     CONFIG.PF0_SUBSYSTEM_ID {{ device.subsys_device_id if device.subsys_device_id else "0000" }} \
@@ -117,11 +123,14 @@ set_property -dict [list \
 # TEMPLATE FILE: /src/templates/tcl/pcileech_generate_project.j2
 # 7-Series PCIe IP (default)
 create_ip -name pcie_7x -vendor xilinx.com -library ip -module_name pcie_7x_bridge
+{%- if not device.device_id or not device.vendor_id %}
+{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- endif %}
 set_property -dict [list \
     CONFIG.Link_Speed {2.5_GT/s} \
     CONFIG.Maximum_Link_Width X1 \
-    CONFIG.Device_ID {{ device.device_id if device.device_id else "7021" }} \
-    CONFIG.Vendor_ID {{ device.vendor_id if device.vendor_id else "10EE" }} \
+    CONFIG.Device_ID {{ device.device_id }} \
+    CONFIG.Vendor_ID {{ device.vendor_id }} \
     CONFIG.Revision_ID {{ device.revision_id if device.revision_id else "00" }} \
     CONFIG.Class_Code_Base {02} \
     CONFIG.Class_Code_Interface {00} \

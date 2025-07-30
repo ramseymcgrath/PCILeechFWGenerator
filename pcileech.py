@@ -453,6 +453,22 @@ Environment Variables:
         default="generic",
         help="Override device type detection (default: auto-detect from class code)",
     )
+    build_parser.add_argument(
+        "--vivado-path",
+        help="Manual path to Vivado installation directory (e.g., /tools/Xilinx/2025.1/Vivado)",
+    )
+    build_parser.add_argument(
+        "--vivado-jobs",
+        type=int,
+        default=4,
+        help="Number of parallel jobs for Vivado builds (default: 4)",
+    )
+    build_parser.add_argument(
+        "--vivado-timeout",
+        type=int,
+        default=3600,
+        help="Timeout for Vivado operations in seconds (default: 3600)",
+    )
 
     # TUI command
     tui_parser = subparsers.add_parser("tui", help="Launch interactive TUI")

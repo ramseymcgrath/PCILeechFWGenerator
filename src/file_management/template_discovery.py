@@ -317,6 +317,11 @@ class TemplateDiscovery:
             "pcileech_com.sv",
             "pcileech_pcie_cfg_a7.sv",
             "pcileech_pcie_cfg_us.sv",
+            "pcileech.svh",  # Add missing PCILeech header file
+            "tlp_pkg.svh",  # TLP package definitions
+            "bar_controller.sv",
+            "cfg_shadow.sv",
+            "pcileech_pcie_tlp_a7.sv",
         ]
 
         # Search in common locations
