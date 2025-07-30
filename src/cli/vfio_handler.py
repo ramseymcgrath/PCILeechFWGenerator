@@ -820,10 +820,7 @@ def render_pretty(diagnostic_result: Dict[str, Any]) -> str:
     """
     try:
         # Use color functions from vfio_diagnostics if available
-        if HAS_VFIO_ASSIST and Diagnostics is not None:
-            from .vfio_diagnostics import Fore, colour
-        else:
-            raise ImportError("No color support available")
+        from .vfio_diagnostics import Fore, colour
 
         output = []
         overall = diagnostic_result.get("overall", "unknown")
