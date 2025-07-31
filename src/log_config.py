@@ -86,8 +86,8 @@ class FallbackColoredFormatter(logging.Formatter):
 
     def format(self, record):
         # Only colorize if outputting to a terminal
+        levelname = record.levelname
         if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
-            levelname = record.levelname
             if levelname in self.COLORS:
                 record.levelname = f"{self.COLORS[levelname]}{levelname}{self.RESET}"
                 record.msg = f"{self.COLORS[levelname]}{record.msg}{self.RESET}"

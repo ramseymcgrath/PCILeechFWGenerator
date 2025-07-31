@@ -915,48 +915,50 @@ class FirmwareBuilder:
 
     def run_vivado(self) -> None:
         """
-        Hand-off to Vivado in batch mode using the generated scripts.
+        Hand-off to Vivado in batch mode using the simplified VivadoRunner.
 
         Raises:
             VivadoIntegrationError: If Vivado integration fails
         """
         try:
             from .vivado_handling import (
+                VivadoRunner,
                 find_vivado_installation,
-                integrate_pcileech_build,
-                run_vivado_with_error_reporting,
             )
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
-        vivado = find_vivado_installation(self.config.vivado_path)
-        if not vivado:
-            raise VivadoIntegrationError("Vivado not found in PATH")
+        # Determine Vivado path
+        if self.config.vivado_path:
+            # User provided explicit path
+            vivado_path = self.config.vivado_path
+            self.logger.info(f"Using user-specified Vivado path: {vivado_path}")
+        else:
+            # Auto-detect Vivado installation
+            vivado_info = find_vivado_installation()
+            if not vivado_info:
+                raise VivadoIntegrationError(
+                    "Vivado not found in PATH. Use --vivado-path to specify installation directory."
+                )
+            # Extract root path from executable path
+            # e.g., /tools/Xilinx/2025.1/Vivado/bin/vivado -> /tools/Xilinx/2025.1/Vivado
+            vivado_exe_path = Path(vivado_info["executable"])
+            vivado_path = str(vivado_exe_path.parent.parent)
+            self.logger.info(f"Auto-detected Vivado at: {vivado_path}")
 
-        try:
-            # Use integrated build if available
-            build_script = integrate_pcileech_build(
-                self.config.board,
-                self.config.output_dir,
-                device_config=(
-                    self._device_config.__dict__ if self._device_config else None
-                ),
-            )
-            self.logger.info(f"Using integrated build script: {build_script}")
-            build_tcl = build_script
-        except Exception as e:
-            self.logger.warning(
-                f"Failed to use integrated build, falling back to generated scripts: {e}"
-            )
-            build_tcl = self.config.output_dir / "vivado_build.tcl"
-
-        rc, rpt = run_vivado_with_error_reporting(
-            build_tcl, self.config.output_dir, vivado["executable"]
+        # Create and run VivadoRunner
+        runner = VivadoRunner(
+            board=self.config.board,
+            output_dir=self.config.output_dir,
+            vivado_path=vivado_path,
+            logger=self.logger,
+            device_config=(
+                self._device_config.__dict__ if self._device_config else None
+            ),
         )
-        if rc:
-            raise VivadoIntegrationError(f"Vivado failed - see {rpt}")
 
-        self.logger.info("Vivado implementation finished successfully ✓")
+        # Run Vivado synthesis
+        runner.run()
 
     # ────────────────────────────────────────────────────────────────────────
     # Private methods - initialization

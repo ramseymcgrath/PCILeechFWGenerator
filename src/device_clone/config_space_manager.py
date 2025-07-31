@@ -6,6 +6,7 @@ Handles PCI configuration space reading via VFIO and synthetic configuration
 space generation for PCILeech firmware building.
 """
 
+import importlib
 import logging
 import os
 import subprocess
@@ -44,7 +45,7 @@ except ImportError:
     DeviceConfiguration = None
 
     def get_device_config(
-        profile_name: str = "generic",
+        profile_name: str,
     ) -> Optional[Any]:
         return None
 
@@ -224,8 +225,6 @@ class ConfigSpaceManager:
         """Run VFIO diagnostics to help troubleshoot issues."""
         try:
             # Try to import and run VFIO diagnostics if available
-            import importlib
-
             vfio_diag_module = importlib.import_module(
                 "..cli.vfio_diagnostics", package=__name__
             )

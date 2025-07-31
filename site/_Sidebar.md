@@ -22,6 +22,7 @@ Last Updated: 2025-07-18
 * [Device Cloning Process](device-cloning "Learn about the device cloning workflow")
 * [Configuration Space Shadow](config-space-shadow "Understanding the configuration space shadow mechanism")
 * [Template Architecture](template-architecture "Explore the template-based design system")
+* [Dynamic Device Capabilities](dynamic-device-capabilities "Advanced PCIe capability generation for network, storage, media, and USB functions")
 * [Firmware Authenticity & Stability](firmware-uniqueness "Ensuring firmware integrity and reliability")
 * [Supported Devices](supported-devices "View all compatible hardware devices")
 

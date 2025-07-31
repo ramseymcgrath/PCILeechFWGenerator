@@ -12,6 +12,7 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 ## ✨ Key Features
 
 - **Donor Hardware Analysis**: Extract real PCIe device configurations and register maps from live hardware via VFIO
+- **Dynamic Device Capabilities**: Generate realistic network, storage, media, and USB controller capabilities with pattern-based analysis
 - **Full 4KB Config-Space Shadow**: Complete configuration space emulation with BRAM-based overlay memory
 - **MSI-X Table Replication**: Exact replication of MSI-X tables from donor devices with interrupt delivery logic
 - **Deterministic Variance Seeding**: Consistent hardware variance based on device serial number for unique firmware
@@ -23,7 +24,7 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🏗️ **[Device Cloning Guide](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** | 🔧 **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)**
+📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🏗️ **[Device Cloning Guide](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** | ⚡ **[Dynamic Capabilities](https://pcileechfwgenerator.ramseymcgrath.com/dynamic-device-capabilities)** | 🔧 **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)**
 
 ## 🚀 Quick Start
 

@@ -30,6 +30,27 @@ except ImportError:
     from ..string_utils import safe_format
 
 from .constants import PCI_CAP_ID_OFFSET, PCI_CAP_NEXT_PTR_OFFSET
+
+# MSI-X specific constants
+MSIX_CAPABILITY_SIZE = 12  # MSI-X capability structure is 12 bytes
+MSIX_MESSAGE_CONTROL_OFFSET = 2
+MSIX_TABLE_OFFSET_BIR_OFFSET = 4
+MSIX_PBA_OFFSET_BIR_OFFSET = 8
+
+# MSI-X Message Control register bit definitions
+MSIX_TABLE_SIZE_MASK = 0x07FF  # Bits 0-10
+MSIX_FUNCTION_MASK_BIT = 0x4000  # Bit 14
+MSIX_ENABLE_BIT = 0x8000  # Bit 15
+
+# MSI-X Table/PBA offset register bit definitions
+MSIX_BIR_MASK = 0x7  # Bits 0-2
+MSIX_OFFSET_MASK = 0xFFFFFFF8  # Bits 3-31
+
+# MSI-X constraints
+MSIX_MIN_TABLE_SIZE = 1
+MSIX_MAX_TABLE_SIZE = 2048
+MSIX_MAX_BIR = 5
+MSIX_OFFSET_ALIGNMENT = 8
 from .core import CapabilityWalker, ConfigSpace
 from .patches import BinaryPatch, PatchEngine
 from .rules import RuleEngine
@@ -99,7 +120,7 @@ class MSIXCapabilityHandler:
         Returns:
             Dictionary with MSI-X capability details, or None if invalid
         """
-        if not self.config_space.has_data(offset, 4):
+        if not self.config_space.has_data(offset, MSIX_CAPABILITY_SIZE):
             log_warning_safe(
                 logger,
                 "MSI-X capability at offset 0x{offset:02x} is truncated",
@@ -126,24 +147,30 @@ class MSIXCapabilityHandler:
                 return None
 
             # Read MSI-X Message Control register
-            message_control = self.config_space.read_word(offset + 2)
+            message_control = self.config_space.read_word(
+                offset + MSIX_MESSAGE_CONTROL_OFFSET
+            )
 
             # Extract fields from Message Control
             table_size = (
-                message_control & 0x07FF
-            ) + 1  # Bits 0-10, add 1 for actual size
-            function_mask = bool(message_control & 0x4000)  # Bit 14
-            msix_enable = bool(message_control & 0x8000)  # Bit 15
+                message_control & MSIX_TABLE_SIZE_MASK
+            ) + 1  # Add 1 for actual size
+            function_mask = bool(message_control & MSIX_FUNCTION_MASK_BIT)
+            msix_enable = bool(message_control & MSIX_ENABLE_BIT)
 
             # Read Table Offset/BIR register
-            table_offset_bir = self.config_space.read_dword(offset + 4)
-            table_bir = table_offset_bir & 0x7  # Bits 0-2
-            table_offset = table_offset_bir & 0xFFFFFFF8  # Bits 3-31
+            table_offset_bir = self.config_space.read_dword(
+                offset + MSIX_TABLE_OFFSET_BIR_OFFSET
+            )
+            table_bir = table_offset_bir & MSIX_BIR_MASK
+            table_offset = table_offset_bir & MSIX_OFFSET_MASK
 
             # Read PBA Offset/BIR register
-            pba_offset_bir = self.config_space.read_dword(offset + 8)
-            pba_bir = pba_offset_bir & 0x7  # Bits 0-2
-            pba_offset = pba_offset_bir & 0xFFFFFFF8  # Bits 3-31
+            pba_offset_bir = self.config_space.read_dword(
+                offset + MSIX_PBA_OFFSET_BIR_OFFSET
+            )
+            pba_bir = pba_offset_bir & MSIX_BIR_MASK
+            pba_offset = pba_offset_bir & MSIX_OFFSET_MASK
 
             return {
                 "offset": offset,
@@ -203,9 +230,9 @@ class MSIXCapabilityHandler:
         if not msix_info:
             return None
 
-        # Create patch to clear MSI-X Enable bit (bit 15) in Message Control
+        # Create patch to clear MSI-X Enable bit in Message Control
         message_control = msix_info["message_control"]
-        new_message_control = message_control & ~0x8000  # Clear bit 15
+        new_message_control = message_control & ~MSIX_ENABLE_BIT  # Clear enable bit
 
         if message_control == new_message_control:
             log_debug_safe(
@@ -217,7 +244,7 @@ class MSIXCapabilityHandler:
             return None
 
         patch = BinaryPatch(
-            offset + 2,  # Message Control register offset
+            offset + MSIX_MESSAGE_CONTROL_OFFSET,  # Message Control register offset
             message_control.to_bytes(2, "little"),
             new_message_control.to_bytes(2, "little"),
             safe_format(
@@ -241,12 +268,14 @@ class MSIXCapabilityHandler:
         Returns:
             BinaryPatch to modify table size, or None if failed
         """
-        if not (1 <= new_table_size <= 2048):
+        if not (MSIX_MIN_TABLE_SIZE <= new_table_size <= MSIX_MAX_TABLE_SIZE):
             log_error_safe(
                 logger,
-                "Invalid MSI-X table size: {new_table_size} (must be 1-2048)",
+                "Invalid MSI-X table size: {new_table_size} (must be {min}-{max})",
                 prefix="PCI_CAP",
                 new_table_size=new_table_size,
+                min=MSIX_MIN_TABLE_SIZE,
+                max=MSIX_MAX_TABLE_SIZE,
             )
             return None
 
@@ -256,9 +285,9 @@ class MSIXCapabilityHandler:
 
         # Calculate new Message Control value
         message_control = msix_info["message_control"]
-        # Clear table size bits (0-10) and set new size (subtract 1 for encoding)
-        new_message_control = (message_control & 0xF800) | (
-            (new_table_size - 1) & 0x07FF
+        # Clear table size bits and set new size (subtract 1 for encoding)
+        new_message_control = (message_control & ~MSIX_TABLE_SIZE_MASK) | (
+            (new_table_size - 1) & MSIX_TABLE_SIZE_MASK
         )
 
         if message_control == new_message_control:
@@ -273,7 +302,7 @@ class MSIXCapabilityHandler:
             return None
 
         patch = BinaryPatch(
-            offset + 2,  # Message Control register offset
+            offset + MSIX_MESSAGE_CONTROL_OFFSET,  # Message Control register offset
             message_control.to_bytes(2, "little"),
             new_message_control.to_bytes(2, "little"),
             safe_format(
@@ -307,10 +336,27 @@ class MSIXCapabilityHandler:
         previous_cap_offset = self._find_previous_capability(offset)
 
         if previous_cap_offset is not None:
+            # Read the current value from the previous capability's next pointer
+            current_next_ptr = self.config_space.read_byte(
+                previous_cap_offset + PCI_CAP_NEXT_PTR_OFFSET
+            )
+
+            # Verify we're actually pointing to the MSI-X capability we want to remove
+            if current_next_ptr != offset:
+                log_warning_safe(
+                    logger,
+                    "Previous capability at 0x{prev_offset:02x} points to 0x{current:02x}, not MSI-X at 0x{offset:02x}",
+                    prefix="PCI_CAP",
+                    prev_offset=previous_cap_offset,
+                    current=current_next_ptr,
+                    offset=offset,
+                )
+                return patches  # Don't create invalid patches
+
             # Update the previous capability's next pointer
             patch = BinaryPatch(
                 previous_cap_offset + PCI_CAP_NEXT_PTR_OFFSET,
-                bytes([offset]),  # Current pointer value
+                bytes([current_next_ptr]),
                 bytes([next_ptr]),  # New pointer value
                 safe_format(
                     "Update capability chain to skip MSI-X at 0x{offset:02x}",
@@ -322,9 +368,23 @@ class MSIXCapabilityHandler:
             # This is the first capability, update the capabilities pointer
             from .constants import PCI_CAPABILITIES_POINTER
 
+            # Read the current capabilities pointer
+            current_cap_ptr = self.config_space.read_byte(PCI_CAPABILITIES_POINTER)
+
+            # Verify it points to our MSI-X capability
+            if current_cap_ptr != offset:
+                log_warning_safe(
+                    logger,
+                    "Capabilities pointer is 0x{current:02x}, not MSI-X at 0x{offset:02x}",
+                    prefix="PCI_CAP",
+                    current=current_cap_ptr,
+                    offset=offset,
+                )
+                return patches  # Don't create invalid patches
+
             patch = BinaryPatch(
                 PCI_CAPABILITIES_POINTER,
-                bytes([offset]),  # Current pointer value
+                bytes([current_cap_ptr]),  # Current pointer value
                 bytes([next_ptr]),  # New pointer value
                 safe_format(
                     "Update capabilities pointer to skip MSI-X at 0x{offset:02x}",
@@ -333,10 +393,12 @@ class MSIXCapabilityHandler:
             )
             patches.append(patch)
 
-        # Zero out the MSI-X capability structure (12 bytes)
-        if self.config_space.has_data(offset, 12):
-            current_data = bytes(self.config_space[offset : offset + 12])
-            zero_data = bytes(12)  # All zeros
+        # Zero out the MSI-X capability structure
+        if self.config_space.has_data(offset, MSIX_CAPABILITY_SIZE):
+            current_data = bytes(
+                self.config_space[offset : offset + MSIX_CAPABILITY_SIZE]
+            )
+            zero_data = bytes(MSIX_CAPABILITY_SIZE)  # All zeros
 
             patch = BinaryPatch(
                 offset,
@@ -402,6 +464,99 @@ class MSIXCapabilityHandler:
         )
         return patches_created
 
+    def create_msix_enable_patch(self, offset: int) -> Optional[BinaryPatch]:
+        """
+        Create a patch to enable an MSI-X capability.
+
+        Args:
+            offset: Offset of the MSI-X capability
+
+        Returns:
+            BinaryPatch to enable MSI-X, or None if failed
+        """
+        msix_info = self.get_msix_capability_info(offset)
+        if not msix_info:
+            return None
+
+        # Create patch to set MSI-X Enable bit in Message Control
+        message_control = msix_info["message_control"]
+        new_message_control = message_control | MSIX_ENABLE_BIT  # Set enable bit
+
+        if message_control == new_message_control:
+            log_debug_safe(
+                logger,
+                "MSI-X at offset 0x{offset:02x} is already enabled",
+                prefix="PCI_CAP",
+                offset=offset,
+            )
+            return None
+
+        patch = BinaryPatch(
+            offset + MSIX_MESSAGE_CONTROL_OFFSET,
+            message_control.to_bytes(2, "little"),
+            new_message_control.to_bytes(2, "little"),
+            safe_format(
+                "Enable MSI-X at offset 0x{offset:02x}",
+                offset=offset,
+            ),
+        )
+
+        return patch
+
+    def create_atomic_msix_patches(
+        self, operations: List[Tuple[str, int, Any]]
+    ) -> List[BinaryPatch]:
+        """
+        Create multiple MSI-X patches atomically with validation.
+
+        Args:
+            operations: List of (operation, offset, args) tuples
+                       Operations: 'disable', 'enable', 'set_table_size', 'remove'
+
+        Returns:
+            List of validated patches
+        """
+        patches = []
+
+        # Validate all operations first
+        for op_name, offset, args in operations:
+            if not self.get_msix_capability_info(offset):
+                log_error_safe(
+                    logger,
+                    "Invalid MSI-X capability at offset 0x{offset:02x} for operation {op}",
+                    prefix="PCI_CAP",
+                    offset=offset,
+                    op=op_name,
+                )
+                return []  # Return empty list on validation failure
+
+        # Create patches
+        for op_name, offset, args in operations:
+            patch = None
+
+            if op_name == "disable":
+                patch = self.create_msix_disable_patch(offset)
+            elif op_name == "enable":
+                patch = self.create_msix_enable_patch(offset)
+            elif op_name == "set_table_size":
+                patch = self.create_msix_table_size_patch(offset, args)
+            elif op_name == "remove":
+                patches.extend(self.create_msix_removal_patches(offset))
+                continue
+            else:
+                log_error_safe(
+                    logger,
+                    "Unknown MSI-X operation: {op}",
+                    prefix="PCI_CAP",
+                    op=op_name,
+                )
+                continue
+
+            if patch:
+                patches.append(patch)
+
+        return patches
+
     def get_msix_integration_info(self) -> Dict[str, Any]:
         """
         Get information for integration with existing MSI-X functionality.
@@ -425,6 +580,58 @@ class MSIXCapabilityHandler:
                 integration_info["msix_details"].append(msix_info)
 
         return integration_info
+
+    def check_msix_requirements(
+        self, device_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Check MSI-X requirements and constraints for the device.
+
+        Args:
+            device_context: Optional device context for additional checks
+
+        Returns:
+            Dictionary with requirement analysis
+        """
+        msix_capabilities = self.find_msix_capabilities()
+        requirements = {
+            "has_msix": len(msix_capabilities) > 0,
+            "msix_count": len(msix_capabilities),
+            "total_vectors": 0,
+            "issues": [],
+            "recommendations": [],
+        }
+
+        total_vectors = 0
+
+        for cap_info in msix_capabilities:
+            msix_info = self.get_msix_capability_info(cap_info.offset)
+            if msix_info:
+                table_size = msix_info["table_size"]
+                total_vectors += table_size
+
+                # Check for common issues
+                if table_size > 64:
+                    requirements["issues"].append(
+                        f"Large MSI-X table size ({table_size}) at offset 0x{cap_info.offset:02x}"
+                    )
+
+                if msix_info["table_bir"] == msix_info["pba_bir"]:
+                    requirements["recommendations"].append(
+                        f"MSI-X table and PBA share same BAR at offset 0x{cap_info.offset:02x}"
+                    )
+
+        requirements["total_vectors"] = total_vectors
+
+        # Check device context requirements
+        if device_context:
+            required_vectors = device_context.get("required_msix_vectors", 0)
+            if required_vectors > total_vectors:
+                requirements["issues"].append(
+                    f"Device requires {required_vectors} vectors but only {total_vectors} available"
+                )
+
+        return requirements
 
     def _find_previous_capability(self, target_offset: int) -> Optional[int]:
         """
@@ -455,11 +662,12 @@ class MSIXCapabilityHandler:
         errors = []
 
         # Check basic structure
-        if not self.config_space.has_data(offset, 12):
+        if not self.config_space.has_data(offset, MSIX_CAPABILITY_SIZE):
             errors.append(
                 safe_format(
-                    "MSI-X capability at 0x{offset:02x} is truncated",
+                    "MSI-X capability at 0x{offset:02x} is truncated (need {size} bytes)",
                     offset=offset,
+                    size=MSIX_CAPABILITY_SIZE,
                 )
             )
             return False, errors
@@ -476,47 +684,53 @@ class MSIXCapabilityHandler:
 
         # Validate table size
         table_size = msix_info["table_size"]
-        if not (1 <= table_size <= 2048):
+        if not (MSIX_MIN_TABLE_SIZE <= table_size <= MSIX_MAX_TABLE_SIZE):
             errors.append(
                 safe_format(
-                    "Invalid MSI-X table size: {table_size}",
+                    "Invalid MSI-X table size: {table_size} (must be {min}-{max})",
                     table_size=table_size,
+                    min=MSIX_MIN_TABLE_SIZE,
+                    max=MSIX_MAX_TABLE_SIZE,
                 )
             )
 
         # Validate BIR values
         table_bir = msix_info["table_bir"]
         pba_bir = msix_info["pba_bir"]
-        if table_bir > 5:
+        if table_bir > MSIX_MAX_BIR:
             errors.append(
                 safe_format(
-                    "Invalid MSI-X table BIR: {table_bir}",
+                    "Invalid MSI-X table BIR: {table_bir} (max {max})",
                     table_bir=table_bir,
+                    max=MSIX_MAX_BIR,
                 )
             )
-        if pba_bir > 5:
+        if pba_bir > MSIX_MAX_BIR:
             errors.append(
                 safe_format(
-                    "Invalid MSI-X PBA BIR: {pba_bir}",
+                    "Invalid MSI-X PBA BIR: {pba_bir} (max {max})",
                     pba_bir=pba_bir,
+                    max=MSIX_MAX_BIR,
                 )
             )
 
         # Validate alignment
         table_offset = msix_info["table_offset"]
         pba_offset = msix_info["pba_offset"]
-        if table_offset & 0x7:
+        if table_offset & (MSIX_OFFSET_ALIGNMENT - 1):
             errors.append(
                 safe_format(
-                    "MSI-X table offset 0x{table_offset:08x} is not 8-byte aligned",
+                    "MSI-X table offset 0x{table_offset:08x} is not {alignment}-byte aligned",
                     table_offset=table_offset,
+                    alignment=MSIX_OFFSET_ALIGNMENT,
                 )
             )
-        if pba_offset & 0x7:
+        if pba_offset & (MSIX_OFFSET_ALIGNMENT - 1):
             errors.append(
                 safe_format(
-                    "MSI-X PBA offset 0x{pba_offset:08x} is not 8-byte aligned",
+                    "MSI-X PBA offset 0x{pba_offset:08x} is not {alignment}-byte aligned",
                     pba_offset=pba_offset,
+                    alignment=MSIX_OFFSET_ALIGNMENT,
                 )
             )
 

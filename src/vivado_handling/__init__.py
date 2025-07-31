@@ -17,6 +17,10 @@ from .vivado_error_reporter import (
     create_enhanced_vivado_runner,
     run_vivado_with_error_reporting,
 )
+from .vivado_runner import (
+    VivadoRunner,
+    create_vivado_runner,
+)
 from .vivado_utils import (
     debug_vivado_search,
     find_vivado_installation,
@@ -36,6 +40,9 @@ __all__ = [
     "VivadoErrorReporter",
     "run_vivado_with_error_reporting",
     "create_enhanced_vivado_runner",
+    # vivado_runner exports (new simplified interface)
+    "VivadoRunner",
+    "create_vivado_runner",
     # pcileech_build_integration exports
     "PCILeechBuildIntegration",
     "integrate_pcileech_build",

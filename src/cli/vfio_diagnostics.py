@@ -43,6 +43,8 @@ from ..string_utils import (
     log_error_safe,
     log_info_safe,
     log_warning_safe,
+    safe_format,
+    safe_print_format,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -55,7 +57,7 @@ try:
     colorama_init()
 
     def colour(txt: str, col: str) -> str:  # noqa: D401 - short lambda‑style fn
-        return f"{col}{txt}{Style.RESET_ALL}"
+        return safe_format("{col}{txt}{reset}", col=col, txt=txt, reset=Style.RESET_ALL)
 
 except ImportError:  # colour optional - silently degrade
 
@@ -132,7 +134,10 @@ def _cmds_for_args(args: Tuple[str, ...]) -> list[str]:
 
     if boot == Boot.GRUBBY:
         return [
-            f"sudo grubby --update-kernel=ALL --args {shlex.quote(joined)}",
+            safe_format(
+                "sudo grubby --update-kernel=ALL --args {args}",
+                args=shlex.quote(joined),
+            ),
             "sudo reboot",
         ]
 
@@ -157,7 +162,10 @@ def _cmds_for_args(args: Tuple[str, ...]) -> list[str]:
             add = [a for a in args if a not in current]
             if add:
                 return [
-                    f"echo {' '.join(add)} | sudo tee -a /etc/kernel/cmdline",
+                    safe_format(
+                        "echo {args} | sudo tee -a /etc/kernel/cmdline",
+                        args=" ".join(add),
+                    ),
                     "sudo kernelstub -A || sudo bootctl update",
                     "sudo reboot",
                 ]
@@ -166,7 +174,10 @@ def _cmds_for_args(args: Tuple[str, ...]) -> list[str]:
             ]
         return ["# Could not locate /etc/kernel/cmdline – edit manually"]
 
-    return ["# Unknown boot loader; append these once then reboot:", "# " + joined]
+    return [
+        "# Unknown boot loader; append these once then reboot:",
+        safe_format("# {args}", args=joined),
+    ]
 
 
 def _kernel_param_commands() -> list[str]:
@@ -294,12 +305,14 @@ class Diagnostics:
                 prefix="VFIO",
                 error=str(e),
             )
-            log.error("Full exception details:", exc_info=True)
+            log_error_safe(
+                log, "Full exception details available in logs", prefix="VFIO"
+            )
             # Add an error check to indicate the diagnostic failure
             self._append(
                 name="Diagnostic Engine",
                 status=Status.ERROR,
-                message=f"Diagnostic engine failed: {e}",
+                message=safe_format("Diagnostic engine failed: {error}", error=str(e)),
                 remediation="Check system logs and retry",
             )
             return Report(Status.ERROR, self.checks, self.device_bdf, False)
@@ -333,7 +346,9 @@ class Diagnostics:
             self._append(
                 name="Platform",
                 status=Status.ERROR,
-                message=f"Unsupported OS: {platform.system()}",
+                message=safe_format(
+                    "Unsupported OS: {os_name}", os_name=platform.system()
+                ),
                 remediation="Run on a Linux system with VFIO support",
             )
 
@@ -387,11 +402,13 @@ class Diagnostics:
             log_error_safe(
                 log, "Failed to check IOMMU hardware support: {error}", error=str(e)
             )
-            log.error("Full exception details:", exc_info=True)
+            log_error_safe(log, "Full exception details available in logs")
             self._append(
                 name="IOMMU HW",
                 status=Status.WARNING,
-                message=f"Could not parse /proc/cpuinfo: {e}",
+                message=safe_format(
+                    "Could not parse /proc/cpuinfo: {error}", error=str(e)
+                ),
             )
 
     def _check_kernel_params(self):
@@ -430,14 +447,19 @@ class Diagnostics:
 
             if found_params:
                 log_debug_safe(log, "IOMMU enabled in kernel cmdline")
-                message = f"IOMMU enabled in cmdline: {', '.join(found_params)}"
+                message = safe_format(
+                    "IOMMU enabled in cmdline: {params}", params=", ".join(found_params)
+                )
                 if found_acs:
                     # Check if ACS override is actually supported
                     acs_supported = self._test_acs_override_support()
                     if acs_supported:
-                        message += f", ACS override: {', '.join(found_acs)}"
+                        message += safe_format(
+                            ", ACS override: {acs_params}",
+                            acs_params=", ".join(found_acs),
+                        )
                     else:
-                        message += f", ACS override params present but kernel doesn't support them"
+                        message += ", ACS override params present but kernel doesn't support them"
 
                 self._append(
                     name="Kernel cmdline",
@@ -462,11 +484,13 @@ class Diagnostics:
             log_error_safe(
                 log, "Failed to check kernel parameters: {error}", error=str(e)
             )
-            log.error("Full exception details:", exc_info=True)
+            log_error_safe(log, "Full exception details available in logs")
             self._append(
                 name="Kernel cmdline",
                 status=Status.ERROR,
-                message=f"Failed to read /proc/cmdline: {e}",
+                message=safe_format(
+                    "Failed to read /proc/cmdline: {error}", error=str(e)
+                ),
             )
 
     def _check_modules(self):
@@ -478,7 +502,7 @@ class Diagnostics:
         loaded = []
 
         for module in required:
-            module_path = f"/sys/module/{module}"
+            module_path = safe_format("/sys/module/{module}", module=module)
             if self._path_exists(module_path):
                 loaded.append(module)
                 log_debug_safe(log, "Module {module} is loaded", module=module)
@@ -498,7 +522,9 @@ class Diagnostics:
             self._append(
                 name="Kernel modules",
                 status=Status.OK,
-                message=f"All VFIO modules loaded: {', '.join(loaded)}",
+                message=safe_format(
+                    "All VFIO modules loaded: {modules}", modules=", ".join(loaded)
+                ),
             )
         else:
             severity = Status.ERROR if len(missing) == len(required) else Status.WARNING
@@ -511,9 +537,14 @@ class Diagnostics:
             self._append(
                 name="Kernel modules",
                 status=severity,
-                message="Missing modules: " + ", ".join(missing),
+                message=safe_format(
+                    "Missing modules: {modules}", modules=", ".join(missing)
+                ),
                 remediation="Load required modules with modprobe",
-                commands=[f"sudo modprobe {m.replace('_', '-')}" for m in missing],
+                commands=[
+                    safe_format("sudo modprobe {module}", module=m.replace("_", "-"))
+                    for m in missing
+                ],
             )
 
     def _check_vfio_driver_path(self):
@@ -533,25 +564,34 @@ class Diagnostics:
 
     # Device‑specific ---------------------------------------------------------
     def _device_exists(self):
-        device_path = Path(f"/sys/bus/pci/devices/{self.device_bdf}")
+        device_path = Path(
+            safe_format("/sys/bus/pci/devices/{bdf}", bdf=self.device_bdf)
+        )
         if device_path.exists():
             vendor = (device_path / "vendor").read_text().strip()
             device = (device_path / "device").read_text().strip()
             self._append(
                 name="Device",
                 status=Status.OK,
-                message=f"{self.device_bdf} ({vendor}:{device}) present",
+                message=safe_format(
+                    "{bdf} ({vendor}:{device}) present",
+                    bdf=self.device_bdf,
+                    vendor=vendor,
+                    device=device,
+                ),
             )
         else:
             self._append(
                 name="Device",
                 status=Status.ERROR,
-                message=f"PCI device {self.device_bdf} not found",
+                message=safe_format("PCI device {bdf} not found", bdf=self.device_bdf),
                 remediation="Check BDF with lspci ‑D",
             )
 
     def _device_iommu_group(self):
-        group_link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        group_link = Path(
+            safe_format("/sys/bus/pci/devices/{bdf}/iommu_group", bdf=self.device_bdf)
+        )
         log_debug_safe(
             log,
             "Checking IOMMU group link: {group_link}",
@@ -572,7 +612,9 @@ class Diagnostics:
                 )
 
                 # Check if the group directory exists
-                group_dir = Path(f"/sys/kernel/iommu_groups/{group}")
+                group_dir = Path(
+                    safe_format("/sys/kernel/iommu_groups/{group}", group=group)
+                )
                 if group_dir.exists():
                     # List devices in the group for debugging
                     devices_dir = group_dir / "devices"
@@ -597,7 +639,9 @@ class Diagnostics:
                             )
 
                 self._append(
-                    name="IOMMU group", status=Status.OK, message=f"Group {group}"
+                    name="IOMMU group",
+                    status=Status.OK,
+                    message=safe_format("Group {group}", group=group),
                 )
             except OSError as e:
                 log_debug_safe(
@@ -609,11 +653,15 @@ class Diagnostics:
                 self._append(
                     name="IOMMU group",
                     status=Status.ERROR,
-                    message=f"Failed to read IOMMU group symlink: {e}",
+                    message=safe_format(
+                        "Failed to read IOMMU group symlink: {error}", error=str(e)
+                    ),
                 )
         else:
             # Check if device exists at all
-            device_path = Path(f"/sys/bus/pci/devices/{self.device_bdf}")
+            device_path = Path(
+                safe_format("/sys/bus/pci/devices/{bdf}", bdf=self.device_bdf)
+            )
             if device_path.exists():
                 log_debug_safe(
                     log,
@@ -637,7 +685,9 @@ class Diagnostics:
                 self._append(
                     name="IOMMU group",
                     status=Status.ERROR,
-                    message=f"Device {self.device_bdf} not found in sysfs",
+                    message=safe_format(
+                        "Device {bdf} not found in sysfs", bdf=self.device_bdf
+                    ),
                     prefix="VFIO",
                 )
 
@@ -650,7 +700,9 @@ class Diagnostics:
             )
             return
 
-        link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/driver")
+        link = Path(
+            safe_format("/sys/bus/pci/devices/{bdf}/driver", bdf=self.device_bdf)
+        )
         log_debug_safe(
             log,
             "Checking driver binding for {device} at {link}",
@@ -687,7 +739,7 @@ class Diagnostics:
                     self._append(
                         name="Driver",
                         status=Status.WARNING,
-                        message=f"Bound to {driver}",
+                        message=safe_format("Bound to {driver}", driver=driver),
                         remediation="Will need to rebind to vfio-pci",
                         commands=self._bind_commands(self.device_bdf, driver),
                     )
@@ -702,7 +754,9 @@ class Diagnostics:
                 self._append(
                     name="Driver",
                     status=Status.ERROR,
-                    message=f"Failed to read driver symlink: {e}",
+                    message=safe_format(
+                        "Failed to read driver symlink: {error}", error=str(e)
+                    ),
                 )
         else:
             log_debug_safe(
@@ -722,16 +776,23 @@ class Diagnostics:
     def _bind_commands(bdf: str, current: Optional[str]) -> List[str]:
         cmds: list[str] = [
             (
-                f"echo '{bdf}' | sudo tee /sys/bus/pci/devices/{bdf}/driver/unbind"
+                safe_format(
+                    "echo '{bdf}' | sudo tee /sys/bus/pci/devices/{bdf}/driver/unbind",
+                    bdf=bdf,
+                )
                 if current
                 else ""
             ),
-            f"echo '{bdf}' | sudo tee /sys/bus/pci/drivers/vfio-pci/bind",
+            safe_format(
+                "echo '{bdf}' | sudo tee /sys/bus/pci/drivers/vfio-pci/bind", bdf=bdf
+            ),
         ]
         return [c for c in cmds if c]
 
     def _device_node(self):
-        link = Path(f"/sys/bus/pci/devices/{self.device_bdf}/iommu_group")
+        link = Path(
+            safe_format("/sys/bus/pci/devices/{bdf}/iommu_group", bdf=self.device_bdf)
+        )
         log_debug_safe(
             log,
             "Checking VFIO device node for {device}",
@@ -759,7 +820,7 @@ class Diagnostics:
                 prefix="VFIO",
             )
 
-            node = Path(f"/dev/vfio/{group}")
+            node = Path(safe_format("/dev/vfio/{group}", group=group))
             log_debug_safe(log, "Checking VFIO node: {node}", node=node, prefix="VFIO")
 
             if node.exists():
@@ -814,7 +875,9 @@ class Diagnostics:
                 self._append(
                     name="/dev/vfio node",
                     status=Status.WARNING,
-                    message=f"{node} missing (will appear after binding)",
+                    message=safe_format(
+                        "{node} missing (will appear after binding)", node=str(node)
+                    ),
                 )
         except OSError as e:
             log_debug_safe(
@@ -826,7 +889,9 @@ class Diagnostics:
             self._append(
                 name="/dev/vfio node",
                 status=Status.ERROR,
-                message=f"Failed to determine VFIO node: {e}",
+                message=safe_format(
+                    "Failed to determine VFIO node: {error}", error=str(e)
+                ),
             )
 
     def _check_acs_bypass_need(self):
@@ -851,7 +916,9 @@ class Diagnostics:
             group = os.path.basename(group_target)
 
             # Check how many devices are in this IOMMU group
-            group_devices_path = Path(f"/sys/kernel/iommu_groups/{group}/devices")
+            group_devices_path = Path(
+                safe_format("/sys/kernel/iommu_groups/{group}/devices", group=group)
+            )
             if not group_devices_path.exists():
                 return
 
@@ -874,10 +941,18 @@ class Diagnostics:
                 # Check if this looks like PCIe bridge isolation issue
                 bridges = [d for d in device_names if self._is_pci_bridge(d)]
 
-                warning_msg = f"Device shares IOMMU group {group} with {device_count-1} other device(s): {', '.join([d for d in device_names if d != self.device_bdf])}"
+                other_devices = [d for d in device_names if d != self.device_bdf]
+                warning_msg = safe_format(
+                    "Device shares IOMMU group {group} with {count} other device(s): {devices}",
+                    group=group,
+                    count=device_count - 1,
+                    devices=", ".join(other_devices),
+                )
 
                 if bridges:
-                    warning_msg += f". PCIe bridges detected: {', '.join(bridges)}"
+                    warning_msg += safe_format(
+                        ". PCIe bridges detected: {bridges}", bridges=", ".join(bridges)
+                    )
 
                 # Check if ACS override is actually supported by testing the parameter
                 acs_supported = self._test_acs_override_support()
@@ -914,7 +989,9 @@ class Diagnostics:
                 self._append(
                     name="ACS bypass",
                     status=Status.OK,
-                    message=f"Device isolated in IOMMU group {group}",
+                    message=safe_format(
+                        "Device isolated in IOMMU group {group}", group=group
+                    ),
                 )
 
         except Exception as e:
@@ -927,13 +1004,15 @@ class Diagnostics:
             self._append(
                 name="ACS bypass",
                 status=Status.WARNING,
-                message=f"Could not determine if ACS bypass is needed: {e}",
+                message=safe_format(
+                    "Could not determine if ACS bypass is needed: {error}", error=str(e)
+                ),
             )
 
     def _is_pci_bridge(self, bdf: str) -> bool:
         """Check if a device is a PCIe bridge by examining its class code."""
         try:
-            class_path = Path(f"/sys/bus/pci/devices/{bdf}/class")
+            class_path = Path(safe_format("/sys/bus/pci/devices/{bdf}/class", bdf=bdf))
             if class_path.exists():
                 class_code = class_path.read_text().strip()
                 # PCIe bridges typically have class code 0x060400 or 0x060401
@@ -961,7 +1040,7 @@ class Diagnostics:
             return True
 
         # 2. kernel build config
-        kcfg = Path(f"/boot/config-{os.uname().release}")
+        kcfg = Path(safe_format("/boot/config-{release}", release=os.uname().release))
         try:
             if kcfg.exists():
                 for line in kcfg.read_text().splitlines():
@@ -1046,15 +1125,32 @@ SYMBOLS = {
 
 def render(report: Report):
     print(colour("\n=== VFIO DIAGNOSTIC REPORT ===", Fore.CYAN))
-    print(f"Overall: {SYMBOLS[report.overall]} {report.overall.value.upper()}")
+    print(
+        safe_format(
+            "Overall: {symbol} {status}",
+            symbol=SYMBOLS[report.overall],
+            status=report.overall.value.upper(),
+        )
+    )
     if report.device_bdf:
-        print(f"Device : {report.device_bdf}")
-    print(f"Proceed: {'yes' if report.can_proceed else 'no'}\n")
+        print(safe_format("Device : {device}", device=report.device_bdf))
+    print(
+        safe_format(
+            "Proceed: {proceed}\n", proceed="yes" if report.can_proceed else "no"
+        )
+    )
     for ck in report.checks:
         sym = SYMBOLS.get(ck.status, "?")
-        print(f"{sym} {ck.name}: {ck.message}")
+        print(
+            safe_format(
+                "{symbol} {name}: {message}",
+                symbol=sym,
+                name=ck.name,
+                message=ck.message,
+            )
+        )
         if ck.remediation:
-            print("   · " + ck.remediation)
+            print(safe_format("   · {remediation}", remediation=ck.remediation))
     print()
 
 
@@ -1139,7 +1235,12 @@ def main(argv: list[str] | None = None):
         temp.write_text(script_text)
         temp.chmod(0o755)
         render(report)
-        print(colour(f"Remediation script written to {temp}", Fore.CYAN))
+        print(
+            colour(
+                safe_format("Remediation script written to {path}", path=str(temp)),
+                Fore.CYAN,
+            )
+        )
 
         if not args.yes:
             confirm = input("Run remediation script now? [y/N]: ").strip().lower()

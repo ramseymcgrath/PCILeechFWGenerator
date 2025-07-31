@@ -311,7 +311,8 @@ class VFIOBinderImpl:
             logger, "Binding {bdf} to vfio-pci driver", bdf=self.bdf, prefix="BIND"
         )
 
-        time.sleep(1.5)
+        # Wait for driver_override to be writable
+        self._wait_for_override_writable(timeout=5.0)
 
         # Set driver override
         self._write_sysfs_safe(
@@ -440,6 +441,25 @@ class VFIOBinderImpl:
             logger,
             "VFIO binding verification successful for {bdf}",
             bdf=self.bdf,
+            prefix="BIND",
+        )
+
+    def _wait_for_override_writable(self, timeout: float = 5.0) -> None:
+        """Wait for the driver_override file to become writable."""
+        start_time = time.time()
+        override_path = self._path_manager.driver_override_path
+        while time.time() - start_time < timeout:
+            if override_path.exists() and os.access(override_path, os.W_OK):
+                log_debug_safe(
+                    logger,
+                    "driver_override is writable",
+                    prefix="BIND",
+                )
+                return
+            time.sleep(0.1)
+        log_warning_safe(
+            logger,
+            "Timed out waiting for driver_override to become writable",
             prefix="BIND",
         )
 
@@ -575,6 +595,9 @@ class VFIOBinderImpl:
         if not self.group_id:
             raise VFIOGroupError("No group ID available for opening device FD")
 
+        container_fd = None
+        group_fd = None
+
         try:
             # Open the generic container node
             container_fd = os.open(VFIO_CONTAINER_PATH, os.O_RDWR | os.O_CLOEXEC)
@@ -630,11 +653,24 @@ class VFIOBinderImpl:
             device_fd = fcntl.ioctl(group_fd, VFIO_GROUP_GET_DEVICE_FD, name_array)
 
             # Group FD can be closed now; the container & device FDs remain live
-            os.close(group_fd)
+            if group_fd is not None:
+                os.close(group_fd)
+                group_fd = None
 
             return int(device_fd), container_fd
 
         except OSError as e:
+            # Ensure all file descriptors are properly closed on error
+            if group_fd is not None:
+                try:
+                    os.close(group_fd)
+                except OSError:
+                    pass  # Already closed or invalid
+            if container_fd is not None:
+                try:
+                    os.close(container_fd)
+                except OSError:
+                    pass  # Already closed or invalid
             raise VFIOBindError(
                 f"Failed to open VFIO device FD for {self.bdf}: {e}"
             ) from e
@@ -777,14 +813,13 @@ def run_diagnostics(bdf: Optional[str] = None) -> Dict[str, Any]:
         }
 
     try:
-        if not HAS_VFIO_ASSIST or Diagnostics is None:
+        if Diagnostics is None:
             return {
                 "overall": "skipped",
                 "can_proceed": True,
                 "checks": [],
-                "message": "vfio diagnostics module not available - diagnostics skipped",
+                "message": "vfio_assist module not available - diagnostics skipped",
             }
-
         diagnostics = Diagnostics(bdf)
         result = diagnostics.run()
 
@@ -818,12 +853,12 @@ def render_pretty(diagnostic_result: Dict[str, Any]) -> str:
     Returns:
         Formatted string with ANSI color codes
     """
+    output = []
+    overall = diagnostic_result.get("overall", "unknown")
+
     try:
         # Use color functions from vfio_diagnostics if available
         from .vfio_diagnostics import Fore, colour
-
-        output = []
-        overall = diagnostic_result.get("overall", "unknown")
 
         # Header
         if overall == "ok":
@@ -850,11 +885,26 @@ def render_pretty(diagnostic_result: Dict[str, Any]) -> str:
         if "error" in diagnostic_result:
             output.append(colour(f"Error: {diagnostic_result['error']}", Fore.RED))
 
-        return "\n".join(output)
-
     except ImportError:
-        # Fallback without colors
-        return json.dumps(diagnostic_result, indent=2)
+        # Fallback without colors - generate a clean text report
+        header_map = {
+            "ok": "✓ VFIO Diagnostics: PASSED",
+            "warning": "⚠ VFIO Diagnostics: WARNINGS",
+            "error": "✗ VFIO Diagnostics: FAILED",
+        }
+        output.append(header_map.get(overall, "✗ VFIO Diagnostics: FAILED"))
+
+        for check in diagnostic_result.get("checks", []):
+            status_map = {"ok": "✓", "warning": "⚠", "error": "✗"}
+            status_icon = status_map.get(check.get("status"), "✗")
+            name = check.get("name", "Unknown")
+            message = check.get("message", "")
+            output.append(f"  {status_icon} {name}: {message}")
+
+        if "error" in diagnostic_result:
+            output.append(f"Error: {diagnostic_result['error']}")
+
+    return "\n".join(output)
 
 
 # Expose the context manager at module level for backward compatibility

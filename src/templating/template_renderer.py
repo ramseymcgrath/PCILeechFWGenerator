@@ -25,8 +25,11 @@ try:
         StrictUndefined,
         Template,
         TemplateError,
+        TemplateRuntimeError,
         BaseLoader,
     )
+    from jinja2.ext import Extension
+    from jinja2 import nodes
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"
@@ -47,6 +50,23 @@ class MappingFileSystemLoader(FileSystemLoader):
 
 
 logger = logging.getLogger(__name__)
+
+
+class ErrorTagExtension(Extension):
+    """Custom Jinja2 extension to handle {% error %} tags for template validation."""
+
+    tags = {"error"}
+
+    def parse(self, parser):
+        lineno = next(parser.stream).lineno
+        # Parse the string expression after the tag
+        args = [parser.parse_expression()]
+        return nodes.CallBlock(
+            self.call_method("_raise_error", args), [], [], []
+        ).set_lineno(lineno)
+
+    def _raise_error(self, message, caller=None):
+        raise TemplateRuntimeError(message)
 
 
 class TemplateRenderer:
@@ -78,6 +98,7 @@ class TemplateRenderer:
             trim_blocks=False,
             lstrip_blocks=False,
             keep_trailing_newline=True,
+            extensions=[ErrorTagExtension],
             undefined=StrictUndefined,  # This will raise errors for undefined variables
         )
 
