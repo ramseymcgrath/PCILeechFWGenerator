@@ -45,11 +45,11 @@ end
 // Sample data capture
 always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        {% for i in range(config.metrics_to_monitor|length) -%}
+        {% for i in range(config.metrics_to_monitor|length | default(4)) -%}
         sample_data[{{ i }}] <= COUNTER_WIDTH'h0;
         {% endfor %}
     end else if (sample_valid) begin
-        {% for metric in config.metrics_to_monitor -%}
+        {% for metric in config.metrics_to_monitor | default([{"value": "tlp_count"}, {"value": "completion_latency"}, {"value": "bandwidth_utilization"}, {"value": "error_rate"}]) -%}
         {% if metric.value == "tlp_count" -%}
         sample_data[{{ loop.index0 }}] <= transaction_count;
         {% elif metric.value == "completion_latency" -%}
