@@ -31,13 +31,16 @@ always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         sample_counter <= COUNTER_WIDTH'h0;
         sample_valid <= 1'b0;
+        sample_trigger <= 1'b0;
     end else begin
         if (sample_counter >= SAMPLING_PERIOD) begin
             sample_counter <= COUNTER_WIDTH'h0;
             sample_valid <= 1'b1;
+            sample_trigger <= 1'b1;
         end else begin
             sample_counter <= sample_counter + 1'b1;
             sample_valid <= 1'b0;
+            sample_trigger <= 1'b0;
         end
     end
 end
@@ -64,8 +67,5 @@ always_ff @(posedge clk or negedge rst_n) begin
         {% endfor %}
     end
 end
-
-// Sample trigger output
-assign sample_trigger = sample_valid;
 
 endmodule
