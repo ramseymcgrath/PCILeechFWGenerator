@@ -7,7 +7,8 @@ device identification parameters instead of using dangerous fallback values.
 """
 
 import pytest
-from src.build import ConfigurationManager, ConfigurationError
+
+from src.build import ConfigurationError, ConfigurationManager
 
 
 class TestNoFallbackPolicy:

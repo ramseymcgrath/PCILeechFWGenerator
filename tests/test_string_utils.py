@@ -12,26 +12,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src.string_utils import (
-    build_device_info_string,
-    build_file_size_string,
-    build_progress_string,
-    format_bar_summary_table,
-    format_bar_table,
-    format_padded_message,
-    format_raw_bar_table,
-    generate_sv_header_comment,
-    generate_tcl_header_comment,
-    get_short_timestamp,
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    multiline_format,
-    safe_format,
-    safe_log_format,
-    safe_print_format,
-)
+from src.string_utils import (build_device_info_string, build_file_size_string,
+                              build_progress_string, format_bar_summary_table,
+                              format_bar_table, format_padded_message,
+                              format_raw_bar_table, generate_sv_header_comment,
+                              generate_tcl_header_comment, get_short_timestamp,
+                              log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe, multiline_format, safe_format,
+                              safe_log_format, safe_print_format)
 
 
 class TestSafeFormat:

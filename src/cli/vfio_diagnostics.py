@@ -38,14 +38,8 @@ from typing import List, Optional, Tuple
 
 # Use consistent relative imports
 from ..log_config import get_logger, setup_logging
-from ..string_utils import (
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-    safe_print_format,
-)
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe, safe_format, safe_print_format)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Pretty terminal helpers

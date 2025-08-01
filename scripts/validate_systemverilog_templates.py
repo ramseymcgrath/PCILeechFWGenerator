@@ -15,14 +15,14 @@ Usage:
     python scripts/validate_systemverilog_templates.py
 """
 
+import glob
 import os
 import re
-import sys
-import glob
-from pathlib import Path
-from typing import List, Dict, Tuple, Optional
-import tempfile
 import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 
 class SystemVerilogValidator:

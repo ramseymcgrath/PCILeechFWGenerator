@@ -7,11 +7,12 @@ designed to replace the complex container-based approach.
 """
 
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from ..log_config import get_logger
 from ..build import VivadoIntegrationError
+from ..log_config import get_logger
 
 
 class VivadoRunner:
@@ -55,9 +56,6 @@ class VivadoRunner:
         # Extract version from path (simple heuristic)
         self.vivado_version: str = self._extract_version_from_path(vivado_path)
 
-        # Validate paths
-        self._validate_vivado_installation()
-
     def _extract_version_from_path(self, path: str) -> str:
         """Extract Vivado version from installation path."""
         # Look for version pattern like /tools/Xilinx/2025.1/Vivado
@@ -68,37 +66,106 @@ class VivadoRunner:
             return version_match.group(1)
         return "unknown"
 
-    def _validate_vivado_installation(self) -> None:
-        """Validate that Vivado installation exists and is accessible."""
-        vivado_exe = Path(self.vivado_executable)
-        if not vivado_exe.exists():
+    def _is_running_in_container(self) -> bool:
+        """Check if we're running inside a container."""
+        # Check for common container indicators
+        container_indicators = [
+            "/.dockerenv",
+            "/run/.containerenv",
+        ]
+
+        for indicator in container_indicators:
+            if Path(indicator).exists():
+                return True
+
+        # Check /proc/1/environ for container=podman
+        try:
+            with open("/proc/1/environ", "rb") as f:
+                environ = f.read().decode("utf-8", errors="ignore")
+                if "container=podman" in environ or "container=docker" in environ:
+                    return True
+        except (OSError, IOError):
+            pass
+
+        return False
+
+    def _run_vivado_on_host(self) -> None:
+        """Drop out of container and run Vivado on the host system."""
+        import os
+        import subprocess
+
+        self.logger.info("Dropping out of container to run Vivado on host")
+
+        # Prepare the host command to run Vivado
+        # We need to tell the host where to find our files and what to run
+        host_output_dir = Path("/app/output")  # This should be mounted from host
+        host_vivado_path = os.environ.get(
+            "HOST_VIVADO_PATH", "/tools/Xilinx/2025.1/Vivado"
+        )
+
+        # Create a script that the host can execute
+        host_script = host_output_dir / "run_vivado_on_host.sh"
+
+        script_content = f"""#!/bin/bash
+set -e
+
+echo "Running Vivado on host system"
+echo "Vivado path: {host_vivado_path}"
+echo "Output directory: {host_output_dir}"
+echo "Board: {self.board}"
+
+# Change to output directory
+cd {host_output_dir}
+
+# Run Vivado with the generated scripts
+{host_vivado_path}/bin/vivado -mode batch -source vivado_build.tcl
+
+echo "Vivado synthesis completed on host"
+"""
+
+        try:
+            with open(host_script, "w") as f:
+                f.write(script_content)
+
+            # Make script executable
+            os.chmod(host_script, 0o755)
+
+            self.logger.info(f"Created host execution script: {host_script}")
+            self.logger.info("To complete Vivado synthesis, run this on the host:")
+            self.logger.info(f"  chmod +x {host_script} && {host_script}")
+
+            # For now, we'll exit here and let the user run Vivado manually
+            # In the future, we could potentially use nsenter or similar to execute on host
             raise VivadoIntegrationError(
-                f"Vivado executable not found at: {self.vivado_executable}"
+                "Container detected. Vivado must be run on host. "
+                f"Please execute: {host_script}"
             )
 
-        if not vivado_exe.is_file():
-            raise VivadoIntegrationError(
-                f"Vivado path exists but is not a file: {self.vivado_executable}"
-            )
-
-        self.logger.info(f"Validated Vivado installation: {self.vivado_executable}")
-        self.logger.info(f"Vivado version: {self.vivado_version}")
+        except Exception as e:
+            raise VivadoIntegrationError(f"Failed to create host execution script: {e}")
 
     def run(self) -> None:
         """
         Hand-off to Vivado in batch mode using the generated scripts.
+        If running in container, drop out to host for Vivado execution.
 
         Raises:
             VivadoIntegrationError: If Vivado integration fails
         """
+        # Check if we're running in a container
+        if self._is_running_in_container():
+            self.logger.info(
+                "Container detected - dropping out to host for Vivado execution"
+            )
+            self._run_vivado_on_host()
+            return
+
         self.logger.info(f"Starting Vivado build for board: {self.board}")
         self.logger.info(f"Output directory: {self.output_dir}")
 
         try:
-            from . import (
-                integrate_pcileech_build,
-                run_vivado_with_error_reporting,
-            )
+            from . import (integrate_pcileech_build,
+                           run_vivado_with_error_reporting)
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
@@ -151,33 +218,6 @@ class VivadoRunner:
             "version": self.vivado_version,
             "installation_path": self.vivado_path,
         }
-
-    def check_license(self) -> bool:
-        """Check if Vivado license is available (basic check).
-
-        Returns:
-            True if license check passes, False otherwise
-        """
-        try:
-            import subprocess
-
-            result = subprocess.run(
-                [self.vivado_executable, "-version"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                self.logger.info("Vivado license check: PASSED")
-                return True
-            else:
-                self.logger.warning("Vivado license check: FAILED")
-                return False
-
-        except Exception as e:
-            self.logger.error(f"License check failed: {e}")
-            return False
 
 
 def create_vivado_runner(

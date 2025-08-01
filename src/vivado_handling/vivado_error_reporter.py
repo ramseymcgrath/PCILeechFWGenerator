@@ -842,9 +842,16 @@ def run_vivado_with_error_reporting(
     vivado_timeout: int = 3600,
 ) -> Tuple[int, str]:
     """Run Vivado with enhanced error reporting."""
-    from .vivado_utils import get_vivado_executable
-
+    # Avoid circular import by dynamically importing only when needed
     if not vivado_executable:
+        # Import locally to prevent circular imports
+        import importlib
+
+        vivado_utils_module = importlib.import_module(
+            ".vivado_utils", package="src.vivado_handling"
+        )
+        get_vivado_executable = getattr(vivado_utils_module, "get_vivado_executable")
+
         vivado_executable = get_vivado_executable()
         if not vivado_executable:
             raise FileNotFoundError("Vivado executable not found")

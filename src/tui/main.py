@@ -11,18 +11,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    ProgressBar,
-    Select,
-    Static,
-    Switch,
-)
+from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
+                             ProgressBar, Select, Static, Switch)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -911,7 +901,8 @@ class PCILeechTUI(App):
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")

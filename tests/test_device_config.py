@@ -8,19 +8,14 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.device_clone.device_config import (
-    DeviceCapabilities,
-    DeviceClass,
-    DeviceConfigManager,
-    DeviceConfiguration,
-    DeviceIdentification,
-    DeviceType,
-    PCIeRegisters,
-    generate_device_state_machine,
-    get_config_manager,
-    get_device_config,
-    validate_hex_id,
-)
+from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
+                                            DeviceConfigManager,
+                                            DeviceConfiguration,
+                                            DeviceIdentification, DeviceType,
+                                            PCIeRegisters,
+                                            generate_device_state_machine,
+                                            get_config_manager,
+                                            get_device_config, validate_hex_id)
 
 
 class TestDeviceType:

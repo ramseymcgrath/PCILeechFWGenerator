@@ -12,13 +12,8 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 except ImportError:
     # Fallback for script execution
     import sys
@@ -39,13 +34,8 @@ from .core import CapabilityWalker, ConfigSpace
 from .msix import MSIXCapabilityHandler
 from .patches import PatchEngine
 from .rules import RuleEngine
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PatchInfo,
-    PruningAction,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PatchInfo, PruningAction)
 
 logger = logging.getLogger(__name__)
 
@@ -1964,7 +1954,8 @@ class CapabilityProcessor:
 
     def _create_generic_removal_patches(self, cap_info: CapabilityInfo) -> List:
         """Create generic patches to remove a capability from the capability chain."""
-        from .constants import PCI_CAP_NEXT_PTR_OFFSET, PCI_CAPABILITIES_POINTER
+        from .constants import (PCI_CAP_NEXT_PTR_OFFSET,
+                                PCI_CAPABILITIES_POINTER)
 
         patches = []
 

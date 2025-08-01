@@ -9,12 +9,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from jinja2 import TemplateError
 
-from src.templating.template_renderer import (
-    TemplateRenderer,
-    TemplateRenderError,
-    MappingFileSystemLoader,
-    render_tcl_template,
-)
+from src.templating.template_renderer import (MappingFileSystemLoader,
+                                              TemplateRenderer,
+                                              TemplateRenderError,
+                                              render_tcl_template)
 
 
 class TestTemplateRenderer:

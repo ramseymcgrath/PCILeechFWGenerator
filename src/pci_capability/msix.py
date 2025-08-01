@@ -12,13 +12,8 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 except ImportError:
     # Fallback for script execution
     import sys
@@ -54,13 +49,8 @@ MSIX_OFFSET_ALIGNMENT = 8
 from .core import CapabilityWalker, ConfigSpace
 from .patches import BinaryPatch, PatchEngine
 from .rules import RuleEngine
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PCICapabilityID,
-    PruningAction,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PCICapabilityID, PruningAction)
 
 logger = logging.getLogger(__name__)
 

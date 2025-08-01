@@ -1,6 +1,10 @@
 name: CI
 
-on: [push]
+on:
+  push:
+    branches: [ main, advanced-behavior-handling ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -200,6 +204,50 @@ jobs:
         with:
           name: integration-logs
           path: tests/integration-logs/*
+
+  import-analysis:
+    runs-on: ubuntu-latest
+    needs: unit-test
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run Import Analysis
+      run: |
+        python scripts/analyze_imports.py > import_analysis_report.txt
+    
+    - name: Check for Import Issues
+      run: |
+        # Extract summary from report
+        grep -A 5 "=== SUMMARY ===" import_analysis_report.txt
+        
+        # Optional: Fail CI if circular imports are found
+        if grep -q "⚠️  Found .* circular import chain" import_analysis_report.txt; then
+          echo "::warning::Circular imports detected! Please check the report for details."
+          # Uncomment to make CI fail on circular imports:
+          # exit 1
+        fi
+        
+        # Optional: Warn about unused imports
+        if grep -q "⚠️  Found unused imports in" import_analysis_report.txt; then
+          echo "::warning::Unused imports detected! Consider cleaning them up."
+        fi
+    
+    - name: Upload Import Analysis Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: import-analysis-report
+        path: import_analysis_report.txt
+        retention-days: 7
 
   docs:
     runs-on: ubuntu-latest

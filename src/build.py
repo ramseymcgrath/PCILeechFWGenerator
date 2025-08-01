@@ -24,12 +24,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 # Import board functions from the correct module
-from .device_clone.board_config import (
-    get_board_info,
-    get_pcileech_board_config,
-    validate_board,
-)
-
+from .device_clone.board_config import (get_board_info,
+                                        get_pcileech_board_config,
+                                        validate_board)
 # Import msix_capability at the module level to avoid late imports
 from .device_clone.msix_capability import parse_msix_capability
 from .exceptions import PlatformCompatibilityError
@@ -921,10 +918,7 @@ class FirmwareBuilder:
             VivadoIntegrationError: If Vivado integration fails
         """
         try:
-            from .vivado_handling import (
-                VivadoRunner,
-                find_vivado_installation,
-            )
+            from .vivado_handling import VivadoRunner, find_vivado_installation
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 
@@ -967,10 +961,8 @@ class FirmwareBuilder:
         """Initialize PCILeech generator and other components."""
         from .device_clone.behavior_profiler import BehaviorProfiler
         from .device_clone.board_config import get_pcileech_board_config
-        from .device_clone.pcileech_generator import (
-            PCILeechGenerationConfig,
-            PCILeechGenerator,
-        )
+        from .device_clone.pcileech_generator import (PCILeechGenerationConfig,
+                                                      PCILeechGenerator)
         from .templating.tcl_builder import BuildContext, TCLBuilder
 
         self.gen = PCILeechGenerator(
@@ -991,7 +983,8 @@ class FirmwareBuilder:
     def _load_donor_template(self) -> Optional[Dict[str, Any]]:
         """Load donor template if provided."""
         if self.config.donor_template:
-            from .device_clone.donor_info_template import DonorInfoTemplateGenerator
+            from .device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
 
             self.logger.info(
                 f"Loading donor template from: {self.config.donor_template}"
@@ -1107,7 +1100,8 @@ class FirmwareBuilder:
 
     def _generate_donor_template(self, result: Dict[str, Any]) -> None:
         """Generate and save donor info template if requested."""
-        from .device_clone.donor_info_template import DonorInfoTemplateGenerator
+        from .device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
 
         # Get device info from the result
         device_info = result.get("config_space_data", {}).get("device_info", {})

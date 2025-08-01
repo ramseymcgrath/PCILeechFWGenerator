@@ -12,11 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from ..string_utils import log_info_safe
 from .behavior_profiler import BehaviorProfiler
-from .manufacturing_variance import (
-    DeviceClass,
-    ManufacturingVarianceSimulator,
-    VarianceModel,
-)
+from .manufacturing_variance import (DeviceClass,
+                                     ManufacturingVarianceSimulator,
+                                     VarianceModel)
 
 logger = logging.getLogger(__name__)
 

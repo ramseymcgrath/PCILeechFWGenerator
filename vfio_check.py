@@ -93,7 +93,8 @@ PCILeech from accessing PCI devices for firmware generation.
         log_info_safe(logger, "", prefix="VFIO")
 
     try:
-        from src.cli.vfio_diagnostics import Diagnostics, render, remediation_script
+        from src.cli.vfio_diagnostics import (Diagnostics, remediation_script,
+                                              render)
 
         # Run diagnostics
         diagnostics = Diagnostics(args.device_bdf)

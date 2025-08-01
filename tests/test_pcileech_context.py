@@ -25,26 +25,21 @@ from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
 
-from src.cli.vfio_constants import (
-    VFIO_DEVICE_GET_REGION_INFO,
-    VFIO_GROUP_GET_DEVICE_FD,
-    VFIO_REGION_INFO_FLAG_MMAP,
-    VFIO_REGION_INFO_FLAG_READ,
-    VFIO_REGION_INFO_FLAG_WRITE,
-    VfioRegionInfo,
-)
+from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
+                                    VFIO_GROUP_GET_DEVICE_FD,
+                                    VFIO_REGION_INFO_FLAG_MMAP,
+                                    VFIO_REGION_INFO_FLAG_READ,
+                                    VFIO_REGION_INFO_FLAG_WRITE,
+                                    VfioRegionInfo)
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
 from src.device_clone.fallback_manager import FallbackManager
 from src.device_clone.overlay_mapper import OverlayMapper
-from src.device_clone.pcileech_context import (
-    BarConfiguration,
-    ContextError,
-    DeviceIdentifiers,
-    PCILeechContextBuilder,
-    TimingParameters,
-    ValidationLevel,
-)
+from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
+                                               DeviceIdentifiers,
+                                               PCILeechContextBuilder,
+                                               TimingParameters,
+                                               ValidationLevel)
 
 
 # Test fixtures for common data structures
@@ -164,11 +159,9 @@ def msix_data():
 @pytest.fixture
 def behavior_profile():
     """Mock behavior profile."""
-    from src.device_clone.behavior_profiler import (
-        BehaviorProfile,
-        RegisterAccess,
-        TimingPattern,
-    )
+    from src.device_clone.behavior_profiler import (BehaviorProfile,
+                                                    RegisterAccess,
+                                                    TimingPattern)
 
     return BehaviorProfile(
         device_bdf="0000:03:00.0",

@@ -18,22 +18,13 @@ from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 import pytest
 
 # Import the module under test
-from src.cli.vfio_handler import (
-    BindingState,
-    DeviceInfo,
-    VFIOBinder,
-    VFIOBinderImpl,
-    VFIOBindError,
-    VFIODeviceNotFoundError,
-    VFIOGroupError,
-    VFIOPathManager,
-    VFIOPermissionError,
-    _get_current_driver,
-    _get_iommu_group,
-    _get_iommu_group_safe,
-    render_pretty,
-    run_diagnostics,
-)
+from src.cli.vfio_handler import (BindingState, DeviceInfo, VFIOBinder,
+                                  VFIOBinderImpl, VFIOBindError,
+                                  VFIODeviceNotFoundError, VFIOGroupError,
+                                  VFIOPathManager, VFIOPermissionError,
+                                  _get_current_driver, _get_iommu_group,
+                                  _get_iommu_group_safe, render_pretty,
+                                  run_diagnostics)
 
 
 # Test fixtures

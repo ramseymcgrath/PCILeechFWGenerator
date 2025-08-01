@@ -19,17 +19,10 @@ except ImportError:
 
 
 try:
-    from jinja2 import (
-        Environment,
-        FileSystemLoader,
-        StrictUndefined,
-        Template,
-        TemplateError,
-        TemplateRuntimeError,
-        BaseLoader,
-    )
+    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
+                        StrictUndefined, Template, TemplateError,
+                        TemplateRuntimeError, nodes)
     from jinja2.ext import Extension
-    from jinja2 import nodes
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"

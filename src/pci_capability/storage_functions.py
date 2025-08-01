@@ -13,16 +13,12 @@ to provide production-ready dynamic capability generation.
 import logging
 from typing import Any, Dict, List, Optional, Set
 
-from .base_function_analyzer import BaseFunctionAnalyzer, create_function_capabilities
+from .base_function_analyzer import (BaseFunctionAnalyzer,
+                                     create_function_capabilities)
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 except ImportError:
     import sys
     from pathlib import Path
@@ -31,13 +27,8 @@ except ImportError:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +144,7 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         capability = super()._create_capability_by_id(cap_id)
         if capability:
             return capability
-            
+
         # Handle storage-specific capabilities
         if cap_id == self.AER_CAP_ID:
             return self._create_aer_capability()
@@ -180,8 +171,10 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
                 multi_message_capable = 4  # Up to 16 messages
             else:
                 multi_message_capable = 3  # Up to 8 messages
-                
-        return super()._create_msi_capability(multi_message_capable, supports_per_vector_masking)
+
+        return super()._create_msi_capability(
+            multi_message_capable, supports_per_vector_masking
+        )
 
     def _create_pcie_capability(
         self,
@@ -197,7 +190,7 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
                 max_payload_size = 256
             else:
                 max_payload_size = 128
-                
+
         return super()._create_pcie_capability(max_payload_size, supports_flr)
 
     def _calculate_default_queue_count(self) -> int:
@@ -287,7 +280,7 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         if 0x11 in self._capabilities:
             vector_count = self._calculate_default_queue_count()
             table_size = max(0x1000, (vector_count * 16 + 0xFFF) & ~0xFFF)
-            
+
             bars.append(
                 {
                     "bar": 2,

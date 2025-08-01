@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.device_clone.overlay_mapper import OverlayMapper, PCIeRegisterDefinitions
+from src.device_clone.overlay_mapper import (OverlayMapper,
+                                             PCIeRegisterDefinitions)
 from src.device_clone.writemask_generator import WritemaskGenerator
 
 

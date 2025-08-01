@@ -252,12 +252,8 @@ if __name__ == "__main__":
 try:
     from src.error_utils import format_concise_error, log_error_with_root_cause
     from src.log_config import get_logger, setup_logging
-    from src.string_utils import (
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from src.string_utils import (log_error_safe, log_info_safe,
+                                  log_warning_safe, safe_format)
 except ImportError as e:
     print(f"❌ Failed to import PCILeech modules: {e}")
     print("Make sure you're running from the PCILeech project directory")
@@ -721,12 +717,8 @@ def handle_check(args):
         # Import the VFIO diagnostics functionality
         from pathlib import Path
 
-        from src.cli.vfio_diagnostics import (
-            Diagnostics,
-            Status,
-            remediation_script,
-            render,
-        )
+        from src.cli.vfio_diagnostics import (Diagnostics, Status,
+                                              remediation_script, render)
 
         log_info_safe(
             logger,
@@ -842,7 +834,8 @@ def handle_donor_template(args):
     """Handle donor template generation."""
     logger = get_logger(__name__)
     try:
-        from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
 
         # If validate flag is set, validate the file instead
         if args.validate:

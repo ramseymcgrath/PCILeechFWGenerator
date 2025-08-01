@@ -27,18 +27,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Import manufacturing variance simulation
-from ..scripts.kernel_utils import setup_debugfs
-
 # Import project logging and string utilities
 from ..exceptions import PlatformCompatibilityError
 from ..log_config import get_logger
-from ..string_utils import (
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-)
+# Import manufacturing variance simulation
+from ..scripts.kernel_utils import setup_debugfs
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe)
 from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
 
 

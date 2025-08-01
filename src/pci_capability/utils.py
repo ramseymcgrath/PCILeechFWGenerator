@@ -10,14 +10,8 @@ import logging
 from typing import Dict
 
 from .constants import TWO_BYTE_HEADER_CAPABILITIES
-from .types import (
-    CapabilityInfo,
-    CapabilityType,
-    EmulationCategory,
-    PCICapabilityID,
-    PCIExtCapabilityID,
-    PruningAction,
-)
+from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
+                    PCICapabilityID, PCIExtCapabilityID, PruningAction)
 
 logger = logging.getLogger(__name__)
 
@@ -214,11 +208,8 @@ def validate_capability_offset(offset: int, cap_type: CapabilityType) -> bool:
         return 0x40 <= offset < 0x100
     else:
         # Extended capabilities start at 0x100 and should be DWORD aligned
-        from .constants import (
-            PCI_EXT_CAP_ALIGNMENT,
-            PCI_EXT_CAP_START,
-            PCI_EXT_CONFIG_SPACE_END,
-        )
+        from .constants import (PCI_EXT_CAP_ALIGNMENT, PCI_EXT_CAP_START,
+                                PCI_EXT_CONFIG_SPACE_END)
 
         return (
             PCI_EXT_CAP_START <= offset < PCI_EXT_CONFIG_SPACE_END

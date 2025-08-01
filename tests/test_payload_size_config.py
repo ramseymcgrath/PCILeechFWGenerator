@@ -7,10 +7,7 @@ import pytest
 
 from src.device_clone.constants import VALID_MPS_VALUES
 from src.device_clone.payload_size_config import (
-    PayloadSizeConfig,
-    PayloadSizeError,
-    validate_and_configure_payload_size,
-)
+    PayloadSizeConfig, PayloadSizeError, validate_and_configure_payload_size)
 
 
 class TestPayloadSizeConfig:

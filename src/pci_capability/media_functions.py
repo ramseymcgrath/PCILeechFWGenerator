@@ -13,16 +13,12 @@ to provide production-ready dynamic capability generation.
 import logging
 from typing import Any, Dict, List, Optional, Set
 
-from .base_function_analyzer import BaseFunctionAnalyzer, create_function_capabilities
+from .base_function_analyzer import (BaseFunctionAnalyzer,
+                                     create_function_capabilities)
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 except ImportError:
     import sys
     from pathlib import Path
@@ -31,13 +27,8 @@ except ImportError:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe, safe_format)
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +124,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
 
     def _is_high_end_device(self) -> bool:
         """Check if this is a high-end media device."""
-        return (
-            self._device_category in ["hdaudio", "video"]
-            and self.device_id > 0x2000
-        )
+        return self._device_category in ["hdaudio", "video"] and self.device_id > 0x2000
 
     def _supports_vendor_capability(self) -> bool:
         """Check if device supports vendor-specific capabilities."""
@@ -153,7 +141,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         capability = super()._create_capability_by_id(cap_id)
         if capability:
             return capability
-            
+
         # Handle media-specific capabilities
         if cap_id == self.VENDOR_CAP_ID:
             return self._create_vendor_capability()
@@ -175,8 +163,10 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         if multi_message_capable is None:
             # Most media devices need only single MSI
             multi_message_capable = 1 if not self._is_high_end_device() else 2
-            
-        return super()._create_msi_capability(multi_message_capable, supports_per_vector_masking)
+
+        return super()._create_msi_capability(
+            multi_message_capable, supports_per_vector_masking
+        )
 
     def _create_pcie_capability(
         self,
@@ -187,7 +177,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         if max_payload_size is None:
             # Conservative payload size for media devices
             max_payload_size = 128
-            
+
         # HD Audio benefits from FLR
         supports_flr = self._device_category == "hdaudio"
         return super()._create_pcie_capability(max_payload_size, supports_flr)
@@ -244,7 +234,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
                     "description": "HD Audio registers",
                 }
             )
-            
+
             # MSI-X table space if supported
             if 0x11 in self._capabilities:
                 bars.append(

@@ -25,16 +25,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..error_utils import extract_root_cause
 from ..exceptions import PCILeechGenerationError, PlatformCompatibilityError
-
 # Import from centralized locations
 from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
-from ..templating import (
-    AdvancedSVGenerator,
-    BuildContext,
-    TemplateRenderer,
-    TemplateRenderError,
-)
-
+from ..templating import (AdvancedSVGenerator, BuildContext, TemplateRenderer,
+                          TemplateRenderError)
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
 from .config_space_manager import ConfigSpaceManager
@@ -946,9 +940,8 @@ class PCILeechGenerator:
                         )
                     else:
                         # Generate new content as last resort
-                        from ..templating.systemverilog_generator import (
-                            AdvancedSVGenerator,
-                        )
+                        from ..templating.systemverilog_generator import \
+                            AdvancedSVGenerator
 
                         sv_gen = AdvancedSVGenerator(
                             template_dir=self.config.template_dir

@@ -17,10 +17,10 @@ target board configuration.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
 
-from .file_management.template_discovery import TemplateDiscovery
 from .file_management.repo_manager import RepoManager
+from .file_management.template_discovery import TemplateDiscovery
 from .string_utils import log_info_safe, log_warning_safe
 
 logger = logging.getLogger(__name__)

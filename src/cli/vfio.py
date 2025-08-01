@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 # Re-export the correct, complete VFIO implementation
-from .vfio_handler import VFIOBinder, VFIOBindError, render_pretty, run_diagnostics
+from .vfio_handler import (VFIOBinder, VFIOBindError, render_pretty,
+                           run_diagnostics)
 from .vfio_helpers import get_device_fd
 
 # Legacy compatibility functions - these are kept for backward compatibility
@@ -15,12 +16,8 @@ from .vfio_helpers import get_device_fd
 
 
 try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-    )
+    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                                log_warning_safe)
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):

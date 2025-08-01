@@ -6,12 +6,14 @@ These tests focus on the new functionality and edge cases
 added in the improved MSI-X handler.
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 from src.pci_capability.core import ConfigSpace
 from src.pci_capability.msix import MSIXCapabilityHandler
-from src.pci_capability.types import CapabilityInfo, CapabilityType, PCICapabilityID
+from src.pci_capability.types import (CapabilityInfo, CapabilityType,
+                                      PCICapabilityID)
 
 
 class TestMSIXHandlerImprovements:
