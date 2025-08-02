@@ -13,8 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ...cli.cli import list_pci_devices
 from ...cli.vfio import get_current_driver
-from ...cli.vfio_helpers import (check_iommu_group_binding,
-                                 check_vfio_prerequisites)
+from ...cli.vfio_helpers import check_iommu_group_binding, check_vfio_prerequisites
 from ...error_utils import format_concise_error, log_error_with_root_cause
 from ...log_config import get_logger
 from ..models.device import PCIDevice
@@ -281,10 +280,13 @@ class DeviceManager:
                 return False
 
             # Try to read the files to ensure they're accessible
-            with open(vendor_path, "r") as f:
-                f.read().strip()
-            with open(device_id_path, "r") as f:
-                f.read().strip()
+            try:
+                with open(vendor_path, "r") as f:
+                    f.read().strip()
+                with open(device_id_path, "r") as f:
+                    f.read().strip()
+            except (OSError, IOError):
+                return False
 
             return True
         except Exception as e:

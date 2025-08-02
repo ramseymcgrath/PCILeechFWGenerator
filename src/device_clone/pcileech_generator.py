@@ -19,16 +19,23 @@ fast if required data is not available.
 """
 
 import logging
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..error_utils import extract_root_cause
 from ..exceptions import PCILeechGenerationError, PlatformCompatibilityError
+
 # Import from centralized locations
 from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
-from ..templating import (AdvancedSVGenerator, BuildContext, TemplateRenderer,
-                          TemplateRenderError)
+from ..templating import (
+    AdvancedSVGenerator,
+    BuildContext,
+    TemplateRenderer,
+    TemplateRenderError,
+)
+
 # Import existing infrastructure components
 from .behavior_profiler import BehaviorProfile, BehaviorProfiler
 from .config_space_manager import ConfigSpaceManager
@@ -738,20 +745,34 @@ class PCILeechGenerator:
         try:
             # Generate advanced controller if behavior profile is available
             if template_context.get("device_config", {}).get("behavior_profile"):
+                log_info_safe(
+                    self.logger, "Generating advanced modules with behavior profile"
+                )
                 registers = self._extract_register_definitions(template_context)
                 variance_model = template_context.get("device_config", {}).get(
                     "variance_model"
                 )
 
+                log_info_safe(
+                    self.logger,
+                    "Calling generate_advanced_systemverilog with {reg_count} registers",
+                    reg_count=len(registers),
+                )
                 advanced_modules["advanced_controller"] = (
                     self.sv_generator.generate_advanced_systemverilog(
                         regs=registers, variance_model=variance_model
                     )
                 )
+                log_info_safe(
+                    self.logger, "Successfully generated advanced_controller module"
+                )
 
         except Exception as e:
-            log_warning_safe(
-                self.logger, "Advanced module generation failed: {error}", error=str(e)
+            log_error_safe(
+                self.logger,
+                "Advanced module generation failed: {error}\nTraceback: {tb}",
+                error=str(e),
+                tb=traceback.format_exc(),
             )
 
         return advanced_modules
@@ -940,8 +961,9 @@ class PCILeechGenerator:
                         )
                     else:
                         # Generate new content as last resort
-                        from ..templating.systemverilog_generator import \
-                            AdvancedSVGenerator
+                        from ..templating.systemverilog_generator import (
+                            AdvancedSVGenerator,
+                        )
 
                         sv_gen = AdvancedSVGenerator(
                             template_dir=self.config.template_dir
@@ -1202,24 +1224,62 @@ class PCILeechGenerator:
 
         try:
             # Save SystemVerilog modules
-            sv_dir = output_dir / "systemverilog"
+            # IMPORTANT: TCL scripts expect files in "src" directory, not "systemverilog"
+            sv_dir = output_dir / "src"
             sv_dir.mkdir(exist_ok=True)
 
-            for module_name, module_code in generation_result[
-                "systemverilog_modules"
-            ].items():
-                # Handle COE files specially - they should NOT go in src directory
-                if module_name.endswith(".coe"):
-                    # COE files go in the systemverilog directory only
-                    # Skip saving to src directory to avoid duplication
-                    continue
+            log_info_safe(
+                self.logger, "Saving SystemVerilog modules to {path}", path=str(sv_dir)
+            )
+
+            sv_modules = generation_result.get("systemverilog_modules", {})
+            log_info_safe(
+                self.logger,
+                "Found {count} SystemVerilog modules to save: {modules}",
+                count=len(sv_modules),
+                modules=list(sv_modules.keys()),
+            )
+
+            for module_name, module_code in sv_modules.items():
+                # COE files should also go in src directory for Vivado to find them
+                # Avoid double .sv extension
+                if module_name.endswith(".sv") or module_name.endswith(".coe"):
+                    module_file = sv_dir / module_name
                 else:
-                    # Avoid double .sv extension
-                    if module_name.endswith(".sv"):
-                        module_file = sv_dir / module_name
-                    else:
-                        module_file = sv_dir / f"{module_name}.sv"
+                    module_file = sv_dir / f"{module_name}.sv"
+
+                log_info_safe(
+                    self.logger,
+                    "Writing module {name} to {path} ({size} bytes)",
+                    name=module_name,
+                    path=str(module_file),
+                    size=len(module_code),
+                )
+
+                try:
                     module_file.write_text(module_code)
+
+                    # Verify the file was written
+                    if not module_file.exists():
+                        log_error_safe(
+                            self.logger,
+                            "Failed to write module {name} - file does not exist after write",
+                            name=module_name,
+                        )
+                    elif module_file.stat().st_size == 0:
+                        log_error_safe(
+                            self.logger,
+                            "Module {name} was written but is empty",
+                            name=module_name,
+                        )
+                except Exception as e:
+                    log_error_safe(
+                        self.logger,
+                        "Failed to write module {name}: {error}",
+                        name=module_name,
+                        error=str(e),
+                    )
+                    raise
 
             # Save firmware components
             components_dir = output_dir / "components"

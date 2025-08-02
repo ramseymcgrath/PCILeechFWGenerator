@@ -20,8 +20,12 @@ from typing import List
 
 # Import project logging and string utilities
 from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 ###############################################################################
 # Configuration constants - override with environment vars if desired.
@@ -264,8 +268,11 @@ class RepoManager:
                 (dst / ".last_update").write_text(_dt.datetime.now().isoformat())
                 return
             except Exception as exc:
-                if dst.exists():
+                # Remove failed clone directory if it exists
+                try:
                     _shutil.rmtree(dst, ignore_errors=True)
+                except Exception:
+                    pass  # Ignore errors during cleanup
                 log_warning_safe(
                     _logger,
                     "Clone attempt {attempts} failed: {error}",

@@ -227,10 +227,17 @@ def ensure_kernel_source() -> Optional[pathlib.Path]:
         try:
             with tarfile.open(src_pkg) as t:
                 # Security: validate tar members before extraction
-                def is_safe_path(path: str) -> bool:
-                    return not (path.startswith("/") or ".." in path)
+                def is_safe_path(member: tarfile.TarInfo, target_dir: str) -> bool:
+                    # Get the absolute path where the member would be extracted
+                    member_path = os.path.join(target_dir, member.name)
+                    real_target = os.path.realpath(target_dir)
+                    real_member = os.path.realpath(member_path)
+                    # Ensure the member path is within the target directory
+                    return real_member.startswith(real_target + os.sep)
 
-                safe_members = [m for m in t.getmembers() if is_safe_path(m.name)]
+                safe_members = [
+                    m for m in t.getmembers() if is_safe_path(m, "/usr/src")
+                ]
                 t.extractall("/usr/src", members=safe_members)
         except Exception as e:
             raise RuntimeError(f"Failed to extract kernel source: {e}") from e

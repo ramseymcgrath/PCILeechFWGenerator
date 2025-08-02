@@ -1,6 +1,12 @@
 {#- Performance Counter Template -#}
 {#- Generates comprehensive performance monitoring logic -#}
 
+{#- Extract the enable flag from perf_config if it exists -#}
+{% set enable_transaction_counters = perf_config.enable_transaction_counters if perf_config else false %}
+{% set enable_bandwidth_monitoring = perf_config.enable_bandwidth_monitoring if perf_config else false %}
+{% set enable_latency_tracking = perf_config.enable_latency_tracking if perf_config else false %}
+{% set enable_error_counting = perf_config.enable_error_counting if perf_config else false %}
+
 {% if enable_transaction_counters %}
 // Transaction Counter Logic
 reg [31:0] read_transaction_count;

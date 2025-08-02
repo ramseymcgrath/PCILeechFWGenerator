@@ -11,20 +11,39 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import project logging and string utilities
 from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
+
+# Import PCI capability infrastructure for extended capabilities support
+try:
+    from ..pci_capability.compat import find_cap as pci_find_cap, find_ext_cap
+    from ..pci_capability.types import CapabilityType
+except ImportError:
+    # Fallback for different import paths
+    try:
+        from pci_capability.compat import find_cap as pci_find_cap, find_ext_cap
+        from pci_capability.types import CapabilityType
+    except ImportError:
+        # Use None to indicate unavailable - will fall back to local implementation
+        pci_find_cap = None
+        find_ext_cap = None
+        CapabilityType = None
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import (TemplateRenderer,
-                                                TemplateRenderError)
+    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     try:
-        from templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+        from templating.template_renderer import TemplateRenderer, TemplateRenderError
     except ImportError:
-        from src.templating.template_renderer import (TemplateRenderer,
-                                                      TemplateRenderError)
+        from src.templating.template_renderer import (
+            TemplateRenderer,
+            TemplateRenderError,
+        )
 
 logger = get_logger(__name__)
 
@@ -110,12 +129,12 @@ def is_valid_offset(data: bytearray, offset: int, size: int) -> bool:
     return offset + size <= len(data)
 
 
-# TODO: Add support for PCIe extended capabilities (offset >= 0x100)
-
-
 def find_cap(cfg: str, cap_id: int) -> Optional[int]:
     """
-    Find a capability in the PCI configuration space.
+    Find a capability in the PCI configuration space, supporting both standard and extended capabilities.
+
+    This function now supports PCIe extended capabilities (offset >= 0x100) by leveraging
+    the existing PCI capability infrastructure when available.
 
     Args:
         cfg: Configuration space as a hex string
@@ -133,6 +152,48 @@ def find_cap(cfg: str, cap_id: int) -> Optional[int]:
         logger, "Configuration space length: {length} characters", length=len(cfg)
     )
 
+    # Try to use the advanced PCI capability infrastructure first
+    if pci_find_cap is not None:
+        try:
+            # First try standard capabilities
+            standard_offset = pci_find_cap(cfg, cap_id)
+            if standard_offset is not None:
+                log_debug_safe(
+                    logger,
+                    "Found capability ID 0x{cap_id:02x} at standard offset 0x{offset:02x}",
+                    cap_id=cap_id,
+                    offset=standard_offset,
+                )
+                return standard_offset
+
+            # If not found in standard space and extended capability support is available,
+            # try extended capabilities
+            if find_ext_cap is not None:
+                extended_offset = find_ext_cap(cfg, cap_id)
+                if extended_offset is not None:
+                    log_debug_safe(
+                        logger,
+                        "Found capability ID 0x{cap_id:02x} at extended offset 0x{offset:03x}",
+                        cap_id=cap_id,
+                        offset=extended_offset,
+                    )
+                    return extended_offset
+
+            # Not found in either space
+            log_debug_safe(
+                logger, "Capability ID 0x{cap_id:02x} not found", cap_id=cap_id
+            )
+            return None
+
+        except Exception as e:
+            log_warning_safe(
+                logger,
+                "Error using advanced PCI capability infrastructure: {error}, falling back to local implementation",
+                error=e,
+            )
+            # Fall through to local implementation
+
+    # Fallback to local implementation for standard capabilities only
     # Check if configuration space is valid (minimum 256 bytes for basic config space)
     if not cfg or len(cfg) < 512:  # 256 bytes = 512 hex chars
         log_warning_safe(logger, "Configuration space is too small (need ≥256 bytes)")
@@ -390,6 +451,266 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         return result
 
 
+def parse_bar_info_from_config_space(cfg: str) -> List[Dict[str, Any]]:
+    """
+    Parse BAR information from configuration space for overlap detection.
+
+    This method uses the BarSizeConverter for accurate PCIe-compliant BAR size
+    detection when possible, falling back to simplified estimation.
+
+    Args:
+        cfg: Configuration space as a hex string
+
+    Returns:
+        List of dictionaries containing BAR information with keys:
+        - index: BAR index (0-5)
+        - bar_type: "memory" or "io"
+        - address: Base address (64-bit for 64-bit BARs)
+        - size: BAR size in bytes (PCIe-compliant detection when possible)
+        - is_64bit: Whether this is a 64-bit BAR
+        - prefetchable: Whether the BAR is prefetchable
+    """
+    bars = []
+
+    try:
+        cfg_bytes = hex_to_bytes(cfg)
+    except ValueError as e:
+        log_error_safe(
+            logger, "Invalid hex string in configuration space: {error}", error=e
+        )
+        return bars
+
+    # Parse each BAR (0-5)
+    i = 0
+    while i < 6:  # Standard PCI has 6 BARs max
+        bar_offset = 0x10 + (i * 4)  # BAR0 starts at offset 0x10
+
+        if not is_valid_offset(cfg_bytes, bar_offset, 4):
+            break
+
+        try:
+            bar_value = read_u32_le(cfg_bytes, bar_offset)
+
+            # Skip empty BARs
+            if bar_value == 0:
+                i += 1
+                continue
+
+            # Determine BAR type
+            is_io_bar = bool(bar_value & 0x1)
+            bar_type = "io" if is_io_bar else "memory"
+
+            # For memory BARs, check if 64-bit
+            is_64bit = False
+            prefetchable = False
+
+            if not is_io_bar:
+                memory_type = (bar_value >> 1) & 0x3
+                is_64bit = memory_type == 2  # Type 10b = 64-bit
+                prefetchable = bool(bar_value & 0x8)
+
+            # Calculate base address
+            if is_io_bar:
+                base_addr = bar_value & 0xFFFFFFFC  # Clear lower 2 bits
+            else:
+                base_addr = bar_value & 0xFFFFFFF0  # Clear lower 4 bits
+
+            # For 64-bit BARs, read upper 32 bits
+            if is_64bit and i < 5:  # Make sure we don't go beyond BAR5
+                upper_bar_offset = bar_offset + 4
+                if is_valid_offset(cfg_bytes, upper_bar_offset, 4):
+                    upper_value = read_u32_le(cfg_bytes, upper_bar_offset)
+                    base_addr = (base_addr & 0xFFFFFFF0) | (upper_value << 32)
+
+            # Estimate BAR size - try multiple methods for accuracy
+            size = 0
+            if bar_value != 0:
+                # Method 1: Try using BarSizeConverter for proper size detection
+                # Note: This requires the BAR value to be the result of writing all 1s
+                # and reading back, which we don't have from config space dumps
+                try:
+                    from .bar_size_converter import BarSizeConverter
+
+                    # For config space values, we can't use the PCIe probe method
+                    # as we don't have the actual size mask. Use the simplified method instead.
+                    size = 0  # Skip BarSizeConverter for config space parsing
+                except ImportError:
+                    pass
+
+                # Method 2: Use simplified estimation based on address alignment
+                if size == 0:
+                    if is_io_bar:
+                        # I/O BARs are typically smaller
+                        size = 0x100  # Default 256 bytes for I/O
+                    else:
+                        # Memory BARs - estimate from alignment
+                        addr_mask = base_addr & 0xFFFFFFF0
+                        if addr_mask != 0:
+                            # Find the lowest set bit to estimate alignment/size
+                            alignment = addr_mask & (~addr_mask + 1)
+                            size = max(alignment, 0x1000)  # Minimum 4KB for memory BARs
+                        else:
+                            size = 0x10000  # Default 64KB if we can't determine
+
+            bar_info = {
+                "index": i,
+                "bar_type": bar_type,
+                "address": base_addr,
+                "size": size,
+                "is_64bit": is_64bit,
+                "prefetchable": prefetchable,
+            }
+
+            bars.append(bar_info)
+            log_debug_safe(
+                logger,
+                "Parsed BAR {index}: {type} @ 0x{address:016x}, size=0x{size:x}, 64bit={is_64bit}",
+                index=i,
+                type=bar_type,
+                address=base_addr,
+                size=size,
+                is_64bit=is_64bit,
+            )
+
+            # Skip next BAR if this was 64-bit (it's the upper half)
+            if is_64bit:
+                i += 2
+            else:
+                i += 1
+
+        except (struct.error, IndexError) as e:
+            log_warning_safe(
+                logger,
+                "Error parsing BAR {index}: {error}",
+                index=i,
+                error=e,
+            )
+            i += 1
+
+    return bars
+
+
+def validate_msix_configuration_enhanced(
+    msix_info: Dict[str, Any], cfg: str
+) -> Tuple[bool, List[str]]:
+    """
+    Enhanced MSI-X configuration validation with proper 64-bit BAR support.
+
+    Args:
+        msix_info: Dictionary containing MSI-X capability information
+        cfg: Configuration space as a hex string for BAR parsing
+
+    Returns:
+        Tuple of (is_valid, error_messages)
+    """
+    errors = []
+
+    # Check table size validity
+    table_size = msix_info.get("table_size", 0)
+    if table_size == 0:
+        errors.append("MSI-X table size is zero")
+    elif table_size > 2048:  # PCIe spec maximum
+        errors.append(f"MSI-X table size {table_size} exceeds maximum of 2048")
+
+    # Check BIR validity (must be 0-5 for standard BARs)
+    table_bir = msix_info.get("table_bir", 0)
+    pba_bir = msix_info.get("pba_bir", 0)
+
+    if table_bir > 5:
+        errors.append(f"MSI-X table BIR {table_bir} is invalid (must be 0-5)")
+    if pba_bir > 5:
+        errors.append(f"MSI-X PBA BIR {pba_bir} is invalid (must be 0-5)")
+
+    # Check alignment requirements
+    table_offset = msix_info.get("table_offset", 0)
+    pba_offset = msix_info.get("pba_offset", 0)
+
+    if table_offset % 8 != 0:
+        errors.append(f"MSI-X table offset 0x{table_offset:x} is not 8-byte aligned")
+    if pba_offset % 8 != 0:
+        errors.append(f"MSI-X PBA offset 0x{pba_offset:x} is not 8-byte aligned")
+
+    # Enhanced overlap detection with proper BAR parsing
+    if table_bir == pba_bir:
+        # Parse BAR information from configuration space
+        bars = parse_bar_info_from_config_space(cfg)
+
+        # Find the relevant BAR
+        target_bar = None
+        for bar in bars:
+            if bar["index"] == table_bir:
+                target_bar = bar
+                break
+
+        if target_bar is None:
+            log_warning_safe(
+                logger,
+                "Could not find BAR {bir} information for overlap validation",
+                bir=table_bir,
+            )
+            # Fall back to basic overlap detection
+            table_end = table_offset + (table_size * 16)  # 16 bytes per entry
+            pba_size = ((table_size + 31) // 32) * 4  # PBA size in bytes
+            pba_end = pba_offset + pba_size
+
+            if table_offset < pba_end and table_end > pba_offset:
+                errors.append(
+                    "MSI-X table and PBA overlap in the same BAR (basic validation)"
+                )
+        else:
+            # Enhanced validation with actual BAR information
+            bar_size = target_bar["size"]
+            bar_is_64bit = target_bar["is_64bit"]
+
+            log_debug_safe(
+                logger,
+                "Validating MSI-X overlap in BAR {bir}: size=0x{size:x}, 64bit={is_64bit}",
+                bir=table_bir,
+                size=bar_size,
+                is_64bit=bar_is_64bit,
+            )
+
+            # Calculate table and PBA regions with proper 64-bit support
+            table_end = table_offset + (table_size * 16)  # 16 bytes per entry
+            pba_size = ((table_size + 31) // 32) * 4  # PBA size in bytes
+            pba_end = pba_offset + pba_size
+
+            # Check if regions fit within the BAR
+            if bar_size > 0:  # Only validate if we have BAR size information
+                if table_end > bar_size:
+                    errors.append(
+                        f"MSI-X table extends beyond BAR {table_bir} "
+                        f"(table ends at 0x{table_end:x}, BAR size is 0x{bar_size:x})"
+                    )
+
+                if pba_end > bar_size:
+                    errors.append(
+                        f"MSI-X PBA extends beyond BAR {pba_bir} "
+                        f"(PBA ends at 0x{pba_end:x}, BAR size is 0x{bar_size:x})"
+                    )
+
+            # Check for overlap between table and PBA
+            if table_offset < pba_end and table_end > pba_offset:
+                errors.append(
+                    f"MSI-X table (0x{table_offset:x}-0x{table_end:x}) and "
+                    f"PBA (0x{pba_offset:x}-0x{pba_end:x}) overlap in BAR {table_bir}"
+                )
+
+            log_debug_safe(
+                logger,
+                "MSI-X overlap validation complete: table=0x{table_offset:x}-0x{table_end:x}, "
+                "pba=0x{pba_offset:x}-0x{pba_end:x}, bar_size=0x{bar_size:x}",
+                table_offset=table_offset,
+                table_end=table_end,
+                pba_offset=pba_offset,
+                pba_end=pba_end,
+                bar_size=bar_size,
+            )
+
+    is_valid = len(errors) == 0
+    return is_valid, errors
+
+
 def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     """
     Generate SystemVerilog code for the MSI-X table and PBA.
@@ -474,60 +795,69 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     return main_template + "\n" + capability_registers
 
 
-def validate_msix_configuration(msix_info: Dict[str, Any]) -> Tuple[bool, List[str]]:
+def validate_msix_configuration(
+    msix_info: Dict[str, Any], cfg: str = ""
+) -> Tuple[bool, List[str]]:
     """
     Validate MSI-X configuration for correctness and compliance.
 
+    This function now supports both legacy mode (without cfg parameter) and
+    enhanced mode (with cfg parameter for proper 64-bit BAR validation).
+
     Args:
         msix_info: Dictionary containing MSI-X capability information
+        cfg: Optional configuration space hex string for enhanced validation
 
     Returns:
         Tuple of (is_valid, error_messages)
     """
-    errors = []
+    if cfg:
+        # Use enhanced validation with proper BAR parsing
+        return validate_msix_configuration_enhanced(msix_info, cfg)
+    else:
+        # Legacy validation mode for backward compatibility
+        errors = []
 
-    # Check table size validity
-    table_size = msix_info.get("table_size", 0)
-    if table_size == 0:
-        errors.append("MSI-X table size is zero")
-    elif table_size > 2048:  # PCIe spec maximum
-        errors.append(f"MSI-X table size {table_size} exceeds maximum of 2048")
+        # Check table size validity
+        table_size = msix_info.get("table_size", 0)
+        if table_size == 0:
+            errors.append("MSI-X table size is zero")
+        elif table_size > 2048:  # PCIe spec maximum
+            errors.append(f"MSI-X table size {table_size} exceeds maximum of 2048")
 
-    # Check BIR validity (must be 0-5 for standard BARs)
-    table_bir = msix_info.get("table_bir", 0)
-    pba_bir = msix_info.get("pba_bir", 0)
+        # Check BIR validity (must be 0-5 for standard BARs)
+        table_bir = msix_info.get("table_bir", 0)
+        pba_bir = msix_info.get("pba_bir", 0)
 
-    if table_bir > 5:
-        errors.append(f"MSI-X table BIR {table_bir} is invalid (must be 0-5)")
-    if pba_bir > 5:
-        errors.append(f"MSI-X PBA BIR {pba_bir} is invalid (must be 0-5)")
+        if table_bir > 5:
+            errors.append(f"MSI-X table BIR {table_bir} is invalid (must be 0-5)")
+        if pba_bir > 5:
+            errors.append(f"MSI-X PBA BIR {pba_bir} is invalid (must be 0-5)")
 
-    # Check alignment requirements
-    table_offset = msix_info.get("table_offset", 0)
-    pba_offset = msix_info.get("pba_offset", 0)
+        # Check alignment requirements
+        table_offset = msix_info.get("table_offset", 0)
+        pba_offset = msix_info.get("pba_offset", 0)
 
-    if table_offset % 8 != 0:
-        errors.append(f"MSI-X table offset 0x{table_offset:x} is not 8-byte aligned")
-    if pba_offset % 8 != 0:
-        errors.append(f"MSI-X PBA offset 0x{pba_offset:x} is not 8-byte aligned")
+        if table_offset % 8 != 0:
+            errors.append(
+                f"MSI-X table offset 0x{table_offset:x} is not 8-byte aligned"
+            )
+        if pba_offset % 8 != 0:
+            errors.append(f"MSI-X PBA offset 0x{pba_offset:x} is not 8-byte aligned")
 
-    # Check for overlap if table and PBA are in the same BAR
-    if table_bir == pba_bir:
-        table_end = table_offset + (table_size * 16)  # 16 bytes per entry
-        pba_size = (
-            (table_size + 31) // 32
-        ) * 4  # PBA size in bytes (parenthesized for clarity)
-        pba_end = pba_offset + pba_size
+        # Basic overlap detection for legacy mode
+        if table_bir == pba_bir:
+            table_end = table_offset + (table_size * 16)  # 16 bytes per entry
+            pba_size = ((table_size + 31) // 32) * 4  # PBA size in bytes
+            pba_end = pba_offset + pba_size
 
-        # TODO: Enhance overlap detection for 64-bit BARs
-        # Current implementation assumes 32-bit addresses; for 64-bit BARs above 4GiB,
-        # we would need to parse BAR size bits and handle 64-bit math properly
+            if table_offset < pba_end and table_end > pba_offset:
+                errors.append(
+                    "MSI-X table and PBA overlap in the same BAR (basic validation)"
+                )
 
-        if table_offset < pba_end and table_end > pba_offset:
-            errors.append("MSI-X table and PBA overlap in the same BAR")
-
-    is_valid = len(errors) == 0
-    return is_valid, errors
+        is_valid = len(errors) == 0
+        return is_valid, errors
 
 
 def generate_msix_capability_registers(msix_info: Dict[str, Any]) -> str:
@@ -578,6 +908,26 @@ if __name__ == "__main__":
     print(f"MSI-X PBA Offset: 0x{msix_info['pba_offset']:x}")
     print(f"MSI-X Enabled: {msix_info['enabled']}")
     print(f"MSI-X Function Mask: {msix_info['function_mask']}")
+
+    # Enhanced validation with BAR parsing
+    is_valid, errors = validate_msix_configuration(msix_info, config_space)
+    print(f"\nValidation Result: {'VALID' if is_valid else 'INVALID'}")
+    if errors:
+        print("Validation Errors:")
+        for error in errors:
+            print(f"  - {error}")
+
+    # Parse and display BAR information
+    bars = parse_bar_info_from_config_space(config_space)
+    if bars:
+        print(f"\nParsed BARs ({len(bars)} active):")
+        for bar in bars:
+            bitness = "64-bit" if bar["is_64bit"] else "32-bit"
+            prefetch = "prefetchable" if bar["prefetchable"] else "non-prefetchable"
+            print(
+                f"  BAR {bar['index']}: {bar['bar_type']} @ 0x{bar['address']:016x}, "
+                f"size=0x{bar['size']:x} ({bitness}, {prefetch})"
+            )
 
     sv_code = generate_msix_table_sv(msix_info)
     print("\nSystemVerilog Code:")

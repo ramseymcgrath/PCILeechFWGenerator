@@ -541,18 +541,14 @@ class ConfigManager:
                     severity=ErrorSeverity.ERROR,
                     category="config",
                     message="Invalid JSON in import file",
-                    details=f"Error at line {
-                        e.lineno}, column {
-                        e.colno}: {e.msg}",
+                    details=f"Error at line {e.lineno}, column {e.colno}: {e.msg}",
                     suggested_actions=[
                         "Check if the file contains valid JSON data",
                         "Verify that the file is a valid configuration profile",
                     ],
                 )
                 print(
-                    f"Invalid JSON in import file: Error at line {
-                        e.lineno}, column {
-                        e.colno}: {e.msg}"
+                    f"Invalid JSON in import file: Error at line {e.lineno}, column {e.colno}: {e.msg}"
                 )
                 return None
             except Exception as e:

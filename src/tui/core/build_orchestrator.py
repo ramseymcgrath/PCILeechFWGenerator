@@ -151,7 +151,7 @@ class BuildOrchestrator:
             raise
         finally:
             self._is_building = False
-            self._executor.shutdown(wait=False)
+            self._executor.shutdown(wait=True)
 
     def _create_build_stages(
         self, device: PCIDevice, config: BuildConfiguration
@@ -404,10 +404,11 @@ class BuildOrchestrator:
         """
         # Find the app instance in the widget tree
         widget = getattr(self, "_progress_callback", None)
-        while widget and not isinstance(widget, object):
-            widget = getattr(widget, "app", None)
-
-        return widget
+        while widget:
+            if hasattr(widget, "app"):
+                return widget.app
+            widget = getattr(widget, "parent", None)
+        return None
 
     async def _validate_container_environment(self) -> None:
         """
@@ -556,8 +557,8 @@ class BuildOrchestrator:
 
         try:
             # Check if repository already exists
-            repo = Repo(repo_dir)
             os.makedirs(repo_dir, exist_ok=True)
+            repo = Repo(repo_dir)
 
             if self._current_progress:
                 self._current_progress.current_operation = (
