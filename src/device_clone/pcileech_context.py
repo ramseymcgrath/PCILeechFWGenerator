@@ -16,6 +16,8 @@ import hashlib
 import logging
 import os
 import struct
+import subprocess
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -23,9 +25,14 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..error_utils import extract_root_cause
 from ..exceptions import ContextError
-from ..string_utils import (format_bar_summary_table, format_bar_table,
-                            format_raw_bar_table, log_error_safe,
-                            log_info_safe, log_warning_safe)
+from ..string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .behavior_profiler import BehaviorProfile
 from .config_space_manager import BarInfo
 from .fallback_manager import FallbackManager
@@ -34,11 +41,14 @@ from .overlay_mapper import OverlayMapper
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                  VFIO_GROUP_GET_DEVICE_FD,
-                                  VFIO_REGION_INFO_FLAG_MMAP,
-                                  VFIO_REGION_INFO_FLAG_READ,
-                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
+from ..cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 
 
 class ValidationLevel(Enum):
@@ -766,6 +776,9 @@ class PCILeechContextBuilder:
         chooses the largest such BAR as primary, and raises ContextError
         only if all BARs are size 0 or I/O-port.
 
+        This method now includes power state checking and device wake functionality
+        to handle devices that report BAR size 0 when in D3 power state.
+
         Args:
             config_space_data: Configuration space data
             behavior_profile: Device behavior profile
@@ -776,6 +789,9 @@ class PCILeechContextBuilder:
         Raises:
             ContextError: If no valid MMIO BARs found
         """
+        # Check and fix device power state before analyzing BARs
+        self._check_and_fix_power_state()
+
         bars = config_space_data["bars"]
         bar_configs = []
         primary_bar = None
@@ -1073,8 +1089,7 @@ class PCILeechContextBuilder:
 
                     # Compute and validate size encoding
                     if size > 0:
-                        from src.device_clone.bar_size_converter import \
-                            BarSizeConverter
+                        from src.device_clone.bar_size_converter import BarSizeConverter
 
                         try:
                             bar_type_str = "io" if is_io else "memory"
@@ -1179,7 +1194,111 @@ class PCILeechContextBuilder:
             )
             raise
 
+    def _check_and_fix_power_state(self) -> None:
+        """Check device power state and wake from D3 if needed."""
+        try:
+            power_state_file = f"/sys/bus/pci/devices/{self.device_bdf}/power_state"
+            if os.path.exists(power_state_file):
+                with open(power_state_file, "r") as f:
+                    power_state = f.read().strip()
+
+                log_info_safe(
+                    self.logger,
+                    "Device power state: {state}",
+                    state=power_state,
+                    prefix="PWR",
+                )
+
+                if power_state in ["D3cold", "D3hot", "D3"]:
+                    log_warning_safe(
+                        self.logger,
+                        "Device is in power saving state {state}, attempting to wake...",
+                        state=power_state,
+                        prefix="PWR",
+                    )
+
+                    # Try to wake the device
+                    power_control = (
+                        f"/sys/bus/pci/devices/{self.device_bdf}/power/control"
+                    )
+                    if os.path.exists(power_control):
+                        try:
+                            # Set runtime PM to 'on'
+                            subprocess.run(
+                                ["sh", "-c", f"echo on > {power_control}"],
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
+
+                            # Also try using setpci to set D0 state
+                            result = subprocess.run(
+                                ["setpci", "-s", self.device_bdf, "CAP_PM+4.b=0"],
+                                capture_output=True,
+                                text=True,
+                            )
+                            if result.returncode != 0:
+                                log_warning_safe(
+                                    self.logger,
+                                    "setpci command failed: {error}",
+                                    error=result.stderr,
+                                    prefix="PWR",
+                                )
+
+                            # Give device time to wake
+                            time.sleep(0.5)
+
+                            # Check new power state
+                            with open(power_state_file, "r") as f:
+                                new_state = f.read().strip()
+
+                            log_info_safe(
+                                self.logger,
+                                "Device power state after wake attempt: {old} -> {new}",
+                                old=power_state,
+                                new=new_state,
+                                prefix="PWR",
+                            )
+                        except Exception as e:
+                            log_warning_safe(
+                                self.logger,
+                                "Failed to wake device: {error}",
+                                error=str(e),
+                                prefix="PWR",
+                            )
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Failed to check power state: {error}",
+                error=str(e),
+                prefix="PWR",
+            )
+
     def _get_vfio_region_info(self, index: int) -> Optional[Dict[str, Any]]:
+        # First log sysfs BAR info for comparison
+        try:
+            resource_file = f"/sys/bus/pci/devices/{self.device_bdf}/resource{index}"
+            if os.path.exists(resource_file):
+                with open(resource_file, "r") as f:
+                    line = f.read().strip()
+                    if line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            start = int(parts[0], 16)
+                            end = int(parts[1], 16)
+                            sysfs_size = end - start + 1 if end >= start else 0
+                            log_info_safe(
+                                self.logger,
+                                "BAR {index} sysfs shows size: {size} bytes (start: 0x{start:x}, end: 0x{end:x})",
+                                index=index,
+                                size=sysfs_size,
+                                start=start,
+                                end=end,
+                                prefix="BARA",
+                            )
+        except Exception:
+            pass
+
         log_info_safe(
             self.logger,
             "Attempting to get VFIO region info for BAR {index} on device {bdf}",

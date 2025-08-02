@@ -31,6 +31,7 @@ Last Updated: 2025-07-18
 * [Manual Donor Dump](manual-donor-dump "How to manually create donor device dumps")
 * [Donor Info Template](donor-info-template "Generate comprehensive device information templates")
 * [TUI Interface Guide](tui-readme "Using the Terminal User Interface")
+* [Troubleshooting Guide](troubleshooting "Common issues and solutions")
 
 ## 🛠️ Development
 

@@ -24,9 +24,9 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🏗️ **[Device Cloning Guide](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** | ⚡ **[Dynamic Capabilities](https://pcileechfwgenerator.ramseymcgrath.com/dynamic-device-capabilities)** | 🔧 **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)**
+📚 **[Complete Documentation](https://pcileechfwgenerator.ramseymcgrath.com)** | 🔧 **[Troubleshooting Guide](https://pcileechfwgenerator.ramseymcgrath.com/troubleshooting)** | 🏗️ **[Device Cloning Guide](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** | ⚡ **[Dynamic Capabilities](https://pcileechfwgenerator.ramseymcgrath.com/dynamic-device-capabilities)** | �️ **[Development Setup](https://pcileechfwgenerator.ramseymcgrath.com/development)**
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -71,8 +71,6 @@ sudo python3 pcileech.py check --device 0000:03:00.0
 sudo python3 pcileech.py flash output/firmware.bin
 ```
 
-> [!NOTE]
-> The legacy entrypoint has been removed, please see the steps above and update your scripts accordingly
 
 ### Development from Repository
 
@@ -84,81 +82,24 @@ pip install -r requirements.txt
 sudo -E python3 pcileech.py tui
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
-### VFIO Setup Issues
+Having issues? Check our comprehensive **[Troubleshooting Guide](https://pcileechfwgenerator.ramseymcgrath.com/troubleshooting)** which covers:
 
-> [!WARNING]
-> Avoid using on-board devices (audio, graphics cards) for donor info. The VFIO process can lock the bus during extraction and cause system reboots.
+- **VFIO Setup Issues** - IOMMU configuration, module loading, device binding
+- **Installation Problems** - Package dependencies, container setup
+- **BAR Detection Issues** - Power state problems, device compatibility  
+- **Device-Specific Issues** - Known problems with specific hardware
 
-
-The most common issues involve VFIO (Virtual Function I/O) configuration. Use the built-in diagnostic tool:
-
+Quick diagnostic command:
 ```bash
 # Check VFIO setup and device compatibility
-sudo python3 pcileech.py check
+sudo python3 pcileech.py check --device 0000:03:00.0 --interactive
+``` 
 
-# Check a specific device
-sudo python3 pcileech.py check --device 0000:03:00.0
+## Direct Documentation Links
 
-# Interactive mode with guided fixes
-sudo python3 pcileech.py check --interactive
-
-# Attempt automatic fixes
-sudo python3 pcileech.py check --fix
-```
-
-### Common VFIO Problems
-
-**1. IOMMU not enabled in BIOS/UEFI**
-```bash
-# Enable VT-d (Intel) or AMD-Vi (AMD) in BIOS settings
-# Then add to /etc/default/grub GRUB_CMDLINE_LINUX:
-# For Intel: intel_iommu=on
-# For AMD: amd_iommu=on
-sudo update-grub && sudo reboot
-```
-
-**2. VFIO modules not loaded**
-```bash
-sudo modprobe vfio vfio_pci vfio_iommu_type1
-```
-
-**3. Device not in IOMMU group**
-```bash
-# Check IOMMU groups
-find /sys/kernel/iommu_groups/ -name '*' -type l | grep YOUR_DEVICE_BDF
-```
-
-**4. Permission issues**
-```bash
-# Add user to required groups
-sudo usermod -a -G vfio $USER
-sudo usermod -a -G dialout $USER  # For USB-JTAG access
-```
-
-### Installation Issues
-
-```bash
-# If pip installation fails
-pip install --upgrade pip setuptools wheel
-pip install pcileechfwgenerator[tui]
-
-# For TUI dependencies
-pip install textual rich psutil watchdog
-
-# Container issues
-podman --version
-podman info | grep rootless
-```
-
-> [!NOTE]
-> If you run into issues with your vivado project file formatting, first clear out all your cached files and rerun. Otherwise try pulling a copy of the pcileech repo directly and then inserting the generator output in. 
-
-## 📚 Documentation
-
-For detailed information, please visit our **[Documentation Site](https://pcileechfwgenerator.ramseymcgrath.com)**:
-
+- **[Troubleshooting Guide](https://pcileechfwgenerator.ramseymcgrath.com/troubleshooting)** - Comprehensive troubleshooting and diagnostic guide
 - **[Device Cloning Process](https://pcileechfwgenerator.ramseymcgrath.com/device-cloning)** - Complete guide to the cloning workflow
 - **[Firmware Uniqueness](https://pcileechfwgenerator.ramseymcgrath.com/firmware-uniqueness)** - How authenticity is achieved
 - **[Manual Donor Dump](https://pcileechfwgenerator.ramseymcgrath.com/manual-donor-dump)** - Step-by-step manual extraction
@@ -166,7 +107,7 @@ For detailed information, please visit our **[Documentation Site](https://pcilee
 - **[TUI Documentation](https://pcileechfwgenerator.ramseymcgrath.com/tui-readme)** - Interactive interface guide
 - **[Config space info](https://pcileechfwgenerator.ramseymcgrath.com/config-space-shadow)** - Config space shadow info
 
-## 🧹 Cleanup & Safety
+## Cleanup & Safety
 
 - **Rebind donors**: Use TUI/CLI to rebind donor devices to original drivers
 - **Keep firmware private**: Generated firmware contains real device identifiers
@@ -176,16 +117,16 @@ For detailed information, please visit our **[Documentation Site](https://pcilee
 > [!IMPORTANT]
 > This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
 
-## 🏆 Acknowledgments
+## Acknowledgments
 
 - **PCILeech Community**: For feedback and contributions
 - @Simonrak for the writemask implementation
 
-## 📄 License
+## License
 
 This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
 
-## ⚠️ Legal Notice
+## Legal Notice
 
 *AGAIN* This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
 

@@ -22,6 +22,7 @@ title: "Site Map"
 
 - [Manual Donor Dump](manual-donor-dump) - How to manually create donor device dumps
 - [TUI Interface Guide](tui-readme) - Using the Terminal User Interface
+- [Troubleshooting Guide](troubleshooting) - Common issues and solutions
 - [Development Guide](development) - Contributing to PCILeech Firmware Generator
 
 ## 📖 API Documentation

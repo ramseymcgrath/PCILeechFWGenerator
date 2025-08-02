@@ -29,7 +29,7 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](.)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)**
+📚 **[Complete Documentation](.)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)** | 🛠️ **[Troubleshooting](troubleshooting.md)**
 
 ## 🚀 Quick Start
 
