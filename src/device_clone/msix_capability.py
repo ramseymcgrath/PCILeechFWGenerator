@@ -11,8 +11,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import project logging and string utilities
 from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 # Import PCI capability infrastructure for extended capabilities support
 try:
@@ -33,17 +37,33 @@ except ImportError:
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import (TemplateRenderer,
-                                                TemplateRenderError)
+    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     try:
-        from templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+        from templating.template_renderer import TemplateRenderer, TemplateRenderError
     except ImportError:
-        from src.templating.template_renderer import (TemplateRenderer,
-                                                      TemplateRenderError)
+        from src.templating.template_renderer import (
+            TemplateRenderer,
+            TemplateRenderError,
+        )
+
+# Import BAR size constants
+try:
+    from .constants import BAR_SIZE_CONSTANTS
+except ImportError:
+    try:
+        from constants import BAR_SIZE_CONSTANTS
+    except ImportError:
+        from src.device_clone.constants import BAR_SIZE_CONSTANTS
 
 logger = get_logger(__name__)
+
+# Define commonly used BAR size constants
+BAR_MEM_MIN_SIZE = BAR_SIZE_CONSTANTS["SIZE_4KB"]  # 4KB minimum for memory BARs
+BAR_MEM_DEFAULT_SIZE = BAR_SIZE_CONSTANTS["SIZE_64KB"]  # 64KB default for memory BARs
+BAR_IO_DEFAULT_SIZE = BAR_SIZE_CONSTANTS[
+    "MAX_IO_SIZE"
+]  # 256 bytes default for I/O BARs
 
 
 def hex_to_bytes(hex_string: str) -> bytearray:
@@ -546,7 +566,9 @@ def parse_bar_info_from_config_space(cfg: str) -> List[Dict[str, Any]]:
                         if addr_mask != 0:
                             # Find the lowest set bit to estimate alignment/size
                             alignment = addr_mask & (~addr_mask + 1)
-                            size = max(alignment, BAR_MEM_MIN_SIZE)  # Minimum 4KB for memory BARs
+                            size = max(
+                                alignment, BAR_MEM_MIN_SIZE
+                            )  # Minimum 4KB for memory BARs
                         else:
                             size = BAR_MEM_DEFAULT_SIZE  # Default 64KB if we can't determine
 
