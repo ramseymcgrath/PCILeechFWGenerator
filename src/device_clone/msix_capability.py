@@ -539,16 +539,16 @@ def parse_bar_info_from_config_space(cfg: str) -> List[Dict[str, Any]]:
                 if size == 0:
                     if is_io_bar:
                         # I/O BARs are typically smaller
-                        size = 0x100  # Default 256 bytes for I/O
+                        size = BAR_IO_DEFAULT_SIZE  # Default 256 bytes for I/O
                     else:
                         # Memory BARs - estimate from alignment
                         addr_mask = base_addr & 0xFFFFFFF0
                         if addr_mask != 0:
                             # Find the lowest set bit to estimate alignment/size
                             alignment = addr_mask & (~addr_mask + 1)
-                            size = max(alignment, 0x1000)  # Minimum 4KB for memory BARs
+                            size = max(alignment, BAR_MEM_MIN_SIZE)  # Minimum 4KB for memory BARs
                         else:
-                            size = 0x10000  # Default 64KB if we can't determine
+                            size = BAR_MEM_DEFAULT_SIZE  # Default 64KB if we can't determine
 
             bar_info = {
                 "index": i,
