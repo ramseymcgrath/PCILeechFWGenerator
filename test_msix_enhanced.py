@@ -10,12 +10,10 @@ from pathlib import Path
 src_dir = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_dir))
 
-from device_clone.msix_capability import (
-    parse_bar_info_from_config_space,
-    parse_msix_capability,
-    validate_msix_configuration,
-    validate_msix_configuration_enhanced,
-)
+from device_clone.msix_capability import (parse_bar_info_from_config_space,
+                                          parse_msix_capability,
+                                          validate_msix_configuration,
+                                          validate_msix_configuration_enhanced)
 
 
 def create_test_config_space_with_64bit_bar():

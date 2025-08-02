@@ -3,24 +3,15 @@
 Unit tests for MSI-X Capability Parser with enhanced 64-bit BAR support and extended capabilities.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.device_clone.msix_capability import (
-    hex_to_bytes,
-    read_u8,
-    read_u16_le,
-    read_u32_le,
-    is_valid_offset,
-    find_cap,
-    msix_size,
-    parse_msix_capability,
-    parse_bar_info_from_config_space,
-    validate_msix_configuration_enhanced,
-    validate_msix_configuration,
-    generate_msix_table_sv,
-    generate_msix_capability_registers,
-)
+    find_cap, generate_msix_capability_registers, generate_msix_table_sv,
+    hex_to_bytes, is_valid_offset, msix_size, parse_bar_info_from_config_space,
+    parse_msix_capability, read_u8, read_u16_le, read_u32_le,
+    validate_msix_configuration, validate_msix_configuration_enhanced)
 
 
 class TestUtilityFunctions:

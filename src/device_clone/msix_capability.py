@@ -11,21 +11,19 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import project logging and string utilities
 from ..log_config import get_logger
-from ..string_utils import (
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-)
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe)
 
 # Import PCI capability infrastructure for extended capabilities support
 try:
-    from ..pci_capability.compat import find_cap as pci_find_cap, find_ext_cap
+    from ..pci_capability.compat import find_cap as pci_find_cap
+    from ..pci_capability.compat import find_ext_cap
     from ..pci_capability.types import CapabilityType
 except ImportError:
     # Fallback for different import paths
     try:
-        from pci_capability.compat import find_cap as pci_find_cap, find_ext_cap
+        from pci_capability.compat import find_cap as pci_find_cap
+        from pci_capability.compat import find_ext_cap
         from pci_capability.types import CapabilityType
     except ImportError:
         # Use None to indicate unavailable - will fall back to local implementation
@@ -35,15 +33,15 @@ except ImportError:
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import TemplateRenderer, TemplateRenderError
+    from ..templating.template_renderer import (TemplateRenderer,
+                                                TemplateRenderError)
 except ImportError:
     try:
-        from templating.template_renderer import TemplateRenderer, TemplateRenderError
+        from templating.template_renderer import (TemplateRenderer,
+                                                  TemplateRenderError)
     except ImportError:
-        from src.templating.template_renderer import (
-            TemplateRenderer,
-            TemplateRenderError,
-        )
+        from src.templating.template_renderer import (TemplateRenderer,
+                                                      TemplateRenderError)
 
 logger = get_logger(__name__)
 
