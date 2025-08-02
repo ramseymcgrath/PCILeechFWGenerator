@@ -99,79 +99,82 @@ class TestCapabilityFinding:
         result = find_cap(config_hex, 0x11)
         assert result == 0x40
 
-    @patch('src.device_clone.msix_capability.pci_find_cap')
+    @patch("src.device_clone.msix_capability.pci_find_cap")
     def test_find_cap_with_pci_infrastructure_success(self, mock_pci_find_cap):
         """Test finding capability using PCI infrastructure."""
         mock_pci_find_cap.return_value = 0x50
-        
+
         config_space = "00" * 256
         result = find_cap(config_space, 0x11)
-        
+
         assert result == 0x50
         mock_pci_find_cap.assert_called_once_with(config_space, 0x11)
 
-    @patch('src.device_clone.msix_capability.pci_find_cap')
-    @patch('src.device_clone.msix_capability.find_ext_cap')
-    def test_find_cap_extended_capability_success(self, mock_find_ext_cap, mock_pci_find_cap):
+    @patch("src.device_clone.msix_capability.pci_find_cap")
+    @patch("src.device_clone.msix_capability.find_ext_cap")
+    def test_find_cap_extended_capability_success(
+        self, mock_find_ext_cap, mock_pci_find_cap
+    ):
         """Test finding extended capability when standard search fails."""
         mock_pci_find_cap.return_value = None  # Not found in standard space
         mock_find_ext_cap.return_value = 0x200  # Found in extended space
-        
+
         config_space = "00" * 1024  # Extended config space
         result = find_cap(config_space, 0x11)
-        
+
         assert result == 0x200
         mock_pci_find_cap.assert_called_once_with(config_space, 0x11)
         mock_find_ext_cap.assert_called_once_with(config_space, 0x11)
 
-    @patch('src.device_clone.msix_capability.pci_find_cap')
-    @patch('src.device_clone.msix_capability.find_ext_cap')
+    @patch("src.device_clone.msix_capability.pci_find_cap")
+    @patch("src.device_clone.msix_capability.find_ext_cap")
     def test_find_cap_not_found_anywhere(self, mock_find_ext_cap, mock_pci_find_cap):
         """Test capability not found in either standard or extended space."""
         mock_pci_find_cap.return_value = None
         mock_find_ext_cap.return_value = None
-        
+
         config_space = "00" * 1024
         result = find_cap(config_space, 0x11)
-        
+
         assert result is None
         mock_pci_find_cap.assert_called_once_with(config_space, 0x11)
         mock_find_ext_cap.assert_called_once_with(config_space, 0x11)
 
-    @patch('src.device_clone.msix_capability.pci_find_cap')
+    @patch("src.device_clone.msix_capability.pci_find_cap")
     def test_find_cap_pci_infrastructure_exception_fallback(self, mock_pci_find_cap):
         """Test fallback to local implementation when PCI infrastructure fails."""
         mock_pci_find_cap.side_effect = Exception("PCI infrastructure error")
-        
+
         # Create a minimal valid config space with MSI-X capability
         cfg_bytes = bytearray([0x00] * 256)
         cfg_bytes[0x06] = 0x10  # Status register with capabilities bit
         cfg_bytes[0x34] = 0x40  # Capabilities pointer
         cfg_bytes[0x40] = 0x11  # MSI-X capability ID
         cfg_bytes[0x41] = 0x00  # Next capability (end)
-        
+
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         # Should find via fallback implementation
         assert result == 0x40
 
     def test_find_cap_pci_infrastructure_unavailable(self):
         """Test behavior when PCI infrastructure is not available."""
         # Mock the module-level variables to simulate unavailable infrastructure
-        with patch('src.device_clone.msix_capability.pci_find_cap', None), \
-             patch('src.device_clone.msix_capability.find_ext_cap', None):
-            
+        with patch("src.device_clone.msix_capability.pci_find_cap", None), patch(
+            "src.device_clone.msix_capability.find_ext_cap", None
+        ):
+
             # Create a minimal valid config space with MSI-X capability
             cfg_bytes = bytearray([0x00] * 256)
             cfg_bytes[0x06] = 0x10  # Status register with capabilities bit
             cfg_bytes[0x34] = 0x40  # Capabilities pointer
             cfg_bytes[0x40] = 0x11  # MSI-X capability ID
             cfg_bytes[0x41] = 0x00  # Next capability (end)
-            
+
             config_space = cfg_bytes.hex().upper()
             result = find_cap(config_space, 0x11)
-            
+
             # Should find via local implementation
             assert result == 0x40
 
@@ -183,10 +186,10 @@ class TestCapabilityFinding:
         cfg_bytes[0x34] = 0x40  # Capabilities pointer
         cfg_bytes[0x40] = 0x11  # MSI-X capability ID
         cfg_bytes[0x41] = 0x00  # Next capability (end)
-        
+
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         assert result == 0x40
 
     def test_find_cap_capability_chain_walking(self):
@@ -208,7 +211,7 @@ class TestCapabilityFinding:
         cfg_bytes[0x61] = 0x00  # End of chain
 
         config_space = cfg_bytes.hex().upper()
-        
+
         # Test finding each capability
         assert find_cap(config_space, 0x05) == 0x40  # MSI
         assert find_cap(config_space, 0x11) == 0x50  # MSI-X
@@ -227,7 +230,7 @@ class TestCapabilityFinding:
         cfg_bytes[0x51] = 0x40  # Points back to first capability (loop)
 
         config_space = cfg_bytes.hex().upper()
-        
+
         # Should not find a non-existent capability due to loop protection
         result = find_cap(config_space, 0x99)
         assert result is None
@@ -289,7 +292,7 @@ class TestCapabilityFinding:
 
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         # Should handle gracefully and not crash
         assert result is None
 
@@ -301,7 +304,7 @@ class TestCapabilityFinding:
 
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         assert result is None
 
 
@@ -861,7 +864,7 @@ class TestSystemVerilogGeneration:
         # Verify the context passed to template renderer includes alignment warning
         call_args = mock_renderer.render_template.call_args_list
         context = call_args[0][0][1]  # First call, second argument (context)
-        
+
         assert "alignment_warning" in context
         assert context["alignment_warning"] != ""
         assert "0x1004" in context["alignment_warning"]
@@ -1032,7 +1035,7 @@ class TestEdgeCasesAndStressTests:
 
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         assert result == 0x40
 
     def test_msix_maximum_table_size(self):
@@ -1041,12 +1044,12 @@ class TestEdgeCasesAndStressTests:
         config_space = TestMsixParsing().create_msix_config_space(
             table_size=2048,  # Maximum per PCIe spec
             table_offset=0x1000,
-            pba_offset=0x10000  # Large enough to avoid overlap
+            pba_offset=0x10000,  # Large enough to avoid overlap
         )
-        
+
         msix_info = parse_msix_capability(config_space)
         assert msix_info["table_size"] == 2048
-        
+
         # Validation should pass for maximum size
         is_valid, errors = validate_msix_configuration(msix_info)
         assert is_valid is True
@@ -1054,10 +1057,10 @@ class TestEdgeCasesAndStressTests:
     def test_msix_minimum_table_size(self):
         """Test MSI-X with minimum table size."""
         config_space = TestMsixParsing().create_msix_config_space(table_size=1)
-        
+
         msix_info = parse_msix_capability(config_space)
         assert msix_info["table_size"] == 1
-        
+
         is_valid, errors = validate_msix_configuration(msix_info)
         assert is_valid is True
 
@@ -1070,7 +1073,7 @@ class TestEdgeCasesAndStressTests:
 
         config_space = TestBarParsing().create_config_space_with_bars(bars)
         result = parse_bar_info_from_config_space(config_space)
-        
+
         assert len(result) == 3  # 3 BARs (each taking 2 slots)
         for bar in result:
             assert bar["is_64bit"] is True
@@ -1085,21 +1088,21 @@ class TestEdgeCasesAndStressTests:
             {"value": 0x00000002},  # Upper 32 bits
             {"value": 0x0000C001},  # Another I/O BAR
         ]
-        
+
         config_space = TestBarParsing().create_config_space_with_bars(bars)
         result = parse_bar_info_from_config_space(config_space)
-        
+
         assert len(result) == 5  # All BARs should be parsed
-        
+
         # Verify mixed types
         types = [bar["bar_type"] for bar in result]
         assert "memory" in types
         assert "io" in types
-        
+
         # Check for 64-bit BAR
         has_64bit = any(bar["is_64bit"] for bar in result)
         assert has_64bit is True
-        
+
         # Check for prefetchable BAR
         has_prefetchable = any(bar["prefetchable"] for bar in result)
         assert has_prefetchable is True
@@ -1108,11 +1111,11 @@ class TestEdgeCasesAndStressTests:
         """Test reading at configuration space boundaries."""
         # Test reading at exactly the boundary
         cfg_bytes = bytearray([0x00] * 256)
-        
+
         # Test valid boundary reads
         assert is_valid_offset(cfg_bytes, 252, 4) is True  # Last 4 bytes
         assert is_valid_offset(cfg_bytes, 255, 1) is True  # Last byte
-        
+
         # Test invalid boundary reads
         assert is_valid_offset(cfg_bytes, 253, 4) is False  # Would read beyond
         assert is_valid_offset(cfg_bytes, 256, 1) is False  # Beyond end
@@ -1124,13 +1127,13 @@ class TestEdgeCasesAndStressTests:
         cfg_bytes[0x34] = 0x40  # Capabilities pointer
         cfg_bytes[0x40] = 0x11  # MSI-X capability ID
         cfg_bytes[0x41] = 0x00  # Next capability (end)
-        
+
         # Truncate config space so MSI-X registers can't be fully read
         truncated_cfg = cfg_bytes[:66]  # Cut off before full MSI-X structure
         config_space = truncated_cfg.hex().upper()
-        
+
         result = parse_msix_capability(config_space)
-        
+
         # Should return default values when structure can't be read
         assert result["table_size"] == 0
 
@@ -1143,13 +1146,13 @@ class TestEdgeCasesAndStressTests:
         cfg_bytes[0xF1] = 0x00  # Next capability (end)
         cfg_bytes[0xF2] = 0x00  # Message Control (lower)
         cfg_bytes[0xF3] = 0x00  # Message Control (upper), table size = 1
-        
+
         config_space = cfg_bytes.hex().upper()
         result = find_cap(config_space, 0x11)
-        
+
         # Should find the capability
         assert result == 0xF0
-        
+
         # And parsing should work with table size 1
         msix_info = parse_msix_capability(config_space)
         assert msix_info["table_size"] == 1
@@ -1158,17 +1161,17 @@ class TestEdgeCasesAndStressTests:
         """Test validation with multiple simultaneous errors."""
         msix_info = {
             "table_size": 0,  # Error: zero size
-            "table_bir": 7,   # Error: invalid BIR
+            "table_bir": 7,  # Error: invalid BIR
             "table_offset": 0x1003,  # Error: misaligned
-            "pba_bir": 9,     # Error: invalid BIR
-            "pba_offset": 0x2007,    # Error: misaligned
+            "pba_bir": 9,  # Error: invalid BIR
+            "pba_offset": 0x2007,  # Error: misaligned
         }
-        
+
         is_valid, errors = validate_msix_configuration(msix_info)
-        
+
         assert is_valid is False
         assert len(errors) >= 5  # Should catch all errors
-        
+
         # Check that all error types are present
         error_text = " ".join(errors)
         assert "zero" in error_text
@@ -1183,11 +1186,11 @@ class TestEdgeCasesAndStressTests:
         cfg_bytes[0x34] = 0x40
         cfg_bytes[0x40] = 0x11
         cfg_bytes[0x41] = 0x00
-        
+
         config_upper = cfg_bytes.hex().upper()
         config_lower = cfg_bytes.hex().lower()
         config_mixed = cfg_bytes.hex().swapcase()
-        
+
         # All should work the same
         assert find_cap(config_upper, 0x11) == 0x40
         assert find_cap(config_lower, 0x11) == 0x40
@@ -1197,11 +1200,11 @@ class TestEdgeCasesAndStressTests:
         """Test memory efficiency with large configuration spaces."""
         # Test with maximum extended config space (4KB)
         large_config = "00" * 4096
-        
+
         # This should not cause memory issues
         result = find_cap(large_config, 0x99)  # Non-existent capability
         assert result is None
-        
+
         # Test BAR parsing with large space
         result = parse_bar_info_from_config_space(large_config)
         assert isinstance(result, list)
