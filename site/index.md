@@ -29,7 +29,7 @@ Generate authentic PCIe DMA firmware from real donor hardware with a single comm
 - **Automated Testing and Validation**: Comprehensive test suite with SystemVerilog assertions and Python unit tests
 - **USB-JTAG Flashing**: Direct firmware deployment to DMA boards via integrated flash utilities
 
-📚 **[Complete Documentation](.)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)** | 🛠️ **[Troubleshooting](troubleshooting.md)**
+📚 **[Complete Documentation](.)** | 🏗️ **[Device Cloning Guide](device-cloning.md)** | 🔧 **[Development Setup](development.md)** | 🛠️ **[Troubleshooting](troubleshooting.md)** | 🔐 **[Security Policy](no-fallback-policy.md)**
 
 ## 🚀 Quick Start
 
@@ -72,7 +72,6 @@ sudo python3 pcileech.py check --device 0000:03:00.0
 sudo python3 pcileech.py flash output/firmware.bin
 ```
 
-> **Note:** The legacy entrypoint has been removed, please see the steps above and update your scripts accordingly
 
 ### Development from Repository
 
@@ -169,7 +168,9 @@ For detailed information, browse the sections below or visit our complete docume
 - **[Device Cloning Process](device-cloning.md)** - Complete guide to the cloning workflow
 - **[Configuration Space Shadow](config-space-shadow.md)** - Understanding the configuration space shadow mechanism
 - **[Template Architecture](template-architecture.md)** - Explore the template-based design system
+- **[Dynamic Device Capabilities](dynamic-device-capabilities.md)** - Advanced PCIe device capability generation
 - **[Firmware Authenticity & Stability](firmware-uniqueness.md)** - Ensuring firmware integrity and reliability
+- **[No-Fallback Security Policy](no-fallback-policy.md)** - Security policy preventing generic firmware
 - **[Supported Devices](supported-devices.md)** - View all compatible hardware devices
 
 ### Guides & Tutorials
@@ -177,6 +178,7 @@ For detailed information, browse the sections below or visit our complete docume
 - **[Manual Donor Dump](manual-donor-dump.md)** - Step-by-step manual extraction guide
 - **[TUI Interface Guide](tui-readme.md)** - Using the Terminal User Interface
 - **[Development Guide](development.md)** - Contributing to PCILeech Firmware Generator
+- **[Troubleshooting Guide](troubleshooting.md)** - Common issues and solutions
 
 ### External Resources
 
