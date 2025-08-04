@@ -206,7 +206,7 @@ class Check:
     message: str
     remediation: Optional[str] = None
     commands: Optional[List[str]] = None
-
+    prefix: Optional[str] = None
 
 @dataclass
 class Report:
