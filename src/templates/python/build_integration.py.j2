@@ -44,7 +44,8 @@ def build_advanced_sv(
     perf_config = PerformanceCounterConfig(
         enable_transaction_counters=True,
         enable_bandwidth_monitoring=True,
-        enable_latency_measurement=True,
+        enable_latency_measurement=False,
+        enable_latency_tracking=False,
         enable_error_rate_tracking=True
     )
 

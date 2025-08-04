@@ -5,6 +5,7 @@
 {% set enable_transaction_counters = perf_config.enable_transaction_counters if perf_config else false %}
 {% set enable_bandwidth_monitoring = perf_config.enable_bandwidth_monitoring if perf_config else false %}
 {% set enable_latency_tracking = perf_config.enable_latency_tracking if perf_config else false %}
+{% set enable_latency_measurement = perf_config.enable_latency_measurement if perf_config else false %}
 {% set enable_error_counting = perf_config.enable_error_counting if perf_config else false %}
 
 {% if enable_transaction_counters %}
@@ -70,7 +71,7 @@ end
 // Bandwidth monitoring disabled
 {% endif %}
 
-{% if enable_latency_measurement %}
+{% if enable_latency_measurement or enable_latency_tracking %}
 // Latency Measurement Logic
 reg [31:0] read_latency_accumulator;
 reg [31:0] write_latency_accumulator;
@@ -290,7 +291,7 @@ always @(posedge clk) begin
         end
         {% endif %}
         
-        {% if enable_latency_measurement %}
+        {% if enable_latency_measurement or enable_latency_tracking %}
         // Factor in latency (lower is better)
         if (avg_read_latency < {{ low_latency_threshold | default(10) }}) begin
             performance_factors = performance_factors + 25;

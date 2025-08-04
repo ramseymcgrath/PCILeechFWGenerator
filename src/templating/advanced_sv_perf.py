@@ -39,7 +39,8 @@ class PerformanceCounterConfig:
     # Counter types to implement
     enable_transaction_counters: bool = True
     enable_bandwidth_monitoring: bool = True
-    enable_latency_measurement: bool = True
+    enable_latency_measurement: bool = False
+    enable_latency_tracking: bool = False  # Alias for backward compatibility
     enable_error_rate_tracking: bool = True
     enable_device_specific_counters: bool = True
 
@@ -104,6 +105,15 @@ class PerformanceCounterGenerator:
     ):
         """Initialize the performance counter generator."""
         self.config = config or PerformanceCounterConfig()
+        # Ensure both properties are set for backward compatibility
+        if hasattr(self.config, "enable_latency_measurement") and not hasattr(
+            self.config, "enable_latency_tracking"
+        ):
+            self.config.enable_latency_tracking = self.config.enable_latency_measurement
+        elif hasattr(self.config, "enable_latency_tracking") and not hasattr(
+            self.config, "enable_latency_measurement"
+        ):
+            self.config.enable_latency_measurement = self.config.enable_latency_tracking
         self.device_type = device_type
 
         # Initialize template renderer
@@ -150,6 +160,7 @@ class PerformanceCounterGenerator:
         """Generate latency measurement logic."""
         context = {
             "enable_latency_measurement": self.config.enable_latency_measurement,
+            "enable_latency_tracking": self.config.enable_latency_tracking,
         }
         return self.renderer.render_template(
             "systemverilog/advanced/performance_counters.sv.j2", context
@@ -203,6 +214,7 @@ class PerformanceCounterGenerator:
             "enable_transaction_counters": self.config.enable_transaction_counters,
             "enable_bandwidth_monitoring": self.config.enable_bandwidth_monitoring,
             "enable_latency_measurement": self.config.enable_latency_measurement,
+            "enable_latency_tracking": self.config.enable_latency_tracking,
             "enable_error_rate_tracking": self.config.enable_error_rate_tracking,
             "high_performance_threshold": 1000,
             "medium_performance_threshold": 100,
