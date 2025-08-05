@@ -43,6 +43,8 @@ class PerformanceCounterConfig:
     enable_latency_tracking: bool = False  # Alias for backward compatibility
     enable_error_rate_tracking: bool = True
     enable_device_specific_counters: bool = True
+    enable_performance_grading: bool = True
+    enable_perf_outputs: bool = True
 
     # Counter specifications
     counter_width_bits: int = 32

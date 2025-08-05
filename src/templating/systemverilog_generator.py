@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Templated SystemVerilog Generator
+SystemVerilog Generator with Jinja2 Templates
 
-This module provides a templated approach to SystemVerilog generation,
-integrating all the advanced SystemVerilog generation components
-(power management, error handling, performance counters) into a cohesive
-advanced PCIe device controller using Jinja2 templates.
+This module provides advanced SystemVerilog code generation capabilities
+using the centralized Jinja2 templating system for the PCILeech firmware generator.
 
-Advanced SystemVerilog Generation feature for the PCILeechFWGenerator project.
+Key Features:
+- Uses the project's centralized TemplateRenderer for consistent template handling
+- Proper error handling - template failures raise TemplateRenderError instead of falling back to defaults
+- Integration with the existing template system including custom filters and global functions
+- Support for advanced features like power management, error handling, and performance monitoring
+
+The generator properly delegates all template rendering to the TemplateRenderer class,
+ensuring consistent behavior and proper error reporting throughout the system.
 """
 
 import logging
@@ -15,37 +20,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Import template renderer
-try:
-    from .template_renderer import TemplateRenderer, TemplateRenderError
-except ImportError:
-    from .template_renderer import TemplateRenderer, TemplateRenderError
-
-# Import string utilities for safe formatting
-try:
-    from ..string_utils import (generate_sv_header_comment, log_error_safe,
-                                log_info_safe, log_warning_safe)
-except ImportError:
-    from string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe, log_warning_safe)
-
-# Import advanced components for integration
-try:
-    from ..device_clone.manufacturing_variance import (
-        DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
-    from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
-    from .advanced_sv_perf import (DeviceType, PerformanceCounterConfig,
-                                   PerformanceCounterGenerator)
-    from .advanced_sv_power import (PowerManagementConfig,
-                                    PowerManagementGenerator)
-except ImportError:
-    from ..device_clone.manufacturing_variance import (
-        DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
-    from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
-    from .advanced_sv_perf import (DeviceType, PerformanceCounterConfig,
-                                   PerformanceCounterGenerator)
-    from .advanced_sv_power import (PowerManagementConfig,
-                                    PowerManagementGenerator)
+from ..device_clone.device_config import DeviceType, DeviceClass
+from ..device_clone.manufacturing_variance import VarianceModel
+from ..string_utils import (
+    safe_format,
+    log_info_safe,
+    log_error_safe,
+    log_warning_safe,
+    generate_sv_header_comment,
+)
+from .template_renderer import TemplateRenderer, TemplateRenderError
+from .advanced_sv_features import (
+    AdvancedSVFeatureGenerator,
+    PowerManagementConfig,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+)
 
 
 @dataclass
@@ -109,44 +99,34 @@ class PCILeechOutput:
 
 
 class AdvancedSVGenerator:
-    """Main advanced SystemVerilog generator with PCILeech as primary generation path."""
+    """Main advanced SystemVerilog generator using the templating system."""
 
     def __init__(
         self,
         power_config: Optional[PowerManagementConfig] = None,
         error_config: Optional[ErrorHandlingConfig] = None,
-        perf_config: Optional[PerformanceCounterConfig] = None,
+        perf_config: Optional[PerformanceConfig] = None,
         device_config: Optional[DeviceSpecificLogic] = None,
         template_dir: Optional[Path] = None,
         use_pcileech_primary: bool = True,
     ):
-        """Initialize the advanced SystemVerilog generator with PCILeech as primary path."""
+        """Initialize the advanced SystemVerilog generator."""
 
         self.power_config = power_config or PowerManagementConfig()
         self.error_config = error_config or ErrorHandlingConfig()
-        self.perf_config = perf_config or PerformanceCounterConfig()
+        self.perf_config = perf_config or PerformanceConfig()
         self.device_config = device_config or DeviceSpecificLogic()
         self.use_pcileech_primary = use_pcileech_primary
 
-        # Initialize template renderer
+        # Initialize template renderer - this is our core templating system
         self.renderer = TemplateRenderer(template_dir)
-
-        # Initialize component generators
-        self.power_gen = PowerManagementGenerator(self.power_config)
-        self.error_gen = ErrorHandlingGenerator(self.error_config)
-        self.perf_gen = PerformanceCounterGenerator(
-            self.perf_config, self.device_config.device_type
-        )
-
-        # Initialize variance simulator for realistic timing
-        self.variance_simulator = ManufacturingVarianceSimulator()
 
         # Set up logger
         self.logger = logging.getLogger(__name__)
 
         log_info_safe(
             self.logger,
-            "AdvancedSVGenerator initialized with PCILeech primary: {primary}",
+            "AdvancedSVGenerator initialized with templating system, PCILeech primary: {primary}",
             primary=self.use_pcileech_primary,
         )
 
@@ -166,15 +146,8 @@ class AdvancedSVGenerator:
                 "Failed to render device-specific ports template: {error}",
                 error=e,
             )
-            # Return a minimal valid SystemVerilog module instead of a comment
-            return """// Device-specific ports module (template error fallback)
-module device_specific_ports (
-    // Minimal fallback implementation
-    input wire clk,
-    input wire rst_n
-);
-    // Error: Template rendering failed, using minimal fallback
-endmodule"""
+            # Re-raise the exception to properly report the error
+            raise
 
     def generate_systemverilog_modules(
         self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None
@@ -230,20 +203,11 @@ endmodule"""
             ]
 
             for module_template in basic_modules:
-                try:
-                    module_content = self.renderer.render_template(
-                        f"systemverilog/{module_template}", template_context
-                    )
-                    module_name = module_template.replace(".sv.j2", "")
-                    modules[module_name] = module_content
-
-                except Exception as e:
-                    log_warning_safe(
-                        self.logger,
-                        "Failed to generate legacy module {module}: {error}",
-                        module=module_template,
-                        error=str(e),
-                    )
+                module_content = self.renderer.render_template(
+                    f"systemverilog/{module_template}", template_context
+                )
+                module_name = module_template.replace(".sv.j2", "")
+                modules[module_name] = module_content
 
             log_info_safe(
                 self.logger,
@@ -281,17 +245,45 @@ endmodule"""
         context = {
             "header": header,
             "device_config": self.device_config,
+            "device_type": self.device_config.device_type.value,
             "power_config": self.power_config,
             "error_config": self.error_config,
             "perf_config": self.perf_config,
             "registers": regs,
             "variance_model": variance_model,
             "device_specific_ports": device_specific_ports,
-            # Pass the config objects, not the generated strings
             "power_management": self.power_config if self.power_config else None,
             "error_handling": self.error_config if self.error_config else None,
             "performance_counters": self.perf_config if self.perf_config else None,
         }
+
+        # Add performance counter flags at top level for template compatibility
+        if self.perf_config:
+            context.update(
+                {
+                    "enable_transaction_counters": getattr(
+                        self.perf_config, "enable_transaction_counters", True
+                    ),
+                    "enable_bandwidth_monitoring": getattr(
+                        self.perf_config, "enable_bandwidth_monitoring", True
+                    ),
+                    "enable_latency_measurement": getattr(
+                        self.perf_config, "enable_latency_measurement", True
+                    ),
+                    "enable_error_rate_tracking": getattr(
+                        self.perf_config, "enable_error_rate_tracking", True
+                    ),
+                    "enable_device_specific_counters": getattr(
+                        self.perf_config, "enable_device_specific_counters", True
+                    ),
+                    "enable_performance_grading": getattr(
+                        self.perf_config, "enable_performance_grading", True
+                    ),
+                    "enable_perf_outputs": getattr(
+                        self.perf_config, "enable_perf_outputs", True
+                    ),
+                }
+            )
 
         try:
             # Render main advanced controller template
@@ -371,24 +363,27 @@ endmodule"""
             device_config = template_context.get("device_config", {})
 
             # Generate header comment for SystemVerilog files
-            try:
-                from ..string_utils import generate_sv_header_comment
-
-                header = generate_sv_header_comment(
-                    "PCILeech SystemVerilog Module",
-                    generator="PCILeechFWGenerator - SystemVerilog Generation",
-                    device_type="PCIe Device Controller",
-                    features="PCILeech integration, MSI-X support, BAR controller",
-                )
-            except ImportError:
-                header = "// PCILeech SystemVerilog Module\n// Generated by PCILeechFWGenerator"
+            header = generate_sv_header_comment(
+                "PCILeech SystemVerilog Module",
+                generator="PCILeechFWGenerator - SystemVerilog Generation",
+                device_type="PCIe Device Controller",
+                features="PCILeech integration, MSI-X support, BAR controller",
+            )
 
             # Create device object for template compatibility
             device_info = {
-                "vendor_id": device_config.get("vendor_id", "0000"),
-                "device_id": device_config.get("device_id", "0000"),
-                "subsys_vendor_id": device_config.get("subsystem_vendor_id", "0000"),
-                "subsys_device_id": device_config.get("subsystem_device_id", "0000"),
+                "vendor_id": device_config.get(
+                    "vendor_id", "FFFF"
+                ),  # FFFF = missing/invalid vendor ID
+                "device_id": device_config.get(
+                    "device_id", "FFFF"
+                ),  # FFFF = missing/invalid device ID
+                "subsys_vendor_id": device_config.get(
+                    "subsystem_vendor_id", "FFFF"
+                ),  # FFFF = missing/invalid subsystem vendor ID
+                "subsys_device_id": device_config.get(
+                    "subsystem_device_id", "FFFF"
+                ),  # FFFF = missing/invalid subsystem device ID
                 "class_code": device_config.get("class_code", "020000"),
                 "revision_id": device_config.get("revision_id", "01"),
             }
@@ -398,8 +393,12 @@ endmodule"""
                     "header": header,  # Add header for template
                     "device": device_info,
                     "config_space": {
-                        "vendor_id": device_config.get("vendor_id", "0000"),
-                        "device_id": device_config.get("device_id", "0000"),
+                        "vendor_id": device_config.get(
+                            "vendor_id", "FFFF"
+                        ),  # FFFF = missing/invalid vendor ID
+                        "device_id": device_config.get(
+                            "device_id", "FFFF"
+                        ),  # FFFF = missing/invalid device ID
                         "class_code": device_config.get("class_code", "020000"),
                         "revision_id": device_config.get("revision_id", "01"),
                     },
@@ -422,10 +421,14 @@ endmodule"""
                     "fifo_depth": 512,
                     "data_width": 128,
                     "fpga_family": "artix7",
-                    "vendor_id": device_config.get("vendor_id", "0000"),
-                    "device_id": device_config.get("device_id", "0000"),
-                    "vendor_id_hex": device_config.get("vendor_id", "0000"),
-                    "device_id_hex": device_config.get("device_id", "0000"),
+                    "vendor_id": device_config.get(
+                        "vendor_id", "FFFF"
+                    ),  # FFFF = missing/invalid vendor ID
+                    "device_id": device_config.get(
+                        "device_id", "FFFF"
+                    ),  # FFFF = missing/invalid device ID
+                    "vendor_id_hex": device_config.get("vendor_id", "FFFF"),
+                    "device_id_hex": device_config.get("device_id", "FFFF"),
                     "device_specific_config": {},
                 }
             )
@@ -449,26 +452,9 @@ endmodule"""
             )
 
             # Generate top-level wrapper (CRITICAL for Vivado top module)
-            try:
-                modules["top_level_wrapper"] = self.renderer.render_template(
-                    "systemverilog/top_level_wrapper.sv.j2", enhanced_context
-                )
-            except TemplateRenderError:
-                # Try alternative path
-                try:
-                    modules["top_level_wrapper"] = self.renderer.render_template(
-                        "sv/top_level_wrapper.sv.j2", enhanced_context
-                    )
-                except TemplateRenderError as e:
-                    log_warning_safe(
-                        self.logger,
-                        "Failed to generate top_level_wrapper from both paths: {error}",
-                        error=str(e),
-                    )
-                    # Generate a basic top-level wrapper as fallback
-                    modules["top_level_wrapper"] = self._generate_basic_top_wrapper(
-                        enhanced_context
-                    )
+            modules["top_level_wrapper"] = self.renderer.render_template(
+                "systemverilog/top_level_wrapper.sv.j2", enhanced_context
+            )
 
             # Generate configuration space COE file
             modules["pcileech_cfgspace.coe"] = self.renderer.render_template(
@@ -487,68 +473,7 @@ endmodule"""
                 msix_template_context = enhanced_context.copy()
                 msix_template_context.update(msix_config)
 
-                # Validate MSI-X template context to prevent rendering errors
-                required_msix_vars = [
-                    "table_size",
-                    "table_bir",
-                    "table_offset",
-                    "pba_bir",
-                    "pba_offset",
-                    "enabled_val",
-                    "function_mask_val",
-                    "pba_size",
-                    "pba_size_minus_one",
-                    "alignment_warning",
-                ]
-                missing_vars = [
-                    var
-                    for var in required_msix_vars
-                    if var not in msix_template_context
-                ]
-                if missing_vars:
-                    log_warning_safe(
-                        self.logger,
-                        "Missing MSI-X template variables: {vars}, using defaults",
-                        vars=missing_vars,
-                    )
-                    # Add default values to prevent template errors
-                    defaults = {
-                        "table_size": 1,
-                        "table_bir": 0,
-                        "table_offset": 0x1000,
-                        "pba_bir": 0,
-                        "pba_offset": 0x2000,
-                        "enabled_val": 0,
-                        "function_mask_val": 1,
-                        "pba_size": 1,
-                        "pba_size_minus_one": 0,
-                        "alignment_warning": "// MSI-X template context incomplete - using defaults",
-                    }
-                    for var in missing_vars:
-                        msix_template_context[var] = defaults.get(var, 0)
-
                 # Generate MSI-X capability registers
-                # Add capability-specific context validation
-                cap_required_vars = [
-                    "table_size_minus_one",
-                    "table_offset_bir",
-                    "pba_offset_bir",
-                ]
-                for var in cap_required_vars:
-                    if var not in msix_template_context:
-                        if var == "table_size_minus_one":
-                            msix_template_context[var] = max(
-                                0, msix_template_context.get("table_size", 1) - 1
-                            )
-                        elif var == "table_offset_bir":
-                            offset = msix_template_context.get("table_offset", 0x1000)
-                            bir = msix_template_context.get("table_bir", 0)
-                            msix_template_context[var] = f"32'h{(offset | bir):08X}"
-                        elif var == "pba_offset_bir":
-                            offset = msix_template_context.get("pba_offset", 0x2000)
-                            bir = msix_template_context.get("pba_bir", 0)
-                            msix_template_context[var] = f"32'h{(offset | bir):08X}"
-
                 modules["msix_capability_registers"] = self.renderer.render_template(
                     "systemverilog/msix_capability_registers.sv.j2",
                     msix_template_context,
@@ -603,41 +528,34 @@ endmodule"""
         """Generate advanced PCILeech modules based on behavior profile."""
         advanced_modules = {}
 
-        try:
-            # Extract register definitions from behavior profile
-            registers = self._extract_pcileech_registers(behavior_profile)
+        # Extract register definitions from behavior profile
+        registers = self._extract_pcileech_registers(behavior_profile)
 
-            # Get variance model if available
-            variance_model = None
-            if (
-                hasattr(behavior_profile, "variance_metadata")
-                and behavior_profile.variance_metadata
-            ):
-                variance_model = behavior_profile.variance_metadata
+        # Get variance model if available
+        variance_model = None
+        if (
+            hasattr(behavior_profile, "variance_metadata")
+            and behavior_profile.variance_metadata
+        ):
+            variance_model = behavior_profile.variance_metadata
 
-            # Generate advanced controller with PCILeech integration
-            pcileech_context = template_context.copy()
-            pcileech_context.update(
-                {
-                    "registers": registers,
-                    "variance_model": variance_model,
-                    "pcileech_integration": True,
-                    "behavior_profile": behavior_profile,
-                }
+        # Generate advanced controller with PCILeech integration
+        pcileech_context = template_context.copy()
+        pcileech_context.update(
+            {
+                "registers": registers,
+                "variance_model": variance_model,
+                "pcileech_integration": True,
+                "behavior_profile": behavior_profile,
+            }
+        )
+
+        # Generate advanced controller - let template errors propagate
+        advanced_modules["pcileech_advanced_controller"] = (
+            self.generate_advanced_systemverilog(
+                regs=registers, variance_model=variance_model
             )
-
-            advanced_modules["pcileech_advanced_controller"] = (
-                self.generate_advanced_systemverilog(
-                    regs=registers, variance_model=variance_model
-                )
-            )
-
-        except Exception as e:
-            log_warning_safe(
-                self.logger,
-                "Advanced PCILeech module generation failed: {error}",
-                error=str(e),
-            )
+        )
 
         return advanced_modules
 
@@ -1077,108 +995,5 @@ endmodule"""
             )
 
         except TemplateRenderError:
-            # Fallback to base build integration
-            return self.generate_enhanced_build_integration()
-
-    def _generate_basic_top_wrapper(self, context: Dict[str, Any]) -> str:
-        """Generate a basic top-level wrapper when template is not available."""
-        device_config = context.get("device_config", {})
-        vendor_id = device_config.get("vendor_id", "0000")
-        device_id = device_config.get("device_id", "0000")
-
-        header = context.get(
-            "header",
-            "// PCILeech Top-Level Wrapper\n// Generated by PCILeechFWGenerator",
-        )
-
-        return f"""// PCILeech Top-Level Wrapper
-// Generated for device: {vendor_id}:{device_id}
-
-module pcileech_top (
-    // Clock and reset
-    input  logic        clk,
-    input  logic        reset_n,
-
-    // PCIe interface (connect to PCIe hard IP)
-    input  logic [127:0] pcie_rx_data,
-    input  logic         pcie_rx_valid,
-    output logic [127:0] pcie_tx_data,
-    output logic         pcie_tx_valid,
-
-    // Configuration space interface
-    input  logic        cfg_ext_read_received,
-    input  logic        cfg_ext_write_received,
-    input  logic [9:0]  cfg_ext_register_number,
-    input  logic [3:0]  cfg_ext_function_number,
-    input  logic [31:0] cfg_ext_write_data,
-    input  logic [3:0]  cfg_ext_write_byte_enable,
-    output logic [31:0] cfg_ext_read_data,
-    output logic        cfg_ext_read_data_valid,
-
-    // MSI-X interrupt interface
-    output logic        msix_interrupt,
-    output logic [10:0] msix_vector,
-    input  logic        msix_interrupt_ack,
-
-    // Debug/status outputs
-    output logic [31:0] debug_status,
-    output logic        device_ready
-);
-
-    // Internal signals
-    logic [31:0] bar_addr;
-    logic [31:0] bar_wr_data;
-    logic        bar_wr_en;
-    logic        bar_rd_en;
-    logic [31:0] bar_rd_data;
-    logic [2:0]  bar_index;
-    logic [3:0]  bar_wr_be;
-
-    // Instantiate BAR controller
-    pcileech_tlps128_bar_controller bar_controller (
-        .clk(clk),
-        .reset_n(reset_n),
-        .bar_index(bar_index),
-        .bar_addr(bar_addr),
-        .bar_wr_data(bar_wr_data),
-        .bar_wr_be(bar_wr_be),
-        .bar_wr_en(bar_wr_en),
-        .bar_rd_en(bar_rd_en),
-        .bar_rd_data(bar_rd_data),
-        .cfg_ext_read_received(cfg_ext_read_received),
-        .cfg_ext_write_received(cfg_ext_write_received),
-        .cfg_ext_register_number(cfg_ext_register_number),
-        .cfg_ext_function_number(cfg_ext_function_number),
-        .cfg_ext_write_data(cfg_ext_write_data),
-        .cfg_ext_write_byte_enable(cfg_ext_write_byte_enable),
-        .cfg_ext_read_data(cfg_ext_read_data),
-        .cfg_ext_read_data_valid(cfg_ext_read_data_valid),
-        .msix_interrupt(msix_interrupt),
-        .msix_vector(msix_vector),
-        .msix_interrupt_ack(msix_interrupt_ack)
-    );
-
-    // Basic assignments
-    assign bar_index = 3'b000;
-    assign bar_wr_be = 4'hF;
-    assign device_ready = 1'b1;
-    assign debug_status = 32'h{vendor_id}{device_id[:4]};
-
-    // Simple TLP processing
-    always_ff @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            pcie_tx_data <= 128'h0;
-            pcie_tx_valid <= 1'b0;
-            bar_addr <= 32'h0;
-            bar_wr_data <= 32'h0;
-            bar_wr_en <= 1'b0;
-            bar_rd_en <= 1'b0;
-        end else begin
-            // Basic echo for testing
-            pcie_tx_data <= pcie_rx_data;
-            pcie_tx_valid <= pcie_rx_valid;
-        end
-    end
-
-endmodule
-"""
+            # Re-raise the error to properly report template issues
+            raise
