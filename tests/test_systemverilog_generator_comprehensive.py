@@ -66,9 +66,7 @@ class TestMSIXTableReadingCriticalPaths:
     def test_bar_matching_direct_bir_match(self, generator, complex_msix_context):
         """Test direct BIR matching logic - covers lines 783-792 in attached code."""
         # Mock the VFIO helper import
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("mmap.mmap") as mock_mmap:
@@ -92,9 +90,7 @@ class TestMSIXTableReadingCriticalPaths:
         # Modify context to have no direct BAR match
         complex_msix_context["msix_config"]["table_bir"] = 5  # Non-existent BAR
 
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("os.close"):
@@ -114,9 +110,7 @@ class TestMSIXTableReadingCriticalPaths:
 
         complex_msix_context["msix_config"]["table_bir"] = 5  # Force no direct match
 
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("mmap.mmap") as mock_mmap:
@@ -139,9 +133,7 @@ class TestMSIXTableReadingCriticalPaths:
 
         complex_msix_context["msix_config"]["table_bir"] = 5  # Force no direct match
 
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("mmap.mmap") as mock_mmap:
@@ -174,9 +166,7 @@ class TestMSIXTableReadingCriticalPaths:
 
     def test_mmap_einval_error_handling(self, generator, complex_msix_context):
         """Test mmap EINVAL error handling - covers lines 940-950 in attached code."""
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("mmap.mmap") as mock_mmap:
@@ -198,9 +188,7 @@ class TestMSIXTableReadingCriticalPaths:
         ] = 16000  # Near end of 16KB BAR
         complex_msix_context["msix_config"]["num_vectors"] = 32  # Large table
 
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("os.close"):
@@ -213,9 +201,7 @@ class TestMSIXTableReadingCriticalPaths:
         self, generator, complex_msix_context
     ):
         """Test successful read with truncation handling - covers lines 913-935 in attached code."""
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.return_value = (100, 101)
 
             with patch("mmap.mmap") as mock_mmap:
@@ -225,8 +211,10 @@ class TestMSIXTableReadingCriticalPaths:
                     mock_data[i : i + 4] = (i // 4 + 1).to_bytes(4, "little")
 
                 mock_mm = MagicMock()
-                mock_mm.__enter__.return_value = mock_data
-                mock_mm.__len__.return_value = 48
+                # Make the mock behave like the actual bytearray
+                mock_mm.__getitem__ = lambda self, key: mock_data.__getitem__(key)
+                mock_mm.__len__ = lambda self: len(mock_data)
+                mock_mm.__enter__.return_value = mock_mm
                 mock_mmap.return_value = mock_mm
 
                 with patch("os.close"):
@@ -239,9 +227,7 @@ class TestMSIXTableReadingCriticalPaths:
 
     def test_exception_handling_in_msix_read(self, generator, complex_msix_context):
         """Test general exception handling - covers lines 957-964 in attached code."""
-        with patch(
-            "src.templating.systemverilog_generator.get_device_fd"
-        ) as mock_get_fd:
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
             mock_get_fd.side_effect = RuntimeError("Unexpected VFIO error")
 
             result = generator._read_actual_msix_table(complex_msix_context)

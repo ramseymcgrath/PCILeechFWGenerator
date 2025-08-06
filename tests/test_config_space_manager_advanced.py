@@ -37,7 +37,7 @@ class TestConfigSpaceManagerAdvanced:
         """Test complete VFIO to sysfs fallback chain."""
         # Mock VFIO import failure, should fall back to sysfs
         with patch(
-            "src.device_clone.config_space_manager.VFIOBinder",
+            "src.cli.vfio_handler.VFIOBinder",
             side_effect=ImportError("VFIO not available"),
         ):
             with patch.object(
@@ -188,7 +188,9 @@ class TestBarInfoAdvanced:
         ]
 
         for size, kb, mb, gb in test_cases:
-            bar = BarInfo(index=0, size=size, address=0, is_memory=True, is_64bit=False)
+            bar = BarInfo(
+                index=0, size=size, address=0, bar_type="memory", is_64bit=False
+            )
             assert abs(bar.size_kb - kb) < 0.1
             assert abs(bar.size_mb - mb) < 0.1
             assert abs(bar.size_gb - gb) < 0.1
@@ -207,7 +209,7 @@ class TestBarInfoAdvanced:
                 index=0,
                 size=size,
                 address=0x80000000,
-                is_memory=True,
+                bar_type="memory",
                 is_64bit=(size > 0xFFFFFFFF),
             )
             assert bar.size == size, f"Failed for {description}"
@@ -314,7 +316,7 @@ class TestErrorRecoveryScenarios:
         mock_vfio_binder.__exit__.return_value = None
 
         with patch(
-            "src.device_clone.config_space_manager.VFIOBinder",
+            "src.cli.vfio_handler.VFIOBinder",
             return_value=mock_vfio_binder,
         ):
             with patch.object(

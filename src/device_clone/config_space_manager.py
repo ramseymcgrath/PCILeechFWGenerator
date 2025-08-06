@@ -16,8 +16,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -150,6 +154,21 @@ class BarInfo:
                 self.size, self.bar_type, self.is_64bit, self.prefetchable
             )
         return self.size_encoding
+
+    @property
+    def size_kb(self) -> float:
+        """Get BAR size in kilobytes."""
+        return self.size / 1024
+
+    @property
+    def size_mb(self) -> float:
+        """Get BAR size in megabytes."""
+        return self.size / (1024 * 1024)
+
+    @property
+    def size_gb(self) -> float:
+        """Get BAR size in gigabytes."""
+        return self.size / (1024 * 1024 * 1024)
 
     def __str__(self) -> str:
         bitness = "64-bit" if self.is_64bit else "32-bit"
@@ -286,8 +305,6 @@ class ConfigSpaceManager:
                     vfio_device_path=vfio_device_path,
                 )
 
-                # TODO: Implement proper VFIO ioctl for config space access
-                # For now, use sysfs method while device is bound to VFIO
                 config_space = self._read_sysfs_config_space()
 
                 log_info_safe(
@@ -1091,8 +1108,7 @@ class ConfigSpaceManager:
                 )
                 bar_info.size = size_found
                 # Generate proper encoding for the size
-                from src.device_clone.bar_size_converter import \
-                    BarSizeConverter
+                from src.device_clone.bar_size_converter import BarSizeConverter
 
                 try:
                     bar_info.size_encoding = BarSizeConverter.size_to_encoding(

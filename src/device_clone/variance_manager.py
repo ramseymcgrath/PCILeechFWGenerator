@@ -39,6 +39,7 @@ class VarianceManager:
         else:
             self.fallback_manager = fallback_manager
 
+
     def apply_manufacturing_variance(self, device_info: Dict[str, Any]) -> List[str]:
         """Apply manufacturing variance simulation."""
         variance_files = []
@@ -124,10 +125,28 @@ class VarianceManager:
 
         return variance_files
 
+
     def run_behavior_profiling(
+
         self, device_info: Dict[str, Any], duration: int = 30
     ) -> Optional[str]:
-        """Run behavior profiling if available."""
+        """
+        Runs behavior profiling on the specified device for a given duration and saves the results to a JSON file.
+
+        Args:
+            device_info (Dict[str, Any]): Information about the device to profile.
+            duration (int, optional): Duration in seconds to run the profiling. Defaults to 30.
+
+        Returns:
+            Optional[str]: Path to the saved behavior profile JSON file if profiling succeeds, otherwise None.
+
+        Behavior:
+            - Attempts to run behavior profiling using the BehaviorProfiler if available.
+            - If BehaviorProfiler is not available or an error occurs, logs the issue and consults the fallback manager if configured.
+            - Captures and serializes device behavior data including register accesses, timing patterns, state transitions, power states, and interrupt patterns.
+            - Saves the serialized profile data to 'behavior_profile.json' in the output directory.
+            - Returns the path to the saved profile file or None if profiling was not performed.
+        """
         if not BehaviorProfiler:
             error_msg = "Behavior profiler not available"
             logger.warning(error_msg)

@@ -61,6 +61,9 @@ async def test_configuration_dialog():
         board_select = app.query_one("#board-type-select")
         assert board_select is not None
 
+        # Select a valid board option
+        board_select.value = "pcileech_35t325_x4"
+
         # Test configuration name input
         await pilot.click("#config-name-input")
         await pilot.type("Test Configuration")
@@ -87,6 +90,11 @@ async def test_donor_dump_configuration():
         # Open configuration dialog
         await pilot.click("#configure")
         await pilot.pause(0.5)
+
+        # Set a valid board type first
+        board_select = app.query_one("#board-type-select")
+        if board_select:
+            board_select.value = "pcileech_35t325_x4"
 
         # Test donor dump switch
         await pilot.click("#donor-dump-switch")
@@ -199,6 +207,11 @@ async def test_profile_management():
         # Open configuration dialog
         await pilot.click("#configure")
         await pilot.pause(0.5)
+
+        # Set a valid board type first
+        board_select = app.query_one("#board-type-select")
+        if board_select:
+            board_select.value = "pcileech_35t325_x4"
 
         # Modify some settings
         await pilot.click("#config-name-input")

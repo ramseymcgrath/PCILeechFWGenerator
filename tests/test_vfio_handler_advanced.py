@@ -10,6 +10,7 @@ concurrent access, and edge cases in device binding workflows.
 import errno
 import fcntl
 import os
+import sys
 import pytest
 import threading
 import time
@@ -29,6 +30,7 @@ from src.cli.vfio_handler import (
 )
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
 class TestVFIOBinderAdvancedErrorHandling:
     """Test advanced VFIO error handling scenarios."""
 
@@ -144,6 +146,7 @@ class TestVFIOBinderAdvancedErrorHandling:
                         binder._verify_vfio_binding()
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
 class TestVFIOResourceManagement:
     """Test VFIO resource management and cleanup scenarios."""
 
@@ -246,6 +249,7 @@ class TestVFIOResourceManagement:
                             mock_close.assert_called()
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
 class TestVFIOConcurrencyAndThreadSafety:
     """Test VFIO operations under concurrent access scenarios."""
 
@@ -320,6 +324,7 @@ class TestVFIOConcurrencyAndThreadSafety:
         assert thread_results[2] == "2"
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
 class TestVFIODeviceStateComplexity:
     """Test complex device state management scenarios."""
 
@@ -398,6 +403,7 @@ class TestVFIODeviceStateComplexity:
                     mock_write.assert_called()
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
 class TestVFIODiagnosticsAndDebugging:
     """Test VFIO diagnostics and debugging capabilities."""
 
@@ -429,7 +435,16 @@ class TestVFIODiagnosticsAndDebugging:
             binding_state=BindingState.BOUND_TO_OTHER,
         )
 
-        pretty_output = render_pretty(device_info)
+        # Convert DeviceInfo to dict for render_pretty
+        device_info_dict = {
+            "bdf": device_info.bdf,
+            "current_driver": device_info.current_driver,
+            "iommu_group": device_info.iommu_group,
+            "binding_state": str(device_info.binding_state),
+            "overall": "ok",
+            "checks": [],
+        }
+        pretty_output = render_pretty(device_info_dict)
 
         # Should contain key diagnostic information
         assert valid_bdf in pretty_output

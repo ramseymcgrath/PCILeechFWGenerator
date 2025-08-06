@@ -16,11 +16,16 @@ from typing import Dict, List, Optional
 
 # Import device configuration system
 from ..device_clone import DeviceConfiguration as NewDeviceConfiguration
-from ..device_clone import (ManufacturingVarianceSimulator, VarianceModel,
-                            get_device_config)
+from ..device_clone import (
+    ManufacturingVarianceSimulator,
+    VarianceModel,
+    get_device_config,
+)
 from ..device_clone.manufacturing_variance import DeviceClass
+
 # Import from centralized utils
 from ..string_utils import generate_sv_header_comment
+
 # Import template renderer
 from . import TemplateRenderer, TemplateRenderError
 
@@ -98,7 +103,7 @@ class PerformanceConfig:
     """Configuration for performance monitoring features."""
 
     # Counter configuration
-    counter_width_bits: int = 32
+    counter_width: int = 32
     enable_bandwidth_monitoring: bool = True
     enable_latency_monitoring: bool = True
     enable_error_rate_monitoring: bool = True
@@ -231,7 +236,7 @@ class SystemVerilogGenerator:
     def _build_perf_context(self) -> Dict:
         """Build performance monitoring context for templates."""
         return {
-            "counter_width": self.perf_config.counter_width_bits,
+            "counter_width": self.perf_config.counter_width,
             "enable_bandwidth": self.perf_config.enable_bandwidth_monitoring,
             "enable_latency": self.perf_config.enable_latency_monitoring,
             "enable_error_rate": self.perf_config.enable_error_rate_monitoring,

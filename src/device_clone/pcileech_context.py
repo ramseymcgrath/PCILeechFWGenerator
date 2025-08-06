@@ -8,8 +8,16 @@ to provide structured context for all PCILeech templates.
 
 The context builder ensures all required data is present and provides validation
 to prevent template rendering failures. The system fails if data is incomplete to ensure firmware uniqueness.
+
+Key improvements in this version:
+- Enhanced type safety with comprehensive type hints
+- Better error handling with context managers
+- Performance optimizations through caching and lazy evaluation
+- Reduced complexity through functional decomposition
+- Improved testability with dependency injection
 """
 
+import contextlib
 import ctypes
 import fcntl
 import hashlib
@@ -17,17 +25,25 @@ import logging
 import os
 import struct
 import subprocess
+import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from functools import lru_cache, cached_property
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union, Tuple, Protocol, TypeVar, cast
 
 from ..error_utils import extract_root_cause
 from ..exceptions import ContextError
-from ..string_utils import (format_bar_summary_table, format_bar_table,
-                            format_raw_bar_table, log_error_safe,
-                            log_info_safe, log_warning_safe)
+from ..string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .behavior_profiler import BehaviorProfile
 from .config_space_manager import BarInfo
 from .fallback_manager import FallbackManager
@@ -36,11 +52,19 @@ from .overlay_mapper import OverlayMapper
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                  VFIO_GROUP_GET_DEVICE_FD,
-                                  VFIO_REGION_INFO_FLAG_MMAP,
-                                  VFIO_REGION_INFO_FLAG_READ,
-                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
+from ..cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
+
+# Type aliases for clarity
+ConfigSpaceData = Dict[str, Any]
+MSIXData = Dict[str, Any]
+TemplateContext = Dict[str, Any]
 
 
 class ValidationLevel(Enum):
@@ -55,9 +79,40 @@ class ValidationLevel(Enum):
 PCILeechContextError = ContextError
 
 
+# Constants moved to module level for better organization
+class PCIConstants:
+    """PCIe-related constants."""
+
+    MIN_CONFIG_SPACE_SIZE = 256
+    MAX_CONFIG_SPACE_SIZE = 4096
+    MIN_BAR_INDEX = 0
+    MAX_BAR_INDEX = 5
+
+    # BAR type constants
+    BAR_TYPE_MEMORY_32BIT = 0
+    BAR_TYPE_MEMORY_64BIT = 1
+
+    # Common BAR sizes
+    DEFAULT_BAR_SIZE = 4096  # 4KB
+    DEFAULT_IO_BAR_SIZE = 256
+
+    # Device class prefixes
+    CLASS_NETWORK = "02"
+    CLASS_STORAGE = "01"
+    CLASS_DISPLAY = "03"
+    CLASS_AUDIO = "040"
+    CLASS_MULTIMEDIA = "048"
+
+    # Power states
+    POWER_STATE_D0 = "D0"
+    POWER_STATE_D3_COLD = "D3cold"
+    POWER_STATE_D3_HOT = "D3hot"
+    POWER_STATE_D3 = "D3"
+
+
 @dataclass
 class DeviceIdentifiers:
-    """Device identification data."""
+    """Device identification data with enhanced validation and utilities."""
 
     vendor_id: str
     device_id: str
@@ -66,27 +121,76 @@ class DeviceIdentifiers:
     subsystem_vendor_id: Optional[str] = None
     subsystem_device_id: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate device identifiers."""
         if not all([self.vendor_id, self.device_id, self.class_code, self.revision_id]):
             raise ContextError("Device identifiers cannot be empty")
 
-        # Validate hex format
-        for field_name, value in [
-            ("vendor_id", self.vendor_id),
-            ("device_id", self.device_id),
-            ("class_code", self.class_code),
-            ("revision_id", self.revision_id),
-        ]:
+        # Validate hex format and normalize
+        self._validate_and_normalize_fields()
+
+    def _validate_and_normalize_fields(self) -> None:
+        """Validate hex format and normalize field values."""
+        field_specs = [
+            ("vendor_id", 4),
+            ("device_id", 4),
+            ("class_code", 6),
+            ("revision_id", 2),
+        ]
+
+        for field_name, expected_length in field_specs:
+            value = getattr(self, field_name)
             try:
-                int(value, 16)
+                # Validate hex format
+                int_value = int(value, 16)
+                # Normalize to expected length with zero padding
+                normalized = f"{int_value:0{expected_length}x}"
+                setattr(self, field_name, normalized)
             except ValueError:
                 raise ContextError(f"Invalid hex format for {field_name}: {value}")
+
+        # Normalize optional fields if present
+        if self.subsystem_vendor_id:
+            self.subsystem_vendor_id = self._normalize_hex(self.subsystem_vendor_id, 4)
+        if self.subsystem_device_id:
+            self.subsystem_device_id = self._normalize_hex(self.subsystem_device_id, 4)
+
+    @staticmethod
+    def _normalize_hex(value: str, length: int) -> str:
+        """Normalize a hex string to specified length."""
+        try:
+            int_value = int(value, 16)
+            return f"{int_value:0{length}x}"
+        except ValueError:
+            return value
+
+    @property
+    def device_signature(self) -> str:
+        """Generate a unique device signature."""
+        return f"{self.vendor_id}:{self.device_id}"
+
+    @property
+    def full_signature(self) -> str:
+        """Generate a full device signature including subsystem IDs."""
+        subsys_vendor = self.subsystem_vendor_id or self.vendor_id
+        subsys_device = self.subsystem_device_id or self.device_id
+        return f"{self.vendor_id}:{self.device_id}:{subsys_vendor}:{subsys_device}"
+
+    def get_device_class_type(self) -> str:
+        """Get human-readable device class type."""
+        class_prefix = self.class_code[:2]
+        class_map = {
+            PCIConstants.CLASS_NETWORK: "Network Controller",
+            PCIConstants.CLASS_STORAGE: "Storage Controller",
+            PCIConstants.CLASS_DISPLAY: "Display Controller",
+            PCIConstants.CLASS_AUDIO: "Audio Controller",
+        }
+        return class_map.get(class_prefix, "Unknown Device")
 
 
 @dataclass
 class BarConfiguration:
-    """BAR configuration data."""
+    """BAR configuration data with enhanced validation and utilities."""
 
     index: int
     base_address: int
@@ -95,35 +199,63 @@ class BarConfiguration:
     prefetchable: bool
     is_memory: bool
     is_io: bool
-    is_64bit: bool = False
-    size_encoding: Optional[int] = None
+    is_64bit: bool = field(default=False)
+    _size_encoding: Optional[int] = field(default=None, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate BAR configuration."""
-        if self.index < 0 or self.index > 5:
+        if not PCIConstants.MIN_BAR_INDEX <= self.index <= PCIConstants.MAX_BAR_INDEX:
             raise ContextError(f"Invalid BAR index: {self.index}")
         if self.size < 0:
             raise ContextError(f"Invalid BAR size: {self.size}")
 
         # Set is_64bit based on bar_type
-        if self.is_memory and self.bar_type == 1:
+        if self.is_memory and self.bar_type == PCIConstants.BAR_TYPE_MEMORY_64BIT:
             self.is_64bit = True
 
     def get_size_encoding(self) -> int:
         """Get the size encoding for this BAR, computing it if necessary."""
-        if self.size_encoding is None:
+        if self._size_encoding is None:
             from src.device_clone.bar_size_converter import BarSizeConverter
 
             bar_type_str = "io" if self.is_io else "memory"
-            self.size_encoding = BarSizeConverter.size_to_encoding(
+            self._size_encoding = BarSizeConverter.size_to_encoding(
                 self.size, bar_type_str, self.is_64bit, self.prefetchable
             )
-        return self.size_encoding
+        return self._size_encoding
+
+    @property
+    def size_encoding(self) -> int:
+        """Property wrapper for backward compatibility."""
+        return self.get_size_encoding()
+
+    @property
+    def size_mb(self) -> float:
+        """Get BAR size in megabytes."""
+        return self.size / (1024 * 1024)
+
+    @property
+    def type_description(self) -> str:
+        """Get human-readable BAR type description."""
+        if self.is_io:
+            return "I/O"
+        elif self.is_64bit:
+            return "64-bit Memory"
+        else:
+            return "32-bit Memory"
+
+    def __str__(self) -> str:
+        """String representation for logging."""
+        return (
+            f"BAR{self.index}: {self.type_description} "
+            f"@ 0x{self.base_address:08X}, size={self.size} bytes "
+            f"({self.size_mb:.2f} MB), prefetchable={self.prefetchable}"
+        )
 
 
 @dataclass
 class TimingParameters:
-    """Device timing parameters."""
+    """Device timing parameters with validation and utilities."""
 
     read_latency: int
     write_latency: int
@@ -133,22 +265,151 @@ class TimingParameters:
     clock_frequency_mhz: float
     timing_regularity: float
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate timing parameters."""
-        if any(
-            param <= 0
-            for param in [
-                self.read_latency,
-                self.write_latency,
-                self.burst_length,
-                self.inter_burst_gap,
-                self.timeout_cycles,
-                self.timing_regularity,
-            ]
-        ):
-            raise ContextError("Timing parameters must be positive")
-        if self.clock_frequency_mhz <= 0:
-            raise ContextError("Clock frequency must be positive")
+        numeric_params = {
+            "read_latency": self.read_latency,
+            "write_latency": self.write_latency,
+            "burst_length": self.burst_length,
+            "inter_burst_gap": self.inter_burst_gap,
+            "timeout_cycles": self.timeout_cycles,
+            "timing_regularity": self.timing_regularity,
+            "clock_frequency_mhz": self.clock_frequency_mhz,
+        }
+
+        for param_name, value in numeric_params.items():
+            if value <= 0:
+                raise ContextError(f"{param_name} must be positive, got {value}")
+
+        if not 0 < self.timing_regularity <= 1.0:
+            raise ContextError(
+                f"timing_regularity must be between 0 and 1, got {self.timing_regularity}"
+            )
+
+    @property
+    def total_latency(self) -> int:
+        """Calculate total read/write latency."""
+        return self.read_latency + self.write_latency
+
+    @property
+    def effective_bandwidth_mbps(self) -> float:
+        """Estimate effective bandwidth in MB/s."""
+        # Simplified calculation based on burst parameters
+        cycles_per_burst = self.burst_length + self.inter_burst_gap
+        bursts_per_second = (self.clock_frequency_mhz * 1e6) / cycles_per_burst
+        bytes_per_burst = self.burst_length * 4  # Assuming 32-bit transfers
+        return (bursts_per_second * bytes_per_burst) / 1e6
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary with additional computed values."""
+        base_dict = asdict(self)
+        base_dict.update(
+            {
+                "total_latency": self.total_latency,
+                "effective_bandwidth_mbps": self.effective_bandwidth_mbps,
+            }
+        )
+        return base_dict
+
+
+class VFIODeviceManager:
+    """Manages VFIO device operations with proper resource management."""
+
+    def __init__(self, device_bdf: str, logger: logging.Logger):
+        """Initialize VFIO device manager."""
+        self.device_bdf = device_bdf
+        self.logger = logger
+        self._device_fd: Optional[int] = None
+        self._container_fd: Optional[int] = None
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with cleanup."""
+        self.close()
+
+    def open(self) -> Tuple[int, int]:
+        """Open VFIO device and container file descriptors."""
+        if self._device_fd is not None and self._container_fd is not None:
+            return self._device_fd, self._container_fd
+
+        from ..cli.vfio_helpers import get_device_fd
+
+        log_info_safe(
+            self.logger,
+            "Opening VFIO device FD for device {bdf}",
+            bdf=self.device_bdf,
+            prefix="VFIO",
+        )
+
+        try:
+            self._device_fd, self._container_fd = get_device_fd(self.device_bdf)
+            log_info_safe(
+                self.logger,
+                "Successfully opened VFIO device FD {fd} and container FD {cont_fd}",
+                fd=self._device_fd,
+                cont_fd=self._container_fd,
+                prefix="VFIO",
+            )
+            return self._device_fd, self._container_fd
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                "Failed to open VFIO device FD: {error}",
+                error=str(e),
+                prefix="VFIO",
+            )
+            raise
+
+    def close(self) -> None:
+        """Close VFIO file descriptors."""
+        if self._device_fd is not None:
+            try:
+                os.close(self._device_fd)
+                self._device_fd = None
+            except OSError:
+                pass
+
+        if self._container_fd is not None:
+            try:
+                os.close(self._container_fd)
+                self._container_fd = None
+            except OSError:
+                pass
+
+    def get_region_info(self, index: int) -> Optional[Dict[str, Any]]:
+        """Get VFIO region information."""
+        if self._device_fd is None:
+            self.open()
+
+        info = VfioRegionInfo()
+        info.argsz = ctypes.sizeof(VfioRegionInfo)
+        info.index = index
+
+        try:
+            # Ensure device_fd is not None after open()
+            assert self._device_fd is not None
+            fcntl.ioctl(self._device_fd, VFIO_DEVICE_GET_REGION_INFO, info, True)
+
+            return {
+                "index": info.index,
+                "flags": info.flags,
+                "size": info.size,
+                "readable": bool(info.flags & VFIO_REGION_INFO_FLAG_READ),
+                "writable": bool(info.flags & VFIO_REGION_INFO_FLAG_WRITE),
+                "mappable": bool(info.flags & VFIO_REGION_INFO_FLAG_MMAP),
+            }
+        except OSError as e:
+            log_error_safe(
+                self.logger,
+                "VFIO region info ioctl failed for index {index}: {error}",
+                index=index,
+                error=str(e),
+                prefix="VFIO",
+            )
+            return None
 
 
 class PCILeechContextBuilder:
@@ -162,13 +423,11 @@ class PCILeechContextBuilder:
     - Strict validation of all input data
     - Comprehensive error reporting
     - Deterministic context generation
+    - Resource management with context managers
+    - Performance optimization through caching
     """
 
-    # Constants for validation
-    # Minimum and maximum config space sizes
-    MIN_CONFIG_SPACE_SIZE = 256
-    MAX_CONFIG_SPACE_SIZE = 4096
-    # Required fields for device identifiers and MSI-X capabilities
+    # Required fields for validation
     REQUIRED_DEVICE_FIELDS = ["vendor_id", "device_id", "class_code", "revision_id"]
     REQUIRED_MSIX_FIELDS = ["table_size", "table_bir", "table_offset"]
 
@@ -196,6 +455,7 @@ class PCILeechContextBuilder:
         self.validation_level = validation_level
         self.logger = logging.getLogger(__name__)
         self._context_cache: Dict[str, Any] = {}
+        self._vfio_manager = VFIODeviceManager(self.device_bdf, self.logger)
 
         # Initialize fallback manager with default settings if not provided
         self.fallback_manager = fallback_manager or FallbackManager(
@@ -348,14 +608,14 @@ class PCILeechContextBuilder:
 
             # Validate config space size
             config_size = config_space_data.get("config_space_size", 0)
-            if config_size < self.MIN_CONFIG_SPACE_SIZE:
+            if config_size < PCIConstants.MIN_CONFIG_SPACE_SIZE:
                 # Log warning but don't fail - many devices only expose 64 bytes via sysfs
                 log_warning_safe(
                     self.logger,
                     "Config space size ({size}) is less than ideal minimum ({min_size}), "
                     "but proceeding as this is common for sysfs-based reads",
                     size=config_size,
-                    min_size=self.MIN_CONFIG_SPACE_SIZE,
+                    min_size=PCIConstants.MIN_CONFIG_SPACE_SIZE,
                     prefix="CONF",
                 )
                 # Only fail in strict mode if we have absolutely no config space data
@@ -363,7 +623,7 @@ class PCILeechContextBuilder:
                     missing_data.append(
                         f"config_space_data.config_space_size (got {config_size})"
                     )
-            elif config_size > self.MAX_CONFIG_SPACE_SIZE:
+            elif config_size > PCIConstants.MAX_CONFIG_SPACE_SIZE:
                 missing_data.append(
                     f"config_space_data.config_space_size (got {config_size})"
                 )
@@ -787,7 +1047,6 @@ class PCILeechContextBuilder:
         bars = config_space_data["bars"]
         bar_configs = []
         primary_bar = None
-        largest_size = 0
 
         # Log raw BAR data from config space using table format
         log_info_safe(
@@ -1076,25 +1335,21 @@ class PCILeechContextBuilder:
                         prefetchable=prefetchable,
                         is_memory=is_memory,
                         is_io=is_io,
-                        is_64bit=(bar_type == 1),
                     )
 
                     # Compute and validate size encoding
                     if size > 0:
-                        from src.device_clone.bar_size_converter import \
-                            BarSizeConverter
+                        from src.device_clone.bar_size_converter import BarSizeConverter
 
                         try:
                             bar_type_str = "io" if is_io else "memory"
                             if BarSizeConverter.validate_bar_size(size, bar_type_str):
-                                bar_config.size_encoding = (
-                                    bar_config.get_size_encoding()
-                                )
+                                size_encoding = bar_config.get_size_encoding()
                                 log_info_safe(
                                     self.logger,
                                     "BAR {index} size encoding: 0x{encoding:08X} for size {size} ({size_str})",
                                     index=index,
-                                    encoding=bar_config.size_encoding,
+                                    encoding=size_encoding,
                                     size=size,
                                     size_str=BarSizeConverter.format_size(size),
                                     prefix="BARA",
@@ -1408,95 +1663,54 @@ class PCILeechContextBuilder:
             except OSError:
                 pass  # Already closed
 
+    @lru_cache(maxsize=1)
     def _get_vfio_group(self) -> str:
         """
         Return the IOMMU group number for the device.
 
-        Inside the build container the usual sysfs path is often absent, but the
-        correct /dev/vfio/<grp> node is mounted.  If we can't resolve the group via
-        sysfs, fall back to enumerating /dev/vfio.
+        This method is cached since the IOMMU group doesn't change during runtime.
         """
-        # 1) Outside-container / normal path
+        # Try sysfs first
+        group = self._get_iommu_group_from_sysfs()
+        if group:
+            return group
+
+        # Try container fallback
+        group = self._get_iommu_group_from_container()
+        if group:
+            return group
+
+        # Last resort
+        log_warning_safe(
+            self.logger,
+            "All IOMMU group resolution methods failed, using fallback group '0'",
+            prefix="IOMMU",
+        )
+        return "0"
+
+    def _get_iommu_group_from_sysfs(self) -> Optional[str]:
+        """Try to get IOMMU group from sysfs."""
         try:
-            log_info_safe(
-                self.logger,
-                "Attempting to resolve IOMMU group for device {bdf} via sysfs",
-                bdf=self.device_bdf,
-                prefix="IOMMU",
-            )
-
             # Parse BDF components
-            dom, bus_devfunc = (
-                self.device_bdf.split(":", 1)
-                if ":" in self.device_bdf
-                else ("0000", self.device_bdf)
-            )
-            bus, dev_func = bus_devfunc.split(":")
-            dev, fn = dev_func.split(".")
+            bdf_parts = self._parse_bdf()
+            if not bdf_parts:
+                return None
 
-            log_info_safe(
-                self.logger,
-                "Parsed BDF {bdf} into domain: {dom}, bus: {bus}, device: {dev}, function: {fn}",
-                bdf=self.device_bdf,
-                dom=dom,
-                bus=bus,
-                dev=dev,
-                fn=fn,
-                prefix="IOMMU",
+            dom, bus, dev, fn = bdf_parts
+            iommu_path = Path(
+                f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}/iommu_group"
             )
 
-            iommu_path = f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}/iommu_group"
-            log_info_safe(
-                self.logger,
-                "Checking IOMMU group path: {path}",
-                path=iommu_path,
-                prefix="IOMMU",
-            )
-
-            if os.path.exists(iommu_path):
-                try:
-                    group_link = os.readlink(iommu_path)
-                    group_number = os.path.basename(group_link)
-                    log_info_safe(
-                        self.logger,
-                        "Successfully resolved IOMMU group via sysfs: {group} (link: {link})",
-                        group=group_number,
-                        link=group_link,
-                        prefix="IOMMU",
-                    )
-                    return group_number
-                except OSError as e:
-                    log_warning_safe(
-                        self.logger,
-                        "Failed to read IOMMU group symlink {path}: {error}",
-                        path=iommu_path,
-                        error=str(e),
-                        prefix="IOMMU",
-                    )
-            else:
-                log_warning_safe(
+            if iommu_path.exists():
+                group_link = iommu_path.readlink()
+                group_number = group_link.name
+                log_info_safe(
                     self.logger,
-                    "IOMMU group path does not exist: {path}",
-                    path=iommu_path,
+                    "Successfully resolved IOMMU group via sysfs: {group}",
+                    group=group_number,
                     prefix="IOMMU",
                 )
-
-                # Check if the device exists at all
-                device_path = f"/sys/bus/pci/devices/{dom}:{bus}:{dev}.{fn}"
-                if os.path.exists(device_path):
-                    log_info_safe(
-                        self.logger,
-                        "Device exists at {path} but no IOMMU group - IOMMU may be disabled",
-                        path=device_path,
-                        prefix="IOMMU",
-                    )
-                else:
-                    log_warning_safe(
-                        self.logger,
-                        "Device does not exist at {path} - check BDF format",
-                        path=device_path,
-                        prefix="IOMMU",
-                    )
+                return group_number
 
         except Exception as e:
             log_warning_safe(
@@ -1505,47 +1719,29 @@ class PCILeechContextBuilder:
                 error=str(e),
                 prefix="IOMMU",
             )
+        return None
 
-        # 2) In-container fallback - pick the first numeric node in /dev/vfio
-        log_info_safe(
-            self.logger,
-            "Falling back to enumerating /dev/vfio for available groups",
-            prefix="IOMMU",
-        )
-
+    def _get_iommu_group_from_container(self) -> Optional[str]:
+        """Try to get IOMMU group from container environment."""
         try:
-            vfio_entries = os.listdir("/dev/vfio")
-            log_info_safe(
-                self.logger,
-                "Found entries in /dev/vfio: {entries}",
-                entries=vfio_entries,
-                prefix="IOMMU",
-            )
+            vfio_path = Path("/dev/vfio")
+            if not vfio_path.exists():
+                return None
 
-            numeric_groups = [entry for entry in vfio_entries if entry.isdigit()]
-            log_info_safe(
-                self.logger,
-                "Available numeric VFIO groups: {groups}",
-                groups=numeric_groups,
-                prefix="IOMMU",
-            )
+            numeric_groups = [
+                entry.name for entry in vfio_path.iterdir() if entry.name.isdigit()
+            ]
 
             if numeric_groups:
                 selected_group = numeric_groups[0]
                 log_info_safe(
                     self.logger,
-                    "Selected VFIO group from fallback enumeration: {group}",
+                    "Selected VFIO group from container enumeration: {group}",
                     group=selected_group,
                     prefix="IOMMU",
                 )
                 return selected_group
 
-        except FileNotFoundError:
-            log_warning_safe(
-                self.logger,
-                "/dev/vfio directory not found - VFIO may not be available",
-                prefix="IOMMU",
-            )
         except Exception as e:
             log_warning_safe(
                 self.logger,
@@ -1553,14 +1749,30 @@ class PCILeechContextBuilder:
                 error=str(e),
                 prefix="IOMMU",
             )
+        return None
 
-        # 3) Last resort
-        log_warning_safe(
-            self.logger,
-            "All IOMMU group resolution methods failed, using fallback group '0'",
-            prefix="IOMMU",
-        )
-        return "0"
+    def _parse_bdf(self) -> Optional[Tuple[str, str, str, str]]:
+        """Parse BDF string into components."""
+        try:
+            # Handle both formats: "0000:00:00.0" and "00:00.0"
+            if self.device_bdf.count(":") == 2:
+                dom, bus_devfunc = self.device_bdf.split(":", 1)
+            else:
+                dom = "0000"
+                bus_devfunc = self.device_bdf
+
+            bus, dev_func = bus_devfunc.split(":")
+            dev, fn = dev_func.split(".")
+
+            return dom, bus, dev, fn
+        except ValueError:
+            log_error_safe(
+                self.logger,
+                "Invalid BDF format: {bdf}",
+                bdf=self.device_bdf,
+                prefix="BDF",
+            )
+            return None
 
     def _analyze_bar_fallback(self, index: int, bar_data) -> Optional[BarConfiguration]:
         """
@@ -2306,7 +2518,7 @@ class PCILeechContextBuilder:
         self,
         device_identifiers: DeviceIdentifiers,
         behavior_profile: Optional[BehaviorProfile],
-        config_space_data: Dict[str, Any],
+        config_space_data: ConfigSpaceData,
     ) -> str:
         """
         Generate a unique device signature for firmware uniqueness.
@@ -2317,77 +2529,91 @@ class PCILeechContextBuilder:
             config_space_data: Configuration space data
 
         Returns:
-            Unique device signature
+            Unique device signature in Verilog format
         """
-        log_info_safe(
-            self.logger,
-            "Generating unique device signature for device {bdf}",
-            bdf=self.device_bdf,
-            prefix="CONF",
-        )
-        # Combine all unique device characteristics
-        signature_components = [
-            device_identifiers.vendor_id,
-            device_identifiers.device_id,
-            device_identifiers.class_code,
-            device_identifiers.revision_id,
+        # Create cache key
+        cache_key = (
+            device_identifiers.full_signature,
             self.device_bdf,
-            str(config_space_data.get("config_space_size", 0)),
-            str(len(config_space_data.get("bars", []))),
-        ]
+            self._create_config_space_key(config_space_data),
+            self._create_behavior_key(behavior_profile) if behavior_profile else None,
+        )
 
-        # Add full 4 KiB config-space hash for uniqueness calculation
-        config_space_hex = config_space_data.get("config_space_hex", "")
-        if config_space_hex:
-            # Ensure we have the full 4 KiB (4096 bytes = 8192 hex chars)
-            # Only pad with zeros if necessary to ensure consistent hashing
-            if len(config_space_hex) < 8192:
-                padded_config_space = config_space_hex.ljust(8192, "0")
-            else:
-                padded_config_space = config_space_hex[:8192]
-            config_space_hash = hashlib.sha256(padded_config_space.encode()).hexdigest()
-            signature_components.append(config_space_hash)
+        # Check if we've already computed this signature
+        if hasattr(self, "_signature_cache"):
+            if cache_key in self._signature_cache:
+                return self._signature_cache[cache_key]
+        else:
+            self._signature_cache = {}
 
-        # Add subsystem IDs if available
-        if device_identifiers.subsystem_vendor_id:
-            signature_components.append(device_identifiers.subsystem_vendor_id)
-        if device_identifiers.subsystem_device_id:
-            signature_components.append(device_identifiers.subsystem_device_id)
+        # Build signature components
+        hasher = hashlib.sha256()
 
-        # Add behavior profile signature if available
+        # Add device identifiers
+        hasher.update(device_identifiers.full_signature.encode())
+        hasher.update(self.device_bdf.encode())
+
+        # Add config space characteristics
+        hasher.update(self._create_config_space_key(config_space_data).encode())
+
+        # Add behavior profile if available
         if behavior_profile:
-            signature_components.extend(
-                [
-                    str(behavior_profile.total_accesses),
-                    str(behavior_profile.capture_duration),
-                    str(len(behavior_profile.timing_patterns)),
-                    str(len(behavior_profile.state_transitions)),
-                ]
+            behavior_data = (
+                f"{behavior_profile.total_accesses}"
+                f"{behavior_profile.capture_duration}"
+                f"{len(behavior_profile.timing_patterns)}"
+                f"{len(behavior_profile.state_transitions)}"
             )
+            hasher.update(behavior_data.encode())
+
+        # Generate final hash
+        signature_hash = hasher.hexdigest()
+
         log_info_safe(
             self.logger,
-            "Device signature components: {components}",
-            components=signature_components,
-            prefix="CONF",
+            "Generated device signature: {hash}",
+            hash=signature_hash[:8],
+            prefix="SIG",
         )
 
-        # Create deterministic hash
-        signature_data = "_".join(signature_components)
-        signature_hash = hashlib.sha256(signature_data.encode()).hexdigest()
-        log_info_safe(
-            self.logger,
-            "Generated device signature hash: {hash}",
-            hash=signature_hash,
-            prefix="CONF",
+        result = f"32'h{int(signature_hash[:8], 16):08X}"
+
+        # Cache the result
+        self._signature_cache[cache_key] = result
+
+        return result
+
+    def _create_behavior_key(self, behavior_profile: BehaviorProfile) -> str:
+        """Create a hashable key from behavior profile."""
+        return (
+            f"{behavior_profile.total_accesses}_"
+            f"{behavior_profile.capture_duration}_"
+            f"{len(behavior_profile.timing_patterns)}_"
+            f"{len(behavior_profile.state_transitions)}"
         )
 
-        return f"32'h{int(signature_hash[:8], 16):08X}"
+    def _create_config_space_key(self, config_space_data: ConfigSpaceData) -> str:
+        """Create a hashable key from config space data."""
+        # Extract key components
+        config_size = config_space_data.get("config_space_size", 0)
+        bar_count = len(config_space_data.get("bars", []))
+
+        # Hash the config space hex data
+        config_hex = config_space_data.get("config_space_hex", "")
+        if config_hex:
+            # Normalize to 4KB for consistent hashing
+            normalized_hex = config_hex[:8192].ljust(8192, "0")
+            config_hash = hashlib.md5(normalized_hex.encode()).hexdigest()
+        else:
+            config_hash = "empty"
+
+        return f"{config_size}_{bar_count}_{config_hash}"
 
     def _build_generation_metadata(
         self, device_identifiers: DeviceIdentifiers
     ) -> Dict[str, Any]:
         """
-        Build generation metadata.
+        Build generation metadata with enhanced information.
 
         Args:
             device_identifiers: Device identifiers
@@ -2398,10 +2624,13 @@ class PCILeechContextBuilder:
         return {
             "generated_at": datetime.now().isoformat(),
             "device_bdf": self.device_bdf,
-            "device_signature": f"{device_identifiers.vendor_id}:{device_identifiers.device_id}",
+            "device_signature": device_identifiers.device_signature,
+            "device_class": device_identifiers.get_device_class_type(),
             "generator_version": "2.0.0",
             "context_builder_version": "2.0.0",
             "validation_level": self.validation_level.value,
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "platform": sys.platform,
         }
 
     def _merge_donor_template(
@@ -2445,17 +2674,68 @@ class PCILeechContextBuilder:
 
         return merged_context
 
-    def _validate_context_completeness(self, context: Dict[str, Any]) -> None:
+    def _validate_context_completeness(self, context: TemplateContext) -> None:
         """
-        Validate template context for completeness.
+        Validate template context for completeness with structured validation.
 
         Args:
             context: Template context to validate
 
         Raises:
-            ContextError: If validation fails
+            ContextError: If validation fails in strict mode
         """
-        log_info_safe(self.logger, "Validating template context completeness")
+        validation_errors = []
+        validation_warnings = []
+
+        # Define validation rules
+        validations = [
+            self._validate_required_sections,
+            self._validate_device_config,
+            self._validate_bar_config,
+            self._validate_device_signature,
+            self._validate_timing_config,
+            self._validate_interrupt_config,
+        ]
+
+        # Run all validations
+        for validator in validations:
+            errors, warnings = validator(context)
+            validation_errors.extend(errors)
+            validation_warnings.extend(warnings)
+
+        # Log warnings
+        for warning in validation_warnings:
+            log_warning_safe(self.logger, warning, prefix="VLDN")
+
+        # Handle errors based on validation level
+        if validation_errors:
+            if self.validation_level == ValidationLevel.STRICT:
+                raise ContextError(
+                    f"Context validation failed with {len(validation_errors)} errors: "
+                    + "; ".join(validation_errors)
+                )
+            else:
+                for error in validation_errors:
+                    log_warning_safe(
+                        self.logger,
+                        f"Validation error (non-strict mode): {error}",
+                        prefix="VLDN",
+                    )
+
+        if not validation_errors and not validation_warnings:
+            log_info_safe(
+                self.logger,
+                "Template context validation completed successfully",
+                prefix="VLDN",
+            )
+
+    def _validate_required_sections(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate required sections are present."""
+        errors = []
+        warnings = []
+
         required_sections = [
             "device_config",
             "config_space",
@@ -2470,83 +2750,101 @@ class PCILeechContextBuilder:
         missing_sections = [
             section for section in required_sections if section not in context
         ]
-        # Check for missing sections
 
         if missing_sections:
-            log_warning_safe(
-                self.logger,
-                "Template context is missing required sections: {sections}",
-                sections=missing_sections,
-                prefix="VLDN",
-            )
-            if self.validation_level == ValidationLevel.STRICT:
-                raise ContextError(
-                    f"Template context missing required sections: {missing_sections}"
-                )
-            else:
-                log_warning_safe(
-                    self.logger,
-                    "Template context is missing sections: {sections}. "
-                    "This may lead to incomplete firmware generation.",
-                    prefix="VLDN",
-                )
+            errors.append(f"Missing required sections: {missing_sections}")
 
-        # Validate critical device information
+        return errors, warnings
+
+    def _validate_device_config(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate device configuration."""
+        errors = []
+        warnings = []
+
         device_config = context.get("device_config", {})
+
         if (
             not device_config.get("vendor_id")
             or device_config.get("vendor_id") == "0000"
         ):
-            if self.validation_level == ValidationLevel.STRICT:
-                raise ContextError("Device vendor ID is missing or invalid")
-            else:
-                log_warning_safe(
-                    self.logger,
-                    "Device vendor ID is missing or invalid",
-                    prefix="VLDN",
-                )
-        # Validate BAR configuration
+            errors.append("Device vendor ID is missing or invalid")
+
+        if (
+            not device_config.get("device_id")
+            or device_config.get("device_id") == "0000"
+        ):
+            errors.append("Device ID is missing or invalid")
+
+        return errors, warnings
+
+    def _validate_bar_config(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate BAR configuration."""
+        errors = []
+        warnings = []
+
         bar_config = context.get("bar_config", {})
         bars = bar_config.get("bars")
+
         if bars is None:
-            if self.validation_level == ValidationLevel.STRICT:
-                raise ContextError("BARs section is missing in context")
+            errors.append("BARs section is missing in context")
         elif isinstance(bars, list) and len(bars) == 0:
-            if self.validation_level == ValidationLevel.STRICT:
-                raise ContextError("BARs list is empty")
-            else:
-                log_warning_safe(self.logger, "BARs list is empty", prefix="VLDN")
+            warnings.append("BARs list is empty - device may not have any BARs")
 
-        # Validate device signature
+        return errors, warnings
+
+    def _validate_device_signature(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate device signature."""
+        errors = []
+        warnings = []
+
         device_signature = context.get("device_signature")
-        if not device_signature or device_signature == "32'hDEADBEEF":
-            if self.validation_level == ValidationLevel.STRICT:
-                raise ContextError("Invalid or generic device signature")
-            else:
-                log_warning_safe(
-                    self.logger,
-                    "Invalid or generic device signature",
-                    prefix="VLDN",
-                )
 
-        # Only log success if no warnings/errors occurred above
-        if (
-            not missing_sections
-            and device_config.get("vendor_id")
-            and device_config.get("vendor_id") != "0000"
-            and bar_config.get("bars")
-            and device_signature
-            and device_signature != "32'hDEADBEEF"
-        ):
-            log_info_safe(
-                self.logger,
-                "Template context validation completed successfully for device {bdf}",
-                bdf=device_config.get("bdf"),
-                prefix="VLDN",
-            )
+        if not device_signature:
+            errors.append("Device signature is missing")
+        elif device_signature == "32'hDEADBEEF":
+            errors.append("Device signature is using default/invalid value")
 
-        log_info_safe(
-            self.logger,
-            "Template context validation completed successfully",
-            prefix="VLDN",
-        )
+        return errors, warnings
+
+    def _validate_timing_config(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate timing configuration."""
+        errors = []
+        warnings = []
+
+        timing_config = context.get("timing_config", {})
+
+        if isinstance(timing_config, dict):
+            # Validate timing parameters are reasonable
+            clock_freq = timing_config.get("clock_frequency_mhz", 0)
+            if clock_freq <= 0:
+                errors.append("Invalid clock frequency")
+            elif clock_freq > 1000:
+                warnings.append(f"Unusually high clock frequency: {clock_freq} MHz")
+
+        return errors, warnings
+
+    def _validate_interrupt_config(
+        self, context: TemplateContext
+    ) -> Tuple[List[str], List[str]]:
+        """Validate interrupt configuration."""
+        errors = []
+        warnings = []
+
+        interrupt_config = context.get("interrupt_config", {})
+        strategy = interrupt_config.get("strategy")
+
+        if strategy not in ["intx", "msi", "msix"]:
+            errors.append(f"Invalid interrupt strategy: {strategy}")
+
+        if strategy == "msix" and not interrupt_config.get("msix_available"):
+            warnings.append("MSI-X strategy selected but MSI-X not available")
+
+        return errors, warnings
