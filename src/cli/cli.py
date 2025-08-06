@@ -34,6 +34,7 @@ except ImportError:
 
 from ..string_utils import log_info_safe, log_warning_safe
 from .container import BuildConfig, run_build  # new unified runner
+from .version_checker import check_and_notify, add_version_args
 
 logger = get_logger(__name__)
 
@@ -202,9 +203,13 @@ def donor_template_sub(parser: argparse._SubParsersAction):
 
 def get_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser("cli", description=__doc__)
+
+    # Add version checking arguments
+    add_version_args(ap)
+
     sub = ap.add_subparsers(
         dest="cmd",
-        required=True,
+        required=False,  # Make optional for --check-version
         help="Command to run (build/flash)",
     )
     build_sub(sub)
@@ -230,6 +235,31 @@ def main(argv: Optional[List[str]] = None):
     setup_logging(level=logging.INFO)
 
     args = get_parser().parse_args(argv)
+
+    # Handle version check arguments
+    if hasattr(args, "check_version") and args.check_version:
+        from .version_checker import check_for_updates, prompt_for_update
+
+        result = check_for_updates(force=True)
+        if result:
+            latest_version, update_available = result
+            if update_available:
+                prompt_for_update(latest_version)
+            else:
+                log_info_safe(
+                    logger, f"✓ You are running the latest version ({latest_version})"
+                )
+        else:
+            log_warning_safe(logger, "Unable to check for updates")
+        sys.exit(0)
+
+    # Check for updates unless explicitly skipped
+    if not (hasattr(args, "skip_version_check") and args.skip_version_check):
+        check_and_notify()
+
+    # If no command specified, we're done (e.g., --check-version only)
+    if not args.cmd:
+        return
 
     if args.cmd == "build":
         bdf = args.bdf or choose_device()["bdf"]
@@ -285,8 +315,7 @@ def main(argv: Optional[List[str]] = None):
         flash_bin(Path(args.firmware))
 
     elif args.cmd == "donor-template":
-        from ..device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         if args.with_comments:
             # Generate template with comments (for documentation)

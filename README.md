@@ -69,7 +69,20 @@ sudo python3 pcileech.py check --device 0000:03:00.0
 
 # Flash firmware to device
 sudo python3 pcileech.py flash output/firmware.bin
+
+# Check for updates
+./cli --check-version
+
+# Skip automatic version check
+./cli build --skip-version-check --bdf 0000:03:00.0 --board pcileech_35t325_x1
 ```
+
+### Version Updates
+
+The tool automatically checks for newer versions when you run it. You can:
+- **Disable automatic checks**: Set `PCILEECH_DISABLE_UPDATE_CHECK=1` environment variable
+- **Force a version check**: Run `./cli --check-version`
+- **Skip check for one run**: Use `--skip-version-check` flag
 
 
 ### Development from Repository
