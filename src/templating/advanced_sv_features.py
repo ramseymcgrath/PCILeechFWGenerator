@@ -82,6 +82,7 @@ class ErrorHandlingConfig:
     enable_error_detection: bool = True
     enable_error_injection: bool = False
     enable_error_logging: bool = True
+    enable_auto_retry: bool = True  # Enable automatic retry for recoverable errors
     error_log_depth: int = 256
     error_recovery_cycles: int = 1000  # Clock cycles for error recovery
     max_retry_count: int = 3  # Maximum number of retries for recoverable errors
@@ -105,8 +106,29 @@ class PerformanceConfig:
     """Configuration for performance monitoring."""
 
     enable_performance_counters: bool = True
+    enable_transaction_counters: bool = True
+    enable_bandwidth_monitoring: bool = True
+    enable_latency_tracking: bool = True
+    enable_latency_measurement: bool = True
+    enable_error_counting: bool = True
+    enable_error_rate_tracking: bool = True
+    enable_performance_grading: bool = True
+    enable_perf_outputs: bool = True
     counter_width: int = 32
     sampling_period: int = 1000  # Clock cycles
+    bandwidth_sample_period: int = 100000  # Clock cycles for bandwidth sampling
+    transfer_width: int = 4  # Transfer width in bytes
+    bandwidth_shift: int = 10  # Shift for bandwidth calculation
+    min_operations_for_error_rate: int = 100
+    high_performance_threshold: int = 1000
+    medium_performance_threshold: int = 100
+    high_bandwidth_threshold: int = 100
+    medium_bandwidth_threshold: int = 50
+    low_latency_threshold: int = 10
+    medium_latency_threshold: int = 50
+    low_error_threshold: int = 1
+    medium_error_threshold: int = 5
+    avg_packet_size: int = 1500  # For network devices
     metrics_to_monitor: Set[PerformanceMetric] = field(
         default_factory=lambda: {
             PerformanceMetric.TLP_COUNT,
@@ -116,6 +138,16 @@ class PerformanceConfig:
     )
     enable_histograms: bool = False
     histogram_bins: int = 16
+
+
+@dataclass
+class TransitionCycles:
+    """Power state transition cycle counts."""
+
+    d0_to_d1: int = 100
+    d1_to_d0: int = 200
+    d0_to_d3: int = 500
+    d3_to_d0: int = 1000
 
 
 @dataclass
@@ -132,6 +164,7 @@ class PowerManagementConfig:
             (PowerState.D3_HOT, PowerState.D0): 1000,
         }
     )
+    transition_cycles: TransitionCycles = field(default_factory=TransitionCycles)
     enable_clock_gating: bool = True
     enable_power_gating: bool = False
     idle_threshold: int = 10000  # Clock cycles before entering low power
