@@ -1,17 +1,22 @@
 {#- Device-Specific Port Declarations Template -#}
-{%- if device_config.device_type.value == "network" %}
+{%- if device_config.device_type is string -%}
+    {%- set device_type = device_config.device_type -%}
+{%- else -%}
+    {%- set device_type = device_config.device_type.value -%}
+{%- endif -%}
+{%- if device_type == "network" %}
 // Network controller ports
     output logic link_up,
     output logic [1:0] link_speed,
     input logic [7:0] phy_data,
     output logic [7:0] mac_data
-{%- elif device_config.device_type.value == "storage" %}
+{%- elif device_type == "storage" %}
 // Storage controller ports
     output logic storage_ready,
     output logic [7:0] queue_depth,
     input logic [31:0] sector_addr,
     output logic [31:0] data_out
-{%- elif device_config.device_type.value == "graphics" %}
+{%- elif device_type == "graphics" %}
 // Graphics controller ports
     output logic display_active,
     output logic [7:0] gpu_utilization,

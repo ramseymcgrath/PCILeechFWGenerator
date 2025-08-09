@@ -1,9 +1,20 @@
 {#- Advanced SystemVerilog Module Template -#}
 {{ header | safe }}
 
-module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.device_class.value }} #(
-    parameter DEVICE_TYPE = "{{ device_config.device_type.value }}",
-    parameter DEVICE_CLASS = "{{ device_config.device_class.value }}",
+{%- if device_config.device_type is string -%}
+    {%- set device_type = device_config.device_type -%}
+{%- else -%}
+    {%- set device_type = device_config.device_type.value -%}
+{%- endif -%}
+{%- if device_config.device_class is string -%}
+    {%- set device_class = device_config.device_class -%}
+{%- else -%}
+    {%- set device_class = device_config.device_class.value -%}
+{%- endif -%}
+
+module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
+    parameter DEVICE_TYPE = "{{ device_type }}",
+    parameter DEVICE_CLASS = "{{ device_class }}",
     parameter MAX_PAYLOAD_SIZE = {{ device_config.max_payload_size }},
     parameter MSI_VECTORS = {{ device_config.msi_vectors }},
     parameter COUNTER_WIDTH = {{ performance_counters.counter_width if performance_counters else 32 }}
@@ -43,14 +54,14 @@ module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.
     output logic [10:0] msix_vector,
     input  logic        msix_interrupt_ack,
 
-{%- if device_config.device_type.value == 'audio' %}
+{%- if device_type == 'audio' %}
     // Audio-specific ports
     output logic [23:0] audio_data_left,
     output logic [23:0] audio_data_right,
     output logic        audio_valid,
     input  logic        audio_ready,
     output logic        audio_clk,
-{%- elif device_config.device_type.value == 'network' %}
+{%- elif device_type == 'network' %}
     // Network-specific ports
     output logic [63:0] tx_data,
     output logic        tx_valid,
@@ -58,7 +69,7 @@ module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.
     input  logic [63:0] rx_data,
     input  logic        rx_valid,
     output logic        rx_ready,
-{%- elif device_config.device_type.value == 'storage' %}
+{%- elif device_type == 'storage' %}
     // Storage-specific ports
     output logic [31:0] storage_addr,
     output logic [31:0] storage_wr_data,
@@ -66,7 +77,7 @@ module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.
     output logic        storage_rd_en,
     input  logic [31:0] storage_rd_data,
     input  logic        storage_ready,
-{%- elif device_config.device_type.value == 'graphics' %}
+{%- elif device_type == 'graphics' %}
     // Graphics-specific ports
     output logic [23:0] pixel_data,
     output logic        pixel_valid,
@@ -198,7 +209,7 @@ module pcileech_advanced_{{ device_config.device_type.value }}_{{ device_config.
         end
     end
 
-{%- if device_config.device_type.value == 'audio' %}
+{%- if device_type == 'audio' %}
     // Audio-specific logic
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
