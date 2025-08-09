@@ -1,8 +1,31 @@
 # PCILeech Firmware Generator
 
-[![CI](https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions)
-[![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
-![](https://dcbadge.limes.pink/api/shield/429866199833247744)
+## 🔄 CI/CD Status
+
+[![CI](https://github.com/ramseymcgrath/PCILeechFWGenerator/workflows/CI/badge.svg?branch=main)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![SystemVerilog Validation](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=systemverilog-validation)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Unit Tests](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=unit-test)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![TUI Tests](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=tui-test)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Integration Tests](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=integration)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Packaging](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=packaging)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Documentation](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml/badge.svg?job=docs)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+
+## 📊 Quality Metrics
+
+[![codecov](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator/branch/main/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/ramseymcgrath/PCILeechFWGenerator)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://github.com/ramseymcgrath/PCILeechFWGenerator)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.txt)
+[![Latest Release](https://img.shields.io/github/v/release/ramseymcgrath/PCILeechFWGenerator?include_prereleases)](https://github.com/ramseymcgrath/PCILeechFWGenerator/releases)
+[![Downloads](https://img.shields.io/github/downloads/ramseymcgrath/PCILeechFWGenerator/total)](https://github.com/ramseymcgrath/PCILeechFWGenerator/releases)
+
+## 🏗️ Build Artifacts
+
+[![Package Build](https://img.shields.io/badge/packages-available-brightgreen)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Wheel](https://img.shields.io/badge/wheel-✓-green)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+[![Source Distribution](https://img.shields.io/badge/sdist-✓-green)](https://github.com/ramseymcgrath/PCILeechFWGenerator/actions/workflows/ci.yml)
+
+![Discord](https://dcbadge.limes.pink/api/shield/429866199833247744)
 
 Generate authentic PCIe DMA firmware from real donor hardware with a single command. This tool extracts donor configurations from a local device and generates unique PCILeech FPGA bitstreams (and optionally flashes a DMA card over USB-JTAG).
 

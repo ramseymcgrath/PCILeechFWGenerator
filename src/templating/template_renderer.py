@@ -10,18 +10,20 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 # Import template mapping for backward compatibility
-try:
-    from ..templates.template_mapping import update_template_path
-except ImportError:
-    # Fallback if mapping not available
-    def update_template_path(template_name: str) -> str:
-        return template_name
+from ..templates.template_mapping import update_template_path
 
 
 try:
-    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
-                        StrictUndefined, Template, TemplateError,
-                        TemplateRuntimeError, nodes)
+    from jinja2 import (
+        BaseLoader,
+        Environment,
+        FileSystemLoader,
+        StrictUndefined,
+        Template,
+        TemplateError,
+        TemplateRuntimeError,
+        nodes,
+    )
     from jinja2.ext import Extension
 except ImportError:
     raise ImportError(

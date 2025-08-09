@@ -4,20 +4,25 @@ on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -27,75 +32,49 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build setuptools setuptools_scm wheel twine
     
-    - name: Build package
+    - name: Build packages
       run: |
         python -m build
     
-    - name: Check package
+    - name: Verify packages
       run: |
         twine check dist/*
     
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dist
-        path: dist/
-
-  pypi-publish:
-    needs: build
-    name: upload release to PyPI
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v5
-        with:
-          name: dist
-          path: dist/
-      - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-  publish-github:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Download build artifacts
-      uses: actions/download-artifact@v5
-      with:
-        name: dist
-        path: dist/
-    
-    - name: Extract tag name
-      id: tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-    
-    - name: Extract changelog
-      id: changelog
+    - name: Get version and changelog
+      id: version
       run: |
-        # Extract changelog section for this version
-        VERSION=$(echo ${{ steps.tag.outputs.tag }} | sed 's/^v//')
-        awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.md
+        VERSION=$(python -c "import setuptools_scm; print(setuptools_scm.get_version())")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Extract changelog for this version
+        if [ -f "CHANGELOG.rst" ]; then
+          # Extract section between current version and next version/end
+          CHANGELOG=$(awk "/^$VERSION/,/^[0-9]/ {if (/^[0-9]/ && !/^$VERSION/) exit; print}" CHANGELOG.rst | head -n -1)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "changelog=Release $VERSION" >> $GITHUB_OUTPUT
+        fi
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ steps.tag.outputs.tag }}
-        name: Release ${{ steps.tag.outputs.tag }}
-        body_path: release_notes.md
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ steps.version.outputs.version }}
+        body: ${{ steps.version.outputs.changelog }}
         files: |
-          dist/*.whl
           dist/*.tar.gz
+          dist/*.whl
         draft: false
-        prerelease: false
+        prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+    
+    - name: Publish to PyPI
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        twine upload dist/*
+      if: ${{ !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') }}

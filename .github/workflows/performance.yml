@@ -1,0 +1,154 @@
+name: Performance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sundays at 2 AM
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark memory-profiler psutil
+    
+    - name: Create mock sysfs for benchmarks
+      run: |
+        if [ -f "tests/create_mock_sysfs.sh" ]; then
+          ./tests/create_mock_sysfs.sh tests/mock_sysfs
+        fi
+    
+    - name: Run performance benchmarks
+      run: |
+        # Run pytest benchmarks if they exist
+        if [ -d "tests" ] && find tests -name "*benchmark*" -o -name "*perf*" | grep -q .; then
+          pytest tests/ -k "benchmark or perf" --benchmark-json=benchmark-results.json --benchmark-only || true
+        fi
+        
+        # Run custom performance tests
+        python << 'EOF'
+        import time
+        import json
+        import psutil
+        import sys
+        import os
+        sys.path.append('src')
+        
+        results = {
+            "benchmarks": [],
+            "system_info": {
+                "cpu_count": psutil.cpu_count(),
+                "memory_total": psutil.virtual_memory().total,
+                "python_version": sys.version
+            }
+        }
+        
+        # Test import performance
+        start_time = time.time()
+        try:
+            import src.cli.cli as cli_module
+            import_time = time.time() - start_time
+            results["benchmarks"].append({
+                "name": "CLI Import Time",
+                "value": import_time,
+                "unit": "seconds"
+            })
+        except Exception as e:
+            print(f"Import benchmark failed: {e}")
+        
+        # Test template rendering performance (if templates exist)
+        if os.path.exists('src/templates'):
+            start_time = time.time()
+            try:
+                from pathlib import Path
+                template_count = len(list(Path('src/templates').rglob('*.j2')))
+                template_scan_time = time.time() - start_time
+                results["benchmarks"].append({
+                    "name": "Template Scan Time",
+                    "value": template_scan_time,
+                    "unit": "seconds",
+                    "extra": f"{template_count} templates"
+                })
+            except Exception as e:
+                print(f"Template benchmark failed: {e}")
+        
+        # Save results
+        with open('performance-results.json', 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        print("Performance Results:")
+        for benchmark in results["benchmarks"]:
+            print(f"  {benchmark['name']}: {benchmark['value']:.4f} {benchmark['unit']}")
+        EOF
+    
+    - name: Store benchmark results
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tool: 'customSmallerIsBetter'
+        output-file-path: performance-results.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        comment-on-alert: true
+        alert-threshold: '150%'
+        fail-on-alert: false
+    
+    - name: Upload performance artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results
+        path: |
+          benchmark-results.json
+          performance-results.json
+        retention-days: 30
+    
+    - name: Memory usage analysis
+      run: |
+        python << 'EOF'
+        import psutil
+        import sys
+        import json
+        
+        # Get current memory usage
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        
+        memory_data = {
+            "rss": memory_info.rss,
+            "vms": memory_info.vms,
+            "percent": process.memory_percent(),
+            "available": psutil.virtual_memory().available
+        }
+        
+        with open('memory-usage.json', 'w') as f:
+            json.dump(memory_data, f, indent=2)
+        
+        print(f"Memory Usage: {memory_data['percent']:.2f}% ({memory_data['rss'] / 1024 / 1024:.2f} MB)")
+        EOF
+    
+    - name: Performance regression check
+      if: github.event_name == 'pull_request'
+      run: |
+        echo "🔍 Performance regression analysis would go here"
+        echo "Compare current results with main branch benchmarks"
+        # This would typically compare against stored baseline metrics

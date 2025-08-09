@@ -3,6 +3,58 @@
 requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "PCILeechFWGenerator"
+description = "Generate spoofed PCIe DMA firmware from real donor hardware"
+authors = [
+    {name = "Ramsey McGrath", email = "ramsey@voltcyclone.info"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+]
+dependencies = [
+    "psutil>=5.9.0",
+    "pydantic>=2.0.0",
+    "aiofiles>=23.0.0",
+    "jinja2>=3.1.0",
+    "PyYAML>=6.0.0",
+    "colorlog>=6.7.0",
+    "typing_extensions>=4.0.0",
+]
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://pcileechfwgenerator.ramseymcgrath.com"
+Source = "https://github.com/ramseymcgrath/PCILeechFWGenerator"
+"Bug Tracker" = "https://github.com/ramseymcgrath/PCILeechFWGenerator/issues"
+
+[project.optional-dependencies]
+testing = [
+    "setuptools",
+    "pytest",
+    "pytest-cov",
+]
+
+[project.scripts]
+pcileech = "pcileech:main"
+pcileech-generate = "src.generate_cli:main"
+pcileech-build = "src.build_cli:main"
+pcileech-tui = "src.tui_cli:main"
+
 [tool.setuptools_scm]
 # For smarter version schemes and other configuration options,
 # check out https://github.com/pypa/setuptools_scm

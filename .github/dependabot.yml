@@ -6,57 +6,62 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "06:00"
     open-pull-requests-limit: 10
+    reviewers:
+      - "ramseymcgrath"
+    assignees:
+      - "ramseymcgrath"
+    commit-message:
+      prefix: "⬆️"
+      include: "scope"
     labels:
       - "dependencies"
       - "python"
-    versioning-strategy: auto
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
     ignore:
-      # Ignore patch updates for black, as formatting changes might be disruptive
-      - dependency-name: "black"
-        update-types: ["version-update:semver-patch"]
-    commit-message:
-      prefix: "pip"
-      include: "scope"
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "setuptools"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "setuptools_scm"
+        update-types: ["version-update:semver-major"]
 
-  # Docker dependencies in Containerfile
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ramseymcgrath"
+    assignees:
+      - "ramseymcgrath"
+    commit-message:
+      prefix: "⬆️"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Docker dependencies (if using containers)
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "tuesday"
-    open-pull-requests-limit: 5
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "ramseymcgrath"
+    assignees:
+      - "ramseymcgrath"
+    commit-message:
+      prefix: "⬆️"
+      include: "scope"
     labels:
       - "dependencies"
       - "docker"
-    commit-message:
-      prefix: "docker"
-      include: "scope"
-
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/.github/workflows"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "github-actions"
-      include: "scope"
-
-  # Test requirements
-  - package-ecosystem: "pip"
-    directory: "/tests"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "testing"
-    versioning-strategy: auto
-    commit-message:
-      prefix: "test-deps"
-      include: "scope"
