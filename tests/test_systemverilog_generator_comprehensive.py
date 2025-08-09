@@ -15,6 +15,8 @@ from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
 
+from src.__version__ import __version__
+
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
@@ -549,7 +551,7 @@ class TestTemplateRenderingRobustness:
         """Test PCILeech integration code generation."""
         template_context = {
             "device_config": {"vendor_id": "1234", "device_id": "5678"},
-            "build_system_version": "0.7.5",
+            "build_system_version": __version__,  # Use dynamic version
         }
 
         with patch.object(generator.renderer, "render_template") as mock_render:
@@ -563,6 +565,7 @@ class TestTemplateRenderingRobustness:
             call_args = mock_render.call_args_list[0]
             context = call_args[0][1]
             assert "pcileech_modules" in context
+            assert context["build_system_version"] == __version__
             assert "integration_type" in context
             assert context["integration_type"] == "pcileech"
 

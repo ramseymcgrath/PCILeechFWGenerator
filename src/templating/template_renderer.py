@@ -9,13 +9,22 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+from ..__version__ import __version__
+
 # Import template mapping for backward compatibility
 from templates.template_mapping import update_template_path
 
 try:
-    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
-                        StrictUndefined, Template, TemplateError,
-                        TemplateRuntimeError, nodes)
+    from jinja2 import (
+        BaseLoader,
+        Environment,
+        FileSystemLoader,
+        StrictUndefined,
+        Template,
+        TemplateError,
+        TemplateRuntimeError,
+        nodes,
+    )
     from jinja2.ext import Extension
 except ImportError:
     raise ImportError(
@@ -442,7 +451,7 @@ class TemplateRenderer:
 
             # Ensure all required context keys have safe defaults
             safe_defaults = {
-                "build_system_version": "0.7.5",  # Default version for build system
+                "build_system_version": __version__,  # Use dynamic version from package
                 "integration_type": "pcileech",
                 "pcileech_modules": [],
             }

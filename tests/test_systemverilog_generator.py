@@ -14,12 +14,16 @@ import pytest
 
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
-from src.templating.systemverilog_generator import (AdvancedSVGenerator,
-                                                    DeviceSpecificLogic,
-                                                    PCILeechOutput)
+from src.templating.advanced_sv_features import (
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    PowerManagementConfig,
+)
+from src.templating.systemverilog_generator import (
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    PCILeechOutput,
+)
 from src.templating.template_renderer import TemplateRenderError
 
 
@@ -493,30 +497,23 @@ class TestAdvancedSVGenerator:
         assert len(lines) == 2
         assert all(line == "00000000" for line in lines)
 
-    def test_generate_msix_table_init_default(self):
-        """Test MSI-X table initialization with default values."""
+    def test_generate_msix_table_init_fails_without_hardware_data(self):
+        """Test MSI-X table initialization fails when hardware data unavailable."""
         generator = AdvancedSVGenerator()
         template_context = {"msix_config": {"num_vectors": 2}}
 
-        # Mock the actual MSI-X table reading to return None (use defaults)
+        # Mock the actual MSI-X table reading to return None (no hardware data)
         with patch.object(generator, "_read_actual_msix_table", return_value=None):
-            result = generator._generate_msix_table_init(template_context)
+            with pytest.raises(TemplateRenderError) as exc_info:
+                generator._generate_msix_table_init(template_context)
 
-        lines = result.strip().split("\n")
-        # 2 vectors * 4 DWORDs per entry = 8 lines
-        assert len(lines) == 8
-
-        # Check vector 0 entry
-        assert lines[0] == "00000000"  # Message Address Low
-        assert lines[1] == "00000000"  # Message Address High
-        assert lines[2] == "00000000"  # Message Data (vector 0)
-        assert lines[3] == "00000001"  # Vector Control (masked)
-
-        # Check vector 1 entry
-        assert lines[4] == "00000000"  # Message Address Low
-        assert lines[5] == "00000000"  # Message Address High
-        assert lines[6] == "00000001"  # Message Data (vector 1)
-        assert lines[7] == "00000001"  # Vector Control (masked)
+            assert "Failed to read actual MSI-X table data from hardware" in str(
+                exc_info.value
+            )
+            assert (
+                "Cannot generate safe firmware without real MSI-X table values"
+                in str(exc_info.value)
+            )
 
     def test_generate_msix_table_init_with_actual_data(self):
         """Test MSI-X table initialization with actual hardware data."""

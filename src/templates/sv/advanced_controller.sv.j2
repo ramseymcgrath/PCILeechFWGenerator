@@ -7,8 +7,8 @@
 `define S_SHADOW_CFGSPACE_USB   2'b10
 
 module advanced_pcileech_controller #(
-    parameter DEVICE_TYPE = "{% if device_config.device_type is string %}{{ device_config.device_type }}{% elif device_config.device_type is mapping %}{{ device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) }}{% else %}{{ device_config.device_type.value }}{% endif %}",
-    parameter DEVICE_CLASS = "{% if device_config.device_class is string %}{{ device_config.device_class }}{% elif device_config.device_class is mapping %}{{ device_config.device_class.get('value', device_config.device_class.get('name', 'consumer')) }}{% else %}{{ device_config.device_class.value }}{% endif %}",
+    parameter DEVICE_TYPE = "{{ device_type }}",
+    parameter DEVICE_CLASS = "{{ device_class }}",
     parameter MAX_PAYLOAD_SIZE = {{ device_config.max_payload_size }},
     parameter MSI_VECTORS = {{ device_config.msi_vectors }},
     parameter COUNTER_WIDTH = {{ perf_config.counter_width if perf_config else 32 }}
