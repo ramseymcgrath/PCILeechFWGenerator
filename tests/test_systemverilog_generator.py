@@ -349,7 +349,15 @@ class TestAdvancedSVGenerator:
             return_value="// Header",
         ):
             generator = AdvancedSVGenerator()
-            template_context = {"device_config": {}}
+            # Provide valid device_config with required fields
+            template_context = {
+                "device_config": {
+                    "vendor_id": "10EC",
+                    "device_id": "8168",
+                    "class_code": "020000",
+                    "revision_id": "01",
+                }
+            }
 
             result = generator.generate_pcileech_modules(template_context)
 
@@ -382,8 +390,14 @@ class TestAdvancedSVGenerator:
                     "_generate_msix_table_init",
                     return_value="TABLE_INIT_DATA",
                 ):
+                    # Provide valid device_config with required fields
                     template_context = {
-                        "device_config": {},
+                        "device_config": {
+                            "vendor_id": "10EC",
+                            "device_id": "8168",
+                            "class_code": "020000",
+                            "revision_id": "01",
+                        },
                         "msix_config": {"is_supported": True, "num_vectors": 4},
                     }
 
@@ -398,16 +412,34 @@ class TestAdvancedSVGenerator:
 
     def test_generate_pcileech_modules_template_error(self, mock_template_renderer):
         """Test that template errors are properly raised in PCILeech module generation."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "PCILeech template error"
-        )
+        # Setup template renderer to succeed for validation but fail for actual template
+        call_count = 0
+
+        def mock_render_with_error(template_name, context):
+            nonlocal call_count
+            call_count += 1
+            # Let validation pass by succeeding on first call, then fail
+            if call_count == 1:
+                return "module test();"
+            else:
+                raise TemplateRenderError("PCILeech template error")
+
+        mock_template_renderer.render_template.side_effect = mock_render_with_error
 
         with patch(
             "src.templating.systemverilog_generator.generate_sv_header_comment",
             return_value="// Header",
         ):
             generator = AdvancedSVGenerator()
-            template_context = {"device_config": {}}
+            # Provide valid device_config to pass validation
+            template_context = {
+                "device_config": {
+                    "vendor_id": "10EC",
+                    "device_id": "8168",
+                    "class_code": "020000",
+                    "revision_id": "01",
+                }
+            }
 
             with pytest.raises(TemplateRenderError, match="PCILeech template error"):
                 generator.generate_pcileech_modules(template_context)
@@ -455,22 +487,18 @@ class TestAdvancedSVGenerator:
         assert reg2["access_count"] == 1
 
     def test_extract_pcileech_registers_no_behavior_profile(self):
-        """Test register extraction with no behavior profile (should return defaults)."""
+        """Test register extraction with no behavior profile (should raise error)."""
         mock_behavior_profile = Mock()
         # Mock hasattr to return False for register_accesses
         with patch("builtins.hasattr", return_value=False):
             generator = AdvancedSVGenerator()
-            registers = generator._extract_pcileech_registers(mock_behavior_profile)
 
-        # Should return default PCILeech registers
-        assert len(registers) == 6
-        reg_names = [r["name"] for r in registers]
-        assert "PCILEECH_CTRL" in reg_names
-        assert "PCILEECH_STATUS" in reg_names
-        assert "PCILEECH_ADDR_LO" in reg_names
-        assert "PCILEECH_ADDR_HI" in reg_names
-        assert "PCILEECH_LENGTH" in reg_names
-        assert "PCILEECH_DATA" in reg_names
+            # The method should raise TemplateRenderError when register_accesses is missing
+            with pytest.raises(
+                TemplateRenderError,
+                match="Behavior profile missing 'register_accesses' attribute",
+            ):
+                generator._extract_pcileech_registers(mock_behavior_profile)
 
     def test_generate_msix_pba_init(self):
         """Test MSI-X PBA initialization generation."""
