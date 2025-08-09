@@ -37,6 +37,17 @@ GITHUB_API_URL = (
 PYPI_API_URL = "https://pypi.org/pypi/pcileech-fw-generator/json"
 
 
+# Enhanced version checking with build metadata awareness
+def get_build_info() -> dict:
+    """Get build information from version file."""
+    try:
+        from ..__version__ import __build_date__, __commit_hash__
+
+        return {"build_date": __build_date__, "commit_hash": __commit_hash__}
+    except ImportError:
+        return {"build_date": "unknown", "commit_hash": "unknown"}
+
+
 def parse_version(version_str: str) -> Tuple[int, ...]:
     """Parse version string into tuple of integers for comparison.
 
@@ -213,12 +224,16 @@ def prompt_for_update(latest_version: str):
     Args:
         latest_version: The latest available version
     """
+    build_info = get_build_info()
+
     log_warning_safe(
         logger,
         "\n" + "=" * 60 + "\n"
         "📦 A new version of PCILeech Firmware Generator is available!\n"
         f"   Current version: {__version__}\n"
         f"   Latest version:  {latest_version}\n"
+        f"   Build date:      {build_info['build_date']}\n"
+        f"   Commit hash:     {build_info['commit_hash']}\n"
         "\n"
         "   Update with one of these commands:\n"
         "   • pip install --upgrade pcileech-fw-generator\n"

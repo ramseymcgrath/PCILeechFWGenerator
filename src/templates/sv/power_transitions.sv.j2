@@ -88,10 +88,12 @@ always_comb begin
     case ({transition_source_state, transition_target_state})
         {% for (from_state, to_state), delay in config.transition_delays.items() -%}
         {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: begin
-            {% if from_state.value == "D0" and to_state.value == "D3_HOT" -%}
+            {% set from_state_value = from_state.value if from_state.value is defined else (from_state.get('value', from_state.get('name', 'D0')) if from_state is mapping else from_state) -%}
+            {% set to_state_value = to_state.value if to_state.value is defined else (to_state.get('value', to_state.get('name', 'D0')) if to_state is mapping else to_state) -%}
+            {% if from_state_value == "D0" and to_state_value == "D3_HOT" -%}
             power_domain_enable = transition_complete ? 1'b0 : 1'b1;
             aux_power_enable = 1'b1;
-            {% elif from_state.value == "D3_HOT" and to_state.value == "D0" -%}
+            {% elif from_state_value == "D3_HOT" and to_state_value == "D0" -%}
             power_domain_enable = transition_complete ? 1'b1 : 1'b0;
             aux_power_enable = 1'b1;
             {% else -%}

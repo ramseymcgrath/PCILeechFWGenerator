@@ -47,8 +47,10 @@ end
 always_comb begin
     case (current_state)
         {% for state in config.supported_states -%}
-        {% if state.value == "D0" -%}
-        {{ state.name }}: clock_enable = !idle_counter_expired || !power_save_mode;
+        {% set state_value = state.value if state.value is defined else (state.get('value', state.get('name', 'D0')) if state is mapping else state) -%}
+        {% set state_name = state.name if state.name is defined else (state.get('name', state.get('value', 'D0')) if state is mapping else state) -%}
+        {% if state_value == "D0" -%}
+        {{ state_name }}: clock_enable = !idle_counter_expired || !power_save_mode;
         {% else -%}
         {{ state.name }}: clock_enable = 1'b0;
         {% endif %}

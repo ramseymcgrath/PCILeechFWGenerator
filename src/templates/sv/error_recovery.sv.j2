@@ -30,11 +30,11 @@ always_comb begin
     is_fatal_error = 1'b0;
     
     {% for error in recoverable_errors %}
-    if (error_type == {{ error.value }}) is_recoverable_error = 1'b1;
+    if (error_type == {% if error is string %}{{ error }}{% elif error is mapping %}{{ error.get('value', error.get('name', '0')) }}{% else %}{{ error.value }}{% endif %}) is_recoverable_error = 1'b1;
     {% endfor %}
     
     {% for error in fatal_errors %}
-    if (error_type == {{ error.value }}) is_fatal_error = 1'b1;
+    if (error_type == {% if error is string %}{{ error }}{% elif error is mapping %}{{ error.get('value', error.get('name', '0')) }}{% else %}{{ error.value }}{% endif %}) is_fatal_error = 1'b1;
     {% endfor %}
 end
 
@@ -148,7 +148,7 @@ logic {{ error_type.name.lower() }}_threshold_exceeded;
 always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         {{ error_type.name.lower() }}_count <= 16'h0;
-    end else if (error_detected && (error_type == {{ error_type.value }})) begin
+    end else if (error_detected && (error_type == {% if error_type is string %}{{ error_type }}{% elif error_type is mapping %}{{ error_type.get('value', error_type.get('name', '0')) }}{% else %}{{ error_type.value }}{% endif %})) begin
         if ({{ error_type.name.lower() }}_count < 16'hFFFF) begin
             {{ error_type.name.lower() }}_count <= {{ error_type.name.lower() }}_count + 1'b1;
         end

@@ -53,13 +53,14 @@ always_ff @(posedge clk or negedge rst_n) begin
         {% endfor %}
     end else if (sample_valid) begin
         {% for metric in config.metrics_to_monitor | default([{"value": "tlp_count"}, {"value": "completion_latency"}, {"value": "bandwidth_utilization"}, {"value": "error_rate"}]) -%}
-        {% if metric.value == "tlp_count" -%}
+        {% set metric_value = metric.value if metric.value is defined else (metric.get('value', metric.get('name', 'tlp_count')) if metric is mapping else metric) -%}
+        {% if metric_value == "tlp_count" -%}
         sample_data[{{ loop.index0 }}] <= transaction_count;
-        {% elif metric.value == "completion_latency" -%}
+        {% elif metric_value == "completion_latency" -%}
         sample_data[{{ loop.index0 }}] <= latency_accumulator;
-        {% elif metric.value == "bandwidth_utilization" -%}
+        {% elif metric_value == "bandwidth_utilization" -%}
         sample_data[{{ loop.index0 }}] <= bandwidth_counter;
-        {% elif metric.value == "error_rate" -%}
+        {% elif metric_value == "error_rate" -%}
         sample_data[{{ loop.index0 }}] <= error_count;
         {% else -%}
         sample_data[{{ loop.index0 }}] <= performance_data;

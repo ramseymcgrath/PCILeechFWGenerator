@@ -74,7 +74,7 @@ def build_advanced_sv(
             device_class=device_class,
             base_frequency_mhz=base_freq
         )
-        print(f"[*] Advanced variance simulation enabled for {device_class.value} class device")
+        print(f"[*] Advanced variance simulation enabled for {% if device_class is string %}{{ device_class }}{% elif device_class is mapping %}{{ device_class.get('value', device_class.get('name', 'consumer')) }}{% else %}{{ device_class.value }}{% endif %} class device")
 
     # Generate advanced SystemVerilog
     generator = AdvancedSVGenerator(power_config, error_config, perf_config, device_config)
@@ -88,4 +88,4 @@ def build_advanced_sv(
     print(f"    - Power management: {power_config.enable_clock_gating}")
     print(f"    - Error handling: {error_config.enable_auto_retry}")
     print(f"    - Performance counters: {perf_config.enable_transaction_counters}")
-    print(f"    - Device type: {device_config.device_type.value}")
+    print(f"    - Device type: {% if device_config.device_type is string %}{{ device_config.device_type }}{% elif device_config.device_type is mapping %}{{ device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) }}{% else %}{{ device_config.device_type.value }}{% endif %}")
