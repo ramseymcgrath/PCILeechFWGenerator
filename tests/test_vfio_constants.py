@@ -9,22 +9,27 @@ import ctypes
 
 import pytest
 
-from src.cli.vfio_constants import (VFIO_CHECK_EXTENSION,
-                                    VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_DEVICE_NAME_MAX_LENGTH,
-                                    VFIO_GET_API_VERSION,
-                                    VFIO_GROUP_FLAGS_CONTAINER_SET,
-                                    VFIO_GROUP_FLAGS_VIABLE,
-                                    VFIO_GROUP_GET_DEVICE_FD,
-                                    VFIO_GROUP_GET_STATUS,
-                                    VFIO_GROUP_SET_CONTAINER,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VFIO_SET_IOMMU, VFIO_TYPE,
-                                    VFIO_TYPE1_IOMMU, VfioGroupStatus,
-                                    VfioRegionInfo, vfio_group_status,
-                                    vfio_region_info)
+from src.cli.vfio_constants import (
+    VFIO_CHECK_EXTENSION,
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_DEVICE_NAME_MAX_LENGTH,
+    VFIO_GET_API_VERSION,
+    VFIO_GROUP_FLAGS_CONTAINER_SET,
+    VFIO_GROUP_FLAGS_VIABLE,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_GROUP_GET_STATUS,
+    VFIO_GROUP_SET_CONTAINER,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VFIO_SET_IOMMU,
+    VFIO_TYPE,
+    VFIO_TYPE1_IOMMU,
+    VfioGroupStatus,
+    VfioRegionInfo,
+    vfio_group_status,
+    vfio_region_info,
+)
 
 
 class TestVFIOConstants:
@@ -164,7 +169,7 @@ class TestVFIOConstants:
 
         source_file = inspect.getfile(vfio_constants)
 
-        with open(source_file, "r") as f:
+        with open(source_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Check that we have hardcoded constants section
