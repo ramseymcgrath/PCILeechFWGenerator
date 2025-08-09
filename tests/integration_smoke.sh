@@ -13,7 +13,7 @@ pip3 install -r requirements.txt --no-cache-dir
 pip3 install -r requirements-tui.txt --no-cache-dir
 
 PCILEECH_SYSFS_ROOT="$MOCK_ROOT/sys/bus/pci/devices" \
-python pcileech.py build --bdf "$BDF" --board "$BOARD" --build-dir "$BUILD_DIR" --no-synth
+python pcileech.py build --bdf "$BDF" --board "$BOARD" --build-dir "$BUILD_DIR"
 
 test -f "$BUILD_DIR/generated/pcileech_top.sv" || { echo "Missing generated SV"; exit 1; }
 
@@ -24,6 +24,6 @@ echo "[podman run]"
 podman run --rm \
     -e PCILEECH_SYSFS_ROOT=/mock/sys/bus/pci/devices \
     -v "$MOCK_ROOT":/mock:ro \
-    pcileechfwgen:ci build --bdf "$BDF" --board "$BOARD" --build-dir /tmp/build --no-synth
+    pcileechfwgen:ci build --bdf "$BDF" --board "$BOARD" --build-dir /tmp/build
 
 echo "Integration OK."

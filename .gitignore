@@ -52,3 +52,13 @@ MANIFEST
 .venv*/
 .conda*/
 .python-version
+tests/mock_sysfs/BDF
+.gitignore
+.gitignore
+.gitignore
+tests/mock_sysfs/sys/bus/pci/devices/0000:03:00.0/subsystem_device
+tests/mock_sysfs/sys/bus/pci/devices/0000:03:00.0/config
+tests/mock_sysfs/sys/bus/pci/devices/0000:03:00.0/device
+tests/mock_sysfs/sys/bus/pci/devices/0000:03:00.0/subsystem_vendor
+.gitignore
+tests/mock_sysfs/sys/bus/pci/devices/0000:03:00.0/vendor
