@@ -8,18 +8,15 @@ sysfs fallback scenarios, and complex device configurations.
 """
 
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, mock_open, call
 from typing import Any, Dict, Optional
+from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
-from src.device_clone.config_space_manager import (
-    ConfigSpaceManager,
-    ConfigSpaceError,
-    VFIOError,
-    SysfsError,
-    BarInfo,
-)
+import pytest
+
+from src.device_clone.config_space_manager import (BarInfo, ConfigSpaceError,
+                                                   ConfigSpaceManager,
+                                                   SysfsError, VFIOError)
 
 
 class TestConfigSpaceManagerAdvanced:

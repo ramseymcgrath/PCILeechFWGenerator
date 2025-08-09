@@ -16,16 +16,11 @@ from typing import Dict, List, Optional
 
 # Import device configuration system
 from ..device_clone import DeviceConfiguration as NewDeviceConfiguration
-from ..device_clone import (
-    ManufacturingVarianceSimulator,
-    VarianceModel,
-    get_device_config,
-)
+from ..device_clone import (ManufacturingVarianceSimulator, VarianceModel,
+                            get_device_config)
 from ..device_clone.manufacturing_variance import DeviceClass
-
 # Import from centralized utils
 from ..string_utils import generate_sv_header_comment
-
 # Import template renderer
 from . import TemplateRenderer, TemplateRenderError
 

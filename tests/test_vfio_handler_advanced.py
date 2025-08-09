@@ -11,23 +11,18 @@ import errno
 import fcntl
 import os
 import sys
-import pytest
 import threading
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call, mock_open
 from typing import Any, Dict, Optional
+from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
-from src.cli.vfio_handler import (
-    VFIOBinderImpl,
-    VFIOBinder,
-    VFIOBindError,
-    VFIOGroupError,
-    VFIOPermissionError,
-    BindingState,
-    DeviceInfo,
-    _get_iommu_group,
-)
+import pytest
+
+from src.cli.vfio_handler import (BindingState, DeviceInfo, VFIOBinder,
+                                  VFIOBinderImpl, VFIOBindError,
+                                  VFIOGroupError, VFIOPermissionError,
+                                  _get_iommu_group)
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")

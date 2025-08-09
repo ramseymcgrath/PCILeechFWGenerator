@@ -12,17 +12,17 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
 
 try:
-    from ..__version__ import __version__, __url__
+    from ..__version__ import __url__, __version__
     from ..log_config import get_logger
     from ..string_utils import log_info_safe, log_warning_safe
 except ImportError:
     # Fallback for direct execution
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from __version__ import __version__, __url__
+    from __version__ import __url__, __version__
     from log_config import get_logger
     from string_utils import log_info_safe, log_warning_safe
 

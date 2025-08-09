@@ -5,20 +5,15 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.cli.version_checker import (
-    parse_version,
-    is_newer_version,
-    get_cached_check,
-    save_cache,
-    fetch_latest_version_github,
-    fetch_latest_version_pypi,
-    check_for_updates,
-    CACHE_FILE,
-)
+from src.cli.version_checker import (CACHE_FILE, check_for_updates,
+                                     fetch_latest_version_github,
+                                     fetch_latest_version_pypi,
+                                     get_cached_check, is_newer_version,
+                                     parse_version, save_cache)
 
 
 class TestVersionParsing:

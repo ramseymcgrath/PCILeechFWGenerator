@@ -7,18 +7,15 @@ currently failing and need improved coverage.
 """
 
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, mock_open
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
-from src.device_clone.config_space_manager import (
-    ConfigSpaceManager,
-    BarInfo,
-    ConfigSpaceError,
-    VFIOError,
-    SysfsError,
-)
+import pytest
+
+from src.device_clone.config_space_manager import (BarInfo, ConfigSpaceError,
+                                                   ConfigSpaceManager,
+                                                   SysfsError, VFIOError)
 
 
 class TestConfigSpaceManagerRobustness:

@@ -6,21 +6,16 @@ This module provides comprehensive tests for the MSI-X BAR validator
 which currently has 0% coverage.
 """
 
+from typing import Any, Dict, List
+
 import pytest
-from typing import Dict, Any, List
 
 from src.pci_capability.msix_bar_validator import (
-    validate_msix_bar_configuration,
-    auto_fix_msix_configuration,
-    print_validation_report,
-    _validate_msix_capability_structure,
-    _validate_bar_configuration_for_msix,
-    _validate_msix_memory_layout,
-    _validate_reserved_region_conflicts,
-    _validate_basic_bar_configuration,
-    _validate_driver_compatibility,
-    _validate_performance_considerations,
-)
+    _validate_bar_configuration_for_msix, _validate_basic_bar_configuration,
+    _validate_driver_compatibility, _validate_msix_capability_structure,
+    _validate_msix_memory_layout, _validate_performance_considerations,
+    _validate_reserved_region_conflicts, auto_fix_msix_configuration,
+    print_validation_report, validate_msix_bar_configuration)
 
 
 class TestMSIXBARValidatorBasic:

@@ -21,7 +21,7 @@ def test_version_parsing():
 
     # Import the update script
     sys.path.insert(0, str(Path(__file__).parent))
-    from update_version import parse_version, bump_version
+    from update_version import bump_version, parse_version
 
     # Test version parsing
     assert parse_version("1.2.3") == (1, 2, 3)

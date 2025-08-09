@@ -12,18 +12,10 @@ from typing import Any, Dict, Optional, Union
 # Import template mapping for backward compatibility
 from templates.template_mapping import update_template_path
 
-
 try:
-    from jinja2 import (
-        BaseLoader,
-        Environment,
-        FileSystemLoader,
-        StrictUndefined,
-        Template,
-        TemplateError,
-        TemplateRuntimeError,
-        nodes,
-    )
+    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
+                        StrictUndefined, Template, TemplateError,
+                        TemplateRuntimeError, nodes)
     from jinja2.ext import Extension
 except ImportError:
     raise ImportError(

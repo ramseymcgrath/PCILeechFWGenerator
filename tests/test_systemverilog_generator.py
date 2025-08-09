@@ -6,24 +6,21 @@ Tests the functionality of the SystemVerilog generator including proper templati
 integration, error handling, and template rendering without fallbacks.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+from unittest.mock import MagicMock, Mock, patch
 
-from src.templating.systemverilog_generator import (
-    AdvancedSVGenerator,
-    DeviceSpecificLogic,
-    PCILeechOutput,
-)
-from src.templating.template_renderer import TemplateRenderError
-from src.templating.advanced_sv_features import (
-    PowerManagementConfig,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-)
-from src.device_clone.device_config import DeviceType, DeviceClass
+import pytest
+
+from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
+from src.templating.advanced_sv_features import (ErrorHandlingConfig,
+                                                 PerformanceConfig,
+                                                 PowerManagementConfig)
+from src.templating.systemverilog_generator import (AdvancedSVGenerator,
+                                                    DeviceSpecificLogic,
+                                                    PCILeechOutput)
+from src.templating.template_renderer import TemplateRenderError
 
 
 class TestDeviceSpecificLogic:

@@ -1,16 +1,13 @@
 """Test script to verify version checking functionality."""
 
-import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
-from src.cli.version_checker import (
-    parse_version,
-    is_newer_version,
-    check_for_updates,
-    fetch_latest_version,
-    check_and_notify,
-)
+import pytest
+
 from src.__version__ import __version__
+from src.cli.version_checker import (check_and_notify, check_for_updates,
+                                     fetch_latest_version, is_newer_version,
+                                     parse_version)
 
 
 class TestVersionParsing:

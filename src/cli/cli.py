@@ -34,7 +34,7 @@ except ImportError:
 
 from ..string_utils import log_info_safe, log_warning_safe
 from .container import BuildConfig, run_build  # new unified runner
-from .version_checker import check_and_notify, add_version_args
+from .version_checker import add_version_args, check_and_notify
 
 logger = get_logger(__name__)
 
@@ -315,7 +315,8 @@ def main(argv: Optional[List[str]] = None):
         flash_bin(Path(args.firmware))
 
     elif args.cmd == "donor-template":
-        from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
+        from ..device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
 
         if args.with_comments:
             # Generate template with comments (for documentation)

@@ -9,14 +9,15 @@ BAR matching logic that was highlighted in the attached code.
 
 import mmap
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, mock_open, call
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
+import pytest
+
+from src.device_clone.device_config import DeviceClass, DeviceType
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
-from src.device_clone.device_config import DeviceType, DeviceClass
 
 
 class TestMSIXTableReadingCriticalPaths:

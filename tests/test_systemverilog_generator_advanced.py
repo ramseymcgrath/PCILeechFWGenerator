@@ -9,20 +9,19 @@ complex template scenarios, and error edge cases.
 
 import mmap
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, mock_open, call
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
+import pytest
+
+from src.device_clone.device_config import DeviceClass, DeviceType
+from src.device_clone.manufacturing_variance import VarianceModel
+from src.templating.advanced_sv_features import (ErrorHandlingConfig,
+                                                 PerformanceConfig,
+                                                 PowerManagementConfig)
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
-from src.templating.advanced_sv_features import (
-    PowerManagementConfig,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-)
-from src.device_clone.device_config import DeviceType, DeviceClass
-from src.device_clone.manufacturing_variance import VarianceModel
 
 
 class TestMSIXAdvancedFunctionality:
