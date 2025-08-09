@@ -31,7 +31,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+        with:
+          submodules: recursive
+          
+      # Initialize and update submodules
+      - name: Initialize submodules
+        run: |
+          git submodule update --init --recursive
+          
       # Add Python setup and Sphinx build
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -57,17 +64,20 @@ jobs:
           ruby-version: '3.3' # Not needed with a .ruby-version file
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
           cache-version: 0 # Increment this number if you need to re-download cached gems
+          working-directory: site
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
       - name: Build with Jekyll
-        # Outputs to the './_site' directory by default
-        run: bundle exec jekyll build --destination ./_site
+        # Build from the site submodule directory
+        run: |
+          cd site
+          bundle exec jekyll build --destination ../_site
         env:
           JEKYLL_ENV: production
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
 
   # Deployment job
   deploy:

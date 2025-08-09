@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 # Import template mapping for backward compatibility
-from ..templates.template_mapping import update_template_path
+from templates.template_mapping import update_template_path
 
 
 try:
