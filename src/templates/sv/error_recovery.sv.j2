@@ -181,12 +181,12 @@ always_ff @(posedge clk or negedge rst_n) begin
         {{ error_name }}_count <= 16'h0;
     end else if (error_detected && (error_type == {{ error_value }})) begin
         if ({{ error_name }}_count < 16'hFFFF) begin
-            {{ error_type.name.lower() }}_count <= {{ error_type.name.lower() }}_count + 1'b1;
+            {{ error_name }}_count <= {{ error_name }}_count + 1'b1;
         end
     end
 end
 
-assign {{ error_type.name.lower() }}_threshold_exceeded = ({{ error_type.name.lower() }}_count >= 16'd{{ threshold }});
+assign {{ error_name }}_threshold_exceeded = ({{ error_name }}_count >= 16'd{{ threshold }});
 {% endfor %}
 
 endmodule
