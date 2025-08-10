@@ -150,10 +150,17 @@ always @(posedge clk) begin
             total_operations <= total_operations + 1'b1;
         end
         
-        // Count errors (assuming error signals exist)
+        // Count errors (with proper signal checking)
+        {% if error_signals_available %}
         if (bar_error || timeout_error || parity_error) begin
             error_count <= error_count + 1'b1;
         end
+        {% else %}
+        // Error signals not available - using generic error detection
+        if (bar_read_valid && !bar_read_ready) begin
+            error_count <= error_count + 1'b1; // Timeout-like behavior
+        end
+        {% endif %}
         
         // Calculate error rate percentage
         if (total_operations > {{ min_operations_for_error_rate | default(100) }}) begin
@@ -177,12 +184,22 @@ always @(posedge clk) begin
         packet_drop_count <= 32'h0;
         network_throughput_mbps <= 32'h0;
     end else begin
+        {% if network_signals_available %}
         if (packet_valid && packet_ready) begin
             packet_count <= packet_count + 1'b1;
         end
         if (packet_drop) begin
             packet_drop_count <= packet_drop_count + 1'b1;
         end
+        {% else %}
+        // Use generic read/write signals for network counters
+        if (bar_read_valid && bar_read_ready) begin
+            packet_count <= packet_count + 1'b1;
+        end
+        if (bar_write_valid && !bar_write_ready) begin
+            packet_drop_count <= packet_drop_count + 1'b1; // Approximation
+        end
+        {% endif %}
         // Calculate throughput based on packet size and rate
         network_throughput_mbps <= (packet_count * {{ avg_packet_size | default(1500) }}) >> 20; // Approximate Mbps
     end
@@ -201,6 +218,7 @@ always @(posedge clk) begin
         sectors_written <= 32'h0;
         storage_iops <= 32'h0;
     end else begin
+        {% if storage_signals_available %}
         if (storage_read_valid || storage_write_valid) begin
             io_operations_count <= io_operations_count + 1'b1;
         end
@@ -210,6 +228,18 @@ always @(posedge clk) begin
         if (storage_write_valid) begin
             sectors_written <= sectors_written + sector_count;
         end
+        {% else %}
+        // Use generic read/write signals for storage counters
+        if (bar_read_valid || bar_write_valid) begin
+            io_operations_count <= io_operations_count + 1'b1;
+        end
+        if (bar_read_valid) begin
+            sectors_read <= sectors_read + 1'b1; // Approximate as 1 sector per operation
+        end
+        if (bar_write_valid) begin
+            sectors_written <= sectors_written + 1'b1; // Approximate as 1 sector per operation
+        end
+        {% endif %}
         // Calculate IOPS (operations per second approximation)
         storage_iops <= io_operations_count; // Simplified calculation
     end
@@ -228,6 +258,7 @@ always @(posedge clk) begin
         gpu_utilization_percent <= 32'h0;
         memory_bandwidth_utilization <= 32'h0;
     end else begin
+        {% if graphics_signals_available %}
         if (frame_complete) begin
             frame_count <= frame_count + 1'b1;
         end
@@ -236,6 +267,17 @@ always @(posedge clk) begin
         end
         // Calculate GPU utilization (simplified)
         gpu_utilization_percent <= (active_cycles * 100) / total_cycles;
+        {% else %}
+        // Use generic signals for graphics approximation
+        if (bar_write_valid && bar_write_ready) begin
+            frame_count <= frame_count + 1'b1; // Approximate frame completion
+        end
+        if (bar_read_valid || bar_write_valid) begin
+            pixel_count <= pixel_count + 1'b1; // Approximate pixel operations
+        end
+        // Simplified GPU utilization based on transaction activity
+        gpu_utilization_percent <= ((bar_read_valid || bar_write_valid) ? 32'd100 : 32'd0);
+        {% endif %}
     end
 end
 {% else %}
@@ -248,10 +290,18 @@ always @(posedge clk) begin
         generic_operation_count <= 32'h0;
         generic_data_transferred <= 32'h0;
     end else begin
+        {% if generic_signals_available %}
         if (operation_valid) begin
             generic_operation_count <= generic_operation_count + 1'b1;
             generic_data_transferred <= generic_data_transferred + data_size;
         end
+        {% else %}
+        // Use standard BAR signals for generic operation counting
+        if (bar_read_valid || bar_write_valid) begin
+            generic_operation_count <= generic_operation_count + 1'b1;
+            generic_data_transferred <= generic_data_transferred + {{ transfer_width | default(4) }};
+        end
+        {% endif %}
     end
 end
 {% endif %}
