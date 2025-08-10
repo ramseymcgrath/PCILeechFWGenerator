@@ -37,6 +37,12 @@ TEMPLATE_PATH_MAPPING = {
     "systemverilog/advanced/main_module.sv.j2": "sv/main_module.sv.j2",
     "systemverilog/advanced/performance_counters.sv.j2": "sv/performance_counters.sv.j2",
     "systemverilog/advanced/power_management.sv.j2": "sv/power_management.sv.j2",
+    # Missing advanced templates
+    "systemverilog/advanced/clock_gating.sv.j2": "sv/clock_gating.sv.j2",
+    "systemverilog/advanced/error_recovery.sv.j2": "sv/error_recovery.sv.j2",
+    "systemverilog/advanced/power_transitions.sv.j2": "sv/power_transitions.sv.j2",
+    "systemverilog/advanced/reporting_logic.sv.j2": "sv/reporting_logic.sv.j2",
+    "systemverilog/advanced/sampling_logic.sv.j2": "sv/sampling_logic.sv.j2",
     # Component templates
     "systemverilog/components/clock_domain_logic.sv.j2": "sv/clock_domain_logic.sv.j2",
     "systemverilog/components/device_specific_ports.sv.j2": "sv/device_specific_ports.sv.j2",

@@ -8,9 +8,10 @@ Tests that templates handle different data structures correctly:
 - Objects with .value attributes
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

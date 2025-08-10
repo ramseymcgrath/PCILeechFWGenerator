@@ -11,19 +11,8 @@ binary format.
 import logging
 from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe, safe_format)
-except ImportError:
-    # Fallback for script execution
-    import sys
-    from pathlib import Path
-
-    src_dir = Path(__file__).parent.parent
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-    from ..string_utils import safe_format
-
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe, safe_format)
 from .core import ConfigSpace
 from .types import PatchInfo, PruningAction
 

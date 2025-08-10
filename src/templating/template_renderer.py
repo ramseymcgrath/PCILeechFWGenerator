@@ -9,67 +9,16 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-# Handle both package and direct imports
-try:
-    from ..__version__ import __version__
-except ImportError:
-    # Fallback for direct imports
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    try:
-        from __version__ import __version__
-    except ImportError:
-        __version__ = "unknown"
-
-# Import string utilities for safe logging
-try:
-    from ..string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-        generate_tcl_header_comment,
-    )
-except ImportError:
-    # Fallback for direct imports
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from string_utils import (
-        log_debug_safe,
-        log_error_safe,
-        log_info_safe,
-        log_warning_safe,
-        safe_format,
-        generate_tcl_header_comment,
-    )
-
-# Import template mapping for backward compatibility
-try:
-    from ..templates.template_mapping import update_template_path
-except ImportError:
-    # Fallback for direct imports
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from templates.template_mapping import update_template_path
+from ..__version__ import __version__
+from ..string_utils import (generate_tcl_header_comment, log_debug_safe,
+                            log_error_safe, log_info_safe, log_warning_safe,
+                            safe_format)
+from ..templates.template_mapping import update_template_path
 
 try:
-    from jinja2 import (
-        BaseLoader,
-        Environment,
-        FileSystemLoader,
-        StrictUndefined,
-        Template,
-        TemplateError,
-        TemplateRuntimeError,
-        nodes,
-    )
+    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
+                        StrictUndefined, Template, TemplateError,
+                        TemplateRuntimeError, nodes)
     from jinja2.ext import Extension
 except ImportError:
     raise ImportError(

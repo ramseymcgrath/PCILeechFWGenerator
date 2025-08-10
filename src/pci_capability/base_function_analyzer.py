@@ -10,24 +10,12 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe, safe_format)
 from .constants import EXTENDED_CAPABILITY_NAMES, STANDARD_CAPABILITY_NAMES
 from .core import ConfigSpace
 from .msix import MSIXCapabilityHandler
 from .types import CapabilityInfo, CapabilityType
-
-try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe, safe_format)
-except ImportError:
-    import sys
-    from pathlib import Path
-
-    src_dir = Path(__file__).parent.parent
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe, safe_format)
 
 logger = logging.getLogger(__name__)
 

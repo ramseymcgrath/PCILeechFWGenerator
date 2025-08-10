@@ -4,9 +4,9 @@ Update README.md with live CI status information.
 This script is used by the GitHub Actions workflow to dynamically update the README.
 """
 
-import re
 import datetime
 import os
+import re
 import sys
 
 

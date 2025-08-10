@@ -11,19 +11,8 @@ MSI-X functionality and provides enhanced categorization through the rule engine
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe, safe_format)
-except ImportError:
-    # Fallback for script execution
-    import sys
-    from pathlib import Path
-
-    src_dir = Path(__file__).parent.parent.parent
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-    from ..string_utils import safe_format
-
+from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                            log_warning_safe, safe_format)
 from .constants import PCI_CAP_ID_OFFSET, PCI_CAP_NEXT_PTR_OFFSET
 
 # MSI-X specific constants
@@ -46,6 +35,7 @@ MSIX_MIN_TABLE_SIZE = 1
 MSIX_MAX_TABLE_SIZE = 2048
 MSIX_MAX_BIR = 5
 MSIX_OFFSET_ALIGNMENT = 8
+
 from .core import CapabilityWalker, ConfigSpace
 from .patches import BinaryPatch, PatchEngine
 from .rules import RuleEngine

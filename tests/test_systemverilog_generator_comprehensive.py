@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, Mock, call, mock_open, patch
 import pytest
 
 from src.__version__ import __version__
-
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
