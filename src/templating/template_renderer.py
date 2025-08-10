@@ -23,6 +23,31 @@ except ImportError:
     except ImportError:
         __version__ = "unknown"
 
+# Import string utilities for safe logging
+try:
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+        generate_tcl_header_comment,
+    )
+except ImportError:
+    # Fallback for direct imports
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+        generate_tcl_header_comment,
+    )
+
 # Import template mapping for backward compatibility
 try:
     from ..templates.template_mapping import update_template_path
@@ -126,8 +151,11 @@ class TemplateRenderer:
         # Add global functions
         self._setup_global_functions()
 
-        logger.debug(
-            f"Template renderer initialized with directory: {self.template_dir}"
+        log_debug_safe(
+            logger,
+            "Template renderer initialized with directory: {template_dir}",
+            prefix="TEMPLATE",
+            template_dir=self.template_dir,
         )
 
     def _setup_custom_filters(self):
@@ -252,6 +280,14 @@ class TemplateRenderer:
 
             return int(math.log2(max(1, int(value))))
 
+        def dataclass_to_dict(value):
+            """Convert dataclass objects to dictionaries for template access."""
+            if hasattr(value, "__dataclass_fields__"):
+                from dataclasses import asdict
+
+                return asdict(value)
+            return value
+
         # Register filters
         self.env.filters["hex"] = hex_format
         self.env.filters["tcl_string_escape"] = tcl_string_escape
@@ -264,6 +300,9 @@ class TemplateRenderer:
         # Math filters
         self.env.filters["log2"] = calc_log2
 
+        # Utility filters
+        self.env.filters["dataclass_to_dict"] = dataclass_to_dict
+
         # SystemVerilog filters
         self.env.filters["sv_hex"] = sv_hex
         self.env.filters["sv_width"] = sv_width
@@ -275,12 +314,6 @@ class TemplateRenderer:
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
-        try:
-            from ..string_utils import generate_tcl_header_comment
-        except ImportError:
-            # Fallback for when running as script (not package)
-            from string_utils import generate_tcl_header_comment
-
         # Add global functions to template environment
         self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
 
@@ -304,38 +337,41 @@ class TemplateRenderer:
 
         Returns:
             Rendered template as string
-        """
-        # Map old template paths to new structure
-        template_name = update_template_path(template_name)
-        """
-        Render a template file with the given context.
-
-        Args:
-            template_name: Name of the template file (relative to template_dir)
-            context: Dictionary of variables to pass to the template
-
-        Returns:
-            Rendered template content as string
 
         Raises:
             TemplateRenderError: If template rendering fails
         """
+        # Map old template paths to new structure
+        template_name = update_template_path(template_name)
         try:
             # Validate and sanitize context before rendering
             validated_context = self._validate_template_context(context, template_name)
 
             template = self.env.get_template(template_name)
             rendered = template.render(**validated_context)
-            logger.debug(f"Successfully rendered template: {template_name}")
+            log_debug_safe(
+                logger,
+                "Successfully rendered template: {template_name}",
+                prefix="TEMPLATE",
+                template_name=template_name,
+            )
             return rendered
 
         except TemplateError as e:
-            error_msg = f"Failed to render template '{template_name}': {e}"
-            logger.error(error_msg)
+            error_msg = safe_format(
+                "Failed to render template '{template_name}': {error}",
+                template_name=template_name,
+                error=e,
+            )
+            log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
         except Exception as e:
-            error_msg = f"Unexpected error rendering template '{template_name}': {e}"
-            logger.error(error_msg)
+            error_msg = safe_format(
+                "Unexpected error rendering template '{template_name}': {error}",
+                template_name=template_name,
+                error=e,
+            )
+            log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
 
     def render_string(self, template_string: str, context: Dict[str, Any]) -> str:
@@ -355,16 +391,16 @@ class TemplateRenderer:
         try:
             template = self.env.from_string(template_string)
             rendered = template.render(**context)
-            logger.debug("Successfully rendered string template")
+            log_debug_safe(logger, "Successfully rendered string template", prefix="TEMPLATE")
             return rendered
 
         except TemplateError as e:
-            error_msg = f"Failed to render string template: {e}"
-            logger.error(error_msg)
+            error_msg = safe_format("Failed to render string template: {error}", error=e)
+            log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
         except Exception as e:
-            error_msg = f"Unexpected error rendering string template: {e}"
-            logger.error(error_msg)
+            error_msg = safe_format("Unexpected error rendering string template: {error}", error=e)
+            log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
 
     def template_exists(self, template_name: str) -> bool:
@@ -446,9 +482,16 @@ class TemplateRenderer:
                     missing_fields.append(field)
 
             if missing_fields:
-                error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+                error_msg = safe_format(
+                    "Missing required fields: {fields}",
+                    fields=", ".join(missing_fields),
+                )
                 if template_name:
-                    error_msg = f"Template '{template_name}' {error_msg}"
+                    error_msg = safe_format(
+                        "Template '{template_name}' {error_msg}",
+                        template_name=template_name,
+                        error_msg=error_msg,
+                    )
                 raise TemplateRenderError(error_msg)
 
         # Special validation for PCILeech build integration template
@@ -456,8 +499,11 @@ class TemplateRenderer:
             # Ensure pcileech_modules is a proper list
             pcileech_modules = validated_context.get("pcileech_modules", [])
             if not isinstance(pcileech_modules, list):
-                logger.warning(
-                    f"pcileech_modules is not a list: {type(pcileech_modules)}, converting to list"
+                log_warning_safe(
+                    logger,
+                    "pcileech_modules is not a list: {module_type}, converting to list",
+                    prefix="TEMPLATE",
+                    module_type=type(pcileech_modules),
                 )
                 if isinstance(pcileech_modules, (str, dict)):
                     # Convert single string to list, or extract from dict
@@ -481,7 +527,43 @@ class TemplateRenderer:
             for key, default_value in safe_defaults.items():
                 if key not in validated_context or validated_context[key] is None:
                     validated_context[key] = default_value
-                    logger.debug(f"Set default value for {key}: {default_value}")
+                    log_debug_safe(
+                        logger,
+                        "Set default value for {key}: {value}",
+                        prefix="TEMPLATE",
+                        key=key,
+                        value=default_value,
+                    )
+
+        # Special validation for SystemVerilog templates that use timing_config
+        if template_name and template_name.endswith(".sv.j2"):
+            timing_config = validated_context.get("timing_config")
+            if timing_config and hasattr(timing_config, "__dataclass_fields__"):
+                # Convert dataclass to dictionary for Jinja2 access
+                log_debug_safe(
+                    logger,
+                    "Converting timing_config dataclass to dictionary for template access",
+                    prefix="TEMPLATE",
+                )
+                from dataclasses import asdict
+
+                validated_context["timing_config"] = asdict(timing_config)
+            elif timing_config is None:
+                # Provide default timing config if missing
+                log_warning_safe(
+                    logger,
+                    "timing_config is missing, providing default values",
+                    prefix="TEMPLATE",
+                )
+                validated_context["timing_config"] = {
+                    "read_latency": 4,
+                    "write_latency": 2,
+                    "burst_length": 16,
+                    "inter_burst_gap": 8,
+                    "timeout_cycles": 1024,
+                    "clock_frequency_mhz": 100.0,
+                    "timing_regularity": 0.8,
+                }
 
         # General validation for all templates
         # Only replace None values with empty strings for basic string fields
@@ -489,8 +571,11 @@ class TemplateRenderer:
         string_fields = ["header", "title", "description", "comment"]
         for key, value in validated_context.items():
             if value is None and key in string_fields:
-                logger.warning(
-                    f"Template context key '{key}' is None, replacing with empty string"
+                log_warning_safe(
+                    logger,
+                    "Template context key '{key}' is None, replacing with empty string",
+                    prefix="TEMPLATE",
+                    key=key,
                 )
                 validated_context[key] = ""
 

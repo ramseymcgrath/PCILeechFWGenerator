@@ -1342,6 +1342,9 @@ class AdvancedSVGenerator:
             "bar_config": template_context.get("bar_config", {}),
             "interrupt_config": template_context.get("interrupt_config", {}),
             "config_space_data": template_context.get("config_space_data", {}),
+            "timing_config": template_context.get(
+                "timing_config", {}
+            ),  # Add timing_config
             # Add new template variables
             "header": header,
             "device": device_info,

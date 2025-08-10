@@ -32,14 +32,18 @@ from datetime import datetime
 from enum import Enum
 from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Protocol, Tuple, TypeVar, Union,
-                    cast)
+from typing import Any, Dict, List, Optional, Protocol, Tuple, TypeVar, Union, cast
 
 from ..error_utils import extract_root_cause
 from ..exceptions import ContextError
-from ..string_utils import (format_bar_summary_table, format_bar_table,
-                            format_raw_bar_table, log_error_safe,
-                            log_info_safe, log_warning_safe)
+from ..string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .behavior_profiler import BehaviorProfile
 from .config_space_manager import BarInfo
 from .fallback_manager import FallbackManager
@@ -48,11 +52,14 @@ from .overlay_mapper import OverlayMapper
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                  VFIO_GROUP_GET_DEVICE_FD,
-                                  VFIO_REGION_INFO_FLAG_MMAP,
-                                  VFIO_REGION_INFO_FLAG_READ,
-                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
+from ..cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 
 # Type aliases for clarity
 ConfigSpaceData = Dict[str, Any]
@@ -535,7 +542,11 @@ class PCILeechContextBuilder:
                 "interrupt_config": interrupt_config,
                 "active_device_config": active_device_config,
                 "bar_config": bar_config,
-                "timing_config": timing_config,
+                "timing_config": (
+                    timing_config.to_dict()
+                    if hasattr(timing_config, "to_dict")
+                    else timing_config
+                ),
                 "pcileech_config": pcileech_config,
                 "device_signature": device_signature,
                 "generation_metadata": self._build_generation_metadata(
@@ -1332,8 +1343,7 @@ class PCILeechContextBuilder:
 
                     # Compute and validate size encoding
                     if size > 0:
-                        from src.device_clone.bar_size_converter import \
-                            BarSizeConverter
+                        from src.device_clone.bar_size_converter import BarSizeConverter
 
                         try:
                             bar_type_str = "io" if is_io else "memory"

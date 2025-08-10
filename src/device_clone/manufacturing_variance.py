@@ -19,7 +19,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from typing_extensions import TypedDict
+try:
+    from typing_extensions import TypedDict
+except ImportError:
+    # For Python 3.8+, TypedDict is available in typing
+    from typing import TypedDict
 
 # Configure module logger
 logger = logging.getLogger(__name__)
