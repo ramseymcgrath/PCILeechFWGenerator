@@ -14,17 +14,27 @@ import pytest
 try:
     from src.tui.models.config import BuildConfiguration
     from src.tui.models.device import PCIDevice
-    from src.tui.utils import (ConfigurationTemplates, DeviceFilter,
-                               ExportManager, KeyboardShortcuts, SystemInfo,
-                               ValidationHelper)
+    from src.tui.utils import (
+        ConfigurationTemplates,
+        DeviceFilter,
+        ExportManager,
+        KeyboardShortcuts,
+        SystemInfo,
+        ValidationHelper,
+    )
 except ImportError:
     # Fallback import paths for different project configurations
     try:
         from tui.models.config import BuildConfiguration
         from tui.models.device import PCIDevice
-        from tui.utils import (ConfigurationTemplates, DeviceFilter,
-                               ExportManager, KeyboardShortcuts, SystemInfo,
-                               ValidationHelper)
+        from tui.utils import (
+            ConfigurationTemplates,
+            DeviceFilter,
+            ExportManager,
+            KeyboardShortcuts,
+            SystemInfo,
+            ValidationHelper,
+        )
     except ImportError:
         pytest.skip("TUI modules not available", allow_module_level=True)
 
@@ -170,7 +180,6 @@ class TestExportManager:
         assert "metadata" in data
         assert len(data["devices"]) == 1
         assert (
-            data["devices"][0]["bd"] == "0000:01:00.0"
             data["devices"][0]["bdf"] == "0000:01:00.0"
         )  # Expect 'bdf' key for consistency with field naming
 

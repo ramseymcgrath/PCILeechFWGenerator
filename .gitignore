@@ -54,3 +54,11 @@ MANIFEST
 .python-version
 tests/mock_sysfs/*
 
+# Cloudflare Worker
+site/worker/node_modules/
+site/worker/.wrangler/
+site/worker/package-lock.json
+
+# MkDocs
+site/site/
+
