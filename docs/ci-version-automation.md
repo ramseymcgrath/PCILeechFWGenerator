@@ -91,7 +91,7 @@ BREAKING CHANGE: removes deprecated methods"
 The [`src/__version__.py`](../src/__version__.py) file contains:
 
 ```python
-__version__ = "0.9.12"           # Semantic version
+__version__ = "0.9.13"           # Semantic version
 __version_info__ = (0, 9, 12)    # Version tuple
 __build_date__ = "2025-01-01T12:00:00.000000"  # ISO format
 __commit_hash__ = "abc123"       # Short git hash

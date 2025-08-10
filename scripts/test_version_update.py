@@ -101,12 +101,12 @@ __commit_hash__ = "abc123"
         from update_version import update_version_file
 
         # Update the version file
-        update_version_file(temp_file, "0.9.12", "def456")
+        update_version_file(temp_file, "0.9.13", "def456")
 
         # Read and verify the updated content
         content = temp_file.read_text()
 
-        assert '__version__ = "0.9.12"' in content
+        assert '__version__ = "0.9.13"' in content
         assert "__version_info__ = (0, 9, 12)" in content
         assert '__commit_hash__ = "def456"' in content
         assert '__build_date__ = "2025-' in content  # Should be updated to current date
