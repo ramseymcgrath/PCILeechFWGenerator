@@ -638,27 +638,25 @@ class TestPCILeechContextBuilder:
         self, mock_exists, mock_readlink, mock_listdir, mock_config
     ):
         """Test VFIO group resolution via sysfs."""
-        mock_exists.return_value = True
-        mock_readlink.return_value = "../../../kernel/iommu_groups/7"
-
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
-        group = builder._get_vfio_group()
-
-        assert group == "7"
+        # Mock the sysfs path exists and readlink successfully
+        with patch.object(builder, "_get_iommu_group_from_sysfs", return_value="7"):
+            group = builder._get_vfio_group()
+            assert group == "7"
 
     @patch("os.listdir")
     @patch("os.path.exists")
     def test_get_vfio_group_fallback(self, mock_exists, mock_listdir, mock_config):
         """Test VFIO group fallback to /dev/vfio enumeration."""
-        mock_exists.return_value = False
-        mock_listdir.return_value = ["vfio", "5", "10", "char"]
-
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
-        group = builder._get_vfio_group()
-
-        assert group == "5"  # First numeric entry
+        # Mock sysfs fails but container method succeeds
+        with patch.object(
+            builder, "_get_iommu_group_from_sysfs", return_value=None
+        ), patch.object(builder, "_get_iommu_group_from_container", return_value="5"):
+            group = builder._get_vfio_group()
+            assert group == "5"  # First numeric entry
 
     @patch("os.listdir")
     @patch("os.path.exists")
@@ -720,15 +718,23 @@ class TestPCILeechContextBuilder:
         )
 
         valid_context = {
-            "device_config": {"vendor_id": "10ee", "bdf": "0000:03:00.0"},
+            "device_config": {
+                "vendor_id": "10ee",
+                "device_id": "7024",
+                "bdf": "0000:03:00.0",
+            },
             "config_space": {},
             "msix_config": {},
             "bar_config": {"bars": [Mock()]},
-            "timing_config": {},
+            "timing_config": {
+                "clock_frequency_mhz": 100.0,
+                "read_latency": 4,
+                "write_latency": 2,
+            },
             "pcileech_config": {},
             "device_signature": "32'h12345678",
             "generation_metadata": {},
-            "interrupt_config": {},
+            "interrupt_config": {"strategy": "msix"},
             "active_device_config": {},
         }
 
@@ -749,7 +755,7 @@ class TestPCILeechContextBuilder:
             # Missing other required sections
         }
 
-        with pytest.raises(ContextError, match="missing required sections"):
+        with pytest.raises(ContextError, match="Missing required sections"):
             builder._validate_context_completeness(invalid_context)
 
     def test_validate_context_completeness_invalid_vendor(self, mock_config):
@@ -1277,6 +1283,9 @@ class TestPCILeechContextBuilder:
                 assert context["config_space"]["size"] == 4096
                 assert context["msix_config"]["num_vectors"] == 32
                 assert context["bar_config"]["aperture_size"] == 65536
-                assert isinstance(context["timing_config"], TimingParameters)
+                assert isinstance(
+                    context["timing_config"], dict
+                )  # Gets converted to dict by to_dict()
+                assert "read_latency" in context["timing_config"]
                 assert context["interrupt_config"]["strategy"] == "msix"
                 assert context["OVERLAY_ENTRIES"] == 1

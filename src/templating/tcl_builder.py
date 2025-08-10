@@ -752,10 +752,27 @@ class TCLBuilder:
                 self.MASTER_BUILD_SCRIPT: self.build_master_tcl(context),
             }
 
+        # Validate required parameters before batch write
+        if tcl_contents is None:
+            raise TCLBuilderError("TCL contents cannot be None")
+        if self.output_dir is None:
+            raise TCLBuilderError("Output directory cannot be None")
+        if self.generated_files is None:
+            raise TCLBuilderError("Generated files list cannot be None")
+        if self.logger is None:
+            raise TCLBuilderError("Logger cannot be None")
+
         # Write all files in batch
-        return self.batch_write_tcl_files(
-            tcl_contents, self.output_dir, self.generated_files, self.logger
-        )
+        try:
+            self.batch_write_tcl_files(
+                tcl_contents, self.output_dir, self.generated_files, self.logger
+            )
+            # Return success status for all files if batch write succeeds
+            return {filename: True for filename in tcl_contents.keys()}
+        except Exception as e:
+            self.logger.error(f"Failed to write TCL files: {e}")
+            # Return failure status for all files if batch write fails
+            return {filename: False for filename in tcl_contents.keys()}
 
     def build_pcileech_scripts_only(
         self,

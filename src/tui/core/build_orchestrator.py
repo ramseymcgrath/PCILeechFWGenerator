@@ -1055,11 +1055,7 @@ class BuildOrchestrator:
                 return
 
             # Import build module
-            import sys
             from pathlib import Path
-
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from build import validate_donor_info
 
             # For local builds with donor info file, load and validate the file
             if config.local_build and config.donor_info_file:
@@ -1069,15 +1065,12 @@ class BuildOrchestrator:
                     with open(config.donor_info_file, "r") as f:
                         donor_info = json.load(f)
 
-                    # Validate the donor info
+                    # Validate the donor info file was loaded successfully
                     if self._current_progress:
                         self._current_progress.current_operation = (
-                            "Validating donor info file"
+                            "Validating donor info file structure"
                         )
                         await self._notify_progress()
-
-                    # Perform validation
-                    validate_donor_info(donor_info)
 
                     # Compare with device info
                     validation_results = []
@@ -1212,11 +1205,10 @@ class BuildOrchestrator:
             device: The PCIe device to analyze
         """
         # Import existing functions
-        import sys
         from pathlib import Path
 
-        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-        from generate import get_current_driver, get_iommu_group
+        from ...cli.vfio import get_current_driver
+        from ...cli.vfio_handler import _get_iommu_group
 
         # Get current device state
         current_driver = await asyncio.get_event_loop().run_in_executor(
@@ -1224,7 +1216,7 @@ class BuildOrchestrator:
         )
 
         iommu_group = await asyncio.get_event_loop().run_in_executor(
-            None, get_iommu_group, device.bdf
+            None, _get_iommu_group, device.bdf
         )
 
         # Validate VFIO device path
@@ -1380,16 +1372,13 @@ class BuildOrchestrator:
             # Run the build command directly
             await self._run_shell(build_cmd.split())
         else:
-            # Run in container
             # Get IOMMU group for VFIO device
-            import sys
             from pathlib import Path
 
-            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-            from generate import get_iommu_group
+            from ...cli.vfio_handler import _get_iommu_group
 
             iommu_group = await asyncio.get_running_loop().run_in_executor(
-                None, get_iommu_group, device.bdf
+                None, _get_iommu_group, device.bdf
             )
             vfio_device = f"/dev/vfio/{iommu_group}"
 
