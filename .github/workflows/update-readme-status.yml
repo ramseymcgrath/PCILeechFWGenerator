@@ -17,6 +17,8 @@ permissions:
 jobs:
   update-readme:
     runs-on: ubuntu-latest
+    # Only run on main branch to avoid conflicts with feature branches
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - uses: actions/checkout@v4
@@ -33,22 +35,36 @@ jobs:
       id: workflow-status
       run: |
         # Get the latest CI workflow run
-        WORKFLOW_RUN=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+        WORKFLOW_RUN=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
           "https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci.yml/runs?per_page=1" | \
-          jq -r '.workflow_runs[0]')
+          jq -r '.workflow_runs[0]' 2>/dev/null || echo '{}')
         
-        STATUS=$(echo "$WORKFLOW_RUN" | jq -r '.conclusion // .status')
-        RUN_ID=$(echo "$WORKFLOW_RUN" | jq -r '.id')
-        CREATED_AT=$(echo "$WORKFLOW_RUN" | jq -r '.created_at')
+        if [ "$WORKFLOW_RUN" = "{}" ] || [ "$WORKFLOW_RUN" = "null" ]; then
+          echo "status=unknown" >> $GITHUB_OUTPUT
+          echo "run_id=" >> $GITHUB_OUTPUT
+          echo "created_at=" >> $GITHUB_OUTPUT
+          echo "jobs=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        STATUS=$(echo "$WORKFLOW_RUN" | jq -r '.conclusion // .status // "unknown"')
+        RUN_ID=$(echo "$WORKFLOW_RUN" | jq -r '.id // ""')
+        CREATED_AT=$(echo "$WORKFLOW_RUN" | jq -r '.created_at // ""')
         
         echo "status=$STATUS" >> $GITHUB_OUTPUT
         echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
         echo "created_at=$CREATED_AT" >> $GITHUB_OUTPUT
         
-        # Get job statuses
-        JOBS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" | \
-          jq -r '.jobs[] | "\(.name):\(.conclusion // .status)"')
+        # Get job statuses if we have a valid run ID
+        if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+          JOBS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" | \
+            jq -r '.jobs[]? | "\(.name):\(.conclusion // .status)"' 2>/dev/null || echo "")
+        else
+          JOBS=""
+        fi
         
         echo "jobs<<EOF" >> $GITHUB_OUTPUT
         echo "$JOBS" >> $GITHUB_OUTPUT
@@ -57,98 +73,33 @@ jobs:
     - name: Get package version
       id: version
       run: |
-        # Install setuptools_scm to get version
+        # Try to get version using setuptools_scm
         pip install setuptools_scm
-        VERSION=$(python -c "import setuptools_scm; print(setuptools_scm.get_version())" 2>/dev/null || echo "unknown")
+        VERSION=$(python -c "
+        try:
+            import setuptools_scm
+            print(setuptools_scm.get_version())
+        except Exception as e:
+            try:
+                import pkg_resources
+                print(pkg_resources.get_distribution('pcileech-fw-generator').version)
+            except:
+                try:
+                    with open('setup.py', 'r') as f:
+                        content = f.read()
+                        import re
+                        match = re.search(r'version=[\"'](.*?)[\"']', content)
+                        if match:
+                            print(match.group(1))
+                        else:
+                            print('dev')
+                except:
+                    print('dev')
+        " 2>/dev/null || echo "dev")
         echo "version=$VERSION" >> $GITHUB_OUTPUT
     
     - name: Update README status section
-      run: |
-        cat > update_readme.py << 'PYTHON_SCRIPT'
-        import re
-        import datetime
-        import os
-        
-        # Read current README
-        with open('README.md', 'r') as f:
-            content = f.read()
-        
-        # Get values from environment
-        status = os.environ.get('WORKFLOW_STATUS', 'unknown')
-        run_id = os.environ.get('WORKFLOW_RUN_ID', '')
-        created_at = os.environ.get('WORKFLOW_CREATED_AT', '')
-        jobs = os.environ.get('WORKFLOW_JOBS', '')
-        version = os.environ.get('PACKAGE_VERSION', 'unknown')
-        
-        # Format timestamp
-        if created_at:
-            try:
-                dt = datetime.datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                formatted_time = dt.strftime('%Y-%m-%d %H:%M UTC')
-            except:
-                formatted_time = 'unknown'
-        else:
-            formatted_time = 'unknown'
-        
-        # Create status emoji
-        status_emoji_map = {
-            'success': '✅',
-            'failure': '❌', 
-            'cancelled': '⏹️',
-            'in_progress': '🔄',
-            'queued': '⏳'
-        }
-        status_emoji = status_emoji_map.get(status, '❓')
-        
-        # Create dynamic status section
-        status_section = f"""
-## 📊 Live CI Status
-
-**Last Build:** {status_emoji} {status.title()} | **Time:** {formatted_time} | **Version:** `{version}`
-
-| Job | Status |
-|-----|--------|"""
-        
-        # Add job statuses
-        if jobs:
-            job_emoji_map = {
-                'success': '✅',
-                'failure': '❌',
-                'cancelled': '⏹️',
-                'in_progress': '🔄',
-                'queued': '⏳'
-            }
-            for job_line in jobs.strip().split('\n'):
-                if ':' in job_line:
-                    job_name, job_status = job_line.split(':', 1)
-                    job_emoji = job_emoji_map.get(job_status, '❓')
-                    status_section += f"\n| {job_name} | {job_emoji} {job_status.title()} |"
-        
-        repo_url = f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}"
-        status_section += f"""
-
-**Build Artifacts:** [Download]({repo_url}/actions/runs/{run_id})
-
----
-"""
-        
-        # Find and replace the status section
-        pattern = r'(## 📊 Live CI Status.*?---\n)'
-        if re.search(pattern, content, re.DOTALL):
-            content = re.sub(pattern, status_section, content, flags=re.DOTALL)
-        else:
-            # Insert after the existing status badges
-            insert_point = content.find('![Discord](https://dcbadge.limes.pink/api/shield/429866199833247744)')
-            if insert_point != -1:
-                insert_point = content.find('\n', insert_point) + 1
-                content = content[:insert_point] + status_section + content[insert_point:]
-        
-        # Write updated README
-        with open('README.md', 'w') as f:
-            f.write(content)
-        PYTHON_SCRIPT
-        
-        python update_readme.py
+      run: python scripts/update_readme_status.py
       env:
         WORKFLOW_STATUS: ${{ steps.workflow-status.outputs.status }}
         WORKFLOW_RUN_ID: ${{ steps.workflow-status.outputs.run_id }}
@@ -162,10 +113,18 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        if git diff --quiet; then
-          echo "No changes to commit"
-        else
-          git add README.md
-          git commit -m "🤖 Update README CI status [skip ci]"
-          git push
+        # Check if we have any changes to commit
+        if git diff --quiet README.md; then
+          echo "No changes to README.md"
+          exit 0
+        fi
+        
+        echo "Changes detected in README.md, committing..."
+        git add README.md
+        git commit -m "🤖 Update README CI status [skip ci]"
+        
+        # Try to push, but don't fail if there are conflicts
+        if ! git push; then
+          echo "Push failed, possibly due to conflicts. This is normal for concurrent updates."
+          exit 0
         fi
