@@ -9,10 +9,30 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from ..__version__ import __version__
+# Handle both package and direct imports
+try:
+    from ..__version__ import __version__
+except ImportError:
+    # Fallback for direct imports
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    try:
+        from __version__ import __version__
+    except ImportError:
+        __version__ = "unknown"
 
 # Import template mapping for backward compatibility
-from templates.template_mapping import update_template_path
+try:
+    from ..templates.template_mapping import update_template_path
+except ImportError:
+    # Fallback for direct imports
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from templates.template_mapping import update_template_path
 
 try:
     from jinja2 import (
