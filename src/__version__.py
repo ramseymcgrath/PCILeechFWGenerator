@@ -1,7 +1,7 @@
 """Version information for PCILeech Firmware Generator."""
 
-__version__ = "0.9.11"
-__version_info__ = (0, 9, 11)
+__version__ = "0.9.12"
+__version_info__ = (0, 9, 12)
 
 # Release information
 __title__ = "PCILeech Firmware Generator"
