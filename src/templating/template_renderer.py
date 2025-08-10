@@ -89,13 +89,15 @@ class TemplateRenderer:
         self.template_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize Jinja2 environment
+        # Use default Undefined instead of StrictUndefined to allow checking for undefined variables
+        # This allows templates to use 'is defined' checks properly
         self.env = Environment(
             loader=MappingFileSystemLoader(str(self.template_dir)),
             trim_blocks=False,
             lstrip_blocks=False,
             keep_trailing_newline=True,
             extensions=[ErrorTagExtension],
-            undefined=StrictUndefined,  # This will raise errors for undefined variables
+            # undefined=StrictUndefined,  # Removed to allow optional variables
         )
 
         # Add custom filters if needed

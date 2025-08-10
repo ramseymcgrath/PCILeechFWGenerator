@@ -55,10 +55,15 @@
 {%- endfor %}
 
     // Device-specific signals based on device type
+{#- Handle device_type: can be string, dict, or object with .value -#}
 {%- if device_config.device_type is string -%}
     {%- set device_type = device_config.device_type -%}
-{%- else -%}
+{%- elif device_config.device_type is mapping -%}
+    {%- set device_type = device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) -%}
+{%- elif device_config.device_type is defined and device_config.device_type.value is defined -%}
     {%- set device_type = device_config.device_type.value -%}
+{%- else -%}
+    {%- set device_type = 'generic' -%}
 {%- endif -%}
 {%- if device_type == 'network' %}
     // Network controller specific signals

@@ -52,7 +52,7 @@ always_comb begin
         {% if state_value == "D0" -%}
         {{ state_name }}: clock_enable = !idle_counter_expired || !power_save_mode;
         {% else -%}
-        {{ state.name }}: clock_enable = 1'b0;
+        {{ state_name }}: clock_enable = 1'b0;
         {% endif %}
         {% endfor %}
         default: clock_enable = 1'b1;

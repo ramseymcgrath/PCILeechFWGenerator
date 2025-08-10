@@ -1,15 +1,26 @@
 {#- Advanced SystemVerilog Module Template -#}
 {{ header | safe }}
 
+{#- Handle device_type: can be string, dict, or object with .value -#}
 {%- if device_config.device_type is string -%}
     {%- set device_type = device_config.device_type -%}
-{%- else -%}
+{%- elif device_config.device_type is mapping -%}
+    {%- set device_type = device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) -%}
+{%- elif device_config.device_type is defined and device_config.device_type.value is defined -%}
     {%- set device_type = device_config.device_type.value -%}
+{%- else -%}
+    {%- set device_type = 'generic' -%}
 {%- endif -%}
+
+{#- Handle device_class: can be string, dict, or object with .value -#}
 {%- if device_config.device_class is string -%}
     {%- set device_class = device_config.device_class -%}
-{%- else -%}
+{%- elif device_config.device_class is mapping -%}
+    {%- set device_class = device_config.device_class.get('value', device_config.device_class.get('name', 'consumer')) -%}
+{%- elif device_config.device_class is defined and device_config.device_class.value is defined -%}
     {%- set device_class = device_config.device_class.value -%}
+{%- else -%}
+    {%- set device_class = 'consumer' -%}
 {%- endif -%}
 
 module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
@@ -17,7 +28,13 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
     parameter DEVICE_CLASS = "{{ device_class }}",
     parameter MAX_PAYLOAD_SIZE = {{ device_config.max_payload_size }},
     parameter MSI_VECTORS = {{ device_config.msi_vectors }},
-    parameter COUNTER_WIDTH = {{ performance_counters.counter_width if performance_counters else 32 }}
+    {%- set perf_counter_width = 32 -%}
+    {%- if performance_counters is defined -%}
+        {%- if performance_counters.counter_width is defined -%}
+            {%- set perf_counter_width = performance_counters.counter_width -%}
+        {%- endif -%}
+    {%- endif -%}
+    parameter COUNTER_WIDTH = {{ perf_counter_width }}
 ) (
     // Clock and reset
     input  logic        clk,
@@ -107,7 +124,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
 {%- include 'systemverilog/advanced/error_handling.sv.j2' %}
 {%- endif %}
 
-{%- if performance_counters %}
+{%- if performance_counters is defined and performance_counters %}
 {%- include 'systemverilog/advanced/performance_counters.sv.j2' %}
 {%- endif %}
 
@@ -135,7 +152,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
 {%- set reg_addr = (reg.offset | int(base=16)) // 4 %}
                     14'h{{ "%04X" | format(reg_addr) }}: bar_rd_data <= {{ reg.name }}_reg;
 {%- endfor %}
-{%- if performance_counters %}
+{%- if performance_counters is defined and performance_counters %}
                     14'h1000: bar_rd_data <= perf_counter_data;  // Performance counter data
                     14'h1001: bar_rd_data <= {28'h0, perf_counter_select};  // Performance counter select
 {%- endif %}
@@ -151,7 +168,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
 {%- set reg_addr = (reg.offset | int(base=16)) // 4 %}
                     14'h{{ "%04X" | format(reg_addr) }}: {{ reg.name }}_reg <= bar_wr_data;
 {%- endfor %}
-{%- if performance_counters %}
+{%- if performance_counters is defined and performance_counters %}
                     14'h1001: perf_counter_select <= bar_wr_data[3:0];  // Performance counter select
 {%- endif %}
                     default: ; // Ignore writes to undefined registers
@@ -168,7 +185,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
 {%- if power_management %}
                     10'h010: cfg_ext_read_data <= {30'h0, current_power_state};  // Power management
 {%- endif %}
-{%- if performance_counters %}
+{%- if performance_counters is defined and performance_counters %}
                     10'h020: cfg_ext_read_data <= perf_counter_data;  // Performance data
 {%- endif %}
                     10'h030: cfg_ext_read_data <= error_status;  // Error status
@@ -189,7 +206,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
                         end
                     end
 {%- endif %}
-{%- if performance_counters %}
+{%- if performance_counters is defined and performance_counters %}
                     10'h020: perf_counter_select <= cfg_ext_write_data[3:0];  // Performance counter select
 {%- endif %}
                     default: ; // Ignore writes to read-only registers

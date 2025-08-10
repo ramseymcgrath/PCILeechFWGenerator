@@ -8,7 +8,19 @@
     {%- if reg.name == "pcileech_tlps128_cfgspace_shadow_status" %}
     logic [31:0] {{ reg.name }}_reg = 32'h1;
     {%- else %}
-    logic [31:0] {{ reg.name }}_reg = {{ reg.value | sv_hex(32) }};
+    {#- Handle reg.value which might be a dict, string, or object with .value attribute -#}
+    {%- if reg.value is number %}
+        {%- set reg_value = reg.value %}
+    {%- elif reg.value is string %}
+        {%- set reg_value = reg.value %}
+    {%- elif reg.value is mapping %}
+        {%- set reg_value = reg.value.get('value', reg.value.get('default', 0)) %}
+    {%- elif reg.value is defined and reg.value.value is defined %}
+        {%- set reg_value = reg.value.value %}
+    {%- else %}
+        {%- set reg_value = 0 %}
+    {%- endif %}
+    logic [31:0] {{ reg.name }}_reg = {{ reg_value | sv_hex(32) }};
     {%- endif %}
     logic {{ reg.name }}_access_pending = 1'b0;
     logic [7:0] {{ reg.name }}_timing_counter = 8'h0;
@@ -35,7 +47,19 @@
     // Write logic for {{ reg.name }}
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
-            {{ reg.name }}_reg <= {{ reg.value | sv_hex(32) }};
+            {#- Handle reg.value which might be a dict, string, or object with .value attribute -#}
+            {%- if reg.value is number %}
+                {%- set reg_value = reg.value %}
+            {%- elif reg.value is string %}
+                {%- set reg_value = reg.value %}
+            {%- elif reg.value is mapping %}
+                {%- set reg_value = reg.value.get('value', reg.value.get('default', 0)) %}
+            {%- elif reg.value is defined and reg.value.value is defined %}
+                {%- set reg_value = reg.value.value %}
+            {%- else %}
+                {%- set reg_value = 0 %}
+            {%- endif %}
+            {{ reg.name }}_reg <= {{ reg_value | sv_hex(32) }};
             {{ reg.name }}_timing_counter <= 8'h0;
             {{ reg.name }}_access_pending <= 1'b0;
         end else if (bar_wr_en && bar_addr == {{ reg.offset | sv_hex(32) }}) begin

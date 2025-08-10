@@ -1,8 +1,10 @@
 {#- Device-Specific Port Declarations Template -#}
 {%- if device_config.device_type is string -%}
     {%- set device_type = device_config.device_type -%}
+{%- elif device_config.device_type is mapping -%}
+    {%- set device_type = device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) -%}
 {%- else -%}
-    {%- set device_type = device_config.device_type.value -%}
+    {%- set device_type = device_config.device_type if device_config.device_type is string else device_config.device_type.value -%}
 {%- endif -%}
 {%- if device_type == "network" %}
 // Network controller ports
