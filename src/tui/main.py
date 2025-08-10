@@ -362,7 +362,8 @@ class BuildLogDialog(ModalScreen[bool]):
                 "Donor device analysis in progress...",
                 "Vivado synthesis starting...",
                 "Build progress: 45%",
-            ]
+            # Get current build logs from build orchestrator
+            log_lines = self.build_orchestrator.get_current_build_log()
 
             for line in log_lines:
                 log_widget.write(line)
