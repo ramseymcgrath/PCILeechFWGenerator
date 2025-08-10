@@ -171,7 +171,8 @@ class TestExportManager:
         assert len(data["devices"]) == 1
         assert (
             data["devices"][0]["bd"] == "0000:01:00.0"
-        )  # Note: 'bd' not 'bdf' in to_dict()
+            data["devices"][0]["bdf"] == "0000:01:00.0"
+        )  # Expect 'bdf' key for consistency with field naming
 
     def test_export_devices_csv(self, tmp_path):
         """Test CSV export"""
