@@ -288,7 +288,31 @@ class ProfileManagerDialog(ModalScreen[Optional[str]]):
         else:
             self.app.notify(
                 "Place profile file as 'imported_profile.json' to import",
-                severity="info",
+        # Prompt user for file path using a modal dialog
+        file_path = await self.app.push_screen(
+            FilePathInputDialog(
+                title="Import Profile",
+                prompt="Enter the path to the profile file to import:"
+            )
+        )
+        if file_path:
+            import_path = Path(file_path)
+            if import_path.exists():
+                profile_name = self.config_manager.import_profile(import_path)
+                if profile_name:
+                    self.app.notify(
+                        f"Profile imported as '{profile_name}'", severity="success"
+                    )
+                    self._refresh_profiles()
+                else:
+                    self.app.notify("Failed to import profile", severity="error")
+            else:
+                self.app.notify(
+                    f"File '{import_path}' does not exist", severity="error"
+                )
+        else:
+            self.app.notify(
+                "Import cancelled", severity="info"
             )
 
     async def _create_new_profile(self) -> None:
