@@ -391,15 +391,21 @@ class TemplateRenderer:
         try:
             template = self.env.from_string(template_string)
             rendered = template.render(**context)
-            log_debug_safe(logger, "Successfully rendered string template", prefix="TEMPLATE")
+            log_debug_safe(
+                logger, "Successfully rendered string template", prefix="TEMPLATE"
+            )
             return rendered
 
         except TemplateError as e:
-            error_msg = safe_format("Failed to render string template: {error}", error=e)
+            error_msg = safe_format(
+                "Failed to render string template: {error}", error=e
+            )
             log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
         except Exception as e:
-            error_msg = safe_format("Unexpected error rendering string template: {error}", error=e)
+            error_msg = safe_format(
+                "Unexpected error rendering string template: {error}", error=e
+            )
             log_error_safe(logger, error_msg, prefix="TEMPLATE")
             raise TemplateRenderError(error_msg) from e
 
