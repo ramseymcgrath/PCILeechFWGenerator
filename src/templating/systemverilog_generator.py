@@ -22,11 +22,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from ..__version__ import __version__
-from ..device_clone.device_config import DeviceClass, DeviceType
-from ..device_clone.manufacturing_variance import VarianceModel
-from ..string_utils import (generate_sv_header_comment, log_error_safe,
-                            log_info_safe, log_warning_safe, safe_format)
+from src.__version__ import __version__
+from src.device_clone.device_config import DeviceClass, DeviceType
+from src.device_clone.manufacturing_variance import VarianceModel
+from src.string_utils import (generate_sv_header_comment, log_error_safe,
+                              log_info_safe, log_warning_safe, safe_format)
+
 from .advanced_sv_features import (AdvancedSVFeatureGenerator,
                                    ErrorHandlingConfig, PerformanceConfig)
 from .advanced_sv_power import PowerManagementConfig

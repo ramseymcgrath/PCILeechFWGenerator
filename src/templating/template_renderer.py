@@ -9,11 +9,11 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from ..__version__ import __version__
-from ..string_utils import (generate_tcl_header_comment, log_debug_safe,
-                            log_error_safe, log_info_safe, log_warning_safe,
-                            safe_format)
-from ..templates.template_mapping import update_template_path
+from __version__ import __version__
+from string_utils import (generate_tcl_header_comment, log_debug_safe,
+                          log_error_safe, log_info_safe, log_warning_safe,
+                          safe_format)
+from templates.template_mapping import update_template_path
 
 try:
     from jinja2 import (BaseLoader, Environment, FileSystemLoader,

@@ -10,9 +10,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..file_management.board_discovery import (BoardDiscovery,
-                                               discover_all_boards)
-from ..string_utils import log_debug_safe, log_info_safe
+from src.file_management.board_discovery import (BoardDiscovery,
+                                                 discover_all_boards)
+from src.string_utils import log_debug_safe, log_info_safe
 
 logger = logging.getLogger(__name__)
 

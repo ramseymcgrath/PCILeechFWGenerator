@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from src.string_utils import (log_debug_safe, log_error_safe,
+                                  log_info_safe, log_warning_safe)
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -35,7 +35,8 @@ except ImportError:
 
 # Import device configuration system
 try:
-    from .device_config import DeviceConfiguration, get_device_config
+    from src.device_clone.device_config import (DeviceConfiguration,
+                                                get_device_config)
 except ImportError:
     # Fallback if device config is not available
     DeviceConfiguration = None
@@ -286,7 +287,7 @@ class ConfigSpaceManager:
     def _read_vfio_strict(self) -> bytes:
         """Read configuration space in strict VFIO mode."""
         try:
-            from ..cli.vfio_handler import VFIOBinder
+            from src.cli.vfio_handler import VFIOBinder
 
             log_info_safe(
                 logger,

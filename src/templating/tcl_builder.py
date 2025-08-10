@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import (Any, Dict, List, Optional, Protocol, Union,
                     runtime_checkable)
 
-from ..exceptions import (DeviceConfigError, TCLBuilderError,
-                          TemplateNotFoundError, XDCConstraintError)
-from ..import_utils import safe_import, safe_import_class
+from exceptions import (DeviceConfigError, TCLBuilderError,
+                        TemplateNotFoundError, XDCConstraintError)
+from import_utils import safe_import, safe_import_class
 
 
 # Enums for better type safety

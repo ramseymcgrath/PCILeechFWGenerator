@@ -11,7 +11,7 @@ import logging
 import os
 from typing import List, Optional, Set
 
-from ..exceptions import PlatformCompatibilityError
+from src.exceptions import PlatformCompatibilityError
 
 # Production mode environment variable
 PRODUCTION_MODE_ENV = "PCILEECH_PRODUCTION_MODE"

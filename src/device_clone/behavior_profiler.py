@@ -27,14 +27,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.device_clone.manufacturing_variance import (
+    DeviceClass, ManufacturingVarianceSimulator)
 # Import project logging and string utilities
-from ..exceptions import PlatformCompatibilityError
-from ..log_config import get_logger
+from src.exceptions import PlatformCompatibilityError
+from src.log_config import get_logger
 # Import manufacturing variance simulation
-from ..scripts.kernel_utils import setup_debugfs
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
-from .manufacturing_variance import DeviceClass, ManufacturingVarianceSimulator
+from src.scripts.kernel_utils import setup_debugfs
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe)
 
 
 def is_linux() -> bool:

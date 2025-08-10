@@ -35,24 +35,25 @@ from pathlib import Path
 from typing import (Any, Dict, List, Optional, Protocol, Tuple, TypeVar, Union,
                     cast)
 
-from ..error_utils import extract_root_cause
-from ..exceptions import ContextError
-from ..string_utils import (format_bar_summary_table, format_bar_table,
-                            format_raw_bar_table, log_error_safe,
-                            log_info_safe, log_warning_safe)
-from .behavior_profiler import BehaviorProfile
-from .config_space_manager import BarInfo
-from .fallback_manager import FallbackManager
-from .overlay_mapper import OverlayMapper
+from src.device_clone.behavior_profiler import BehaviorProfile
+from src.device_clone.config_space_manager import BarInfo
+from src.device_clone.fallback_manager import FallbackManager
+from src.device_clone.overlay_mapper import OverlayMapper
+from src.error_utils import extract_root_cause
+from src.exceptions import ContextError
+from src.string_utils import (format_bar_summary_table, format_bar_table,
+                              format_raw_bar_table, log_error_safe,
+                              log_info_safe, log_warning_safe)
 
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from ..cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                  VFIO_GROUP_GET_DEVICE_FD,
-                                  VFIO_REGION_INFO_FLAG_MMAP,
-                                  VFIO_REGION_INFO_FLAG_READ,
-                                  VFIO_REGION_INFO_FLAG_WRITE, VfioRegionInfo)
+from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
+                                    VFIO_GROUP_GET_DEVICE_FD,
+                                    VFIO_REGION_INFO_FLAG_MMAP,
+                                    VFIO_REGION_INFO_FLAG_READ,
+                                    VFIO_REGION_INFO_FLAG_WRITE,
+                                    VfioRegionInfo)
 
 # Type aliases for clarity
 ConfigSpaceData = Dict[str, Any]
@@ -328,7 +329,7 @@ class VFIODeviceManager:
         if self._device_fd is not None and self._container_fd is not None:
             return self._device_fd, self._container_fd
 
-        from ..cli.vfio_helpers import get_device_fd
+        from src.cli.vfio_helpers import get_device_fd
 
         log_info_safe(
             self.logger,
@@ -1410,7 +1411,7 @@ class PCILeechContextBuilder:
         Returns:
             Tuple of (device_fd, container_fd). Both must be closed when done.
         """
-        from ..cli.vfio_helpers import get_device_fd
+        from src.cli.vfio_helpers import get_device_fd
 
         log_info_safe(
             self.logger,
@@ -2267,7 +2268,7 @@ class PCILeechContextBuilder:
             self.config.device_config, "capabilities"
         ):
             try:
-                from .device_config import DeviceCapabilities
+                from src.device_clone.device_config import DeviceCapabilities
 
                 capabilities = self.config.device_config.capabilities
                 if isinstance(capabilities, DeviceCapabilities):
@@ -2360,7 +2361,7 @@ class PCILeechContextBuilder:
             self.config.device_config, "capabilities"
         ):
             try:
-                from .device_config import DeviceCapabilities
+                from src.device_clone.device_config import DeviceCapabilities
 
                 capabilities = self.config.device_config.capabilities
                 if isinstance(capabilities, DeviceCapabilities):
@@ -2654,7 +2655,8 @@ class PCILeechContextBuilder:
         )
 
         # Import the merge function from donor_info_template
-        from .donor_info_template import DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
 
         # Create a temporary generator instance to use its merge method
         generator = DonorInfoTemplateGenerator()

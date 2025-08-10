@@ -23,8 +23,8 @@ except ImportError:
     yaml = None
     YAML_AVAILABLE = False
 
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe)
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,8 @@ class DeviceCapabilities:
     def validate(self) -> None:
         """Validate capability values."""
         # Import here to avoid circular dependency
-        from .payload_size_config import PayloadSizeConfig, PayloadSizeError
+        from src.device_clone.payload_size_config import (PayloadSizeConfig,
+                                                          PayloadSizeError)
 
         # Validate payload size using the new payload size configuration
         try:
@@ -217,7 +218,7 @@ class DeviceCapabilities:
         Returns:
             cfg_force_mps encoding value (0-5)
         """
-        from .payload_size_config import PayloadSizeConfig
+        from src.device_clone.payload_size_config import PayloadSizeConfig
 
         payload_config = PayloadSizeConfig(self.max_payload_size)
         return payload_config.get_cfg_force_mps()
@@ -229,7 +230,7 @@ class DeviceCapabilities:
         Returns:
             Tuple of (has_issues, warning_message)
         """
-        from .payload_size_config import PayloadSizeConfig
+        from src.device_clone.payload_size_config import PayloadSizeConfig
 
         payload_config = PayloadSizeConfig(self.max_payload_size)
         return payload_config.check_tiny_pcie_algo_issues()

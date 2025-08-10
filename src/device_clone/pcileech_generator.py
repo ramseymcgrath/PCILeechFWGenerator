@@ -24,18 +24,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..error_utils import extract_root_cause
-from ..exceptions import PCILeechGenerationError, PlatformCompatibilityError
-# Import from centralized locations
-from ..string_utils import log_error_safe, log_info_safe, log_warning_safe
-from ..templating import (AdvancedSVGenerator, BuildContext, TemplateRenderer,
-                          TemplateRenderError)
 # Import existing infrastructure components
-from .behavior_profiler import BehaviorProfile, BehaviorProfiler
-from .config_space_manager import ConfigSpaceManager
-from .msix_capability import parse_msix_capability, validate_msix_configuration
-from .pcileech_context import PCILeechContextBuilder
-from .writemask_generator import WritemaskGenerator
+from src.device_clone.behavior_profiler import (BehaviorProfile,
+                                                BehaviorProfiler)
+from src.device_clone.config_space_manager import ConfigSpaceManager
+from src.device_clone.msix_capability import (parse_msix_capability,
+                                              validate_msix_configuration)
+from src.device_clone.pcileech_context import PCILeechContextBuilder
+from src.device_clone.writemask_generator import WritemaskGenerator
+from src.error_utils import extract_root_cause
+from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
+# Import from centralized locations
+from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+from src.templating import (AdvancedSVGenerator, BuildContext,
+                            TemplateRenderer, TemplateRenderError)
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,7 @@ class PCILeechGenerator:
         self.logger = logging.getLogger(__name__)
 
         # Initialize fallback manager
-        from .fallback_manager import FallbackManager
+        from src.device_clone.fallback_manager import FallbackManager
 
         self.fallback_manager = FallbackManager(
             mode=config.fallback_mode,
@@ -187,7 +189,7 @@ class PCILeechGenerator:
 
             # Use a single VFIO binding session for both config space reading and BAR analysis
             # This prevents the cleanup from happening too early
-            from ..cli.vfio_handler import VFIOBinder
+            from src.cli.vfio_handler import VFIOBinder
 
             # Step 1: Capture device behavior profile (doesn't need VFIO)
             behavior_profile = self._capture_device_behavior()
@@ -220,7 +222,7 @@ class PCILeechGenerator:
                     # Check for MSI capability (ID 0x05)
                     config_space_hex = config_space_data.get("config_space_hex", "")
                     if config_space_hex:
-                        from .msix_capability import find_cap
+                        from src.device_clone.msix_capability import find_cap
 
                         msi_cap = find_cap(config_space_hex, 0x05)
                         if msi_cap is not None:
@@ -955,7 +957,7 @@ class PCILeechGenerator:
                         )
                     else:
                         # Generate new content as last resort
-                        from ..templating.systemverilog_generator import \
+                        from src.templating.systemverilog_generator import \
                             AdvancedSVGenerator
 
                         sv_gen = AdvancedSVGenerator(
@@ -1027,7 +1029,7 @@ class PCILeechGenerator:
 
         try:
             # Import hex formatter
-            from .hex_formatter import ConfigSpaceHexFormatter
+            from src.device_clone.hex_formatter import ConfigSpaceHexFormatter
 
             # Try multiple possible locations for config space data
             config_space_data = None

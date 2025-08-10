@@ -10,15 +10,15 @@ import struct
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import project logging and string utilities
-from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from src.log_config import get_logger
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe)
 
 # Import PCI capability infrastructure for extended capabilities support
 try:
-    from ..pci_capability.compat import find_cap as pci_find_cap
-    from ..pci_capability.compat import find_ext_cap
-    from ..pci_capability.types import CapabilityType
+    from src.pci_capability.compat import find_cap as pci_find_cap
+    from src.pci_capability.compat import find_ext_cap
+    from src.pci_capability.types import CapabilityType
 except ImportError:
     # Fallback for different import paths
     try:
@@ -33,8 +33,8 @@ except ImportError:
 
 # Import template renderer
 try:
-    from ..templating.template_renderer import (TemplateRenderer,
-                                                TemplateRenderError)
+    from src.templating.template_renderer import (TemplateRenderer,
+                                                  TemplateRenderError)
 except ImportError:
     try:
         from templating.template_renderer import (TemplateRenderer,
@@ -45,7 +45,7 @@ except ImportError:
 
 # Import BAR size constants
 try:
-    from .constants import BAR_SIZE_CONSTANTS
+    from src.device_clone.constants import BAR_SIZE_CONSTANTS
 except ImportError:
     try:
         from constants import BAR_SIZE_CONSTANTS
@@ -543,7 +543,8 @@ def parse_bar_info_from_config_space(cfg: str) -> List[Dict[str, Any]]:
                 # Note: This requires the BAR value to be the result of writing all 1s
                 # and reading back, which we don't have from config space dumps
                 try:
-                    from .bar_size_converter import BarSizeConverter
+                    from src.device_clone.bar_size_converter import \
+                        BarSizeConverter
 
                     # For config space values, we can't use the PCIe probe method
                     # as we don't have the actual size mask. Use the simplified method instead.

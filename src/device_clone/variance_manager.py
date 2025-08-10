@@ -10,11 +10,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..string_utils import log_info_safe
-from .behavior_profiler import BehaviorProfiler
-from .manufacturing_variance import (DeviceClass,
-                                     ManufacturingVarianceSimulator,
-                                     VarianceModel)
+from src.device_clone.behavior_profiler import BehaviorProfiler
+from src.device_clone.manufacturing_variance import (
+    DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
+from src.string_utils import log_info_safe
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class VarianceManager:
         # Use provided fallback manager or create a default one
         if fallback_manager is None:
             try:
-                from .fallback_manager import FallbackManager
+                from src.device_clone.fallback_manager import FallbackManager
 
                 self.fallback_manager = FallbackManager(mode="none")
             except ImportError:

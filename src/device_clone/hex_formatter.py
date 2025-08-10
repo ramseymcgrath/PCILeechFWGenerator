@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 try:
-    from ..string_utils import log_debug_safe, log_error_safe, log_info_safe
+    from src.string_utils import log_debug_safe, log_error_safe, log_info_safe
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
