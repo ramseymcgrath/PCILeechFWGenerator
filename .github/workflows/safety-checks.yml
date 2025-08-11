@@ -1,6 +1,4 @@
 name: Safety Checks
-permissions:
-  contents: read
 
 on:
   push:
