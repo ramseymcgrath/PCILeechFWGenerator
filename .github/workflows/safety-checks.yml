@@ -17,6 +17,13 @@ on:
       - '.github/workflows/safety-checks.yml'
   workflow_dispatch:  # Allow manual triggering
 
+# Limit token permissions to only what's needed
+permissions:
+  contents: read  # Read repository contents
+  actions: read   # Read workflow files
+  checks: write   # Write check results (optional, for reporting)
+  pull-requests: read  # Read PR information if needed
+
 jobs:
   dictionary-safety:
     name: Dictionary Access Safety Checks

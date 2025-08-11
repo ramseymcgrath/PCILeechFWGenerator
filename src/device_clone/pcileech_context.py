@@ -48,6 +48,7 @@ from src.string_utils import (
     log_info_safe,
     log_warning_safe,
 )
+from src.utils.attribute_access import safe_get_attr, has_attr
 
 logger = logging.getLogger(__name__)
 
@@ -1087,9 +1088,9 @@ class PCILeechContextBuilder:
                     )
                 else:
                     # Log why this BAR was skipped
-                    if isinstance(bar_data, dict):
-                        bar_type = bar_data.get("type", "unknown")
-                        size = bar_data.get("size", 0)
+                    bar_type = safe_get_attr(bar_data, "type", "unknown")
+                    size = safe_get_attr(bar_data, "size", 0)
+                    if bar_type and size is not None:
                         if bar_type == "memory" and size == 0:
                             log_info_safe(
                                 self.logger,
@@ -2828,7 +2829,7 @@ class PCILeechContextBuilder:
 
         timing_config = context.get("timing_config", {})
 
-        if isinstance(timing_config, dict):
+        if timing_config is not None:
             # Validate timing parameters are reasonable
             clock_freq = timing_config.get("clock_frequency_mhz", 0)
             if clock_freq <= 0:

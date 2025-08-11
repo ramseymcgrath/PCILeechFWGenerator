@@ -32,6 +32,12 @@ from src.string_utils import (
     log_warning_safe,
     safe_format,
 )
+from src.utils.attribute_access import (
+    safe_get_attr,
+    has_attr,
+    get_attr_or_raise,
+    require_attrs,
+)
 
 from .advanced_sv_features import (
     AdvancedSVFeatureGenerator,
@@ -699,22 +705,16 @@ class AdvancedSVGenerator:
             raise ValueError("Behavior profile is required for register extraction")
 
         # Handle both dict and object attribute access
-        if isinstance(behavior_profile, dict):
-            if "register_accesses" not in behavior_profile:
-                raise TemplateRenderError(
-                    "Behavior profile missing 'register_accesses' attribute. "
-                    "Cannot generate SystemVerilog without register access information. "
-                    "Ensure the behavior profile was properly generated from actual device data."
-                )
-            register_accesses = behavior_profile["register_accesses"]
-        else:
-            if not hasattr(behavior_profile, "register_accesses"):
-                raise TemplateRenderError(
-                    "Behavior profile missing 'register_accesses' attribute. "
-                    "Cannot generate SystemVerilog without register access information. "
-                    "Ensure the behavior profile was properly generated from actual device data."
-                )
-            register_accesses = behavior_profile.register_accesses
+        try:
+            register_accesses = get_attr_or_raise(
+                behavior_profile,
+                "register_accesses",
+                "Behavior profile missing 'register_accesses' attribute. "
+                "Cannot generate SystemVerilog without register access information. "
+                "Ensure the behavior profile was properly generated from actual device data.",
+            )
+        except AttributeError as e:
+            raise TemplateRenderError(str(e))
         if not register_accesses:
             raise TemplateRenderError(
                 "No register accesses found in behavior profile. "
@@ -729,16 +729,10 @@ class AdvancedSVGenerator:
         # Process register accesses with strict validation
         for i, access in enumerate(register_accesses):
             # Handle both dict and object attribute access for register
-            if isinstance(access, dict):
-                if "register" not in access:
-                    invalid_accesses.append(f"Access {i}: missing 'register' attribute")
-                    continue
-                reg_name = access["register"]
-            else:
-                if not hasattr(access, "register"):
-                    invalid_accesses.append(f"Access {i}: missing 'register' attribute")
-                    continue
-                reg_name = access.register
+            if not has_attr(access, "register"):
+                invalid_accesses.append(f"Access {i}: missing 'register' attribute")
+                continue
+            reg_name = safe_get_attr(access, "register")
 
             if not reg_name or reg_name == "UNKNOWN":
                 invalid_accesses.append(
@@ -747,10 +741,7 @@ class AdvancedSVGenerator:
                 continue
 
             # Validate offset - handle both dict and object attribute access
-            if isinstance(access, dict):
-                offset = access.get("offset", None)
-            else:
-                offset = getattr(access, "offset", None)
+            offset = safe_get_attr(access, "offset", None)
 
             if offset is None:
                 invalid_accesses.append(
@@ -780,10 +771,7 @@ class AdvancedSVGenerator:
             register_map[reg_name]["access_count"] += 1
 
             # Get operation - handle both dict and object attribute access
-            if isinstance(access, dict):
-                operation = access.get("operation")
-            else:
-                operation = getattr(access, "operation", None)
+            operation = safe_get_attr(access, "operation", None)
 
             if operation:
                 if operation == "read":

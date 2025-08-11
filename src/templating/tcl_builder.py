@@ -531,6 +531,15 @@ class TCLBuilder:
         # Get FPGA-specific configuration
         fpga_config = self.fpga_strategy_selector(fpga_part)
 
+        # Validate that FPGA family is properly determined
+        fpga_family = fpga_config.get("family")
+        if not fpga_family:
+            raise TCLBuilderError(
+                f"Failed to determine FPGA family for part '{fpga_part}'. "
+                f"FPGA family is critical for proper synthesis and implementation. "
+                f"Please ensure the FPGA part is correctly specified."
+            )
+
         # Extract device configuration values
         config_vendor_id = self._safe_getattr(
             self.device_config, "identification.vendor_id"
@@ -554,7 +563,7 @@ class TCLBuilder:
         return BuildContext(
             board_name=board,
             fpga_part=fpga_part,
-            fpga_family=fpga_config.get("family", "Unknown"),
+            fpga_family=fpga_family,
             pcie_ip_type=fpga_config.get("pcie_ip_type", "7x"),
             max_lanes=fpga_config.get("max_lanes", 1),
             supports_msi=fpga_config.get("supports_msi", False),

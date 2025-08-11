@@ -38,6 +38,7 @@ from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
 
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+from src.utils.attribute_access import safe_get_attr, has_attr
 from src.templating import (
     AdvancedSVGenerator,
     BuildContext,
