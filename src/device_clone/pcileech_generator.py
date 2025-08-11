@@ -877,7 +877,6 @@ class PCILeechGenerator:
         """Generate constraint files."""
         try:
             # Import TCL builder components
-            from templating.tcl_builder import TCLBuilder, BuildContext, TCLScriptType
             from src.templating.tcl_builder import (
                 TCLBuilder,
                 BuildContext,
