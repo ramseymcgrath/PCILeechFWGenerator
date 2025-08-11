@@ -125,7 +125,16 @@ echo -e "${YELLOW}=== Anti-Pattern Check ===${NC}"
 echo "Checking for unsafe dictionary access patterns..."
 if grep -r "\[\"[^\"]*\"\]" src/templating/tcl_builder.py | grep -v "\.get\|#\|\"\"\"" > /dev/null 2>&1; then
     echo -e "${YELLOW}⚠ Found potential unsafe dictionary access patterns${NC}"
-    grep -n "\[\"[^\"]*\"\]" src/templating/tcl_builder.py | grep -v "\.get\|#\|\"\"\"" | head -5 || true
+# Step 1: Find all direct dictionary access patterns
+unsafe_dict_access=$(grep -rn '\["[^"]*"\]' src/templating/tcl_builder.py)
+# Step 2: Exclude lines using .get
+unsafe_dict_access=$(echo "$unsafe_dict_access" | grep -v '\.get')
+# Step 3: Exclude commented lines and docstrings
+unsafe_dict_access=$(echo "$unsafe_dict_access" | grep -v '^\s*#' | grep -v '"""')
+
+if [ -n "$unsafe_dict_access" ]; then
+    echo -e "${YELLOW}⚠ Found potential unsafe dictionary access patterns${NC}"
+    echo "$unsafe_dict_access" | head -5
 else
     echo -e "${GREEN}✓ No unsafe dictionary access patterns found${NC}"
 fi
