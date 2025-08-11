@@ -16,12 +16,16 @@ import shutil as _shutil
 import subprocess as _sp
 import time as _time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 # Import project logging and string utilities
 from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 ###############################################################################
 # Configuration constants - override with environment vars if desired.
@@ -51,7 +55,7 @@ _logger = get_logger(__name__)
 
 
 def _run(
-    cmd: List[str], *, cwd: Path | None = None, env: dict | None = None
+    cmd: List[str], *, cwd: Optional[Path] = None, env: Optional[dict] = None
 ) -> _sp.CompletedProcess:
     """Run *cmd* and return the completed process, raising on error."""
     log_debug_safe(_logger, "Running {cmd} (cwd={cwd})", cmd=cmd, cwd=cwd)
@@ -107,7 +111,9 @@ class RepoManager:
         return repo_path
 
     @classmethod
-    def get_board_path(cls, board_type: str, *, repo_root: Path | None = None) -> Path:
+    def get_board_path(
+        cls, board_type: str, *, repo_root: Optional[Path] = None
+    ) -> Path:
         repo_root = repo_root or cls.ensure_repo()
         mapping = {
             "35t": repo_root / "PCIeSquirrel",
@@ -138,7 +144,7 @@ class RepoManager:
 
     @classmethod
     def get_xdc_files(
-        cls, board_type: str, *, repo_root: Path | None = None
+        cls, board_type: str, *, repo_root: Optional[Path] = None
     ) -> List[Path]:
         board_dir = cls.get_board_path(board_type, repo_root=repo_root)
         search_roots = [
@@ -166,7 +172,7 @@ class RepoManager:
 
     @classmethod
     def read_combined_xdc(
-        cls, board_type: str, *, repo_root: Path | None = None
+        cls, board_type: str, *, repo_root: Optional[Path] = None
     ) -> str:
         files = cls.get_xdc_files(board_type, repo_root=repo_root)
         parts = [
@@ -293,7 +299,7 @@ def get_repo_manager() -> type[RepoManager]:
     return RepoManager
 
 
-def get_xdc_files(board_type: str, *, repo_root: Path | None = None) -> List[Path]:
+def get_xdc_files(board_type: str, *, repo_root: Optional[Path] = None) -> List[Path]:
     """Wrapper function to get XDC files for a board type.
 
     Args:
@@ -306,7 +312,7 @@ def get_xdc_files(board_type: str, *, repo_root: Path | None = None) -> List[Pat
     return RepoManager.get_xdc_files(board_type, repo_root=repo_root)
 
 
-def read_combined_xdc(board_type: str, *, repo_root: Path | None = None) -> str:
+def read_combined_xdc(board_type: str, *, repo_root: Optional[Path] = None) -> str:
     """Wrapper function to read combined XDC content for a board type.
 
     Args:
@@ -320,7 +326,7 @@ def read_combined_xdc(board_type: str, *, repo_root: Path | None = None) -> str:
 
 
 def is_repository_accessible(
-    board_type: str | None = None, *, repo_root: Path | None = None
+    board_type: Optional[str] = None, *, repo_root: Optional[Path] = None
 ) -> bool:
     """Check if the repository is accessible and optionally if a specific board exists.
 

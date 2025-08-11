@@ -6,6 +6,8 @@ This module defines a hierarchy of custom exceptions to provide better
 error handling and debugging capabilities throughout the application.
 """
 
+from typing import Optional
+
 
 class PCILeechError(Exception):
     """Base exception for all PCILeech firmware generator errors."""
@@ -64,7 +66,7 @@ class RepositoryError(PCILeechError):
 class BuildError(PCILeechError):
     """Raised when build operations fail."""
 
-    def __init__(self, message: str, root_cause: str | None = None):
+    def __init__(self, message: str, root_cause: Optional[str] = None):
         super().__init__(message)
         self.root_cause = root_cause
 
@@ -84,7 +86,7 @@ class ValidationError(PCILeechError):
 class ContextError(PCILeechError):
     """Exception raised when context building fails."""
 
-    def __init__(self, message: str, root_cause: str | None = None):
+    def __init__(self, message: str, root_cause: Optional[str] = None):
         super().__init__(message)
         self.root_cause = root_cause
 
@@ -98,7 +100,7 @@ class ContextError(PCILeechError):
 class PCILeechGenerationError(PCILeechError):
     """Exception raised when PCILeech generation fails."""
 
-    def __init__(self, message: str, root_cause: str | None = None):
+    def __init__(self, message: str, root_cause: Optional[str] = None):
         super().__init__(message)
         self.root_cause = root_cause
 
@@ -121,8 +123,8 @@ class PlatformCompatibilityError(PCILeechError):
     def __init__(
         self,
         message: str,
-        current_platform: str | None = None,
-        required_platform: str | None = None,
+        current_platform: Optional[str] = None,
+        required_platform: Optional[str] = None,
     ):
         super().__init__(message)
         self.current_platform = current_platform

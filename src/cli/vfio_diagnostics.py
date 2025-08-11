@@ -34,12 +34,18 @@ import textwrap
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 # Use consistent relative imports
 from ..log_config import get_logger, setup_logging
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe, safe_format, safe_print_format)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+    safe_print_format,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Pretty terminal helpers
@@ -208,6 +214,7 @@ class Check:
     commands: Optional[List[str]] = None
     prefix: Optional[str] = None
 
+
 @dataclass
 class Report:
     overall: Status
@@ -313,7 +320,7 @@ class Diagnostics:
 
     # Private helpers ---------------------------------------------------------
     @staticmethod
-    def _path_exists(path: str | Path) -> bool:
+    def _path_exists(path: Union[str, Path]) -> bool:
         return Path(path).exists()
 
     def _append(self, **kw):  # tiny helper

@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 LOG = logging.getLogger(__name__)
 if not LOG.handlers:
@@ -218,10 +218,10 @@ def get_vivado_version(vivado_exec: str) -> str:
 
 
 def run_vivado_command(
-    args: str | List[str],
+    args: Union[str, List[str]],
     *,
     tcl_file: Optional[str] = None,
-    cwd: Optional[str | Path] = None,
+    cwd: Optional[Union[str, Path]] = None,
     timeout: Optional[int] = None,
     use_discovered: bool = True,
     enable_error_reporting: bool = True,
