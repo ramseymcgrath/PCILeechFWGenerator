@@ -13,13 +13,20 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
 
-from exceptions import (
+# Use absolute imports for better compatibility
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.exceptions import (
     DeviceConfigError,
     TCLBuilderError,
     TemplateNotFoundError,
     XDCConstraintError,
 )
-from import_utils import safe_import, safe_import_class
+from src.import_utils import safe_import, safe_import_class
 
 
 # Enums for better type safety

@@ -8,10 +8,8 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from log_config import get_logger
-from shell import Shell
+from ..log_config import get_logger
+from ..shell import Shell
 
 logger = get_logger(__name__)
 
