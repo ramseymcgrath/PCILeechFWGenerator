@@ -36,7 +36,7 @@ class Shell:
 
         # none
         dangerous_patterns = [
-            "none",
+            "none"
         ]
 
         cmd_lower = cmd.lower()
