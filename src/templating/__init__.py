@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Templating module for PCILeech firmware generation.
 
@@ -9,16 +10,18 @@ This module contains all templating-related functionality including:
 
 # Import with fallback for missing dependencies
 try:
-    from .template_renderer import (TemplateRenderer, TemplateRenderError,
-                                    render_tcl_template)
+    from .template_renderer import (
+        TemplateRenderer,
+        TemplateRenderError,
+        render_tcl_template,
+    )
 except ImportError:
     TemplateRenderer = None
     TemplateRenderError = None
     render_tcl_template = None
 
 try:
-    from .tcl_builder import (BuildContext, TCLBuilder, TCLScriptBuilder,
-                              TCLScriptType)
+    from .tcl_builder import BuildContext, TCLBuilder, TCLScriptBuilder, TCLScriptType
 except ImportError:
     TCLBuilder = None
     TCLScriptBuilder = None
@@ -26,8 +29,7 @@ except ImportError:
     BuildContext = None
 
 try:
-    from .systemverilog_generator import (AdvancedSVGenerator,
-                                          DeviceSpecificLogic)
+    from .systemverilog_generator import AdvancedSVGenerator, DeviceSpecificLogic
 except ImportError:
     SystemVerilogGenerator = None
     AdvancedSVGenerator = None

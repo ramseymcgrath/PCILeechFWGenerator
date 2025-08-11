@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """CLI components for PCILeech FW Generator."""
 
 # Import non-circular components

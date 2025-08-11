@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Utility functions for unified attribute access across dict and object types.
 
 This module provides helper functions to standardize the pattern of accessing

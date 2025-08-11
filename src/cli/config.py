@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Configuration dataclass for PCILeech firmware generation."""
 
 from dataclasses import dataclass

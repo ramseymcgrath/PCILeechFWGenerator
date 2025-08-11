@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Centralized logging setup with color support."""
 
 import logging

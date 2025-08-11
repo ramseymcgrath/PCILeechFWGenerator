@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Jinja2-based template rendering system for PCILeech firmware generation.
 

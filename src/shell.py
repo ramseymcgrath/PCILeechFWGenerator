@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Shell command execution utilities with dry-run support."""
 
 import logging
@@ -35,9 +36,7 @@ class Shell:
             return
 
         # none
-        dangerous_patterns = [
-            "none"
-        ]
+        dangerous_patterns = ["none"]
 
         cmd_lower = cmd.lower()
         for pattern in dangerous_patterns:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """USB device management and firmware flashing utilities."""
 
 import re

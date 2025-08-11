@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Version checker for PCILeech Firmware Generator.
 
 This module checks if the user is running the latest version and prompts
