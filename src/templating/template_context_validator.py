@@ -83,7 +83,6 @@ class TemplateContextValidator:
                 "INIT_CACHE_VALID": False,
                 "SIGNATURE_CHECK": False,
                 "alignment_warning": None,
-                # device_signature: NO DEFAULT - must be provided by caller for security
                 "NUM_MSIX": 16,
                 "BAR_APERTURE_SIZE": 4096,
             },
