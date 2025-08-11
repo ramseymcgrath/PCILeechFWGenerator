@@ -285,6 +285,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch full history for setuptools_scm
+        submodules: recursive  # Fetch site submodule
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -294,18 +295,32 @@ jobs:
     - name: Install documentation dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install sphinx sphinx-rtd-theme
+        # Install main project dependencies
         pip install -r requirements.txt
+        # Install documentation dependencies
+        pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser
+        pip install mkdocs mkdocs-material mkdocstrings[python]
     
-    - name: Check documentation build
+    - name: Generate API documentation
       run: |
-        # Create basic Sphinx documentation structure if it doesn't exist
-        if [ ! -f "docs/conf.py" ]; then
-          mkdir -p docs
-          sphinx-quickstart -q -p "PCILeech Firmware Generator" -a "Ramsey McGrath" -v "0.5.0" --ext-autodoc --ext-viewcode --makefile --no-batchfile docs
-        fi
-        # Build documentation
-        cd docs && make html || echo "Documentation build test completed"
+        # Generate API docs using our custom script
+        python scripts/generate_api_docs.py \
+          --source src \
+          --output site/docs \
+          --use-mkdocstrings \
+          --clean
+    
+    - name: Build MkDocs documentation
+      run: |
+        cd site
+        mkdocs build --strict --verbose
+    
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation-site
+        path: site/site/
+        retention-days: 30
 
   packaging:
     runs-on: ubuntu-latest

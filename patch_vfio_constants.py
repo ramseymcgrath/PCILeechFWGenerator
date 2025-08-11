@@ -22,13 +22,40 @@ import sys
 from pathlib import Path
 
 # Add project root to path for imports
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "src"))
 
-from src.error_utils import log_error_with_root_cause
-from src.log_config import get_logger, setup_logging
-from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+# Try to import from src, but provide fallbacks if not available
+try:
+    from src.error_utils import log_error_with_root_cause
+    from src.log_config import get_logger, setup_logging
+    from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+except ImportError:
+    # Fallback implementations for when running in container or isolated environment
+    def setup_logging(level=logging.INFO):
+        logging.basicConfig(
+            level=level, format="%(asctime)s - %(levelname)s - %(message)s"
+        )
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+    def log_error_safe(logger, msg, prefix="", **kwargs):
+        formatted_msg = msg.format(**kwargs) if kwargs else msg
+        logger.error(f"[{prefix}] {formatted_msg}" if prefix else formatted_msg)
+
+    def log_info_safe(logger, msg, prefix="", **kwargs):
+        formatted_msg = msg.format(**kwargs) if kwargs else msg
+        logger.info(f"[{prefix}] {formatted_msg}" if prefix else formatted_msg)
+
+    def log_warning_safe(logger, msg, prefix="", **kwargs):
+        formatted_msg = msg.format(**kwargs) if kwargs else msg
+        logger.warning(f"[{prefix}] {formatted_msg}" if prefix else formatted_msg)
+
+    def log_error_with_root_cause(logger, msg, exc=None):
+        logger.error(msg)
+        if exc:
+            logger.error(f"Root cause: {str(exc)}")
 
 
 def compile_and_run_helper():

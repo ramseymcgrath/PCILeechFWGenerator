@@ -11,11 +11,14 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Protocol, Union,
-                    runtime_checkable)
+from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
 
-from exceptions import (DeviceConfigError, TCLBuilderError,
-                        TemplateNotFoundError, XDCConstraintError)
+from exceptions import (
+    DeviceConfigError,
+    TCLBuilderError,
+    TemplateNotFoundError,
+    XDCConstraintError,
+)
 from import_utils import safe_import, safe_import_class
 
 
@@ -116,7 +119,7 @@ class BuildContext:
                 "timeout": self.build_timeout,
                 "batch_mode": self.batch_mode,
             },
-            # PCILeech-specific information
+            # PCILeech-specific information - always included
             "pcileech": {
                 "src_dir": self.pcileech_src_dir,
                 "ip_dir": self.pcileech_ip_dir,
@@ -193,8 +196,10 @@ class ConstraintManager:
         """
         try:
             # Import repo_manager functions directly
-            from file_management.repo_manager import (get_xdc_files,
-                                                      is_repository_accessible)
+            from file_management.repo_manager import (
+                get_xdc_files,
+                is_repository_accessible,
+            )
 
             if not is_repository_accessible(board_name):
                 raise XDCConstraintError("Repository is not accessible")
@@ -367,9 +372,11 @@ class TCLBuilder:
     def _init_build_helpers(self):
         """Initialize build helpers with fallback handling."""
         try:
-            from build_helpers import (batch_write_tcl_files,
-                                       create_fpga_strategy_selector,
-                                       validate_fpga_part)
+            from build_helpers import (
+                batch_write_tcl_files,
+                create_fpga_strategy_selector,
+                validate_fpga_part,
+            )
 
             self.batch_write_tcl_files = batch_write_tcl_files
             self.fpga_strategy_selector = create_fpga_strategy_selector()
@@ -540,11 +547,11 @@ class TCLBuilder:
         return BuildContext(
             board_name=board,
             fpga_part=fpga_part,
-            fpga_family=fpga_config["family"],
-            pcie_ip_type=fpga_config["pcie_ip_type"],
-            max_lanes=fpga_config["max_lanes"],
-            supports_msi=fpga_config["supports_msi"],
-            supports_msix=fpga_config["supports_msix"],
+            fpga_family=fpga_config.get("family", "Unknown"),
+            pcie_ip_type=fpga_config.get("pcie_ip_type", "7x"),
+            max_lanes=fpga_config.get("max_lanes", 1),
+            supports_msi=fpga_config.get("supports_msi", False),
+            supports_msix=fpga_config.get("supports_msix", False),
             vendor_id=vendor_id or config_vendor_id,
             device_id=device_id or config_device_id,
             revision_id=revision_id or config_revision_id,
@@ -633,9 +640,19 @@ class TCLBuilder:
         """
         template_context = context.to_template_context()
 
-        # Ensure PCILeech-specific context is available
-        if not template_context.get("pcileech"):
-            raise TCLBuilderError("PCILeech context not found in build context")
+        # Ensure PCILeech-specific context is available with safe access
+        pcileech_context = template_context.get("pcileech", {})
+        if not pcileech_context:
+            # Create default PCILeech context if missing
+            template_context["pcileech"] = {
+                "src_dir": context.pcileech_src_dir,
+                "ip_dir": context.pcileech_ip_dir,
+                "project_script": context.pcileech_project_script,
+                "build_script": context.pcileech_build_script,
+                "source_files": context.source_file_list or [],
+                "ip_files": context.ip_file_list or [],
+                "coefficient_files": context.coefficient_file_list or [],
+            }
 
         return self.script_builder.build_script(
             TCLScriptType.PCILEECH_PROJECT, template_context
@@ -656,9 +673,19 @@ class TCLBuilder:
         """
         template_context = context.to_template_context()
 
-        # Ensure PCILeech-specific context is available
-        if not template_context.get("pcileech"):
-            raise TCLBuilderError("PCILeech context not found in build context")
+        # Ensure PCILeech-specific context is available with safe access
+        pcileech_context = template_context.get("pcileech", {})
+        if not pcileech_context:
+            # Create default PCILeech context if missing
+            template_context["pcileech"] = {
+                "src_dir": context.pcileech_src_dir,
+                "ip_dir": context.pcileech_ip_dir,
+                "project_script": context.pcileech_project_script,
+                "build_script": context.pcileech_build_script,
+                "source_files": context.source_file_list or [],
+                "ip_files": context.ip_file_list or [],
+                "coefficient_files": context.coefficient_file_list or [],
+            }
 
         return self.script_builder.build_script(
             TCLScriptType.PCILEECH_BUILD, template_context

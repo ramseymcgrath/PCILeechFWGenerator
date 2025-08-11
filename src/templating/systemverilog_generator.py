@@ -1346,6 +1346,9 @@ class AdvancedSVGenerator:
             "timing_config": template_context.get(
                 "timing_config", {}
             ),  # Add timing_config
+            "pcileech_config": template_context.get(
+                "pcileech_config", {}
+            ),  # Add pcileech_config
             "device_signature": template_context.get(
                 "device_signature"
             ),  # Add device_signature
