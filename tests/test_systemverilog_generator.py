@@ -14,12 +14,16 @@ import pytest
 
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
-from src.templating.systemverilog_generator import (AdvancedSVGenerator,
-                                                    DeviceSpecificLogic,
-                                                    PCILeechOutput)
+from src.templating.advanced_sv_features import (
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    PowerManagementConfig,
+)
+from src.templating.systemverilog_generator import (
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    PCILeechOutput,
+)
 from src.templating.template_renderer import TemplateRenderError
 
 
@@ -352,7 +356,8 @@ class TestAdvancedSVGenerator:
                     "device_id": "8168",
                     "class_code": "020000",
                     "revision_id": "01",
-                }
+                },
+                "device_signature": "0xDEADBEEF",  # Required security field
             }
 
             result = generator.generate_pcileech_modules(template_context)
@@ -395,6 +400,7 @@ class TestAdvancedSVGenerator:
                             "revision_id": "01",
                         },
                         "msix_config": {"is_supported": True, "num_vectors": 4},
+                        "device_signature": "0xCAFEBABE",
                     }
 
                     result = generator.generate_pcileech_modules(template_context)
@@ -434,7 +440,8 @@ class TestAdvancedSVGenerator:
                     "device_id": "8168",
                     "class_code": "020000",
                     "revision_id": "01",
-                }
+                },
+                "device_signature": "0xCAFEBABE",
             }
 
             with pytest.raises(TemplateRenderError, match="PCILeech template error"):
@@ -513,7 +520,8 @@ class TestAdvancedSVGenerator:
         """Test MSI-X PBA initialization with large vector count."""
         generator = AdvancedSVGenerator()
         template_context = {
-            "msix_config": {"num_vectors": 64}  # Should require 2 DWORDs
+            "msix_config": {"num_vectors": 64},  # Should require 2 DWORDs
+            "device_signature": "0xCAFEBABE",
         }
 
         result = generator._generate_msix_pba_init(template_context)

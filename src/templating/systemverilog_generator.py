@@ -498,6 +498,28 @@ class AdvancedSVGenerator:
                 log_error_safe(self.logger, error_msg)
                 raise TemplateRenderError(error_msg)
 
+            # Validate critical security fields before proceeding
+            # device_signature is REQUIRED - no fallback allowed per no-fallback policy
+            if "device_signature" not in template_context:
+                error_msg = (
+                    "CRITICAL: device_signature is missing from template context. "
+                    "This field is required for firmware security and uniqueness. "
+                    "Cannot generate generic firmware without proper device signature. "
+                    "Ensure PCILeechContextBuilder provides device_signature."
+                )
+                log_error_safe(self.logger, error_msg)
+                raise TemplateRenderError(error_msg)
+
+            device_signature = template_context["device_signature"]
+            if not device_signature:
+                error_msg = (
+                    "CRITICAL: device_signature is None or empty. "
+                    "A valid device signature is required to prevent generic firmware generation. "
+                    "This is a security requirement - no fallback values are allowed."
+                )
+                log_error_safe(self.logger, error_msg)
+                raise TemplateRenderError(error_msg)
+
             # Create enhanced context efficiently - avoid full copy for performance
             enhanced_context = self._create_context(template_context, device_config)
 
@@ -1362,9 +1384,10 @@ class AdvancedSVGenerator:
             "pcileech_config": template_context.get(
                 "pcileech_config", {}
             ),  # Add pcileech_config
-            "device_signature": template_context.get(
+            # CRITICAL: device_signature must be present - use direct access for fail-fast
+            "device_signature": template_context[
                 "device_signature"
-            ),  # Add device_signature
+            ],  # Required - no fallback
             "generation_metadata": template_context.get(
                 "generation_metadata", {}
             ),  # Add generation_metadata

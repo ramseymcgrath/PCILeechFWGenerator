@@ -17,22 +17,31 @@ Key improvements in this version:
 - Improved testability with dependency injection
 """
 
-import contextlib
 import ctypes
 import fcntl
 import hashlib
 import logging
 import os
-import struct
 import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Tuple, TypeVar, Union, cast
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    TypedDict,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
@@ -62,10 +71,58 @@ from src.cli.vfio_constants import (
     VfioRegionInfo,
 )
 
-# Type aliases for clarity
-ConfigSpaceData = Dict[str, Any]
-MSIXData = Dict[str, Any]
-TemplateContext = Dict[str, Any]
+
+# TypedDicts for better type safety
+class ConfigSpaceData(TypedDict, total=False):
+    """Configuration space data structure."""
+
+    config_space_hex: str
+    config_space_size: int
+    bars: List[Any]
+    device_info: Dict[str, Any]
+    vendor_id: str
+    device_id: str
+    class_code: str
+    revision_id: str
+    dword_map: Dict[int, int]
+    capabilities: Dict[str, Any]
+
+
+class MSIXCapabilityInfo(TypedDict):
+    """MSI-X capability information."""
+
+    table_size: int
+    table_bir: int
+    table_offset: int
+    pba_bir: int
+    pba_offset: int
+    enabled: bool
+    function_mask: bool
+
+
+class MSIXData(TypedDict, total=False):
+    """MSI-X data structure."""
+
+    capability_info: MSIXCapabilityInfo
+    validation_errors: List[str]
+    is_valid: bool
+
+
+class TemplateContext(TypedDict, total=False):
+    """Template context structure."""
+
+    device_config: Dict[str, Any]
+    config_space: Dict[str, Any]
+    msix_config: Dict[str, Any]
+    interrupt_config: Dict[str, Any]
+    active_device_config: Dict[str, Any]
+    bar_config: Dict[str, Any]
+    timing_config: Dict[str, Any]
+    pcileech_config: Dict[str, Any]
+    device_signature: str
+    generation_metadata: Dict[str, Any]
+    EXT_CFG_CAP_PTR: int
+    EXT_CFG_XP_CAP_PTR: int
 
 
 class ValidationLevel(Enum):
@@ -111,7 +168,7 @@ class PCIConstants:
     POWER_STATE_D3 = "D3"
 
 
-@dataclass
+@dataclass(slots=True)
 class DeviceIdentifiers:
     """Device identification data with enhanced validation and utilities."""
 
@@ -159,11 +216,8 @@ class DeviceIdentifiers:
     @staticmethod
     def _normalize_hex(value: str, length: int) -> str:
         """Normalize a hex string to specified length."""
-        try:
-            int_value = int(value, 16)
-            return f"{int_value:0{length}x}"
-        except ValueError:
-            return value
+        int_value = int(value, 16)
+        return f"{int_value:0{length}x}"
 
     @property
     def device_signature(self) -> str:
@@ -189,7 +243,7 @@ class DeviceIdentifiers:
         return class_map.get(class_prefix, "Unknown Device")
 
 
-@dataclass
+@dataclass(slots=True)
 class BarConfiguration:
     """BAR configuration data with enhanced validation and utilities."""
 
@@ -254,7 +308,7 @@ class BarConfiguration:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class TimingParameters:
     """Device timing parameters with validation and utilities."""
 
@@ -469,8 +523,8 @@ class PCILeechContextBuilder:
     def build_context(
         self,
         behavior_profile: Optional[BehaviorProfile],
-        config_space_data: Dict[str, Any],
-        msix_data: Optional[Dict[str, Any]],
+        config_space_data: Dict[str, Any],  # Keep as Dict for backward compatibility
+        msix_data: Optional[Dict[str, Any]],  # Keep as Dict for backward compatibility
         interrupt_strategy: str = "intx",
         interrupt_vectors: int = 1,
         donor_template: Optional[Dict[str, Any]] = None,
@@ -1531,145 +1585,10 @@ class PCILeechContextBuilder:
             )
 
     def _get_vfio_region_info(self, index: int) -> Optional[Dict[str, Any]]:
-        # First log sysfs BAR info for comparison
-        try:
-            resource_file = f"/sys/bus/pci/devices/{self.device_bdf}/resource{index}"
-            if os.path.exists(resource_file):
-                with open(resource_file, "r") as f:
-                    line = f.read().strip()
-                    if line:
-                        parts = line.split()
-                        if len(parts) >= 3:
-                            start = int(parts[0], 16)
-                            end = int(parts[1], 16)
-                            sysfs_size = end - start + 1 if end >= start else 0
-                            log_info_safe(
-                                self.logger,
-                                "BAR {index} sysfs shows size: {size} bytes (start: 0x{start:x}, end: 0x{end:x})",
-                                index=index,
-                                size=sysfs_size,
-                                start=start,
-                                end=end,
-                                prefix="BARA",
-                            )
-        except Exception:
-            pass
-
-        log_info_safe(
-            self.logger,
-            "Attempting to get VFIO region info for BAR {index} on device {bdf}",
-            index=index,
-            bdf=self.device_bdf,
-            prefix="BARA",
-        )
-
-        try:
-            fd, cont_fd = self._open_vfio_device_fd()
-            log_info_safe(
-                self.logger,
-                "Successfully opened VFIO device FD {fd} and container FD {cont_fd} for region info query",
-                fd=fd,
-                cont_fd=cont_fd,
-                prefix="BARA",
-            )
-        except OSError as e:
-            error_code = getattr(e, "errno", "unknown")
-            if error_code == 22:  # EINVAL
-                log_warning_safe(
-                    self.logger,
-                    "Failed to open VFIO device FD for region info: [Errno 22] Invalid argument - device may not be properly bound to vfio-pci or IOMMU issue",
-                    prefix="BARA",
-                )
-            else:
-                log_warning_safe(
-                    self.logger,
-                    "Failed to open VFIO device FD for region info: [Errno {errno}] {error}",
-                    errno=error_code,
-                    error=str(e),
-                    prefix="BARA",
-                )
-            return None
-        except Exception as e:
-            log_warning_safe(
-                self.logger,
-                "Unexpected error opening VFIO device FD for region info: {error}",
-                error=str(e),
-                prefix="BARA",
-            )
-            return None
-
-        try:
-            info = VfioRegionInfo()
-            info.argsz = ctypes.sizeof(VfioRegionInfo)
-            info.index = index
-
-            log_info_safe(
-                self.logger,
-                "Querying VFIO region info for index {index} with struct size {size}",
-                index=index,
-                size=info.argsz,
-                prefix="BARA",
-            )
-
-            # mutate=True lets the kernel write back size/flags
-            fcntl.ioctl(fd, VFIO_DEVICE_GET_REGION_INFO, info, True)
-
-            log_info_safe(
-                self.logger,
-                "VFIO region info successful - index: {index}, size: {size}, flags: 0x{flags:x}",
-                index=info.index,
-                size=info.size,
-                flags=info.flags,
-                prefix="BARA",
-            )
-
-            result = {
-                "index": info.index,
-                "flags": info.flags,
-                "size": info.size,
-                "readable": bool(info.flags & VFIO_REGION_INFO_FLAG_READ),
-                "writable": bool(info.flags & VFIO_REGION_INFO_FLAG_WRITE),
-                "mappable": bool(info.flags & VFIO_REGION_INFO_FLAG_MMAP),
-            }
-
-            log_info_safe(
-                self.logger,
-                "VFIO region {index} properties - readable: {readable}, writable: {writable}, mappable: {mappable}",
-                index=index,
-                readable=result["readable"],
-                writable=result["writable"],
-                mappable=result["mappable"],
-                prefix="BARA",
-            )
-
-            return result
-
-        except OSError as e:
-            log_error_safe(
-                self.logger,
-                "VFIO region info ioctl failed for index {index}: [Errno {errno}] {error}",
-                index=index,
-                errno=getattr(e, "errno", "unknown"),
-                error=str(e),
-                prefix="BARA",
-            )
-            return None
-        finally:
-            log_info_safe(
-                self.logger,
-                "Closing VFIO device FD {fd} and container FD {cont_fd}",
-                fd=fd,
-                cont_fd=cont_fd,
-                prefix="BARA",
-            )
-            try:
-                os.close(fd)
-            except OSError:
-                pass  # Already closed
-            try:
-                os.close(cont_fd)
-            except OSError:
-                pass  # Already closed
+        """Get VFIO region information using the VFIODeviceManager."""
+        # Fix #2: Use VFIODeviceManager instead of opening/closing FDs each time
+        with self._vfio_manager as v:
+            return v.get_region_info(index)
 
     @lru_cache(maxsize=1)
     def _get_vfio_group(self) -> str:
@@ -1781,6 +1700,15 @@ class PCILeechContextBuilder:
                 prefix="BDF",
             )
             return None
+
+    def _completer_id(self) -> int:
+        """Calculate the 16-bit Requester/Completer ID from BDF."""
+        # Fix #5: Add real completer_id calculation
+        parts = self._parse_bdf()
+        if not parts:
+            return 0
+        _, bus, dev, fn = parts
+        return (int(bus, 16) << 8) | (int(dev, 16) << 3) | int(fn)
 
     def _analyze_bar_fallback(self, index: int, bar_data) -> Optional[BarConfiguration]:
         """
@@ -2430,7 +2358,7 @@ class PCILeechContextBuilder:
                 # Device identification for interrupt generation
                 "device_id": f"16'h{int(device_identifiers.device_id, 16):04X}",
                 "vendor_id": f"16'h{int(device_identifiers.vendor_id, 16):04X}",
-                "completer_id": f"16'h0000",  # Bus/Dev/Func - will be set by PCIe core
+                "completer_id": f"16'h{self._completer_id():04X}",  # Fix #5: Real completer ID
             }
         )
 

@@ -1,0 +1,456 @@
+"""
+Template Context Validator
+
+This module ensures all template variables are properly defined with appropriate defaults,
+preventing undefined variable errors in Jinja2 templates.
+"""
+
+from typing import Dict, Any, Optional, List, Set
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+import re
+
+from src.string_utils import log_debug_safe, log_warning_safe, log_info_safe
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TemplateVariableRequirements:
+    """Defines required and optional variables for a template."""
+
+    template_name: str
+    required_vars: Set[str] = field(default_factory=set)
+    optional_vars: Set[str] = field(default_factory=set)
+    default_values: Dict[str, Any] = field(default_factory=dict)
+
+
+class TemplateContextValidator:
+    """
+    Validates and ensures all template variables are properly defined.
+
+    This class addresses the issue where conditional template includes suggest
+    that some template variables may be undefined. It ensures all required
+    template variables are always defined in the template context.
+    """
+
+    # Define template variable requirements for each template type
+    TEMPLATE_REQUIREMENTS = {
+        # SystemVerilog templates
+        "sv/*.sv.j2": {
+            "required_vars": {
+                "device_config",
+                "board_config",
+            },
+            "optional_vars": {
+                "supports_msix",
+                "supports_msi",
+                "variance_model",
+                "power_config",
+                "error_config",
+                "perf_config",
+                "enable_clock_crossing",
+                "enable_custom_config",
+                "device_specific_config",
+                "enable_performance_counters",
+                "enable_error_detection",
+                "power_management",
+                "error_handling",
+                "performance_counters",
+                "timing_config",
+                "behavior_profile",
+            },
+            "default_values": {
+                "supports_msix": False,
+                "supports_msi": False,
+                "variance_model": None,
+                "power_config": None,
+                "error_config": None,
+                "perf_config": None,
+                "enable_clock_crossing": False,
+                "enable_custom_config": False,
+                "device_specific_config": {},
+                "enable_performance_counters": False,
+                "enable_error_detection": False,
+                "power_management": None,
+                "error_handling": None,
+                "performance_counters": None,
+                "DUAL_PORT": False,
+                "RESET_CLEAR": True,
+                "USE_BYTE_ENABLES": True,
+                "WRITE_PBA_ALLOWED": False,
+                "INIT_TABLE": False,
+                "INIT_PBA": False,
+                "INIT_ROM": False,
+                "ALLOW_ROM_WRITES": False,
+                "ENABLE_SIGNATURE_CHECK": False,
+                "USE_QSPI": False,
+                "ENABLE_CACHE": False,
+                "INIT_CACHE_VALID": False,
+                "SIGNATURE_CHECK": False,
+                "alignment_warning": None,
+                # device_signature: NO DEFAULT - must be provided by caller for security
+                "NUM_MSIX": 16,
+                "BAR_APERTURE_SIZE": 4096,
+            },
+        },
+        # TCL templates
+        "tcl/*.j2": {
+            "required_vars": {
+                "board",
+                "device",
+            },
+            "optional_vars": {
+                "supports_msix",
+                "supports_msi",
+                "generated_xdc_path",
+                "board_xdc_content",
+                "top_module",
+                "enable_power_opt",
+                "enable_incremental",
+                "constraint_files",
+                "max_lanes",
+                "batch_mode",
+                "build",
+            },
+            "default_values": {
+                "supports_msix": False,
+                "supports_msi": False,
+                "generated_xdc_path": None,
+                "board_xdc_content": None,
+                "top_module": "pcileech_top",
+                "enable_power_opt": False,
+                "enable_incremental": False,
+                "constraint_files": [],
+                "max_lanes": 1,
+                "batch_mode": False,
+                "build": {"jobs": 4},
+            },
+        },
+        # Power management specific
+        "sv/power_*.sv.j2": {
+            "optional_vars": {
+                "enable_wake_events",
+                "enable_pme",
+            },
+            "default_values": {
+                "enable_wake_events": False,
+                "enable_pme": False,
+            },
+        },
+        # Performance counter specific
+        "sv/performance_counters.sv.j2": {
+            "optional_vars": {
+                "enable_transaction_counters",
+                "enable_bandwidth_monitoring",
+                "enable_error_rate_tracking",
+                "enable_performance_grading",
+                "enable_perf_outputs",
+                "error_signals_available",
+                "network_signals_available",
+                "storage_signals_available",
+                "graphics_signals_available",
+                "generic_signals_available",
+            },
+            "default_values": {
+                "enable_transaction_counters": False,
+                "enable_bandwidth_monitoring": False,
+                "enable_error_rate_tracking": False,
+                "enable_performance_grading": False,
+                "enable_perf_outputs": False,
+                "error_signals_available": False,
+                "network_signals_available": False,
+                "storage_signals_available": False,
+                "graphics_signals_available": False,
+                "generic_signals_available": False,
+            },
+        },
+        # MSI-X specific templates
+        "sv/msix_*.sv.j2": {
+            "required_vars": {
+                "NUM_MSIX",
+            },
+            "optional_vars": {
+                "RESET_CLEAR",
+                "USE_BYTE_ENABLES",
+                "WRITE_PBA_ALLOWED",
+                "INIT_TABLE",
+                "INIT_PBA",
+                "alignment_warning",
+            },
+            "default_values": {
+                "NUM_MSIX": 16,
+                "RESET_CLEAR": True,
+                "USE_BYTE_ENABLES": True,
+                "WRITE_PBA_ALLOWED": False,
+                "INIT_TABLE": False,
+                "INIT_PBA": False,
+                "alignment_warning": None,
+            },
+        },
+        # Option ROM templates
+        "sv/option_rom_*.sv.j2": {
+            "optional_vars": {
+                "ALLOW_ROM_WRITES",
+                "INIT_ROM",
+                "ENABLE_SIGNATURE_CHECK",
+                "USE_QSPI",
+                "ENABLE_CACHE",
+                "RESET_CLEAR",
+                "INIT_CACHE_VALID",
+                "SIGNATURE_CHECK",
+                "SPI_FAST_CMD",
+                "QSPI_ONLY_CMD",
+                "FLASH_ADDR_OFFSET",
+            },
+            "default_values": {
+                "ALLOW_ROM_WRITES": False,
+                "INIT_ROM": False,
+                "ENABLE_SIGNATURE_CHECK": False,
+                "USE_QSPI": False,
+                "ENABLE_CACHE": False,
+                "RESET_CLEAR": True,
+                "INIT_CACHE_VALID": False,
+                "SIGNATURE_CHECK": False,
+                "SPI_FAST_CMD": "0Bh",
+                "QSPI_ONLY_CMD": "EBh",
+                "FLASH_ADDR_OFFSET": "24'h000000",
+            },
+        },
+    }
+
+    def __init__(self):
+        """Initialize the template context validator."""
+        self.template_cache: Dict[str, TemplateVariableRequirements] = {}
+
+    def get_template_requirements(
+        self, template_name: str
+    ) -> TemplateVariableRequirements:
+        """
+        Get the variable requirements for a specific template.
+
+        Args:
+            template_name: Name of the template file
+
+        Returns:
+            TemplateVariableRequirements object with required/optional vars and defaults
+        """
+        if template_name in self.template_cache:
+            return self.template_cache[template_name]
+
+        requirements = TemplateVariableRequirements(template_name)
+
+        # Match template name against patterns
+        for pattern, config in self.TEMPLATE_REQUIREMENTS.items():
+            if self._matches_pattern(template_name, pattern):
+                requirements.required_vars.update(config.get("required_vars", set()))
+                requirements.optional_vars.update(config.get("optional_vars", set()))
+                requirements.default_values.update(config.get("default_values", {}))
+
+        self.template_cache[template_name] = requirements
+        return requirements
+
+    def _matches_pattern(self, template_name: str, pattern: str) -> bool:
+        """
+        Check if a template name matches a pattern.
+
+        Args:
+            template_name: Template file name
+            pattern: Pattern to match (supports wildcards)
+
+        Returns:
+            True if template matches pattern
+        """
+        # Convert glob pattern to regex
+        regex_pattern = pattern.replace("*", ".*").replace("?", ".")
+        regex_pattern = f".*{regex_pattern}$"  # Match end of string
+        return bool(re.match(regex_pattern, template_name))
+
+    def validate_and_complete_context(
+        self, template_name: str, context: Dict[str, Any], strict: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Validate and complete a template context with required defaults.
+
+        This ensures all required variables are present and adds default values
+        for optional variables that are commonly checked in templates.
+
+        Args:
+            template_name: Name of the template being rendered
+            context: Original template context
+            strict: If True, raise error for missing required vars
+
+        Returns:
+            Completed context with all required variables defined
+
+        Raises:
+            ValueError: If strict=True and required variables are missing
+        """
+        requirements = self.get_template_requirements(template_name)
+        validated_context = context.copy()
+
+        # Check required variables
+        missing_required = []
+        for var in requirements.required_vars:
+            if var not in validated_context or validated_context[var] is None:
+                if var in requirements.default_values:
+                    validated_context[var] = requirements.default_values[var]
+                    log_debug_safe(
+                        logger,
+                        f"Added default value for required variable '{var}' in template '{template_name}'",
+                        prefix="TEMPLATE",
+                    )
+                else:
+                    missing_required.append(var)
+
+        if missing_required:
+            # Always raise error for missing required variables - no fallbacks for security
+            error_msg = f"Template '{template_name}' missing required variables: {', '.join(missing_required)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Add defaults for optional variables
+        for var in requirements.optional_vars:
+            if var not in validated_context:
+                if var in requirements.default_values:
+                    validated_context[var] = requirements.default_values[var]
+                    log_debug_safe(
+                        logger,
+                        f"Added default value for optional variable '{var}' in template '{template_name}'",
+                        prefix="TEMPLATE",
+                    )
+
+        # Add all default values that aren't already in context
+        for var, default_value in requirements.default_values.items():
+            if var not in validated_context:
+                validated_context[var] = default_value
+                log_debug_safe(
+                    logger,
+                    f"Added default value for variable '{var}' in template '{template_name}'",
+                    prefix="TEMPLATE",
+                )
+
+        return validated_context
+
+    def analyze_template_for_variables(self, template_path: Path) -> Set[str]:
+        """
+        Analyze a template file to find all referenced variables.
+
+        Args:
+            template_path: Path to the template file
+
+        Returns:
+            Set of variable names referenced in the template
+        """
+        variables = set()
+
+        try:
+            with open(template_path, "r") as f:
+                content = f.read()
+
+            # Find variables in {{ }} expressions
+            var_pattern = r"\{\{\s*(\w+)(?:\.\w+)*\s*(?:\|[^}]+)?\s*\}\}"
+            variables.update(re.findall(var_pattern, content))
+
+            # Find variables in {% if %} conditions
+            if_pattern = (
+                r"\{%\s*if\s+(\w+)(?:\.\w+)*\s*(?:is\s+defined|is\s+undefined|%\})"
+            )
+            variables.update(re.findall(if_pattern, content))
+
+            # Find variables in {% for %} loops
+            for_pattern = r"\{%\s*for\s+\w+\s+in\s+(\w+)(?:\.\w+)*\s*%\}"
+            variables.update(re.findall(for_pattern, content))
+
+        except Exception as e:
+            log_warning_safe(
+                logger,
+                "Failed to analyze template '{path}': {error}",
+                path=template_path,
+                error=str(e),
+            )
+
+        return variables
+
+    def generate_context_documentation(self, template_name: str) -> str:
+        """
+        Generate documentation for the expected context of a template.
+
+        Args:
+            template_name: Name of the template
+
+        Returns:
+            Documentation string describing required/optional variables
+        """
+        requirements = self.get_template_requirements(template_name)
+
+        doc_lines = [f"Template: {template_name}", "=" * 50, ""]
+
+        if requirements.required_vars:
+            doc_lines.append("Required Variables:")
+            for var in sorted(requirements.required_vars):
+                default = requirements.default_values.get(var, "No default")
+                doc_lines.append(f"  - {var}: {default}")
+            doc_lines.append("")
+
+        if requirements.optional_vars:
+            doc_lines.append("Optional Variables:")
+            for var in sorted(requirements.optional_vars):
+                default = requirements.default_values.get(var, "No default")
+                doc_lines.append(f"  - {var}: {default}")
+            doc_lines.append("")
+
+        if requirements.default_values:
+            doc_lines.append("Default Values:")
+            for var, value in sorted(requirements.default_values.items()):
+                doc_lines.append(f"  - {var} = {repr(value)}")
+
+        return "\n".join(doc_lines)
+
+
+# Global instance for easy access
+_validator = TemplateContextValidator()
+
+
+def validate_template_context(
+    template_name: str, context: Dict[str, Any], strict: bool = False
+) -> Dict[str, Any]:
+    """
+    Validate and complete a template context.
+
+    Args:
+        template_name: Name of the template being rendered
+        context: Original template context
+        strict: If True, raise error for missing required vars
+
+    Returns:
+        Completed context with all required variables defined
+    """
+    return _validator.validate_and_complete_context(template_name, context, strict)
+
+
+def get_template_requirements(template_name: str) -> TemplateVariableRequirements:
+    """
+    Get the variable requirements for a template.
+
+    Args:
+        template_name: Name of the template
+
+    Returns:
+        TemplateVariableRequirements object
+    """
+    return _validator.get_template_requirements(template_name)
+
+
+def analyze_template_variables(template_path: Path) -> Set[str]:
+    """
+    Analyze a template file for referenced variables.
+
+    Args:
+        template_path: Path to the template file
+
+    Returns:
+        Set of variable names referenced in the template
+    """
+    return _validator.analyze_template_for_variables(template_path)

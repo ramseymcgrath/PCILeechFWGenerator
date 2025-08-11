@@ -71,6 +71,7 @@ class TestMSIXTableReadingCriticalPaths:
                 "vendor_id": "1234",
                 "device_id": "5678",
             },
+            "device_signature": "0xCAFEBABE",
         }
 
     def test_bar_matching_direct_bir_match(self, generator, complex_msix_context):
@@ -169,6 +170,7 @@ class TestMSIXTableReadingCriticalPaths:
             "bar_config": {"bars": []},  # No BARs available
             "config_space_data": {"device_info": {"bars": []}},
             "device_config": {"device_bdf": "0000:01:00.0"},
+            "device_signature": "0xCAFEBABE",
         }
 
         result = generator._read_actual_msix_table(context)
@@ -256,6 +258,7 @@ class TestMSIXInitializationFilesGeneration:
         context = {
             "msix_config": {"num_vectors": 4},
             "device_config": {"device_bdf": "0000:01:00.0"},
+            "device_signature": "0xCAFEBABE",
         }
 
         # Mock successful hardware read
@@ -373,6 +376,7 @@ class TestPCILeechModuleGeneration:
                     {"index": 1, "size": 65536},
                 ]
             },
+            "device_signature": "0xCAFEBABE",
         }
 
         with patch.object(generator.renderer, "render_template") as mock_render:
@@ -430,6 +434,7 @@ class TestPCILeechModuleGeneration:
         context_no_msix = {
             "device_config": {"vendor_id": "1234"},
             "msix_config": {"is_supported": False, "num_vectors": 0},
+            "device_signature": "0xCAFEBABE",
         }
 
         with patch.object(generator.renderer, "render_template") as mock_render:
@@ -531,7 +536,10 @@ class TestTemplateRenderingRobustness:
 
     def test_template_error_propagation_integrity(self, generator):
         """Test that template errors are properly propagated without modification."""
-        context = {"device_config": {"vendor_id": "1234"}}
+        context = {
+            "device_config": {"vendor_id": "1234"},
+            "device_signature": "0xCAFEBABE",
+        }
 
         original_error = TemplateRenderError("Original template error message")
 
@@ -561,6 +569,7 @@ class TestTemplateRenderingRobustness:
         template_context = {
             "device_config": {"vendor_id": "1234", "device_id": "5678"},
             "build_system_version": __version__,  # Use dynamic version
+            "device_signature": "0xCAFEBABE",
         }
 
         with patch.object(generator.renderer, "render_template") as mock_render:

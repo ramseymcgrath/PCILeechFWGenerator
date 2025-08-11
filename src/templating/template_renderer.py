@@ -6,20 +6,38 @@ the string formatting and concatenation currently used in build.py.
 """
 
 import logging
+import math
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from __version__ import __version__
-from string_utils import (generate_tcl_header_comment, log_debug_safe,
-                          log_error_safe, log_info_safe, log_warning_safe,
-                          safe_format)
+from string_utils import (
+    generate_tcl_header_comment,
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
 from templates.template_mapping import update_template_path
 
 try:
-    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
-                        StrictUndefined, Template, TemplateError,
-                        TemplateRuntimeError, nodes)
+    from jinja2 import (
+        BaseLoader,
+        Environment,
+        FileSystemLoader,
+        StrictUndefined,
+        Template,
+        TemplateError,
+        TemplateNotFound,
+        TemplateRuntimeError,
+        Undefined,
+        meta,
+        nodes,
+    )
+    from jinja2.bccache import FileSystemBytecodeCache
     from jinja2.ext import Extension
+    from jinja2.sandbox import SandboxedEnvironment
 except ImportError:
     raise ImportError(
         "Jinja2 is required for template rendering. Install with: pip install jinja2"
@@ -67,31 +85,53 @@ class TemplateRenderer:
     proper error handling and context management.
     """
 
-    def __init__(self, template_dir: Optional[Union[str, Path]] = None):
+    def __init__(
+        self,
+        template_dir: Optional[Union[str, Path]] = None,
+        *,
+        strict: bool = True,
+        sandboxed: bool = False,
+        bytecode_cache_dir: Optional[Union[str, Path]] = None,
+        auto_reload: bool = True,
+    ):
         """
         Initialize the template renderer.
 
         Args:
             template_dir: Directory containing template files. If None,
                          defaults to src/templates/
+            strict: Use StrictUndefined to fail on missing variables
+            sandboxed: Use sandboxed environment for untrusted templates
+            bytecode_cache_dir: Directory for bytecode cache (speeds up repeated renders)
+            auto_reload: Auto-reload templates when changed
         """
-        if template_dir is None:
-            # Default to the templates directory
-            template_dir = Path(__file__).parent.parent / "templates"
+        template_dir = Path(template_dir or Path(__file__).parent.parent / "templates")
+        template_dir.mkdir(parents=True, exist_ok=True)
+        self.template_dir = template_dir
 
-        self.template_dir = Path(template_dir)
-        self.template_dir.mkdir(parents=True, exist_ok=True)
+        # Choose undefined class based on strict mode
+        undefined_cls = StrictUndefined if strict else Undefined
 
-        # Initialize Jinja2 environment
-        # Use default Undefined instead of StrictUndefined to allow checking for undefined variables
-        # This allows templates to use 'is defined' checks properly
-        self.env = Environment(
+        # Choose environment class based on sandboxed mode
+        env_cls = SandboxedEnvironment if sandboxed else Environment
+
+        # Setup bytecode cache if directory provided
+        bcc = (
+            FileSystemBytecodeCache(str(bytecode_cache_dir))
+            if bytecode_cache_dir
+            else None
+        )
+
+        self.env = env_cls(
             loader=MappingFileSystemLoader(str(self.template_dir)),
+            undefined=undefined_cls,
             trim_blocks=False,
             lstrip_blocks=False,
             keep_trailing_newline=True,
-            extensions=[ErrorTagExtension],
-            # undefined=StrictUndefined,  # Removed to allow optional variables
+            auto_reload=auto_reload,
+            extensions=[ErrorTagExtension, "jinja2.ext.do"],
+            bytecode_cache=bcc,
+            autoescape=False,  # Explicit: we're not doing HTML
         )
 
         # Add custom filters if needed
@@ -116,8 +156,16 @@ class TemplateRenderer:
 
         def tcl_string_escape(value: str) -> str:
             """Escape string for safe use in TCL."""
-            # Basic TCL string escaping
-            return value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
+            # Enhanced TCL string escaping including brackets and braces
+            return (
+                value.replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("$", "\\$")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+            )
 
         def tcl_list_format(items: list) -> str:
             """Format Python list as TCL list."""
@@ -125,28 +173,38 @@ class TemplateRenderer:
             return " ".join(f"{{{item}}}" for item in escaped_items)
 
         # SystemVerilog-specific filters
-        def sv_hex(value, width: int = 32) -> str:
-            """Format value as SystemVerilog hex literal with proper width."""
-            if isinstance(value, str):
-                # Handle hex strings like "0x1234"
-                if value.startswith("0x") or value.startswith("0X"):
-                    int_value = int(value, 16)
-                else:
-                    int_value = (
-                        int(value, 16)
-                        if all(c in "0123456789abcdefABCDEF" for c in value)
-                        else int(value, 16)
-                    )
-            else:
-                int_value = int(value)
+        def _parse_int(value) -> int:
+            """Parse integer from various formats."""
+            if isinstance(value, int):
+                return value
+            s = str(value).strip()
+            try:
+                # hex forms
+                if s.lower().startswith("0x"):
+                    return int(s, 16)
+                # choose base: hex if only hex chars, else decimal
+                hexdigits = set("0123456789abcdefABCDEF")
+                base = 16 if all(c in hexdigits for c in s) else 10
+                return int(s, base)
+            except Exception as e:
+                raise TemplateRenderError(
+                    f"sv_hex: cannot parse int from {value!r}: {e}"
+                )
 
-            hex_digits = (width + 3) // 4  # Round up to nearest hex digit
-            return f"{width}'h{int_value:0{hex_digits}X}"
+        def sv_hex(value, width: int = 32) -> str:
+            """Return SystemVerilog literal. width<=0 returns just hex without width."""
+            iv = _parse_int(value)
+            if width and width > 0:
+                hex_digits = (width + 3) // 4
+                return f"{width}'h{iv:0{hex_digits}X}"
+            return f"{iv:#X}"
 
         def sv_width(msb: int, lsb: int = 0) -> str:
             """Generate SystemVerilog bit width specification."""
             if msb == lsb:
                 return ""
+            if msb < lsb:
+                msb, lsb = lsb, msb
             return f"[{msb}:{lsb}]"
 
         def sv_param(name: str, value, width: Optional[int] = None) -> str:
@@ -167,18 +225,62 @@ class TemplateRenderer:
                 init_str = ""
             return f"logic {width_str}{name}{init_str};"
 
+        # SystemVerilog reserved keywords
+        SV_KEYWORDS = {
+            "assign",
+            "module",
+            "endmodule",
+            "begin",
+            "end",
+            "logic",
+            "wire",
+            "reg",
+            "input",
+            "output",
+            "inout",
+            "parameter",
+            "localparam",
+            "always",
+            "always_ff",
+            "always_comb",
+            "always_latch",
+            "if",
+            "else",
+            "case",
+            "endcase",
+            "for",
+            "while",
+            "do",
+            "function",
+            "endfunction",
+            "task",
+            "endtask",
+            "class",
+            "endclass",
+            "package",
+            "endpackage",
+            "interface",
+            "endinterface",
+            "typedef",
+            "enum",
+            "struct",
+            "union",
+            "initial",
+            "final",
+            "generate",
+            "endgenerate",
+        }
+
         def sv_identifier(name: str) -> str:
             """Convert to valid SystemVerilog identifier."""
             import re
 
-            # Replace invalid characters with underscores
-            sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
-
-            # Ensure it starts with a letter or underscore
-            if not re.match(r"^[a-zA-Z_]", sanitized):
-                sanitized = "_" + sanitized
-
-            return sanitized
+            s = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+            if not re.match(r"^[a-zA-Z_]", s):
+                s = "_" + s
+            if s in SV_KEYWORDS:
+                s = s + "_id"
+            return s
 
         def sv_comment(text: str, style: str = "//") -> str:
             """Format SystemVerilog comment."""
@@ -195,13 +297,15 @@ class TemplateRenderer:
                 return "1" if value else "0"
             return str(value)
 
-        def log2(value: int) -> int:
-            """Calculate log2 (ceiling) of a value for SystemVerilog bit width calculations."""
-            import math
+        def clog2(v) -> int:
+            """Calculate ceiling of log2 for SystemVerilog bit width calculations."""
+            n = int(v)
+            return 0 if n <= 1 else int(math.ceil(math.log2(n)))
 
-            if value <= 0:
-                return 0
-            return int(math.ceil(math.log2(value)))
+        def flog2(v) -> int:
+            """Calculate floor of log2."""
+            n = max(1, int(v))
+            return int(math.log2(n))
 
         def python_list(value) -> str:
             """Format value as Python list literal."""
@@ -223,12 +327,6 @@ class TemplateRenderer:
             """Format value as Python representation."""
             return repr(value)
 
-        def calc_log2(value) -> int:
-            """Calculate log base 2 of a value."""
-            import math
-
-            return int(math.log2(max(1, int(value))))
-
         def dataclass_to_dict(value):
             """Convert dataclass objects to dictionaries for template access."""
             if hasattr(value, "__dataclass_fields__"):
@@ -247,7 +345,9 @@ class TemplateRenderer:
         self.env.filters["python_repr"] = python_repr
 
         # Math filters
-        self.env.filters["log2"] = calc_log2
+        self.env.filters["clog2"] = clog2
+        self.env.filters["log2"] = clog2  # Default to ceiling for compatibility
+        self.env.filters["flog2"] = flog2
 
         # Utility filters
         self.env.filters["dataclass_to_dict"] = dataclass_to_dict
@@ -263,18 +363,39 @@ class TemplateRenderer:
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
-        # Add global functions to template environment
-        self.env.globals["generate_tcl_header_comment"] = generate_tcl_header_comment
+        self.env.globals.update(
+            {
+                "generate_tcl_header_comment": generate_tcl_header_comment,
+                # Python builtins
+                "len": len,
+                "range": range,
+                "min": min,
+                "max": max,
+                "sorted": sorted,
+                "zip": zip,
+                "sum": sum,
+                "int": int,
+                "hex": hex,
+                "hasattr": hasattr,
+                "getattr": getattr,
+                "isinstance": isinstance,
+                # Version info
+                "__version__": __version__,
+            }
+        )
 
-        # Add Python built-in functions that are commonly used in templates
-        self.env.globals["hasattr"] = hasattr
-        self.env.globals["getattr"] = getattr
-        self.env.globals["isinstance"] = isinstance
-        self.env.globals["len"] = len
-        self.env.globals["range"] = range
-        self.env.globals["min"] = min
-        self.env.globals["max"] = max
-        self.env.globals["hex"] = hex
+    def _preflight_undeclared(
+        self, template_name: str, context: Dict[str, Any]
+    ) -> None:
+        """Check for undeclared variables before rendering."""
+        src, _, _ = self.env.loader.get_source(self.env, template_name)
+        ast = self.env.parse(src)
+        declared = set(context.keys()) | set(self.env.globals.keys())
+        missing = meta.find_undeclared_variables(ast) - declared
+        if missing:
+            raise TemplateRenderError(
+                f"Template '{template_name}' requires undefined vars: {sorted(missing)}"
+            )
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """
@@ -290,21 +411,25 @@ class TemplateRenderer:
         Raises:
             TemplateRenderError: If template rendering fails
         """
-        # Map old template paths to new structure
         template_name = update_template_path(template_name)
         try:
-            # Validate and sanitize context before rendering
-            validated_context = self._validate_template_context(context, template_name)
+            validated = self._validate_template_context(context, template_name)
+            self._preflight_undeclared(template_name, validated)
+
+            # Optional external validator
+            try:
+                from src.templating.template_context_validator import (
+                    validate_template_context,
+                )
+
+                validated = validate_template_context(
+                    template_name, validated, strict=False
+                )
+            except ImportError:
+                pass
 
             template = self.env.get_template(template_name)
-            rendered = template.render(**validated_context)
-            log_debug_safe(
-                logger,
-                "Successfully rendered template: {template_name}",
-                prefix="TEMPLATE",
-                template_name=template_name,
-            )
-            return rendered
+            return template.render(**validated)
 
         except TemplateError as e:
             error_msg = safe_format(
@@ -338,12 +463,10 @@ class TemplateRenderer:
             TemplateRenderError: If template rendering fails
         """
         try:
+            # Reuse the same validation path for consistency
+            validated = self._validate_template_context(context, "<inline>")
             template = self.env.from_string(template_string)
-            rendered = template.render(**context)
-            log_debug_safe(
-                logger, "Successfully rendered string template", prefix="TEMPLATE"
-            )
-            return rendered
+            return template.render(**validated)
 
         except TemplateError as e:
             error_msg = safe_format(
@@ -369,10 +492,9 @@ class TemplateRenderer:
             True if template exists, False otherwise
         """
         try:
-            # Use the Jinja2 loader to check existence (applies mapping)
-            self.env.get_template(template_name)
+            self.env.get_template(update_template_path(template_name))
             return True
-        except TemplateError:
+        except TemplateNotFound:
             return False
 
     def list_templates(self, pattern: str = "*.j2") -> list[str]:
@@ -403,7 +525,45 @@ class TemplateRenderer:
         Returns:
             Full path to the template file
         """
-        return self.template_dir / template_name
+        name = update_template_path(template_name)
+        src, filename, _ = self.env.loader.get_source(self.env, name)
+        return Path(filename)
+
+    def render_to_file(
+        self, template_name: str, context: Dict[str, Any], out_path: Union[str, Path]
+    ) -> Path:
+        """
+        Render template to file atomically.
+
+        Args:
+            template_name: Name of the template file
+            context: Template context variables
+            out_path: Output file path
+
+        Returns:
+            Path to the written file
+        """
+        content = self.render_template(template_name, context)
+        out_path = Path(out_path)
+        tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+        tmp.write_text(content)
+        tmp.replace(out_path)
+        return out_path
+
+    def render_many(self, pairs: List[Tuple[str, Dict[str, Any]]]) -> Dict[str, str]:
+        """
+        Render multiple templates efficiently.
+
+        Args:
+            pairs: List of (template_name, context) tuples
+
+        Returns:
+            Dictionary mapping template names to rendered content
+        """
+        results = {}
+        for template_name, context in pairs:
+            results[template_name] = self.render_template(template_name, context)
+        return results
 
     def _validate_template_context(
         self,

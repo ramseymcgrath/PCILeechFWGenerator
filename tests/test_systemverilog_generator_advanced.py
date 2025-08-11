@@ -65,6 +65,7 @@ class TestMSIXAdvancedFunctionality:
                     ]
                 }
             },
+            "device_signature": "0xCAFEBABE",
         }
 
     def test_generate_msix_pba_init_various_vector_counts(self, generator):
@@ -231,6 +232,7 @@ class TestMSIXAdvancedFunctionality:
                 Mock(index=0, size=4096, is_memory=True),
                 Mock(index=1, size=8192, is_memory=True),
             ],
+            "device_signature": "0xCAFEBABE",
         }
 
         result = generator._read_actual_msix_table(context)
@@ -253,6 +255,7 @@ class TestVFIOErrorHandlingAdvanced:
                 "enable_advanced_features": True,
             },
             "vfio_device_path": "/dev/vfio/42",
+            "device_signature": "0xCAFEBABE",
         }
 
         # Mock the renderer to raise various VFIO-related template errors
@@ -310,6 +313,7 @@ class TestComplexTemplateScenarios:
                 "is_supported": True,
                 "num_vectors": 4,
             },
+            "device_signature": "0xCAFEBABE",
         }
 
         behavior_profile = Mock()
@@ -365,6 +369,7 @@ class TestComplexTemplateScenarios:
                 "num_vectors": 32,
                 "large_data": list(range(10000)),
             },
+            "device_signature": "0xCAFEBABE",
         }
 
         with patch.object(generator.renderer, "render_template") as mock_render:
@@ -436,6 +441,7 @@ class TestAdvancedSystemVerilogFeatures:
         """Test generation of advanced PCILeech modules."""
         template_context = {
             "device_config": {"enable_advanced_features": True},
+            "device_signature": "0xCAFEBABE",
         }
 
         behavior_profile = Mock()
@@ -528,6 +534,7 @@ class TestErrorRecoveryAndRobustness:
         template_context = {
             "device_config": {"vendor_id": "1234", "device_id": "5678"},
             "msix_config": {"is_supported": True, "num_vectors": 4},
+            "device_signature": "0xCAFEBABE",
         }
 
         # Mock selective template failures
