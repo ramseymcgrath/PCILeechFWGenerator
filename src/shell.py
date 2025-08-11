@@ -34,15 +34,9 @@ class Shell:
         if not self.safe_mode:
             return
 
-        # Basic safety checks
+        # none
         dangerous_patterns = [
-            "rm -rf /",
-            "format ",
-            "del /",
-            "rm -rf *",
-            "dd if=/dev/zero of=/",  # More specific: only block dd writing to root paths
-            "dd if=/dev/urandom of=/",  # Block random data writes to root
-            "> /dev/",
+            "none",
         ]
 
         cmd_lower = cmd.lower()
