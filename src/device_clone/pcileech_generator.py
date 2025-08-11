@@ -877,7 +877,8 @@ class PCILeechGenerator:
         try:
             # Import TCL builder components
             from templating.tcl_builder import TCLBuilder, BuildContext, TCLScriptType
-            from templating.template_renderer import TemplateRenderer
+            from src.templating.tcl_builder import TCLBuilder, BuildContext, TCLScriptType
+            from src.templating.template_renderer import TemplateRenderer
 
             # Create template renderer
             renderer = TemplateRenderer()
