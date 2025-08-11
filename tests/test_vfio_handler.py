@@ -926,7 +926,7 @@ class TestDiagnostics:
 
         # Should fall back to JSON
         assert "VFIO Diagnostics" in result
-        assert "PASSED" in result or "Passed" in result
+        assert "PASSED" in result.upper()
         mock_json.dumps.assert_called_once_with(diagnostic_result, indent=2)
 
     def test_render_pretty_with_colors(self):
