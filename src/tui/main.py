@@ -16,9 +16,23 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
-                             ProgressBar, RichLog, Select, Static, Switch,
-                             TabbedContent, TabPane, TextArea, Tree)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    RichLog,
+    Select,
+    Static,
+    Switch,
+    TabbedContent,
+    TabPane,
+    TextArea,
+    Tree,
+)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -288,11 +302,13 @@ class ProfileManagerDialog(ModalScreen[Optional[str]]):
         else:
             self.app.notify(
                 "Place profile file as 'imported_profile.json' to import",
+                severity="info",
+            )
         # Prompt user for file path using a modal dialog
         file_path = await self.app.push_screen(
             FilePathInputDialog(
                 title="Import Profile",
-                prompt="Enter the path to the profile file to import:"
+                prompt="Enter the path to the profile file to import:",
             )
         )
         if file_path:
@@ -311,9 +327,7 @@ class ProfileManagerDialog(ModalScreen[Optional[str]]):
                     f"File '{import_path}' does not exist", severity="error"
                 )
         else:
-            self.app.notify(
-                "Import cancelled", severity="info"
-            )
+            self.app.notify("Import cancelled", severity="info")
 
     async def _create_new_profile(self) -> None:
         """Create a new profile from current configuration"""
@@ -379,13 +393,6 @@ class BuildLogDialog(ModalScreen[bool]):
             log_widget = self.query_one("#current-build-log", RichLog)
             log_widget.clear()
 
-            # Get current build logs (mock implementation)
-            log_lines = [
-                "Build started at 2024-01-01 12:00:00",
-                "Detecting system configuration...",
-                "Donor device analysis in progress...",
-                "Vivado synthesis starting...",
-                "Build progress: 45%",
             # Get current build logs from build orchestrator
             log_lines = self.build_orchestrator.get_current_build_log()
 
@@ -606,6 +613,44 @@ class ConfirmationDialog(ModalScreen[bool]):
 
         elif button_id == "confirm-action":
             self.dismiss(True)
+
+
+class FilePathInputDialog(ModalScreen[str]):
+    """Modal dialog for file path input"""
+
+    def __init__(
+        self, title: str = "File Path", prompt: str = "Enter file path:"
+    ) -> None:
+        """Initialize the file path input dialog"""
+        super().__init__()
+        self.title = title
+        self.prompt = prompt
+
+    def compose(self) -> ComposeResult:
+        """Create the file path input dialog layout"""
+        with Container(id="filepath-dialog"):
+            yield Static(f"📁 {self.title}", id="dialog-title")
+
+            with Vertical(id="filepath-form"):
+                yield Label(self.prompt)
+                yield Input(placeholder="Enter file path...", id="path-input")
+
+                with Horizontal(id="dialog-buttons"):
+                    yield Button("OK", variant="primary", id="ok-button")
+                    yield Button("Cancel", variant="default", id="cancel-button")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses"""
+        if event.button.id == "ok-button":
+            path_input = self.query_one("#path-input", Input)
+            self.dismiss(path_input.value)
+        elif event.button.id == "cancel-button":
+            self.dismiss("")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle input submission (Enter key)"""
+        if event.input.id == "path-input":
+            self.dismiss(event.input.value)
 
 
 class ConfigurationDialog(ModalScreen[BuildConfiguration]):
@@ -1830,8 +1875,7 @@ Tips:
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import \
-                DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")

@@ -11,11 +11,17 @@ from typing import Any, Dict, List
 import pytest
 
 from src.pci_capability.msix_bar_validator import (
-    _validate_bar_configuration_for_msix, _validate_basic_bar_configuration,
-    _validate_driver_compatibility, _validate_msix_capability_structure,
-    _validate_msix_memory_layout, _validate_performance_considerations,
-    _validate_reserved_region_conflicts, auto_fix_msix_configuration,
-    print_validation_report, validate_msix_bar_configuration)
+    _validate_bar_configuration_for_msix,
+    _validate_basic_bar_configuration,
+    _validate_driver_compatibility,
+    _validate_msix_capability_structure,
+    _validate_msix_memory_layout,
+    _validate_performance_considerations,
+    _validate_reserved_region_conflicts,
+    auto_fix_msix_configuration,
+    print_validation_report,
+    validate_msix_bar_configuration,
+)
 
 
 class TestMSIXBARValidatorBasic:
@@ -176,8 +182,8 @@ class TestBARConfigurationValidation:
 
         _validate_bar_configuration_for_msix(bars, msix_cap, errors, warnings)
 
-        assert any("table BAR 1 is not configured" in error for error in errors)
-        assert any("PBA BAR 2 is not configured" in error for error in errors)
+        assert any("MSI-X table BAR 1 is not configured" in error for error in errors)
+        assert any("MSI-X PBA BAR 2 is not configured" in error for error in errors)
 
     def test_wrong_bar_type(self):
         """Test validation of wrong BAR types."""
@@ -574,8 +580,8 @@ class TestAutoFixFunctionality:
         )
 
         msix_cap = fixed_caps[0]
-        assert msix_cap["table_offset"] == 0x2000  # Aligned to 4KB
-        assert msix_cap["pba_offset"] == 0x3000  # Aligned to 4KB
+        assert msix_cap["table_offset"] == 0x2000  # Aligned to 4KB (0x1000 -> 0x2000)
+        assert msix_cap["pba_offset"] == 0x3000  # Aligned to 4KB (0x2003 -> 0x3000)
 
         assert any("Aligned MSI-X table offset" in msg for msg in fix_messages)
         assert any("Aligned MSI-X PBA offset" in msg for msg in fix_messages)

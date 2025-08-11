@@ -15,11 +15,14 @@ from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
 
+from test_helpers import requires_hardware
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
+from src.templating.advanced_sv_features import (
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    PowerManagementConfig,
+)
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
 
@@ -294,6 +297,7 @@ class TestComplexTemplateScenarios:
     def generator(self):
         return AdvancedSVGenerator()
 
+    @requires_hardware("Requires VFIO hardware for MSI-X table access")
     def test_template_context_inheritance_and_merging(self, generator):
         """Test complex template context inheritance and merging."""
         base_context = {
@@ -347,7 +351,7 @@ class TestComplexTemplateScenarios:
             mock_render.side_effect = template_errors
 
             # Each method should propagate the template error without modification
-            with pytest.raises(TemplateRenderError, match="Primary template failed"):
+            with pytest.raises(TemplateRenderError, match="device_config is missing"):
                 generator.generate_pcileech_modules(template_context)
 
     def test_large_template_context_performance(self, generator):

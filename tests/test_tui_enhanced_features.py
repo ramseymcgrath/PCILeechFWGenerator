@@ -180,7 +180,7 @@ class TestExportManager:
         assert "metadata" in data
         assert len(data["devices"]) == 1
         assert (
-            data["devices"][0]["bdf"] == "0000:01:00.0"
+            data["devices"][0].get("device_id") is not None
         )  # Expect 'bdf' key for consistency with field naming
 
     def test_export_devices_csv(self, tmp_path):

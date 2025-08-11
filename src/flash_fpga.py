@@ -10,6 +10,7 @@ Needs:
 """
 import argparse
 import pathlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -17,7 +18,10 @@ import sys
 
 def run(cmd):
     print(f"[flash] {cmd}")
-    subprocess.run(cmd, shell=True, check=True)
+    # Use shell=False and split command to prevent injection
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+    subprocess.run(cmd, shell=False, check=True)
 
 
 def main():

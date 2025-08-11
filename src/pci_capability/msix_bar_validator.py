@@ -126,9 +126,11 @@ def _validate_bar_configuration_for_msix(
     # Validate BAR existence
     if table_bar_config is None:
         errors.append(f"MSI-X table BAR {table_bar} is not configured")
-        return
     if pba_bar_config is None:
         errors.append(f"MSI-X PBA BAR {pba_bar} is not configured")
+
+    # If either BAR is missing, we can't continue validation
+    if table_bar_config is None or pba_bar_config is None:
         return
 
     # Validate BAR types

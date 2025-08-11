@@ -18,8 +18,12 @@ from .vfio import get_current_driver, restore_driver
 
 # Import safe logging functions
 try:
-    from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                                log_warning_safe)
+    from ..string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback implementations
     def log_info_safe(logger, template, **kwargs):
@@ -146,9 +150,18 @@ def image_exists(name: str) -> bool:
 
 
 def build_image(name: str, tag: str) -> None:
+    # Validate input parameters to prevent injection
+    import re
+
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", name):
+        raise ValueError(f"Invalid container name: {name}")
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", tag):
+        raise ValueError(f"Invalid container tag: {tag}")
+
     log_info_safe(logger, "Building container image {name}:{tag}", name=name, tag=tag)
-    cmd = f"podman build -t {name}:{tag} -f Containerfile ."
-    subprocess.run(cmd, shell=True, check=True)
+    # Use shell=False and pass arguments as list to prevent injection
+    cmd = ["podman", "build", "-t", f"{name}:{tag}", "-f", "Containerfile", "."]
+    subprocess.run(cmd, shell=False, check=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

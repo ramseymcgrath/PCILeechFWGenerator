@@ -25,11 +25,19 @@ from typing import Any, Dict, List, Optional, Union
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe, log_warning_safe, safe_format)
+from src.string_utils import (
+    generate_sv_header_comment,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
 
-from .advanced_sv_features import (AdvancedSVFeatureGenerator,
-                                   ErrorHandlingConfig, PerformanceConfig)
+from .advanced_sv_features import (
+    AdvancedSVFeatureGenerator,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+)
 from .advanced_sv_power import PowerManagementConfig
 from .template_renderer import TemplateRenderer, TemplateRenderError
 
@@ -1338,6 +1346,12 @@ class AdvancedSVGenerator:
             "timing_config": template_context.get(
                 "timing_config", {}
             ),  # Add timing_config
+            "device_signature": template_context.get(
+                "device_signature"
+            ),  # Add device_signature
+            "generation_metadata": template_context.get(
+                "generation_metadata", {}
+            ),  # Add generation_metadata
             # Add new template variables
             "header": header,
             "device": device_info,
