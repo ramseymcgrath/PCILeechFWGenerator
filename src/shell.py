@@ -47,7 +47,7 @@ class Shell:
         cmd_lower = cmd.lower()
         for pattern in dangerous_patterns:
             if pattern in cmd_lower:
-                raise RuntimeError(f"Command blocked for safety: contains '{pattern}'")
+                raise RuntimeError("Command blocked for safety reasons")
 
         # Check for suspicious redirections to sensitive paths
         if any(path in cmd for path in ["/etc/", "/boot/", "/sys/", "/proc/"]):
