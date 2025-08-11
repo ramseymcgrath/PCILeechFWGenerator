@@ -653,11 +653,12 @@ class AdvancedSVGenerator:
         registers = self._extract_pcileech_registers(behavior_profile)
 
         # Get variance model if available
+        # Extract variance model if available
+        # Handle both dict and object attribute access
         variance_model = None
-        if (
-            hasattr(behavior_profile, "variance_metadata")
-            and behavior_profile.variance_metadata
-        ):
+        if isinstance(behavior_profile, dict):
+            variance_model = behavior_profile.get("variance_metadata")
+        elif hasattr(behavior_profile, "variance_metadata"):
             variance_model = behavior_profile.variance_metadata
 
         # Generate advanced controller with PCILeech integration
@@ -697,14 +698,23 @@ class AdvancedSVGenerator:
         if not behavior_profile:
             raise ValueError("Behavior profile is required for register extraction")
 
-        if not hasattr(behavior_profile, "register_accesses"):
-            raise TemplateRenderError(
-                "Behavior profile missing 'register_accesses' attribute. "
-                "Cannot generate SystemVerilog without register access information. "
-                "Ensure the behavior profile was properly generated from actual device data."
-            )
-
-        register_accesses = behavior_profile.register_accesses
+        # Handle both dict and object attribute access
+        if isinstance(behavior_profile, dict):
+            if "register_accesses" not in behavior_profile:
+                raise TemplateRenderError(
+                    "Behavior profile missing 'register_accesses' attribute. "
+                    "Cannot generate SystemVerilog without register access information. "
+                    "Ensure the behavior profile was properly generated from actual device data."
+                )
+            register_accesses = behavior_profile["register_accesses"]
+        else:
+            if not hasattr(behavior_profile, "register_accesses"):
+                raise TemplateRenderError(
+                    "Behavior profile missing 'register_accesses' attribute. "
+                    "Cannot generate SystemVerilog without register access information. "
+                    "Ensure the behavior profile was properly generated from actual device data."
+                )
+            register_accesses = behavior_profile.register_accesses
         if not register_accesses:
             raise TemplateRenderError(
                 "No register accesses found in behavior profile. "
@@ -718,20 +728,30 @@ class AdvancedSVGenerator:
 
         # Process register accesses with strict validation
         for i, access in enumerate(register_accesses):
-            # Validate access object structure
-            if not hasattr(access, "register"):
-                invalid_accesses.append(f"Access {i}: missing 'register' attribute")
-                continue
+            # Handle both dict and object attribute access for register
+            if isinstance(access, dict):
+                if "register" not in access:
+                    invalid_accesses.append(f"Access {i}: missing 'register' attribute")
+                    continue
+                reg_name = access["register"]
+            else:
+                if not hasattr(access, "register"):
+                    invalid_accesses.append(f"Access {i}: missing 'register' attribute")
+                    continue
+                reg_name = access.register
 
-            reg_name = access.register
             if not reg_name or reg_name == "UNKNOWN":
                 invalid_accesses.append(
                     f"Access {i}: invalid register name '{reg_name}'"
                 )
                 continue
 
-            # Validate offset
-            offset = getattr(access, "offset", None)
+            # Validate offset - handle both dict and object attribute access
+            if isinstance(access, dict):
+                offset = access.get("offset", None)
+            else:
+                offset = getattr(access, "offset", None)
+
             if offset is None:
                 invalid_accesses.append(
                     f"Access {i}: missing offset for register '{reg_name}'"
@@ -756,10 +776,16 @@ class AdvancedSVGenerator:
                     "access_type": "rw",
                 }
 
-            # Count access types
+            # Count access types - handle both dict and object attribute access
             register_map[reg_name]["access_count"] += 1
-            if hasattr(access, "operation"):
-                operation = access.operation
+
+            # Get operation - handle both dict and object attribute access
+            if isinstance(access, dict):
+                operation = access.get("operation")
+            else:
+                operation = getattr(access, "operation", None)
+
+            if operation:
                 if operation == "read":
                     register_map[reg_name]["read_count"] += 1
                 elif operation == "write":
@@ -1355,6 +1381,10 @@ class AdvancedSVGenerator:
             "generation_metadata": template_context.get(
                 "generation_metadata", {}
             ),  # Add generation_metadata
+            # Add power and error config objects for template compatibility
+            "power_config": self.power_config,
+            "error_config": self.error_config,
+            "perf_config": self.perf_config,
             # Add new template variables
             "header": header,
             "device": device_info,

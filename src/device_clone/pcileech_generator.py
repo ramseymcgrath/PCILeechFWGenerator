@@ -877,18 +877,18 @@ class PCILeechGenerator:
         try:
             # Import TCL builder components
             from templating.tcl_builder import TCLBuilder, BuildContext, TCLScriptType
-            from src.templating.tcl_builder import TCLBuilder, BuildContext, TCLScriptType
+            from src.templating.tcl_builder import (
+                TCLBuilder,
+                BuildContext,
+                TCLScriptType,
+            )
             from src.templating.template_renderer import TemplateRenderer
 
             # Create template renderer
             renderer = TemplateRenderer()
 
             # Build constraints using the TCL builder
-            tcl_builder = TCLBuilder(
-                template_renderer=renderer,
-                output_dir=Path("./output"),
-                logger=self.logger,
-            )
+            tcl_builder = TCLBuilder(output_dir=Path("./output"))
 
             # Generate timing constraints
             timing_context = {
