@@ -148,6 +148,7 @@ def monitor_memory(operation_name: str):
     """
 
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             with memory_monitor.monitor_operation(operation_name):
                 return func(*args, **kwargs)
