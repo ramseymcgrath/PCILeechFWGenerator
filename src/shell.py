@@ -40,7 +40,8 @@ class Shell:
             "format ",
             "del /",
             "rm -rf *",
-            "dd if=",
+            "dd if=/dev/zero of=/",  # More specific: only block dd writing to root paths
+            "dd if=/dev/urandom of=/",  # Block random data writes to root
             "> /dev/",
         ]
 

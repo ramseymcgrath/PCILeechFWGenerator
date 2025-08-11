@@ -153,6 +153,10 @@ sudo python3 pcileech.py check --device 0000:03:00.0 --interactive
 > [!IMPORTANT]
 > This tool is intended for educational research and legitimate PCIe development purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations. The authors assume no liability for misuse of this software.
 
+## Docs
+
+Docs are managed in the [site repo](github.com/ramseymcgrath/pcileechfwgenerator-site) and served by cloudflare.
+
 ## Acknowledgments
 
 - **PCILeech Community**: For feedback and contributions
