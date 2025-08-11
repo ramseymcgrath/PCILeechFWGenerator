@@ -95,7 +95,6 @@ class BuildContext:
         subsys_vendor_id = getattr(self, "subsys_vendor_id", None) or self.vendor_id
         subsys_device_id = getattr(self, "subsys_device_id", None) or self.device_id
 
-        # TCL에서는 hex 값을 0x 없이 사용해야 함
         return {
             # Nested device information
             "device": {
@@ -640,6 +639,32 @@ class TCLBuilder:
             TCLScriptType.MASTER_BUILD, template_context
         )
 
+    def _ensure_pcileech_context(
+        self, template_context: Dict[str, Any], context: BuildContext
+    ) -> None:
+        """
+        Ensure PCILeech-specific context is available in the template context.
+
+        Creates a default PCILeech context if one doesn't exist, populating it
+        with necessary paths and file lists from the build context.
+
+        Args:
+            template_context: The template context dictionary to update
+            context: Build context with PCILeech-specific parameters
+        """
+        pcileech_context = template_context.get("pcileech", {})
+        if not pcileech_context:
+            # Create default PCILeech context if missing
+            template_context["pcileech"] = {
+                "src_dir": context.pcileech_src_dir,
+                "ip_dir": context.pcileech_ip_dir,
+                "project_script": context.pcileech_project_script,
+                "build_script": context.pcileech_build_script,
+                "source_files": context.source_file_list or [],
+                "ip_files": context.ip_file_list or [],
+                "coefficient_files": context.coefficient_file_list or [],
+            }
+
     def build_pcileech_project_script(self, context: BuildContext) -> str:
         """
         Build PCILeech project generation script.
@@ -656,19 +681,8 @@ class TCLBuilder:
         """
         template_context = context.to_template_context()
 
-        # Ensure PCILeech-specific context is available with safe access
-        pcileech_context = template_context.get("pcileech", {})
-        if not pcileech_context:
-            # Create default PCILeech context if missing
-            template_context["pcileech"] = {
-                "src_dir": context.pcileech_src_dir,
-                "ip_dir": context.pcileech_ip_dir,
-                "project_script": context.pcileech_project_script,
-                "build_script": context.pcileech_build_script,
-                "source_files": context.source_file_list or [],
-                "ip_files": context.ip_file_list or [],
-                "coefficient_files": context.coefficient_file_list or [],
-            }
+        # Ensure PCILeech-specific context is available
+        self._ensure_pcileech_context(template_context, context)
 
         return self.script_builder.build_script(
             TCLScriptType.PCILEECH_PROJECT, template_context
@@ -689,19 +703,8 @@ class TCLBuilder:
         """
         template_context = context.to_template_context()
 
-        # Ensure PCILeech-specific context is available with safe access
-        pcileech_context = template_context.get("pcileech", {})
-        if not pcileech_context:
-            # Create default PCILeech context if missing
-            template_context["pcileech"] = {
-                "src_dir": context.pcileech_src_dir,
-                "ip_dir": context.pcileech_ip_dir,
-                "project_script": context.pcileech_project_script,
-                "build_script": context.pcileech_build_script,
-                "source_files": context.source_file_list or [],
-                "ip_files": context.ip_file_list or [],
-                "coefficient_files": context.coefficient_file_list or [],
-            }
+        # Ensure PCILeech-specific context is available
+        self._ensure_pcileech_context(template_context, context)
 
         return self.script_builder.build_script(
             TCLScriptType.PCILEECH_BUILD, template_context
