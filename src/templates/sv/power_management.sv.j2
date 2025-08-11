@@ -13,6 +13,18 @@
 
     power_state_t pm_state = PM_D0_ACTIVE;
     power_state_t pm_next_state;
+    
+    // Power management internal signals
+    logic [15:0] power_transition_timer;
+    logic power_state_changing;
+    logic power_down_request;
+    logic power_up_request;
+    logic [1:0] current_power_state;
+    logic power_ready;
+    
+    // Connect power requests to interface signals
+    assign power_down_request = (power_state_req == 2'b01) || (power_state_req == 2'b11);
+    assign power_up_request = (power_state_req == 2'b00);
 
     // Power state transition logic
     always_ff @(posedge clk or negedge reset_n) begin

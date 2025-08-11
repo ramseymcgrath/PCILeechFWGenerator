@@ -17,6 +17,29 @@
     logic uncorrectable_error_detected;
     logic fatal_error_detected;
     logic [3:0] retry_count = 4'h0;
+    
+    // Error handling internal signals
+    logic [15:0] error_recovery_timer;
+    logic error_recovery_active;
+    logic [7:0] correctable_error_count;
+    logic [7:0] uncorrectable_error_count;
+    logic [7:0] error_status;
+    
+    // Error condition signals
+    logic parity_error;
+    logic crc_error;
+    logic timeout_error;
+    logic protocol_error;
+    logic system_error;
+    logic internal_error;
+    
+    // Assign error conditions (can be overridden by actual error detection logic)
+    assign parity_error = 1'b0;
+    assign crc_error = 1'b0;
+    assign timeout_error = 1'b0;
+    assign protocol_error = 1'b0;
+    assign system_error = 1'b0;
+    assign internal_error = 1'b0;
 
     // Error handling logic
     always_ff @(posedge clk or negedge reset_n) begin
