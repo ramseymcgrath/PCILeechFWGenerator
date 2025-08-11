@@ -659,7 +659,6 @@ class AdvancedSVGenerator:
         registers = self._extract_pcileech_registers(behavior_profile)
 
         # Get variance model if available
-        # Extract variance model if available
         # Handle both dict and object attribute access
         variance_model = None
         if isinstance(behavior_profile, dict):
