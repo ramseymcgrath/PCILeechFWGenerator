@@ -263,6 +263,57 @@ class AdvancedSVGenerator:
             # Re-raise the exception to properly report the error
             raise
 
+    def _build_power_management_context(self) -> Dict[str, Any]:
+        """Build power management context for templates using actual PowerManagementConfig attributes."""
+        # PowerManagementConfig from advanced_sv_power.py has these attributes:
+        # clk_hz, transition_timeout_ns, enable_pme, enable_wake_events, transition_cycles
+
+        # Get transition_cycles object or create a dict with the expected structure
+        transition_cycles = self.power_config.transition_cycles
+        if hasattr(transition_cycles, "__dict__"):
+            # It's a TransitionCycles object, convert to dict
+            tc_dict = {
+                "d0_to_d1": transition_cycles.d0_to_d1,
+                "d1_to_d0": transition_cycles.d1_to_d0,
+                "d0_to_d3": transition_cycles.d0_to_d3,
+                "d3_to_d0": transition_cycles.d3_to_d0,
+            }
+        else:
+            # Already a dict or None, use as is
+            tc_dict = transition_cycles if transition_cycles else {}
+
+        return {
+            "clk_hz": self.power_config.clk_hz,
+            "transition_timeout_ns": self.power_config.transition_timeout_ns,
+            "enable_pme": self.power_config.enable_pme,
+            "enable_wake_events": self.power_config.enable_wake_events,
+            "transition_cycles": tc_dict,
+        }
+
+    def _build_performance_context(self) -> Dict[str, Any]:
+        """Build performance monitoring context for templates using actual PerformanceConfig attributes."""
+        # PerformanceConfig from advanced_sv_features.py has these attributes
+        return {
+            "counter_width": self.perf_config.counter_width,
+            "enable_bandwidth": self.perf_config.enable_bandwidth_monitoring,
+            "enable_latency": self.perf_config.enable_latency_tracking,
+            "enable_error_rate": self.perf_config.enable_error_rate_tracking,
+            "sample_period": self.perf_config.sampling_period,
+        }
+
+    def _build_error_handling_context(self) -> Dict[str, Any]:
+        """Build error handling context for templates using actual ErrorHandlingConfig attributes."""
+        # ErrorHandlingConfig from advanced_sv_features.py has these attributes
+        return {
+            "enable_error_detection": self.error_config.enable_error_detection,
+            "enable_error_injection": self.error_config.enable_error_injection,
+            "enable_logging": self.error_config.enable_error_logging,
+            "enable_auto_retry": self.error_config.enable_auto_retry,
+            "max_retry_count": self.error_config.max_retry_count,
+            "recovery_cycles": self.error_config.error_recovery_cycles,
+            "error_log_depth": self.error_config.error_log_depth,
+        }
+
     def generate_systemverilog_modules(
         self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None
     ) -> Dict[str, str]:
@@ -358,18 +409,26 @@ class AdvancedSVGenerator:
         # Validate required values before template generation
         self._validate_template_context()
 
-        # Prepare template context - simplified for single use-case
+        # Prepare template context - ensure both power_config and power_management are available
+        # since templates use both names
+        power_management_ctx = self._build_power_management_context()
+
         context = {
             "header": header,
             "device_config": self.device_config,
             "device_type": self.device_config.device_type.value,
             "device_class": self.device_config.device_class.value,
             "power_config": self.power_config,
+            "power_management": power_management_ctx,  # Some templates use this
             "error_config": self.error_config,
+            "error_handling": self._build_error_handling_context(),
             "perf_config": self.perf_config,
+            "performance_counters": self._build_performance_context(),
             "registers": regs,
             "variance_model": variance_model,
             "device_specific_ports": device_specific_ports,
+            # Add transition_cycles at root level for templates that expect it there
+            "transition_cycles": power_management_ctx.get("transition_cycles", {}),
         }
 
         try:
