@@ -29,7 +29,8 @@ sys.path.insert(0, str(project_root))
 try:
     from src.error_utils import log_error_with_root_cause
     from src.log_config import get_logger, setup_logging
-    from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+    from src.string_utils import (log_error_safe, log_info_safe,
+                                  log_warning_safe)
 except ImportError:
     # Fallback implementations for when running in container or isolated environment
     def setup_logging(level=logging.INFO):

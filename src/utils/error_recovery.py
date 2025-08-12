@@ -6,12 +6,12 @@ This module provides intelligent error recovery and retry logic for common
 failure scenarios in firmware generation.
 """
 
+import functools
 import logging
 import time
-from enum import Enum
-from typing import Callable, Optional, Dict, Any, Union
 from dataclasses import dataclass
-import functools
+from enum import Enum
+from typing import Any, Callable, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 

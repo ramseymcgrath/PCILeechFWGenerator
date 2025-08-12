@@ -13,7 +13,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.templating.tcl_builder import TCLBuilder, BuildContext
+from src.templating.tcl_builder import BuildContext, TCLBuilder
 
 # Note: SystemVerilog generator tests are optional - the class name may vary
 

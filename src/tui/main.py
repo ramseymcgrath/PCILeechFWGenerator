@@ -16,23 +16,9 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    ProgressBar,
-    RichLog,
-    Select,
-    Static,
-    Switch,
-    TabbedContent,
-    TabPane,
-    TextArea,
-    Tree,
-)
+from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
+                             ProgressBar, RichLog, Select, Static, Switch,
+                             TabbedContent, TabPane, TextArea, Tree)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -1875,7 +1861,8 @@ Tips:
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")

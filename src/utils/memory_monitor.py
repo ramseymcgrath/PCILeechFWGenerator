@@ -7,11 +7,12 @@ optimize memory usage during large firmware generation operations.
 """
 
 import logging
-import psutil
 import tracemalloc
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import psutil
 
 logger = logging.getLogger(__name__)
 

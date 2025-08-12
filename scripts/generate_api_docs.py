@@ -6,14 +6,14 @@ This script generates comprehensive API documentation using Sphinx autodoc
 and converts it to Markdown format for integration with MkDocs.
 """
 
-import os
-import sys
-import shutil
-import subprocess
-from pathlib import Path
-from typing import List, Optional
 import argparse
 import logging
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import List, Optional
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

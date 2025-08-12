@@ -12,30 +12,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from __version__ import __version__
-from string_utils import (
-    generate_tcl_header_comment,
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-)
+from string_utils import (generate_tcl_header_comment, log_debug_safe,
+                          log_error_safe, log_info_safe, log_warning_safe,
+                          safe_format)
 from templates.template_mapping import update_template_path
 
 try:
-    from jinja2 import (
-        BaseLoader,
-        Environment,
-        FileSystemLoader,
-        StrictUndefined,
-        Template,
-        TemplateError,
-        TemplateNotFound,
-        TemplateRuntimeError,
-        Undefined,
-        meta,
-        nodes,
-    )
+    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
+                        StrictUndefined, Template, TemplateError,
+                        TemplateNotFound, TemplateRuntimeError, Undefined,
+                        meta, nodes)
     from jinja2.bccache import FileSystemBytecodeCache
     from jinja2.ext import Extension
     from jinja2.sandbox import SandboxedEnvironment
@@ -419,9 +405,8 @@ class TemplateRenderer:
 
             # Optional external validator
             try:
-                from src.templating.template_context_validator import (
-                    validate_template_context,
-                )
+                from src.templating.template_context_validator import \
+                    validate_template_context
 
                 validated = validate_template_context(
                     template_name, validated, strict=False

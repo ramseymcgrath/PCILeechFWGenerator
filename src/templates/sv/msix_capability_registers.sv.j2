@@ -2,9 +2,9 @@
 {{ header | safe }}
 
 module msix_capability_registers #(
-    parameter TABLE_SIZE_MINUS_ONE = {{ table_size_minus_one }},
-    parameter TABLE_OFFSET_BIR = {{ table_offset_bir }},
-    parameter PBA_OFFSET_BIR = {{ pba_offset_bir }}
+    parameter TABLE_SIZE_MINUS_ONE = {{ (msix_config.num_vectors - 1) | default(0) }},
+    parameter TABLE_OFFSET_BIR = {{ ((msix_config.table_offset | default(0x1000)) + (msix_config.table_bir | default(0))) | default(0x1000) }},
+    parameter PBA_OFFSET_BIR = {{ ((msix_config.pba_offset | default(0x2000)) + (msix_config.pba_bir | default(0))) | default(0x2000) }}
 )(
     input wire clk,
     input wire reset_n,

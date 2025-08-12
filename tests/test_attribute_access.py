@@ -1,15 +1,11 @@
 """Tests for the attribute access utility module."""
 
 import pytest
-from src.utils.attribute_access import (
-    safe_get_attr,
-    has_attr,
-    get_attr_or_raise,
-    safe_get_nested,
-    get_multiple_attrs,
-    require_attrs,
-    copy_attrs,
-)
+
+from src.utils.attribute_access import (copy_attrs, get_attr_or_raise,
+                                        get_multiple_attrs, has_attr,
+                                        require_attrs, safe_get_attr,
+                                        safe_get_nested)
 
 
 class TestObject:

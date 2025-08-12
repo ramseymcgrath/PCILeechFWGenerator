@@ -1,9 +1,11 @@
 """Test SystemVerilog generator validation for critical fields."""
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from src.templating.systemverilog_generator import AdvancedSVGenerator
+
 from src.exceptions import TemplateRenderError
+from src.templating.systemverilog_generator import AdvancedSVGenerator
 
 
 class TestSystemVerilogGeneratorValidation:

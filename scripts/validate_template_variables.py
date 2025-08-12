@@ -7,21 +7,19 @@ variables and suggests fixes to ensure all variables are properly defined.
 """
 
 import argparse
+import json
+import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Any
-import re
-import json
+from typing import Any, Dict, List, Set, Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.templating.template_context_validator import (
-    TemplateContextValidator,
-    analyze_template_variables,
-    get_template_requirements,
-)
+    TemplateContextValidator, analyze_template_variables,
+    get_template_requirements)
 
 
 class TemplateVariableAnalyzer:

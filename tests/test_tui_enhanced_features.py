@@ -14,27 +14,17 @@ import pytest
 try:
     from src.tui.models.config import BuildConfiguration
     from src.tui.models.device import PCIDevice
-    from src.tui.utils import (
-        ConfigurationTemplates,
-        DeviceFilter,
-        ExportManager,
-        KeyboardShortcuts,
-        SystemInfo,
-        ValidationHelper,
-    )
+    from src.tui.utils import (ConfigurationTemplates, DeviceFilter,
+                               ExportManager, KeyboardShortcuts, SystemInfo,
+                               ValidationHelper)
 except ImportError:
     # Fallback import paths for different project configurations
     try:
         from tui.models.config import BuildConfiguration
         from tui.models.device import PCIDevice
-        from tui.utils import (
-            ConfigurationTemplates,
-            DeviceFilter,
-            ExportManager,
-            KeyboardShortcuts,
-            SystemInfo,
-            ValidationHelper,
-        )
+        from tui.utils import (ConfigurationTemplates, DeviceFilter,
+                               ExportManager, KeyboardShortcuts, SystemInfo,
+                               ValidationHelper)
     except ImportError:
         pytest.skip("TUI modules not available", allow_module_level=True)
 

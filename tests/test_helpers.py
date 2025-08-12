@@ -4,8 +4,9 @@ Test helper functions for PCILeech FW Generator tests.
 """
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 def has_vfio_device():

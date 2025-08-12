@@ -6,13 +6,13 @@ This module ensures all template variables are properly defined with appropriate
 preventing undefined variable errors in Jinja2 templates.
 """
 
-from typing import Dict, Any, Optional, List, Set
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
+from typing import Any, Dict, List, Optional, Set
 
-from src.string_utils import log_debug_safe, log_warning_safe, log_info_safe
+from src.string_utils import log_debug_safe, log_info_safe, log_warning_safe
 
 logger = logging.getLogger(__name__)
 

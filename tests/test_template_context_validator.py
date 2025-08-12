@@ -5,19 +5,17 @@ This module tests the functionality that ensures all template variables
 are properly defined with appropriate defaults.
 """
 
-import pytest
-from pathlib import Path
-from typing import Dict, Any
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict
+
+import pytest
 
 from src.templating.template_context_validator import (
-    TemplateContextValidator,
-    TemplateVariableRequirements,
-    validate_template_context,
-    get_template_requirements,
-    analyze_template_variables,
-)
+    TemplateContextValidator, TemplateVariableRequirements,
+    analyze_template_variables, get_template_requirements,
+    validate_template_context)
 
 
 class TestTemplateContextValidator:

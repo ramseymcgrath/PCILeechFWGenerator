@@ -2,14 +2,14 @@
 {{ header | safe }}
 
 module msix_implementation #(
-    parameter NUM_MSIX = {{ table_size }},
-    parameter MSIX_TABLE_BIR = {{ table_bir }},
-    parameter MSIX_TABLE_OFFSET = 32'h{{ "%X" | format(table_offset) }},
-    parameter MSIX_PBA_BIR = {{ pba_bir }},
-    parameter MSIX_PBA_OFFSET = 32'h{{ "%X" | format(pba_offset) }},
-    parameter MSIX_ENABLED = {{ enabled_val }},
-    parameter MSIX_FUNCTION_MASK = {{ function_mask_val }},
-    parameter PBA_SIZE = {{ pba_size }}  // Number of 32-bit words needed for PBA
+    parameter NUM_MSIX = {{ msix_config.num_vectors | default(16) }},
+    parameter MSIX_TABLE_BIR = {{ msix_config.table_bir | default(0) }},
+    parameter MSIX_TABLE_OFFSET = 32'h{{ "%X" | format(msix_config.table_offset | default(0x1000)) }},
+    parameter MSIX_PBA_BIR = {{ msix_config.pba_bir | default(0) }},
+    parameter MSIX_PBA_OFFSET = 32'h{{ "%X" | format(msix_config.pba_offset | default(0x2000)) }},
+    parameter MSIX_ENABLED = {{ msix_config.enabled | default(1) }},
+    parameter MSIX_FUNCTION_MASK = {{ msix_config.function_mask | default(0) }},
+    parameter PBA_SIZE = {{ ((msix_config.num_vectors | default(16) + 31) // 32) }}  // Number of 32-bit words needed for PBA
 )(
     input wire clk,
     input wire rst_n,
@@ -44,15 +44,15 @@ module msix_implementation #(
     output bit        bar_ack          // BAR access acknowledge
 );
 
-{% if alignment_warning %}
-{{ alignment_warning }}
-{% endif %}
+// Check alignment requirements for MSI-X table and PBA
+// Table must be naturally aligned on a 16-byte boundary
+// PBA must be naturally aligned on a 8-byte boundary
 
 // MSI-X Table storage
 (* ram_style="block" *) reg [31:0] msix_table[0:NUM_MSIX*4-1];  // 4 DWORDs per entry
 
 // MSI-X PBA storage
-reg [31:0] msix_pba[0:{{ pba_size_minus_one }}];
+reg [31:0] msix_pba[0:{{ ((msix_config.num_vectors | default(16) + 31) // 32) - 1 }}];
 
 // MSI-X Table access logic
 function is_msix_table_access(input [31:0] addr, input [2:0] bar_index);
@@ -68,7 +68,7 @@ function is_msix_pba_access(input [31:0] addr, input [2:0] bar_index);
     begin
         is_msix_pba_access = (bar_index == MSIX_PBA_BIR) &&
                (addr >= MSIX_PBA_OFFSET) &&
-               (addr < (MSIX_PBA_OFFSET + {{ pba_size }} * 4));
+               (addr < (MSIX_PBA_OFFSET + {{ ((msix_config.num_vectors | default(16) + 31) // 32) }} * 4));
     end
 endfunction
 
@@ -177,7 +177,7 @@ always @(posedge clk or negedge rst_n) begin
         end
         
         // Initialize MSI-X PBA
-        for (integer i = 0; i <= {{ pba_size_minus_one }}; i = i + 1) begin
+        for (integer i = 0; i <= {{ ((msix_config.num_vectors | default(16) + 31) // 32) - 1 }}; i = i + 1) begin
             msix_pba[i] <= 32'h0;
         end
     end else begin

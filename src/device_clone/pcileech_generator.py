@@ -25,26 +25,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import existing infrastructure components
-from src.device_clone.behavior_profiler import BehaviorProfile, BehaviorProfiler
+from src.device_clone.behavior_profiler import (BehaviorProfile,
+                                                BehaviorProfiler)
 from src.device_clone.config_space_manager import ConfigSpaceManager
-from src.device_clone.msix_capability import (
-    parse_msix_capability,
-    validate_msix_configuration,
-)
+from src.device_clone.msix_capability import (parse_msix_capability,
+                                              validate_msix_configuration)
 from src.device_clone.pcileech_context import PCILeechContextBuilder
 from src.device_clone.writemask_generator import WritemaskGenerator
 from src.error_utils import extract_root_cause
 from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
-
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.utils.attribute_access import safe_get_attr, has_attr
-from src.templating import (
-    AdvancedSVGenerator,
-    BuildContext,
-    TemplateRenderer,
-    TemplateRenderError,
-)
+from src.templating import (AdvancedSVGenerator, BuildContext,
+                            TemplateRenderer, TemplateRenderError)
+from src.utils.attribute_access import has_attr, safe_get_attr
 
 logger = logging.getLogger(__name__)
 
@@ -877,11 +871,8 @@ class PCILeechGenerator:
         """Generate constraint files."""
         try:
             # Import TCL builder components
-            from src.templating.tcl_builder import (
-                TCLBuilder,
-                BuildContext,
-                TCLScriptType,
-            )
+            from src.templating.tcl_builder import (BuildContext, TCLBuilder,
+                                                    TCLScriptType)
             from src.templating.template_renderer import TemplateRenderer
 
             # Create template renderer
@@ -1158,9 +1149,8 @@ puts "Synthesis complete!"
                         )
                     else:
                         # Generate new content as last resort
-                        from src.templating.systemverilog_generator import (
-                            AdvancedSVGenerator,
-                        )
+                        from src.templating.systemverilog_generator import \
+                            AdvancedSVGenerator
 
                         sv_gen = AdvancedSVGenerator(
                             template_dir=self.config.template_dir

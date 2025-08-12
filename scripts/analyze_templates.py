@@ -7,12 +7,12 @@ Comprehensive template analysis script to check for:
 4. Dead/unused templates
 """
 
+import json
 import os
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
-import json
-from collections import defaultdict
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent
