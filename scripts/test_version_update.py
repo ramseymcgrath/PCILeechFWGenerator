@@ -106,8 +106,8 @@ __commit_hash__ = "abc123"
         # Read and verify the updated content
         content = temp_file.read_text()
 
-        assert '__version__ = "0.9.13"' in content
-        assert "__version_info__ = (0, 9, 12)" in content
+        assert '__version__ = "0.10.4"' in content
+        assert "__version_info__ = (0, 10, 4)" in content
         assert '__commit_hash__ = "def456"' in content
         assert '__build_date__ = "2025-' in content  # Should be updated to current date
 

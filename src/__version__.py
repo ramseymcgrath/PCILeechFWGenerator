@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Version information for PCILeech Firmware Generator."""
 
-__version__ = "0.9.13"
-__version_info__ = (0, 9, 12)
+__version__ = "0.10.4"
+__version_info__ = (0, 10, 4)
 
 # Release information
 __title__ = "PCILeech Firmware Generator"
