@@ -13,8 +13,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from ..log_config import get_logger
-from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                            log_warning_safe)
+from ..string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from .repo_manager import RepoManager
 
 logger = get_logger(__name__)
@@ -43,7 +47,11 @@ class BoardDiscovery:
         "35t484_x1": {"fpga_part": "xc7a35tfgg484-2", "max_lanes": 1},
         "35t325_x4": {"fpga_part": "xc7a35tcsg324-2", "max_lanes": 4},
         "35t325_x1": {"fpga_part": "xc7a35tcsg324-2", "max_lanes": 1},
-        "100t484-1": {"fpga_part": "xczu3eg-sbva484-1-e", "max_lanes": 1},
+        "100t484-1": {
+            "fpga_part": "xczu3eg-sbva484-1-e",
+            "max_lanes": 1,
+            "canonical_name": "pcileech_100t484_x1",
+        },
     }
 
     @classmethod
@@ -81,7 +89,10 @@ class BoardDiscovery:
             for subdir, config in cls.CAPTAINDMA_BOARDS.items():
                 board_path = captaindma_root / subdir
                 if board_path.exists() and board_path.is_dir():
-                    board_name = f"pcileech_{subdir.replace('-', '_')}"
+                    # Use canonical name if specified, otherwise construct standard name
+                    board_name = config.get(
+                        "canonical_name", f"pcileech_{subdir.replace('-', '_')}"
+                    )
                     boards[board_name] = cls._analyze_board(
                         board_path, {"name": board_name, **config}
                     )

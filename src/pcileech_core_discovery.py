@@ -291,10 +291,26 @@ def _enhanced_file_search(repo_root: Path, filename: str) -> Optional[Path]:
         )
 
     # If this is a board-specific search (from pcileech-fpga repo), add board-specific patterns
-    if "CaptainDMA" in str(repo_root) or any(
-        board_name in str(repo_root)
-        for board_name in ["35t", "75t", "100t", "pcileech"]
-    ):
+    # Check for CaptainDMA structure or any board-specific patterns
+    repo_str = str(repo_root).lower()
+    is_board_specific = (
+        "captaindma" in repo_str
+        or "pcileech-fpga" in repo_str
+        or any(
+            pattern in repo_str
+            for pattern in [
+                "35t484",
+                "75t484",
+                "100t484",
+                "35t325",
+                "enigma",
+                "squirrel",
+                "pciescreamer",
+            ]
+        )
+    )
+
+    if is_board_specific:
         # Add board-specific search patterns for pcileech-fpga repo structure
         search_dirs.extend(
             [

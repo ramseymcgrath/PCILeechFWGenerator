@@ -313,37 +313,33 @@ def format_padded_message(message: str, log_level: str) -> str:
 def log_info_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
-    """Convenience function for safe INFO level logging with padding."""
+    """Convenience function for safe INFO level logging."""
     formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    padded_message = format_padded_message(formatted_message, "INFO")
-    logger.info(padded_message)
+    logger.info(formatted_message)
 
 
 def log_error_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
-    """Convenience function for safe ERROR level logging with padding."""
+    """Convenience function for safe ERROR level logging."""
     formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    padded_message = format_padded_message(formatted_message, "ERROR")
-    logger.error(padded_message)
+    logger.error(formatted_message)
 
 
 def log_warning_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
-    """Convenience function for safe WARNING level logging with padding."""
+    """Convenience function for safe WARNING level logging."""
     formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    padded_message = format_padded_message(formatted_message, "WARNING")
-    logger.warning(padded_message)
+    logger.warning(formatted_message)
 
 
 def log_debug_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
-    """Convenience function for safe DEBUG level logging with padding."""
+    """Convenience function for safe DEBUG level logging."""
     formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    padded_message = format_padded_message(formatted_message, "DEBUG")
-    logger.debug(padded_message)
+    logger.debug(formatted_message)
 
 
 def generate_sv_header_comment(

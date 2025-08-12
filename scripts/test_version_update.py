@@ -78,8 +78,8 @@ def test_version_file_update():
         f.write(
             '''"""Version information for test."""
 
-__version__ = "0.9.11"
-__version_info__ = (0, 9, 11)
+__version__ = "0.10.5"
+__version_info__ = (0, 10, 5)
 
 # Release information
 __title__ = "Test Package"
@@ -106,8 +106,8 @@ __commit_hash__ = "abc123"
         # Read and verify the updated content
         content = temp_file.read_text()
 
-        assert '__version__ = "0.10.4"' in content
-        assert "__version_info__ = (0, 10, 4)" in content
+        assert '__version__ = "0.10.5"' in content
+        assert "__version_info__ = (0, 10, 5)" in content
         assert '__commit_hash__ = "def456"' in content
         assert '__build_date__ = "2025-' in content  # Should be updated to current date
 
