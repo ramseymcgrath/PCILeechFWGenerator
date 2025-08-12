@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, advanced-behavior-handling ]
+    branches: [ main, advanced-behavior-handling, missing-template-context ]
   pull_request:
     branches: [ main ]
 
@@ -88,6 +88,206 @@ jobs:
         except Exception as e:
             print(f'❌ Template syntax validation failed: {e}')
             sys.exit(1)
+        "
+    
+    - name: Validate Template Variables (Non-blocking)
+      run: |
+        # Install project for template validator
+        pip install -e .
+        
+        echo "🔍 Running template variable validation..."
+        python scripts/validate_template_variables.py \
+          --format summary \
+          --verbose || echo "⚠️ Template validation found warnings (non-blocking)"
+      continue-on-error: true
+
+  template-variable-validation:
+    runs-on: ubuntu-latest
+    # Only run when template files change
+    if: contains(github.event.head_commit.modified, 'src/templates/') || contains(github.event.head_commit.modified, 'src/templating/') || contains(github.event.head_commit.modified, 'scripts/validate_template_variables.py') || github.event_name == 'pull_request'
+    
+    steps:
+    - name: 🛒 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for setuptools_scm
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-template-validation-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-template-validation-
+          ${{ runner.os }}-pip-
+    
+    - name: 🔧 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install jinja2 pyyaml
+        # Install minimal project dependencies for template validation
+        pip install -e .
+    
+    - name: 🔍 Validate template variables (Non-blocking)
+      id: template_check
+      run: |
+        echo "🔍 Running template variable analysis..."
+        python scripts/validate_template_variables.py \
+          --format summary \
+          --output-file template_validation_summary.txt \
+          --verbose
+        
+        echo "📊 Summary:"
+        cat template_validation_summary.txt
+        
+        # Store results for later steps
+        echo "validation_summary<<EOF" >> $GITHUB_OUTPUT
+        cat template_validation_summary.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        # Check if we should warn about critical errors (not warnings)
+        if grep -q "Critical Errors: [1-9]" template_validation_summary.txt; then
+          echo "has_critical_errors=true" >> $GITHUB_OUTPUT
+          exit 1
+        else
+          echo "has_critical_errors=false" >> $GITHUB_OUTPUT
+        fi
+      continue-on-error: true  # Don't fail the build for warnings
+    
+    - name: 📋 Generate detailed report
+      run: |
+        echo "📋 Generating detailed template analysis report..."
+        python scripts/validate_template_variables.py \
+          --format text \
+          --generate-fixes \
+          --output-file template_validation_report.txt \
+          --verbose
+        
+        echo "✅ Report generated: template_validation_report.txt"
+    
+    - name: 📤 Upload validation reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: template-validation-reports
+        path: |
+          template_validation_summary.txt
+          template_validation_report.txt
+        retention-days: 30
+    
+    - name: 📝 Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const summary = fs.readFileSync('template_validation_summary.txt', 'utf8');
+            const summaryLines = summary.split('\n');
+            
+            const status = summaryLines[0];
+            const isPass = status.includes('PASS');
+            
+            const body = `## 🔍 Template Validation Results
+          
+          ${isPass ? '✅' : '⚠️'} **${status}**
+          
+          \`\`\`
+          ${summary}
+          \`\`\`
+          
+          ${isPass 
+            ? '🎉 All template variables are properly defined!' 
+            : '⚠️ Some template variables may need attention. Check the detailed report in the workflow artifacts.'}
+          
+          📋 **Detailed Report**: Check the \`template-validation-reports\` artifact for complete analysis and suggested fixes.
+          `;
+          
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+          } catch (error) {
+            console.log('Could not read validation summary or post comment:', error);
+          }
+    
+    - name: ⚠️ Set warning annotation
+      if: steps.template_check.outputs.has_critical_errors == 'true'
+      run: |
+        echo "::error::Template validation found critical errors that need to be fixed."
+        echo "Check the detailed report for specific issues."
+    
+    - name: 📝 Set warning for template issues
+      if: steps.template_check.outcome != 'success' && steps.template_check.outputs.has_critical_errors != 'true'
+      run: |
+        echo "::warning::Template validation found warnings. Consider addressing these for better template reliability."
+        echo "Use --warnings-as-errors flag locally to treat these as blocking issues."
+
+  template-syntax-validation:
+    runs-on: ubuntu-latest
+    # Only run when template files change
+    if: contains(github.event.head_commit.modified, 'src/templates/') || contains(github.event.head_commit.modified, 'src/templating/') || github.event_name == 'pull_request'
+    
+    steps:
+    - name: 🛒 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 🔧 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install jinja2 pyyaml
+    
+    - name: ✅ Validate template syntax
+      run: |
+        python -c "
+        import sys
+        from pathlib import Path
+        from jinja2 import Environment, FileSystemLoader, TemplateSyntaxError
+        
+        template_dir = Path('src/templates')
+        if not template_dir.exists():
+            print('❌ Template directory not found')
+            sys.exit(1)
+        
+        env = Environment(loader=FileSystemLoader(template_dir))
+        
+        # Find all template files
+        templates = list(template_dir.rglob('*.j2')) + list(template_dir.rglob('*.jinja')) + list(template_dir.rglob('*.jinja2'))
+        
+        print(f'🔍 Checking syntax of {len(templates)} templates...')
+        
+        errors = 0
+        for template_path in templates:
+            rel_path = template_path.relative_to(template_dir)
+            try:
+                template = env.get_template(str(rel_path))
+                print(f'✅ {rel_path}')
+            except TemplateSyntaxError as e:
+                print(f'❌ {rel_path}: Syntax error at line {e.lineno}: {e.message}')
+                errors += 1
+            except Exception as e:
+                print(f'❌ {rel_path}: {e}')
+                errors += 1
+        
+        if errors > 0:
+            print(f'\n❌ Found {errors} template syntax errors')
+            sys.exit(1)
+        else:
+            print(f'\n✅ All {len(templates)} templates have valid syntax!')
         "
 
   unit-test:

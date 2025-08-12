@@ -93,6 +93,20 @@ repos:
         types: [yaml]
         exclude: .github/workflows/
 
+  # Local project hooks
+  - repo: local
+    hooks:
+      # Template validation
+      - id: template-validation
+        name: Validate Template Variables
+        entry: python scripts/validate_template_variables.py
+        language: system
+        args: ['--format', 'summary']
+        files: '^src/templates/.*\.(j2|jinja|jinja2)$'
+        pass_filenames: false
+        fail_fast: false
+        verbose: true
+
 # Configuration for specific hooks
 ci:
   autofix_commit_msg: |

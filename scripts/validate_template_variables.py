@@ -1,29 +1,43 @@
 #!/usr/bin/env python3
 """
-Script to validate and report on template variable usage.
+Template Variable Validation Script
 
 This script analyzes all Jinja2 templates to identify potentially undefined
-variables and suggests fixes to ensure all variables are properly defined.
+variables and ensures all templates have proper variable definitions.
+
+Usage:
+    python scripts/validate_template_variables.py [options]
+
+CI Usage:
+    python scripts/validate_template_variables.py --strict --format json
 """
 
 import argparse
 import json
+import logging
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.templating.template_context_validator import (
-    TemplateContextValidator, analyze_template_variables,
-    get_template_requirements)
+try:
+    from src.templating.template_context_validator import (
+        TemplateContextValidator,
+        analyze_template_variables,
+        get_template_requirements,
+    )
+except ImportError as e:
+    print(f"Error: Failed to import template validation modules: {e}")
+    print("Make sure you're running this script from the project root.")
+    sys.exit(1)
 
 
 class TemplateVariableAnalyzer:
-    """Analyzes templates for undefined variable issues."""
+    """Analyzes templates for undefined variable issues with improved error handling."""
 
     def __init__(self, template_dir: Path):
         """
@@ -34,7 +48,10 @@ class TemplateVariableAnalyzer:
         """
         self.template_dir = template_dir
         self.validator = TemplateContextValidator()
-        self.issues: List[Dict[str, Any]] = []
+
+        # Setup logging
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+        self.logger = logging.getLogger(__name__)
 
     def analyze_all_templates(self) -> Dict[str, Any]:
         """
@@ -50,33 +67,59 @@ class TemplateVariableAnalyzer:
             "issues_by_template": {},
             "undefined_variables": set(),
             "conditional_checks": [],
+            "critical_issues": 0,
+            "warnings": 0,
+            "errors": 0,
         }
 
+        if not self.template_dir.exists():
+            self.logger.error(f"Template directory does not exist: {self.template_dir}")
+            return results
+
         # Find all Jinja2 templates
-        templates = list(self.template_dir.rglob("*.j2"))
+        template_patterns = ["*.j2", "*.jinja", "*.jinja2"]
+        templates = []
+        for pattern in template_patterns:
+            templates.extend(self.template_dir.rglob(pattern))
+
         results["total_templates"] = len(templates)
+        self.logger.info(f"Found {len(templates)} templates to analyze")
 
         for template_path in templates:
-            rel_path = template_path.relative_to(self.template_dir)
-            template_name = str(rel_path)
+            try:
+                rel_path = template_path.relative_to(self.template_dir)
+                template_name = str(rel_path)
 
-            issues = self.analyze_template(template_path, template_name)
-            if issues:
-                results["templates_with_issues"] += 1
-                results["issues_by_template"][template_name] = issues
-                results["total_issues"] += len(issues)
+                issues = self.analyze_template(template_path, template_name)
+                if issues:
+                    results["templates_with_issues"] += 1
+                    results["issues_by_template"][template_name] = issues
+                    results["total_issues"] += len(issues)
 
-                for issue in issues:
-                    if issue["type"] == "undefined_variable":
-                        results["undefined_variables"].add(issue["variable"])
-                    elif issue["type"] == "conditional_check":
-                        results["conditional_checks"].append(
-                            {
-                                "template": template_name,
-                                "variable": issue["variable"],
-                                "line": issue["line"],
-                            }
-                        )
+                    # Categorize issues
+                    for issue in issues:
+                        if issue["type"] == "undefined_variable":
+                            results["undefined_variables"].add(issue["variable"])
+                            results["warnings"] += 1  # Changed from critical_issues
+                        elif issue["type"] == "conditional_check":
+                            results["conditional_checks"].append(
+                                {
+                                    "template": template_name,
+                                    "variable": issue["variable"],
+                                    "line": issue["line"],
+                                }
+                            )
+                            results["warnings"] += 1
+                        elif issue["type"] == "potentially_undefined":
+                            results["warnings"] += 1
+                        elif issue["type"] == "error":
+                            results["errors"] += 1  # Real errors (file parsing, etc.)
+                            results["critical_issues"] += 1
+
+            except Exception as e:
+                self.logger.error(f"Failed to analyze {template_path}: {e}")
+                results["errors"] += 1
+                results["critical_issues"] += 1
 
         return results
 
@@ -182,87 +225,138 @@ class TemplateVariableAnalyzer:
         for_pattern = r"\{%\s*for\s+" + re.escape(var_name) + r"\s+in\s+"
         return bool(re.search(for_pattern, content))
 
-    def generate_report(self, results: Dict[str, Any]) -> str:
+    def generate_report(
+        self, results: Dict[str, Any], format_type: str = "text"
+    ) -> str:
         """
-        Generate a human-readable report of the analysis.
+        Generate a formatted report of the analysis.
 
         Args:
             results: Analysis results
+            format_type: Output format ('text' or 'summary')
 
         Returns:
             Formatted report string
         """
+        if format_type == "summary":
+            return self._generate_summary_report(results)
+
         report = []
         report.append("=" * 80)
         report.append("Template Variable Analysis Report")
         report.append("=" * 80)
         report.append("")
 
-        # Summary
-        report.append("Summary:")
+        # Summary with color coding for CI
+        status_icon = "✅" if results["critical_issues"] == 0 else "❌"
+        report.append(f"{status_icon} Summary:")
         report.append(f"  Total templates analyzed: {results['total_templates']}")
         report.append(f"  Templates with issues: {results['templates_with_issues']}")
-        report.append(f"  Total issues found: {results['total_issues']}")
+        report.append(f"  Critical errors: {results['critical_issues']}")
+        report.append(f"  Warnings: {results['warnings']}")
+        report.append(f"  Total issues: {results['total_issues']}")
+        report.append("")
+
+        # Quick status for CI
+        if results["critical_issues"] == 0:
+            if results["warnings"] == 0:
+                report.append("🎉 No template variable issues found!")
+            else:
+                report.append(
+                    f"✅ No critical issues! ({results['warnings']} warnings that can be addressed later)"
+                )
+        else:
+            report.append("❌ Critical errors require attention before deployment.")
         report.append("")
 
         # Conditional checks that should be removed
         if results["conditional_checks"]:
-            report.append("Conditional Variable Checks (should be removed):")
-            report.append("-" * 40)
+            report.append("🔍 Conditional Variable Checks (consider removing):")
+            report.append("-" * 50)
             for check in results["conditional_checks"]:
-                report.append(f"  Template: {check['template']}")
+                report.append(f"  📄 Template: {check['template']}")
                 report.append(
-                    f"    Variable: {check['variable']} (line {check['line']})"
+                    f"    🔗 Variable: {check['variable']} (line {check['line']})"
                 )
             report.append("")
 
         # Undefined variables
         if results["undefined_variables"]:
-            report.append("Potentially Undefined Variables:")
-            report.append("-" * 40)
+            report.append("⚠️  Potentially Undefined Variables:")
+            report.append("-" * 50)
             for var in sorted(results["undefined_variables"]):
                 report.append(f"  - {var}")
             report.append("")
 
         # Detailed issues by template
         if results["issues_by_template"]:
-            report.append("Detailed Issues by Template:")
-            report.append("-" * 40)
+            report.append("📋 Detailed Issues by Template:")
+            report.append("-" * 50)
             for template_name, issues in sorted(results["issues_by_template"].items()):
-                report.append(f"\n{template_name}:")
+                report.append(f"\n📄 {template_name}:")
                 for issue in issues:
                     if issue["type"] == "conditional_check":
                         report.append(
-                            f"  Line {issue['line']}: Conditional check for '{issue['variable']}'"
+                            f"  ⚠️  Line {issue['line']}: Conditional check for '{issue['variable']}'"
                         )
-                        report.append(f"    Code: {issue['content']}")
-                        report.append(f"    Fix: {issue['suggestion']}")
+                        report.append(f"      Code: {issue['content']}")
+                        report.append(f"      💡 Fix: {issue['suggestion']}")
                     elif issue["type"] == "undefined_variable":
-                        report.append(f"  Undefined variable: '{issue['variable']}'")
-                        report.append(f"    Fix: {issue['suggestion']}")
+                        report.append(f"  ⚠️  Undefined variable: '{issue['variable']}'")
+                        report.append(f"      💡 Fix: {issue['suggestion']}")
                     elif issue["type"] == "potentially_undefined":
                         report.append(
-                            f"  Line {issue['line']}: Potentially undefined '{issue['variable']}'"
+                            f"  ⚠️  Line {issue['line']}: Potentially undefined '{issue['variable']}'"
                         )
-                        report.append(f"    Code: {issue['content']}")
-                        report.append(f"    Fix: {issue['suggestion']}")
+                        report.append(f"      Code: {issue['content']}")
+                        report.append(f"      💡 Fix: {issue['suggestion']}")
+                    elif issue["type"] == "error":
+                        report.append(f"  💥 Error: {issue['message']}")
 
-        # Recommendations
+        # Actionable recommendations
         report.append("")
-        report.append("Recommendations:")
-        report.append("-" * 40)
+        report.append("🛠️  Recommended Actions:")
+        report.append("-" * 50)
+        if results["critical_issues"] > 0:
+            report.append("1. ⚡ URGENT: Fix critical errors before deployment")
+        if results["warnings"] > 0:
+            report.append(
+                "2. 🔧 Consider updating template rendering code to provide all variables"
+            )
+            report.append(
+                "3. 🧹 Consider removing conditional 'is defined' checks from templates"
+            )
         report.append(
-            "1. Fix template rendering code to provide all required variables"
+            "4. ✅ Add validation to ensure all required variables are present"
         )
-        report.append("2. Remove conditional 'is defined' checks from templates")
         report.append(
-            "3. Add validation to ensure all required variables are present before rendering"
-        )
-        report.append(
-            "4. Use strict mode validation in CI/CD pipeline to catch missing variables"
+            "5. 🚀 Use strict mode validation in CI/CD pipeline for stricter checks"
         )
 
         return "\n".join(report)
+
+    def _generate_summary_report(self, results: Dict[str, Any]) -> str:
+        """Generate a concise summary report suitable for CI logs."""
+        lines = []
+
+        status = "PASS" if results["critical_issues"] == 0 else "FAIL"
+        lines.append(f"Template Validation: {status}")
+        lines.append(f"Templates: {results['total_templates']}")
+        lines.append(f"Critical Errors: {results['critical_issues']}")
+        lines.append(f"Warnings: {results['warnings']}")
+
+        if results["undefined_variables"]:
+            # Limit the list to avoid overly long output
+            vars_list = sorted(results["undefined_variables"])
+            if len(vars_list) > 10:
+                vars_display = (
+                    ", ".join(vars_list[:10]) + f", ... ({len(vars_list) - 10} more)"
+                )
+            else:
+                vars_display = ", ".join(vars_list)
+            lines.append(f"Undefined Variables: {vars_display}")
+
+        return "\n".join(lines)
 
     def generate_fixes(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -311,21 +405,78 @@ class TemplateVariableAnalyzer:
 
         return fixes
 
+    def format_fixes(self, fixes: Dict[str, Any]) -> str:
+        """
+        Format fixes into a readable string.
+
+        Args:
+            fixes: Dictionary of fixes from generate_fixes()
+
+        Returns:
+            Formatted string with fix recommendations
+        """
+        lines = []
+        lines.append("=" * 80)
+        lines.append("🔧 Required Fixes")
+        lines.append("=" * 80)
+
+        if fixes["missing_variables"]:
+            lines.append("\n⚠️  Missing Variables by Template:")
+            lines.append("-" * 50)
+            for template, variables in sorted(fixes["missing_variables"].items()):
+                lines.append(f"\n📄 {template}:")
+                unique_vars = sorted(set(variables))
+                lines.append(f"  Missing: {', '.join(unique_vars)}")
+
+        if fixes["context_fixes"]:
+            lines.append("\n🔧 Context Fixes Required:")
+            lines.append("-" * 50)
+            for template, fixes_list in sorted(fixes["context_fixes"].items()):
+                lines.append(f"\n📄 {template}:")
+                for fix in fixes_list[:3]:  # Show first 3
+                    lines.append(f"  💡 {fix}")
+                if len(fixes_list) > 3:
+                    lines.append(f"  ... and {len(fixes_list) - 3} more variables")
+
+        if fixes["template_updates"]:
+            lines.append("\n📝 Template Updates Needed (remove conditional checks):")
+            lines.append("-" * 50)
+            for update in fixes["template_updates"][:5]:  # Show first 5
+                lines.append(f"  📄 {update['template']} (line {update['line']})")
+                lines.append(f"    ❌ Old: {update['old']}")
+                lines.append(f"    ✅ New: {update['new']}")
+            if len(fixes["template_updates"]) > 5:
+                lines.append(f"  ... and {len(fixes['template_updates']) - 5} more")
+
+        return "\n".join(lines)
+
 
 def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
-        description="Analyze templates for undefined variable issues"
+        description="Analyze templates for undefined variable issues",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic validation
+  python scripts/validate_template_variables.py
+  
+  # CI mode with strict validation
+  python scripts/validate_template_variables.py --strict --format json
+  
+  # Generate detailed fixes
+  python scripts/validate_template_variables.py --generate-fixes --verbose
+        """,
     )
     parser.add_argument(
         "--template-dir",
         type=Path,
-        default=project_root / "src" / "templates",
+        default=PROJECT_ROOT / "src" / "templates",
         help="Directory containing templates (default: src/templates)",
     )
     parser.add_argument(
-        "--output",
-        choices=["text", "json"],
+        "--format",
+        choices=["text", "json", "summary"],
         default="text",
         help="Output format (default: text)",
     )
@@ -337,67 +488,104 @@ def main():
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Exit with error code if issues are found",
+        help="Exit with error code if critical errors are found",
+    )
+    parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Treat warnings (like undefined variables) as errors",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output",
+    )
+    parser.add_argument(
+        "--output-file",
+        type=Path,
+        help="Write output to file instead of stdout",
     )
 
     args = parser.parse_args()
 
-    if not args.template_dir.exists():
-        print(f"Error: Template directory '{args.template_dir}' does not exist")
-        sys.exit(1)
-
-    # Run analysis
-    analyzer = TemplateVariableAnalyzer(args.template_dir)
-    results = analyzer.analyze_all_templates()
-
-    # Output results
-    if args.output == "json":
-        # Convert sets to lists for JSON serialization
-        results["undefined_variables"] = list(results["undefined_variables"])
-        print(json.dumps(results, indent=2))
+    # Configure logging
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
     else:
-        report = analyzer.generate_report(results)
-        print(report)
+        logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
-    # Generate fixes if requested
-    if args.generate_fixes:
-        fixes = analyzer.generate_fixes(results)
-        print("\n" + "=" * 80)
-        print("Required Fixes:")
-        print("=" * 80)
+    if not args.template_dir.exists():
+        print(f"❌ Error: Template directory '{args.template_dir}' does not exist")
+        return 1
 
-        if fixes["missing_variables"]:
-            print("\nMissing Variables by Template:")
-            print("-" * 40)
-            for template, variables in sorted(fixes["missing_variables"].items()):
-                print(f"\n{template}:")
-                print(f"  Missing: {', '.join(sorted(set(variables)))}")
+    try:
+        # Run analysis
+        analyzer = TemplateVariableAnalyzer(args.template_dir)
+        results = analyzer.analyze_all_templates()
 
-        if fixes["context_fixes"]:
-            print("\nContext Fixes Required:")
-            print("-" * 40)
-            for template, fixes_list in sorted(fixes["context_fixes"].items()):
-                print(f"\n{template}:")
-                for fix in fixes_list[:3]:  # Show first 3
-                    print(f"  - {fix}")
-                if len(fixes_list) > 3:
-                    print(f"  ... and {len(fixes_list) - 3} more variables")
+        # Prepare output
+        output_content = ""
 
-        if fixes["template_updates"]:
-            print("\nTemplate Updates Needed (remove conditional checks):")
-            print("-" * 40)
-            for update in fixes["template_updates"][:5]:  # Show first 5
-                print(f"  {update['template']} (line {update['line']})")
-                print(f"    Old: {update['old']}")
-                print(f"    New: {update['new']}")
-            if len(fixes["template_updates"]) > 5:
-                print(f"  ... and {len(fixes['template_updates']) - 5} more")
+        if args.format == "json":
+            # Convert sets to lists for JSON serialization
+            json_results = results.copy()
+            json_results["undefined_variables"] = list(results["undefined_variables"])
+            output_content = json.dumps(json_results, indent=2)
+        else:
+            output_content = analyzer.generate_report(results, args.format)
 
-    # Exit with error if strict mode and issues found
-    if args.strict and results["total_issues"] > 0:
-        sys.exit(1)
+        # Generate fixes if requested
+        if args.generate_fixes:
+            fixes = analyzer.generate_fixes(results)
+            if args.format == "json":
+                output_content = json.dumps(
+                    {"analysis": json_results, "fixes": fixes}, indent=2
+                )
+            else:
+                output_content += "\n" + analyzer.format_fixes(fixes)
 
-    return 0
+        # Output results
+        if args.output_file:
+            args.output_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(args.output_file, "w") as f:
+                f.write(output_content)
+            print(f"✅ Results written to {args.output_file}")
+        else:
+            print(output_content)
+
+        # Exit with appropriate code
+        if args.strict and results["critical_issues"] > 0:
+            print(
+                f"\n❌ Exiting with error: {results['critical_issues']} critical errors found"
+            )
+            return 1
+
+        if args.warnings_as_errors and results["warnings"] > 0:
+            print(
+                f"\n❌ Exiting with error: {results['warnings']} warnings treated as errors"
+            )
+            return 1
+
+        if results["critical_issues"] == 0:
+            if results["warnings"] == 0:
+                print(f"\n✅ Template validation passed with no issues!")
+            else:
+                print(
+                    f"\n✅ Template validation passed! ({results['warnings']} warnings)"
+                )
+        else:
+            print(f"\n❌ Found {results['critical_issues']} critical errors")
+
+        return 0
+
+    except Exception as e:
+        print(f"❌ Template validation failed: {e}")
+        if args.verbose:
+            import traceback
+
+            traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

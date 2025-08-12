@@ -1,4 +1,4 @@
-name: Safety Checks
+name: Security & Safety Checks
 
 on:
   push:

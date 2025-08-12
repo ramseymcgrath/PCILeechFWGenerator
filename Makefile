@@ -1,6 +1,6 @@
 # Makefile for PCILeech Firmware Generator
 
-.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release container container-rebuild docker-build build-container vfio-constants vfio-constants-clean
+.PHONY: help clean install install-dev test lint format build build-pypi upload-test upload-pypi release container container-rebuild docker-build build-container vfio-constants vfio-constants-clean check-templates check-templates-strict check-templates-fix check-templates-errors
 
 # Default target
 help:
@@ -14,6 +14,9 @@ help:
 	@echo "  test-unit    - Run unit tests only (no hardware/TUI)"
 	@echo "  test-all     - Run all tests with coverage"
 	@echo "  test-fast    - Run fast tests only"
+	@echo "  check-templates - Validate template variables and syntax"
+	@echo "  check-templates-strict - Validate templates with strict mode"
+	@echo "  check-templates-errors - Treat template warnings as errors"
 	@echo "  lint         - Run code linting"
 	@echo "  format       - Format code with black and isort"
 	@echo "  clean        - Clean build artifacts"
@@ -60,6 +63,23 @@ test-all:
 
 test-fast:
 	pytest tests/ -x -q -m "not slow and not hardware"
+
+# Template validation targets
+check-templates:
+	@echo "Validating template variables and syntax..."
+	./scripts/check_templates.sh
+
+check-templates-strict:
+	@echo "Validating templates with strict mode..."
+	./scripts/check_templates.sh --strict
+
+check-templates-fix:
+	@echo "Validating templates and generating fixes..."
+	./scripts/check_templates.sh --fix
+
+check-templates-errors:
+	@echo "Validating templates with warnings as errors..."
+	./scripts/check_templates.sh --warnings-as-errors
 
 lint:
 	flake8 src/ tests/
