@@ -30,8 +30,18 @@ from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Protocol, Tuple, TypedDict,
-                    TypeVar, Union, cast)
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    TypedDict,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
@@ -39,20 +49,27 @@ from src.device_clone.fallback_manager import FallbackManager
 from src.device_clone.overlay_mapper import OverlayMapper
 from src.error_utils import extract_root_cause
 from src.exceptions import ContextError
-from src.string_utils import (format_bar_summary_table, format_bar_table,
-                              format_raw_bar_table, log_error_safe,
-                              log_info_safe, log_warning_safe)
+from src.string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from src.utils.attribute_access import has_attr, safe_get_attr
 
 logger = logging.getLogger(__name__)
 
 # Import proper VFIO constants with kernel-compatible ioctl generation
-from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_GROUP_GET_DEVICE_FD,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VfioRegionInfo)
+from src.cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 
 
 # TypedDicts for better type safety
@@ -837,9 +854,6 @@ class PCILeechContextBuilder:
         device_config = {
             "device_bdf": self.device_bdf,
             **asdict(device_identifiers),
-            "enable_error_injection": getattr(
-                self.config, "enable_advanced_features", False
-            ),
             "enable_perf_counters": getattr(
                 self.config, "enable_advanced_features", False
             ),
@@ -1384,8 +1398,7 @@ class PCILeechContextBuilder:
 
                     # Compute and validate size encoding
                     if size > 0:
-                        from src.device_clone.bar_size_converter import \
-                            BarSizeConverter
+                        from src.device_clone.bar_size_converter import BarSizeConverter
 
                         try:
                             bar_type_str = "io" if is_io else "memory"
@@ -2576,8 +2589,7 @@ class PCILeechContextBuilder:
         )
 
         # Import the merge function from donor_info_template
-        from src.device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         # Create a temporary generator instance to use its merge method
         generator = DonorInfoTemplateGenerator()

@@ -32,7 +32,6 @@ module pcileech_tlps128_bar_controller #(
     parameter INTER_BURST_GAP = {{ timing_config.inter_burst_gap | default(8) }},
     
     // Performance and Error Handling
-    parameter ENABLE_ERROR_INJECTION = {{ '1\'b1' if device_config.enable_error_injection else '1\'b0'  }},
     parameter ENABLE_PERFORMANCE_COUNTERS = {{ '1\'b1' if device_config.enable_perf_counters else '1\'b0' }},
     parameter TIMEOUT_CYCLES = {{ timing_config.timeout_cycles | default(1024) }}
 ) (
@@ -751,34 +750,6 @@ module pcileech_tlps128_bar_controller #(
     // ========================================================================
     
     assign debug_state = {4'h0, current_state};
-    
-    // ========================================================================
-    // Error Injection for Testing (if enabled)
-    // ========================================================================
-    
-    {% if device_config.enable_error_injection | default(false) %}
-    // Error injection logic for testing and validation
-    logic [31:0] error_inject_counter;
-    logic        inject_address_error;
-    logic        inject_tlp_error;
-    logic        inject_timeout_error;
-    
-    always_ff @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            error_inject_counter <= '0;
-            inject_address_error <= 1'b0;
-            inject_tlp_error <= 1'b0;
-            inject_timeout_error <= 1'b0;
-        end else begin
-            error_inject_counter <= error_inject_counter + 1;
-            
-            // Inject errors based on counter patterns (for testing)
-            inject_address_error <= (error_inject_counter[15:0] == 16'hAAAA);
-            inject_tlp_error <= (error_inject_counter[15:0] == 16'h5555);
-            inject_timeout_error <= (error_inject_counter[15:0] == 16'hCCCC);
-        end
-    end
-    {% endif %}
     
     // ========================================================================
     // Simulation and Debug Support

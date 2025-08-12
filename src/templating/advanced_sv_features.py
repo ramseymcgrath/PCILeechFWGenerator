@@ -4,7 +4,14 @@ Advanced SystemVerilog Features Module
 
 This module consolidates all advanced SystemVerilog generation features including
 error handling, performance monitoring, and power management into a single,
-cohesive module to reduce import complexity.
+cohesi            return self._generate_module_template(
+                "error_handling_advanced",
+                context,
+                error_detection,
+                error_state_machine,
+                error_logging,
+                error_counters,
+            ) to reduce import complexity.
 """
 
 import logging
@@ -14,17 +21,26 @@ from typing import Dict, List, Optional, Set
 
 # Import standard utilities
 try:
-    from ..string_utils import (generate_sv_header_comment, log_debug_safe,
-                                log_error_safe, log_info_safe,
-                                log_warning_safe, safe_format)
+    from ..string_utils import (
+        generate_sv_header_comment,
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
     from .template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     # Fallback for standalone usage
-    from src.string_utils import (generate_sv_header_comment, log_debug_safe,
-                                  log_error_safe, log_info_safe,
-                                  log_warning_safe, safe_format)
-    from src.templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+    from src.string_utils import (
+        generate_sv_header_comment,
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
+    from src.templating.template_renderer import TemplateRenderer, TemplateRenderError
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -71,7 +87,6 @@ class ErrorHandlingConfig:
     """Configuration for error handling features."""
 
     enable_error_detection: bool = True
-    enable_error_injection: bool = False
     enable_error_logging: bool = True
     enable_auto_retry: bool = True  # Enable automatic retry for recoverable errors
     error_log_depth: int = 256
@@ -204,8 +219,7 @@ class AdvancedSVFeatureGenerator:
 
         try:
             # Import here to avoid circular imports
-            from .advanced_sv_error import (ErrorHandlingConfig,
-                                            ErrorHandlingGenerator)
+            from .advanced_sv_error import ErrorHandlingConfig, ErrorHandlingGenerator
 
             # Create error handling configuration from our config
             error_config = ErrorHandlingConfig(
@@ -216,7 +230,6 @@ class AdvancedSVFeatureGenerator:
                 enable_auto_retry=True,
                 max_retry_count=3,
                 enable_error_logging=self.config.error_handling.enable_error_logging,
-                enable_error_injection=self.config.error_handling.enable_error_injection,
             )
 
             # Create error handling generator
@@ -230,14 +243,6 @@ class AdvancedSVFeatureGenerator:
             error_logging = error_generator.generate_error_logging()
             error_counters = error_generator.generate_error_counters()
 
-            # Add error injection if enabled
-            error_injection = ""
-            if self.config.error_handling.enable_error_injection:
-                error_injection = error_generator.generate_error_injection()
-                log_debug_safe(
-                    logger, "Added error injection logic", prefix="ERROR_GEN"
-                )
-
             # Generate the complete module using template
             return self._generate_module_template(
                 "error_handler",
@@ -246,7 +251,6 @@ class AdvancedSVFeatureGenerator:
                 error_state_machine,
                 error_logging,
                 error_counters,
-                error_injection,
             )
 
         except ImportError as e:

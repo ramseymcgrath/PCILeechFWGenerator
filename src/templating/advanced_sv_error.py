@@ -46,7 +46,6 @@ class ErrorHandlingConfig:
     enable_auto_retry: bool = True
     max_retry_count: int = 3
     enable_error_logging: bool = True
-    enable_error_injection: bool = False  # For testing
 
     # Error thresholds
     correctable_error_threshold: int = 100
@@ -99,13 +98,6 @@ class ErrorHandlingGenerator:
         context = {"config": self.config}
         return self.renderer.render_template(
             "systemverilog/advanced/error_counters.sv.j2", context
-        )
-
-    def generate_error_injection(self) -> str:
-        """Generate error injection logic for testing."""
-        context = {"config": self.config}
-        return self.renderer.render_template(
-            "systemverilog/advanced/error_injection.sv.j2", context
         )
 
     def generate_error_outputs(self) -> str:

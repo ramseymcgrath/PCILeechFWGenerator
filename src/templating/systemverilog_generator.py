@@ -25,16 +25,32 @@ from typing import Any, Dict, List, Optional, Union
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.error_utils import (ErrorCategory, extract_root_cause,
-                             format_concise_error, format_user_friendly_error,
-                             is_user_fixable_error)
-from src.string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe, log_warning_safe, safe_format)
-from src.utils.attribute_access import (get_attr_or_raise, has_attr,
-                                        require_attrs, safe_get_attr)
+from src.error_utils import (
+    ErrorCategory,
+    extract_root_cause,
+    format_concise_error,
+    format_user_friendly_error,
+    is_user_fixable_error,
+)
+from src.string_utils import (
+    generate_sv_header_comment,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
+from src.utils.attribute_access import (
+    get_attr_or_raise,
+    has_attr,
+    require_attrs,
+    safe_get_attr,
+)
 
-from .advanced_sv_features import (AdvancedSVFeatureGenerator,
-                                   ErrorHandlingConfig, PerformanceConfig)
+from .advanced_sv_features import (
+    AdvancedSVFeatureGenerator,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+)
 from .advanced_sv_power import PowerManagementConfig
 from .template_renderer import TemplateRenderer, TemplateRenderError
 
@@ -357,7 +373,6 @@ class AdvancedSVGenerator:
         # ErrorHandlingConfig from advanced_sv_features.py has these attributes
         return {
             "enable_error_detection": self.error_config.enable_error_detection,
-            "enable_error_injection": self.error_config.enable_error_injection,
             "enable_logging": self.error_config.enable_error_logging,
             "enable_auto_retry": self.error_config.enable_auto_retry,
             "max_retry_count": self.error_config.max_retry_count,

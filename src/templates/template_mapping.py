@@ -30,7 +30,6 @@ TEMPLATE_PATH_MAPPING = {
     "systemverilog/advanced/error_detection.sv.j2": "sv/error_detection.sv.j2",
     "systemverilog/advanced/error_handling_complete.sv.j2": "sv/error_handling_complete.sv.j2",
     "systemverilog/advanced/error_handling.sv.j2": "sv/error_handling.sv.j2",
-    "systemverilog/advanced/error_injection.sv.j2": "sv/error_injection.sv.j2",
     "systemverilog/advanced/error_logging.sv.j2": "sv/error_logging.sv.j2",
     "systemverilog/advanced/error_outputs.sv.j2": "sv/error_outputs.sv.j2",
     "systemverilog/advanced/error_state_machine.sv.j2": "sv/error_state_machine.sv.j2",
