@@ -241,7 +241,7 @@ FFFFFFFF,
 ; MSI-X Capability ({{ CAP_OFFSET_MSIX }}-{{ CAP_OFFSET_MSIX + 11 }})
 {% if msix_enabled %}
 {# Set default values if msix_config.table_offset or msix_config.pba_offset are not defined #}
-{% set msix_table_offset = msix_config.table_offset|default(0x0) %}
+{% set msix_table_offset = msix_config.table_offset|default(0x1000) %}
 {% set msix_table_bir = msix_config.table_bir|default(0) %}
 {% set msix_pba_offset = msix_config.pba_offset|default(0x800) %}
 {% set msix_pba_bir = msix_config.pba_bir|default(0) %}
