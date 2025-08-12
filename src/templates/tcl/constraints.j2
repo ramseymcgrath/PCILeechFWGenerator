@@ -91,7 +91,7 @@ add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
 read_xdc $board_auto_xdc_file
 puts "Added auto-generated board XDC: $board_auto_xdc_file"
 {% else %}
-{%- set _ = throw_error("Missing required XDC for board " + board.name + " - aborting build.") %}
+{%- error "Missing required XDC for board " + board.name + " - aborting build." %}
 {% endif %}
 {% endif %}
 

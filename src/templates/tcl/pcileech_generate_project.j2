@@ -85,16 +85,16 @@ puts "Configuring PCIe IP Core for {{ pcie_ip_type }}..."
 
 # Set device-specific parameters for custom PCIe implementation
 {%- if not device.device_id or not device.vendor_id %}
-{%- set _ = throw_error("Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware") %}
+{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
 {%- endif %}
 {%- if not device.revision_id %}
-{%- set _ = throw_error("Revision ID must be derived from donor device - no fallback values allowed to prevent generic firmware") %}
+{%- error "Revision ID must be derived from donor device - no fallback values allowed to prevent generic firmware" %}
 {%- endif %}
 {%- if not device.subsys_device_id %}
-{%- set _ = throw_error("Subsystem Device ID must be derived from donor device - no fallback values allowed to prevent generic firmware") %}
+{%- error "Subsystem Device ID must be derived from donor device - no fallback values allowed to prevent generic firmware" %}
 {%- endif %}
 {%- if not device.subsys_vendor_id %}
-{%- set _ = throw_error("Subsystem Vendor ID must be derived from donor device - no fallback values allowed to prevent generic firmware") %}
+{%- error "Subsystem Vendor ID must be derived from donor device - no fallback values allowed to prevent generic firmware" %}
 {%- endif %}
 set DEVICE_ID {{ device.device_id }}
 set VENDOR_ID {{ device.vendor_id }}
