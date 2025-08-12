@@ -24,8 +24,9 @@ def check_template_syntax() -> Tuple[int, int]:
         Tuple of (total_templates, errors)
     """
     try:
-        from src.templating.template_renderer import TemplateRenderer
         from jinja2 import TemplateSyntaxError
+
+        from src.templating.template_renderer import TemplateRenderer
     except ImportError as e:
         print(f"❌ Error importing modules: {e}")
         print("Make sure you're running from the project root directory")

@@ -26,10 +26,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
     from src.templating.template_context_validator import (
-        TemplateContextValidator,
-        analyze_template_variables,
-        get_template_requirements,
-    )
+        TemplateContextValidator, analyze_template_variables,
+        get_template_requirements)
 except ImportError as e:
     print(f"Error: Failed to import template validation modules: {e}")
     print("Make sure you're running this script from the project root.")
