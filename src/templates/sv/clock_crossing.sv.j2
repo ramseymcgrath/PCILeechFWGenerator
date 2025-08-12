@@ -1,6 +1,15 @@
 {#- Advanced Clock Domain Crossing Module Template -#}
 {{ header | safe }}
 
+{# Ensure required context variables are defined with fallbacks #}
+{% if not device_config is defined %}
+{% set device_config = {} %}
+{% endif %}
+
+{% if not board_config is defined %}
+{% set board_config = {} %}
+{% endif %}
+
 module advanced_clock_crossing #(
     parameter DATA_WIDTH = 32,
     parameter SYNC_STAGES = 3

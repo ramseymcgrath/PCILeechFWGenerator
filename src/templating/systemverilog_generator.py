@@ -637,6 +637,11 @@ class AdvancedSVGenerator:
 
             clock_crossing_context = {
                 "header": clock_crossing_header,
+                "device_config": self.device_config,
+                "board_config": context.get("board_config", {}),
+                "device_type": self.device_config.device_type.value,
+                "device_class": self.device_config.device_class.value,
+                "timing_config": timing_config,
             }
 
             # Only try to render the clock crossing module if the template exists
@@ -645,8 +650,8 @@ class AdvancedSVGenerator:
                     clock_crossing_module = self.renderer.render_template(
                         crossing_template_path, clock_crossing_context
                     )
-                    # Combine modules
-                    return f"{main_module}\n\n{clock_crossing_module}"
+                    # Combine modules - add a proper end-of-module marker before the next module
+                    return f"{main_module}\n\n// ADVANCED CLOCK CROSSING MODULE\n{clock_crossing_module}"
                 except TemplateRenderError as ce:
                     # Log but continue without clock crossing if it fails
                     log_warning_safe(

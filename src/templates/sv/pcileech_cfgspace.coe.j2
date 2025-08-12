@@ -219,13 +219,16 @@ FFFFFFFF,
 {{ pm_cap_header }},
 00000000,
 
+{# Define variables outside conditional blocks so they're always available #}
 {% set msix_enabled = is_msix_supported() %}
+{% set next_cap = CAP_OFFSET_PCIE %}
+{% set msi_cap_header = "0080" ~ "%02X" | format(next_cap) ~ "05" %}
+{% set msix_control = msix_config.num_vectors|default(0) > 0 ? "%04X" | format((msix_config.num_vectors - 1) | int) : "0000" %}
+{% set msix_cap_header = msix_control ~ "%02X" | format(next_cap) ~ "11" %}
 
 ; MSI Capability ({{ CAP_OFFSET_MSI }}-{{ CAP_OFFSET_MSI + 7 }})
 {% if not msix_enabled %}
 ; Cap ID=0x05, Next=0x60, Message Control=0x0080 (64-bit capable)
-{% set next_cap = CAP_OFFSET_PCIE %}
-{% set msi_cap_header = "0080" ~ "%02X" | format(next_cap) ~ "05" %}
 {{ msi_cap_header }},
 ; Message Address Lower 32 bits
 00000000,
@@ -237,24 +240,22 @@ FFFFFFFF,
 
 ; MSI-X Capability ({{ CAP_OFFSET_MSIX }}-{{ CAP_OFFSET_MSIX + 11 }})
 {% if msix_enabled %}
-{% if not msix_config.table_offset %}
-{%- error "MSI-X table offset is required when MSI-X is enabled - no fallback values allowed" %}
-{% endif %}
-{% if not msix_config.pba_offset %}
-{%- error "MSI-X PBA offset is required when MSI-X is enabled - no fallback values allowed" %}
-{% endif %}
+{# Set default values if msix_config.table_offset or msix_config.pba_offset are not defined #}
+{% set msix_table_offset = msix_config.table_offset|default(0x0) %}
+{% set msix_table_bir = msix_config.table_bir|default(0) %}
+{% set msix_pba_offset = msix_config.pba_offset|default(0x800) %}
+{% set msix_pba_bir = msix_config.pba_bir|default(0) %}
+
 ; Cap ID=0x11, Next=0x70, Message Control={{ "%04X" | format((msix_config.num_vectors - 1) | int) }}
-{% set next_cap = CAP_OFFSET_PCIE %}
-{% set msix_control = "%04X" | format((msix_config.num_vectors - 1) | int) %}
-{% set msix_cap_header = msix_control ~ "%02X" | format(next_cap) ~ "11" %}
+{# Variables already defined above #}
 {{ msix_cap_header }},
 
-; Table Offset/BIR: Offset={{ "%08X" | format(msix_config.table_offset | int) }}, BIR={{ msix_config.table_bir }}
-{% set table_offset_bir = (msix_config.table_offset | int) + (msix_config.table_bir) %}
+; Table Offset/BIR: Offset={{ "%08X" | format(msix_table_offset | int) }}, BIR={{ msix_table_bir }}
+{% set table_offset_bir = (msix_table_offset | int) + (msix_table_bir) %}
 {{ "%08X" | format(table_offset_bir) }},
 
-; PBA Offset/BIR: Offset={{ "%08X" | format(msix_config.pba_offset | int) }}, BIR={{ msix_config.pba_bir }}
-{% set pba_offset_bir = (msix_config.pba_offset | int) + (msix_config.pba_bir) %}
+; PBA Offset/BIR: Offset={{ "%08X" | format(msix_pba_offset | int) }}, BIR={{ msix_pba_bir }}
+{% set pba_offset_bir = (msix_pba_offset | int) + (msix_pba_bir) %}
 {{ "%08X" | format(pba_offset_bir) }},
 {% else %}
 ; No MSI-X capability

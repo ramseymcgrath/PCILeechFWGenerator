@@ -1,6 +1,11 @@
 {#- Advanced PCIe Device Controller Template -#}
 {{ header | safe }}
 
+{# Ensure board_config is always defined with fallbacks #}
+{% if not board_config is defined %}
+{% set board_config = {} %}
+{% endif %}
+
 // State machine definitions
 `define S_SHADOW_CFGSPACE_IDLE  2'b00
 `define S_SHADOW_CFGSPACE_TLP   2'b01

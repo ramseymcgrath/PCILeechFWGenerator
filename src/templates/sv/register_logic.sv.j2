@@ -43,7 +43,7 @@
     end
 
 {%- for reg in registers %}
-{%- if reg.rw in ["rw", "wo"] %}
+{%- if reg.rw is defined and reg.rw in ["rw", "wo"] %}
     // Write logic for {{ reg.name }}
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin

@@ -1,11 +1,20 @@
 {#- Device-Specific Port Declarations Template -#}
-{%- if device_config.device_type is string -%}
+{# Ensure device_type is always defined with fallbacks #}
+{%- if not device_config is defined or not device_config.device_type is defined -%}
+    {%- set device_type = "generic" -%}
+{%- elif device_config.device_type is string -%}
     {%- set device_type = device_config.device_type -%}
 {%- elif device_config.device_type is mapping -%}
     {%- set device_type = device_config.device_type.get('value', device_config.device_type.get('name', 'generic')) -%}
 {%- else -%}
-    {%- set device_type = device_config.device_type if device_config.device_type is string else device_config.device_type.value -%}
+    {# Handle enum types that have a .value attribute #}
+    {%- set device_type = device_config.device_type.value if device_config.device_type is defined and device_config.device_type.value is defined else "generic" -%}
 {%- endif -%}
+{# Ensure board_config is always defined with fallbacks #}
+{%- if not board_config is defined -%}
+    {%- set board_config = {} -%}
+{%- endif -%}
+
 {%- if device_type == "network" %}
 // Network controller ports
     output logic link_up,
