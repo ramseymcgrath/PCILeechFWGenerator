@@ -3,7 +3,8 @@
     logic [15:0] clk_monitor_counter = 16'h0;
     logic [15:0] mem_clk_monitor_counter = 16'h0;
     logic [15:0] aux_clk_monitor_counter = 16'h0;
-    wire [2:0] clock_domain_status;
+    // Use reg instead of logic to avoid dual-driving (by both initial value and assign)
+    reg [2:0] clock_domain_status_reg = 3'b111;
     logic mem_clk_valid = 1'b1;
     logic aux_clk_valid = 1'b1;
     
@@ -23,5 +24,15 @@
         end
     end
 
-    // Clock domain status
-    assign clock_domain_status = {aux_clk_valid, mem_clk_valid, 1'b1};
+    // Update clock domain status in procedural block to avoid dual-driving
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            clock_domain_status_reg <= 3'b111;
+        end else begin
+            clock_domain_status_reg <= {aux_clk_valid, mem_clk_valid, 1'b1};
+        end
+    end
+    
+    // Create the output status using the register via continuous assignment
+    wire [2:0] clock_domain_status;
+    assign clock_domain_status = clock_domain_status_reg;
