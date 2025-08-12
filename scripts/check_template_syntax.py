@@ -15,10 +15,11 @@ project_root = script_dir.parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
+
 def check_template_syntax() -> Tuple[int, int]:
     """
     Check syntax of all Jinja2 templates.
-    
+
     Returns:
         Tuple of (total_templates, errors)
     """
@@ -53,7 +54,7 @@ def check_template_syntax() -> Tuple[int, int]:
         return 0, 0
 
     print(f"🔍 Checking syntax of {len(templates)} templates...")
-    
+
     errors = 0
     for template_path in sorted(templates):
         rel_path = template_path.relative_to(template_dir)
@@ -84,9 +85,9 @@ def main():
     """Main entry point."""
     print("PCILeech Template Syntax Checker")
     print("=================================")
-    
+
     total_templates, errors = check_template_syntax()
-    
+
     if errors == 0:
         print(f"\n✅ All {total_templates} templates have valid syntax!")
         return 0
