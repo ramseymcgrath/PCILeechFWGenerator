@@ -465,7 +465,7 @@ module pcileech_tlps128_bar_controller #(
                 6'h04: status_reg_rdata = read_count;
                 6'h05: status_reg_rdata = write_count;
                 6'h06: status_reg_rdata = error_count;
-                6'h07: status_reg_rdata = {% if device_signature %}{{ device_signature }}{% else %}{% error "Device signature is required - no fallback values allowed to prevent generic firmware" %}{% endif %};
+                6'h07: status_reg_rdata = {% if device_signature %}{{ device_signature }}{% else %}{% set _ = throw_error("Device signature is required - no fallback values allowed to prevent generic firmware") %}{% endif %};
                 default: begin
                     if (region_offset[31:2] < (STATUS_REG_SIZE/4)) begin
                         status_reg_rdata = status_reg_mem[region_offset[31:2]];

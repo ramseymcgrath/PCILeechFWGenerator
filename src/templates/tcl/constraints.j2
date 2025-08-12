@@ -85,13 +85,13 @@ if {[file exists $board_xdc_file]} {
 # Write board XDC content to temporary file to avoid brace/semicolon issues
 set board_auto_xdc_file [file join $script_dir "{{ board.name }}_auto.xdc"]
 set fp [open $board_auto_xdc_file w]
-puts $fp {{{ board_xdc_content }}}
+puts $fp {{ "{" ~ board_xdc_content ~ "}" }}
 close $fp
 add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
 read_xdc $board_auto_xdc_file
 puts "Added auto-generated board XDC: $board_auto_xdc_file"
 {% else %}
-error "Missing required XDC for board {{ board.name }} - aborting build."
+{%- set _ = throw_error("Missing required XDC for board " + board.name + " - aborting build.") %}
 {% endif %}
 {% endif %}
 

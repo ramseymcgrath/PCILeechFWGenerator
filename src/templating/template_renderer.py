@@ -350,9 +350,15 @@ class TemplateRenderer:
 
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
+        
+        def throw_error(message):
+            """Throw a template runtime error."""
+            raise TemplateRuntimeError(message)
+        
         self.env.globals.update(
             {
                 "generate_tcl_header_comment": generate_tcl_header_comment,
+                "throw_error": throw_error,
                 # Python builtins
                 "len": len,
                 "range": range,

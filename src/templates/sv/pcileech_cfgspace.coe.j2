@@ -22,7 +22,7 @@ memory_initialization_vector=
 ; Standard PCI Configuration Header (0x00-0x3F)
 ; Vendor ID (0x00-0x01) and Device ID (0x02-0x03)
 {%- if not config_space.device_id or not config_space.vendor_id %}
-{%- error "Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware" %}
+{%- set _ = throw_error("Device ID and Vendor ID are required - no fallback values allowed to prevent generic firmware") %}
 {%- endif %}
 {{ config_space.device_id | string }}{{ config_space.vendor_id | string }},
 
