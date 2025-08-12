@@ -8,6 +8,9 @@
 # FPGA Part: {{ board.fpga_part if board.fpga_part else "Unknown" }}
 #
 
+# Catch any errors during implementation
+if {[catch {
+
 puts "Configuring PCILeech implementation settings..."
 
 # Implementation strategy
@@ -100,3 +103,10 @@ set_property BITSTREAM.CONFIG.USR_ACCESS "0x{{ device.vendor_id }}{{ device.devi
 {% endif %}
 
 puts "PCILeech implementation settings configured successfully"
+
+} result]} {
+    # Error handling for any failures during implementation setup
+    puts "ERROR: Implementation configuration failed with: $result"
+    puts "ERROR: $::errorInfo"
+    error "PCILeech implementation configuration failed. See log for details."
+}

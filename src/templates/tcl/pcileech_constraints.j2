@@ -1,17 +1,44 @@
 {#- PCILeech Constraints Template -#}
 {#- This template generates PCILeech-specific timing constraints and pin assignments -#}
+{#- Improved for better readability, error handling, and maintainability -#}
+
 {{ header_comment if header_comment else "# PCILeech Constraints Script" }}
 #
 # PCILeech FPGA Firmware Constraints
-# Generated for: {{ device.vendor_id if device.vendor_id else "Unknown" }}:{{ device.device_id if device.device_id else "Unknown" }}
-# Board: {{ board.name if board.name else "Unknown" }}
-# FPGA Part: {{ board.fpga_part if board.fpga_part else "Unknown" }}
+{% if not device.vendor_id or not device.device_id %}
+# WARNING: Missing vendor_id or device_id - Device identification incomplete
+{% else %}
+# Generated for: {{ device.vendor_id }}:{{ device.device_id }}
+{% endif %}
+{% if not board.name %}
+# WARNING: Missing board name
+{% else %}
+# Board: {{ board.name }}
+{% endif %}
+{% if not board.fpga_part %}
+# WARNING: Missing FPGA part information
+{% else %}
+# FPGA Part: {{ board.fpga_part }}
+{% endif %}
+# Generation timestamp: [exec date]
 #
 
+#===============================================================================
+# INITIALIZATION
+#===============================================================================
 puts "Applying PCILeech constraints..."
 
-# Add board-specific constraint files
+{# No default values - all pins must be specified in board configuration #}
+{% set pcie_tx_p_pins = board.pcie_tx_p_pins if board.pcie_tx_p_pins is defined else [] %}
+{% set pcie_tx_n_pins = board.pcie_tx_n_pins if board.pcie_tx_n_pins is defined else [] %}
+{% set pcie_rx_p_pins = board.pcie_rx_p_pins if board.pcie_rx_p_pins is defined else [] %}
+{% set pcie_rx_n_pins = board.pcie_rx_n_pins if board.pcie_rx_n_pins is defined else [] %}
+
+#===============================================================================
+# BOARD-SPECIFIC CONSTRAINTS
+#===============================================================================
 {% if board.name %}
+# Include board-specific constraint file if available
 set board_name "{{ board.name }}"
 set constraint_file "${board_name}.xdc"
 
@@ -19,91 +46,229 @@ if {[file exists $constraint_file]} {
     add_files -fileset constrs_1 -norecurse $constraint_file
     puts "Added board constraint file: $constraint_file"
 } else {
-    puts "WARNING: Board constraint file not found: $constraint_file"
+    puts "ERROR: Board constraint file not found: $constraint_file"
+    puts "Required board-specific configuration for '${board_name}' is missing."
+    puts "Please ensure the constraint file exists in the project directory."
+    return
 }
 {% endif %}
 
-# PCILeech-specific timing constraints
-create_clock -period 10.000 -name pcie_clk [get_ports pcie_clk_p]
+#===============================================================================
+# CLOCK CONSTRAINTS
+#===============================================================================
+{% if not board.pcie_clock_period %}
+puts "ERROR: Missing required parameter: board.pcie_clock_period"
+puts "PCIe clock period must be explicitly specified in board configuration"
+return
+{% else %}
+# PCIe reference clock
+create_clock -period {{ board.pcie_clock_period }} -name pcie_clk [get_ports pcie_clk_p]
+{% endif %}
 
-# PCIe clock constraints
-{% if board.pcie_ip_type == "pcie7x" %}
-# PCIe 7-series specific constraints
-set_property PACKAGE_PIN {{ pcie_clk_p_pin if pcie_clk_p_pin else "F6" }} [get_ports pcie_clk_p]
-set_property PACKAGE_PIN {{ pcie_clk_n_pin if pcie_clk_n_pin else "E6" }} [get_ports pcie_clk_n]
+# PCIe clock IO standards and pin assignments
+{% if not board.pcie_ip_type %}
+puts "ERROR: Missing required parameter: board.pcie_ip_type"
+puts "PCIe IP type must be explicitly specified in board configuration"
+return
+{% elif board.pcie_ip_type == "pcie7x" %}
+# PCIe 7-series specific clock constraints
+{% if not pcie_clk_p_pin %}
+puts "ERROR: Missing required parameter: pcie_clk_p_pin for 7-series device"
+return
+{% else %}
+set_property PACKAGE_PIN {{ pcie_clk_p_pin }} [get_ports pcie_clk_p]
+{% endif %}
+{% if not pcie_clk_n_pin %}
+puts "ERROR: Missing required parameter: pcie_clk_n_pin for 7-series device"
+return
+{% else %}
+set_property PACKAGE_PIN {{ pcie_clk_n_pin }} [get_ports pcie_clk_n]
+{% endif %}
 set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_p]
 set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_n]
 {% elif board.pcie_ip_type == "ultrascale" %}
-# UltraScale+ specific constraints
-set_property PACKAGE_PIN {{ pcie_clk_p_pin if pcie_clk_p_pin else "AB7" }} [get_ports pcie_clk_p]
-set_property PACKAGE_PIN {{ pcie_clk_n_pin if pcie_clk_n_pin else "AB6" }} [get_ports pcie_clk_n]
+# UltraScale+ specific clock constraints
+{% if not pcie_clk_p_pin %}
+puts "ERROR: Missing required parameter: pcie_clk_p_pin for UltraScale device"
+return
+{% else %}
+set_property PACKAGE_PIN {{ pcie_clk_p_pin }} [get_ports pcie_clk_p]
+{% endif %}
+{% if not pcie_clk_n_pin %}
+puts "ERROR: Missing required parameter: pcie_clk_n_pin for UltraScale device"
+return
+{% else %}
+set_property PACKAGE_PIN {{ pcie_clk_n_pin }} [get_ports pcie_clk_n]
+{% endif %}
 set_property IOSTANDARD DIFF_SSTL12 [get_ports pcie_clk_p]
 set_property IOSTANDARD DIFF_SSTL12 [get_ports pcie_clk_n]
+{% else %}
+# Error for unsupported FPGA family
+puts "ERROR: Unsupported PCIe IP type: {{ board.pcie_ip_type }}"
+puts "Supported types are: pcie7x, ultrascale"
+return
 {% endif %}
 
-# PCIe reset constraints
-set_property PACKAGE_PIN {{ pcie_rst_pin if pcie_rst_pin else "G1" }} [get_ports pcie_rst_n]
-set_property IOSTANDARD LVCMOS33 [get_ports pcie_rst_n]
-set_property PULLUP true [get_ports pcie_rst_n]
-
-# PCILeech-specific timing constraints
+# Clock domain crossing
 set_clock_groups -asynchronous -group [get_clocks pcie_clk] -group [get_clocks -include_generated_clocks clk_out1_clk_wiz_0]
 
-# PCIe lane constraints
-{% for lane in range(max_lanes if max_lanes else 4) %}
-# Lane {{ lane }}
-set_property PACKAGE_PIN {{ "A4" if lane == 0 else ("A2" if lane == 1 else ("C4" if lane == 2 else "C2")) }} [get_ports {pcie_tx_p[{{ lane }}]}]
-set_property PACKAGE_PIN {{ "A3" if lane == 0 else ("A1" if lane == 1 else ("C3" if lane == 2 else "C1")) }} [get_ports {pcie_tx_n[{{ lane }}]}]
-set_property PACKAGE_PIN {{ "B6" if lane == 0 else ("B4" if lane == 1 else ("D6" if lane == 2 else "D4")) }} [get_ports {pcie_rx_p[{{ lane }}]}]
-set_property PACKAGE_PIN {{ "B5" if lane == 0 else ("B3" if lane == 1 else ("D5" if lane == 2 else "D3")) }} [get_ports {pcie_rx_n[{{ lane }}]}]
-{% endfor %}
+#===============================================================================
+# PCIe RESET CONSTRAINTS
+#===============================================================================
+{% if not pcie_rst_pin %}
+puts "ERROR: Missing required parameter: pcie_rst_pin"
+return
+{% else %}
+set_property PACKAGE_PIN {{ pcie_rst_pin }} [get_ports pcie_rst_n]
+set_property IOSTANDARD LVCMOS33 [get_ports pcie_rst_n]
+set_property PULLUP true [get_ports pcie_rst_n]
+{% endif %}
 
-# PCILeech BAR controller constraints
+#===============================================================================
+# PCIe LANE CONSTRAINTS
+#===============================================================================
+{% if not max_lanes %}
+puts "ERROR: Missing required parameter: max_lanes"
+return
+{% else %}
+{% set num_lanes = max_lanes %}
+{% endif %}
+
+{% if num_lanes > 4 %}
+puts "ERROR: Only up to 4 lanes supported in this template"
+return
+{% endif %}
+
+{% if pcie_tx_p_pins|length < num_lanes or pcie_tx_n_pins|length < num_lanes or
+      pcie_rx_p_pins|length < num_lanes or pcie_rx_n_pins|length < num_lanes %}
+puts "ERROR: Insufficient pin definitions for {{ num_lanes }} PCIe lanes"
+puts "Required pins must be defined in board configuration for all lanes"
+return
+{% else %}
+{% for lane in range(num_lanes) %}
+# Lane {{ lane }} pin assignments
+set_property PACKAGE_PIN {{ pcie_tx_p_pins[lane] }} [get_ports {pcie_tx_p[{{ lane }}]}]
+set_property PACKAGE_PIN {{ pcie_tx_n_pins[lane] }} [get_ports {pcie_tx_n[{{ lane }}]}]
+set_property PACKAGE_PIN {{ pcie_rx_p_pins[lane] }} [get_ports {pcie_rx_p[{{ lane }}]}]
+set_property PACKAGE_PIN {{ pcie_rx_n_pins[lane] }} [get_ports {pcie_rx_n[{{ lane }}]}]
+{% endfor %}
+{% endif %}
+
+#===============================================================================
+# CLOCK DOMAIN CROSSING CONSTRAINTS
+#===============================================================================
+# PCILeech BAR controller CDC constraints
 set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *bar_controller*/reg*/D]
 set_false_path -from [get_pins -hierarchical *bar_controller*/reg*/C] -to [get_clocks pcie_clk]
 
-# MSI-X table constraints
+# Configuration space shadow CDC constraints
+set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *cfg_shadow*/reg*/D]
+set_false_path -from [get_pins -hierarchical *cfg_shadow*/reg*/C] -to [get_clocks pcie_clk]
+
+# PCILeech FIFO timing constraints
+{% if not board.fifo_max_delay or not board.fifo_min_delay %}
+puts "ERROR: Missing required parameters: board.fifo_max_delay and/or board.fifo_min_delay"
+puts "FIFO timing constraints must be specified in board configuration"
+return
+{% else %}
+set_max_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ board.fifo_max_delay }}
+set_min_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ board.fifo_min_delay }}
+{% endif %}
+
+#===============================================================================
+# FEATURE-SPECIFIC CONSTRAINTS
+#===============================================================================
+# MSI-X table constraints (if supported)
 {% if supports_msix %}
 set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *msix_table*/reg*/D]
 set_false_path -from [get_pins -hierarchical *msix_table*/reg*/C] -to [get_clocks pcie_clk]
 {% endif %}
 
-# Configuration space shadow constraints
-set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *cfg_shadow*/reg*/D]
-set_false_path -from [get_pins -hierarchical *cfg_shadow*/reg*/C] -to [get_clocks pcie_clk]
-
-# PCILeech FIFO constraints
-set_max_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] 5.000
-set_min_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] 1.000
-
-# Option ROM constraints
+# Option ROM constraints (if present)
 {% if device.has_option_rom %}
 set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *option_rom*/reg*/D]
 set_false_path -from [get_pins -hierarchical *option_rom*/reg*/C] -to [get_clocks pcie_clk]
 {% endif %}
 
-# Device-specific constraints
+#===============================================================================
+# DEVICE-SPECIFIC CONSTRAINTS
+#===============================================================================
 {% if device.vendor_id and device.device_id %}
 # Device {{ device.vendor_id }}:{{ device.device_id }} specific constraints
+{% if device.class_code %}
 {% if device.class_code == "0x020000" %}
 # Network controller specific constraints
-set_max_delay -from [get_pins -hierarchical *network*/reg*/C] -to [get_pins -hierarchical *network*/reg*/D] 8.000
+{% if not device.network_max_delay %}
+puts "ERROR: Missing required parameter: device.network_max_delay for network controller"
+return
+{% else %}
+set_max_delay -from [get_pins -hierarchical *network*/reg*/C] -to [get_pins -hierarchical *network*/reg*/D] {{ device.network_max_delay }}
+{% endif %}
 {% elif device.class_code == "0x040300" %}
-# Audio controller specific constraints  
-set_max_delay -from [get_pins -hierarchical *audio*/reg*/C] -to [get_pins -hierarchical *audio*/reg*/D] 6.000
+# Audio controller specific constraints
+{% if not device.audio_max_delay %}
+puts "ERROR: Missing required parameter: device.audio_max_delay for audio controller"
+return
+{% else %}
+set_max_delay -from [get_pins -hierarchical *audio*/reg*/C] -to [get_pins -hierarchical *audio*/reg*/D] {{ device.audio_max_delay }}
+{% endif %}
+{% elif device.class_code == "0x0c0330" %}
+# USB controller specific constraints
+{% if not device.usb_max_delay %}
+puts "ERROR: Missing required parameter: device.usb_max_delay for USB controller"
+return
+{% else %}
+set_max_delay -from [get_pins -hierarchical *usb*/reg*/C] -to [get_pins -hierarchical *usb*/reg*/D] {{ device.usb_max_delay }}
+{% endif %}
+{% elif device.class_code == "0x018000" %}
+# Display controller specific constraints
+{% if not device.display_max_delay %}
+puts "ERROR: Missing required parameter: device.display_max_delay for display controller"
+return
+{% else %}
+set_max_delay -from [get_pins -hierarchical *display*/reg*/C] -to [get_pins -hierarchical *display*/reg*/D] {{ device.display_max_delay }}
+{% endif %}
+{% else %}
+# Generic device-specific constraints for class code: {{ device.class_code }}
+puts "ERROR: No timing constraints defined for device class {{ device.class_code }}"
+puts "Device-specific timing parameters must be added to configuration"
+return
+{% endif %}
+{% else %}
+puts "INFO: No device class code specified. Using default timing constraints."
 {% endif %}
 {% endif %}
 
+#===============================================================================
+# IMPLEMENTATION AND BITSTREAM CONSTRAINTS
+#===============================================================================
 # Implementation constraints
 set_property CFGBVS VCCO [current_design]
-set_property CONFIG_VOLTAGE 3.3 [current_design]
+{% if not board.config_voltage %}
+puts "ERROR: Missing required parameter: board.config_voltage"
+return
+{% else %}
+set_property CONFIG_VOLTAGE {{ board.config_voltage }} [current_design]
+{% endif %}
 
 # Bitstream generation constraints
-set_property BITSTREAM.CONFIG.UNUSEDPIN PULLUP [current_design]
-set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
-set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
+{% if not board.bitstream_unusedpin or not board.bitstream_spi_buswidth or not board.bitstream_configrate %}
+puts "ERROR: Missing required bitstream parameters"
+puts "Required: board.bitstream_unusedpin, board.bitstream_spi_buswidth, board.bitstream_configrate"
+return
+{% else %}
+set_property BITSTREAM.CONFIG.UNUSEDPIN {{ board.bitstream_unusedpin }} [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH {{ board.bitstream_spi_buswidth }} [current_design]
+set_property BITSTREAM.CONFIG.CONFIGRATE {{ board.bitstream_configrate }} [current_design]
+{% endif %}
 
 # PCILeech-specific bitstream settings
-set_property BITSTREAM.CONFIG.USERID "0x{{ device.vendor_id if device.vendor_id else '1234' }}{{ device.device_id if device.device_id else '5678' }}" [current_design]
+{% if not device.vendor_id or not device.device_id %}
+puts "ERROR: Missing required parameter: device.vendor_id or device.device_id"
+puts "Both vendor ID and device ID must be specified for proper device identification"
+return
+{% else %}
+set_property BITSTREAM.CONFIG.USERID "0x{{ device.vendor_id }}{{ device.device_id }}" [current_design]
+{% endif %}
 
 puts "PCILeech constraints applied successfully"
