@@ -223,7 +223,7 @@ FFFFFFFF,
 {% set msix_enabled = is_msix_supported() %}
 {% set next_cap = CAP_OFFSET_PCIE %}
 {% set msi_cap_header = "0080" ~ "%02X" | format(next_cap) ~ "05" %}
-{% set msix_control = msix_config.num_vectors|default(0) > 0 ? "%04X" | format((msix_config.num_vectors - 1) | int) : "0000" %}
+{% set msix_control = ("%04X" | format((msix_config.num_vectors - 1) | int)) if (msix_config.num_vectors|default(0) > 0) else "0000" %}
 {% set msix_cap_header = msix_control ~ "%02X" | format(next_cap) ~ "11" %}
 
 ; MSI Capability ({{ CAP_OFFSET_MSI }}-{{ CAP_OFFSET_MSI + 7 }})
