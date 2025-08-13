@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from src.exceptions import TemplateRenderError
-from src.templating.systemverilog_generator import AdvancedSVGenerator
+from src.templating.systemverilog_generator import (ERROR_MESSAGES,
+                                                    AdvancedSVGenerator,
+                                                    ContextBuilder)
 
 
 class TestSystemVerilogGeneratorValidation:
@@ -61,7 +63,7 @@ class TestSystemVerilogGeneratorValidation:
         with pytest.raises(TemplateRenderError) as exc_info:
             self.generator.generate_pcileech_modules(template_context)
 
-        assert "device_signature is missing" in str(exc_info.value)
+        assert ERROR_MESSAGES["missing_device_signature"] in str(exc_info.value)
         assert "security" in str(exc_info.value).lower()
 
     def test_device_signature_none_raises_error(self):
@@ -84,7 +86,7 @@ class TestSystemVerilogGeneratorValidation:
         with pytest.raises(TemplateRenderError) as exc_info:
             self.generator.generate_pcileech_modules(template_context)
 
-        assert "device_signature is None or empty" in str(exc_info.value)
+        assert ERROR_MESSAGES["empty_device_signature"] in str(exc_info.value)
         assert "security requirement" in str(exc_info.value).lower()
 
     def test_device_signature_empty_raises_error(self):
@@ -107,7 +109,7 @@ class TestSystemVerilogGeneratorValidation:
         with pytest.raises(TemplateRenderError) as exc_info:
             self.generator.generate_pcileech_modules(template_context)
 
-        assert "device_signature is None or empty" in str(exc_info.value)
+        assert ERROR_MESSAGES["empty_device_signature"] in str(exc_info.value)
         assert "no fallback values are allowed" in str(exc_info.value).lower()
 
     def test_valid_device_signature_succeeds(self):
@@ -146,8 +148,8 @@ class TestSystemVerilogGeneratorValidation:
             context = call[0][1]  # Second argument is the context
             assert context["device_signature"] == "0xDEADBEEF"
 
-    def test_create_context_preserves_device_signature(self):
-        """Test that _create_context properly preserves device_signature."""
+    def test_context_builder_preserves_device_signature(self):
+        """Test that ContextBuilder properly preserves device_signature."""
         template_context = {
             "device_config": {"vendor_id": "10EC", "device_id": "8168"},
             "device_signature": "0x12345678",
@@ -155,16 +157,21 @@ class TestSystemVerilogGeneratorValidation:
 
         device_config = {"vendor_id": "10EC", "device_id": "8168"}
 
-        # Call _create_context
-        enhanced_context = self.generator._create_context(
-            template_context, device_config
+        # Call create_enhanced_context
+        enhanced_context = ContextBuilder.create_enhanced_context(
+            template_context,
+            device_config,
+            self.mock_power_config,
+            self.mock_error_config,
+            self.mock_perf_config,
+            self.mock_device_config,
         )
 
         # Verify device_signature is preserved
         assert enhanced_context["device_signature"] == "0x12345678"
 
-    def test_create_context_fails_without_device_signature(self):
-        """Test that _create_context fails when device_signature is missing."""
+    def test_context_builder_fails_without_device_signature(self):
+        """Test that context creation fails when device_signature is missing."""
         template_context = {
             "device_config": {"vendor_id": "10EC", "device_id": "8168"}
             # device_signature is missing
@@ -174,7 +181,14 @@ class TestSystemVerilogGeneratorValidation:
 
         # Should raise KeyError due to direct dictionary access
         with pytest.raises(KeyError) as exc_info:
-            self.generator._create_context(template_context, device_config)
+            ContextBuilder.create_enhanced_context(
+                template_context,
+                device_config,
+                self.mock_power_config,
+                self.mock_error_config,
+                self.mock_perf_config,
+                self.mock_device_config,
+            )
 
         assert "device_signature" in str(exc_info.value)
 
@@ -193,8 +207,13 @@ class TestSystemVerilogGeneratorValidation:
         device_config = {"vendor_id": "10EC", "device_id": "8168"}
 
         # Create context
-        enhanced_context = self.generator._create_context(
-            template_context, device_config
+        enhanced_context = ContextBuilder.create_enhanced_context(
+            template_context,
+            device_config,
+            self.mock_power_config,
+            self.mock_error_config,
+            self.mock_perf_config,
+            self.mock_device_config,
         )
 
         # Verify that optional fields use .get() with defaults
@@ -208,4 +227,11 @@ class TestSystemVerilogGeneratorValidation:
         # by checking that missing device_signature raises KeyError
         del template_context["device_signature"]
         with pytest.raises(KeyError):
-            self.generator._create_context(template_context, device_config)
+            ContextBuilder.create_enhanced_context(
+                template_context,
+                device_config,
+                self.mock_power_config,
+                self.mock_error_config,
+                self.mock_perf_config,
+                self.mock_device_config,
+            )

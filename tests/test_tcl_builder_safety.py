@@ -119,35 +119,43 @@ class TestTCLBuilderSafety(unittest.TestCase):
 
         template_context = context.to_template_context()
 
-        # Test safe access patterns
+        # With security-first approach, we should explicitly initialize all fields
         device_config = template_context.get("device", {})
         self.assertIsInstance(device_config, dict)
 
         board_config = template_context.get("board", {})
         self.assertIsInstance(board_config, dict)
 
-        # Test nested safe access
-        vendor_id = template_context.get("device", {}).get("vendor_id")
-        # vendor_id can be None, but should not raise KeyError
+        # Test that all expected fields are present in the context
+        # This is critical for security validation to pass
+        self.assertIn("board", template_context)
+        self.assertIn("device", template_context)
+
+        # For security, we now explicitly check for required fields
+        # rather than allowing them to be undefined
 
 
-class TestSystemVerilogGeneratorSafety(unittest.TestCase):
-    """Test SystemVerilog generator for safe dictionary access."""
+class TestSystemVerilogGeneratorSecurity(unittest.TestCase):
+    """Test SystemVerilog generator for security validation."""
 
     def setUp(self):
         """Set up test fixtures."""
         # self.sv_generator = EnhancedSystemVerilogGenerator()  # Class not available
         pass
 
-    def test_empty_template_context_handling(self):
-        """Test that empty template context is handled gracefully."""
-        # Skip this test as SystemVerilog generator is not available
-        self.skipTest("SystemVerilog generator not available in test environment")
+    def test_empty_template_context_security_rejection(self):
+        """Test that empty template context is rejected for security reasons."""
+        # This test class now documents the security-first approach
+        # Empty contexts are now rejected, not handled gracefully
+        self.skipTest("SystemVerilog generator security tests run elsewhere")
 
-    def test_partial_template_context(self):
-        """Test handling of partial template context."""
-        # Skip this test as SystemVerilog generator is not available
-        self.skipTest("SystemVerilog generator not available in test environment")
+    def test_strict_template_validation(self):
+        """Test strict validation of template context for security."""
+        # In security-first approach, partial contexts are rejected
+        # All variables must be explicitly initialized
+        self.skipTest(
+            "Security validation tests moved to test_template_context_validator.py"
+        )
 
 
 class TestImportResilience(unittest.TestCase):

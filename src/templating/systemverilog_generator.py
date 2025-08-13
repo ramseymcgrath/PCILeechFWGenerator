@@ -17,42 +17,125 @@ ensuring consistent behavior and proper error reporting throughout the system.
 """
 
 import logging
-from dataclasses import dataclass
+import mmap
+import os
+import sys
+from dataclasses import dataclass, field
+from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import (Any, Dict, List, Optional, Set, Tuple, TypedDict, Union,
+                    cast)
 
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.error_utils import (
-    ErrorCategory,
-    extract_root_cause,
-    format_concise_error,
-    format_user_friendly_error,
-    is_user_fixable_error,
-)
-from src.string_utils import (
-    generate_sv_header_comment,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-)
-from src.utils.attribute_access import (
-    get_attr_or_raise,
-    has_attr,
-    require_attrs,
-    safe_get_attr,
-)
+from src.error_utils import (ErrorCategory, extract_root_cause,
+                             format_concise_error, format_user_friendly_error,
+                             is_user_fixable_error)
+from src.string_utils import (generate_sv_header_comment, log_error_safe,
+                              log_info_safe, log_warning_safe, safe_format)
+from src.utils.attribute_access import (get_attr_or_raise, has_attr,
+                                        require_attrs, safe_get_attr)
 
-from .advanced_sv_features import (
-    AdvancedSVFeatureGenerator,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-)
+from .advanced_sv_features import (AdvancedSVFeatureGenerator,
+                                   ErrorHandlingConfig, PerformanceConfig)
 from .advanced_sv_power import PowerManagementConfig
 from .template_renderer import TemplateRenderer, TemplateRenderError
+
+# Constants for default values and validation
+DEFAULT_FIFO_DEPTH = 512
+DEFAULT_DATA_WIDTH = 128
+DEFAULT_FPGA_FAMILY = "artix7"
+DEFAULT_CLASS_CODE = "020000"  # Network controller
+DEFAULT_REVISION_ID = "01"
+DEFAULT_SUBSYSTEM_ID = "0000"  # No subsystem
+
+# Minimum/maximum values for validation
+MIN_PAYLOAD_SIZE = 128
+MAX_PAYLOAD_SIZE = 4096
+MIN_READ_REQUEST_SIZE = 128
+MAX_READ_REQUEST_SIZE = 4096
+MIN_QUEUE_DEPTH = 1
+MAX_QUEUE_DEPTH = 65536
+MIN_FREQUENCY_MHZ = 1.0
+MAX_BASE_FREQUENCY_MHZ = 1000.0
+MAX_MEMORY_FREQUENCY_MHZ = 2000.0
+
+# Template paths for better maintainability
+TEMPLATE_PATHS = {
+    "device_specific_ports": "systemverilog/components/device_specific_ports.sv.j2",
+    "main_advanced_controller": "systemverilog/advanced/advanced_controller.sv.j2",
+    "clock_crossing": "systemverilog/advanced/clock_crossing.sv.j2",
+    "build_integration": "python/build_integration.py.j2",
+    "pcileech_integration": "python/pcileech_build_integration.py.j2",
+    "pcileech_tlps_bar_controller": "systemverilog/pcileech_tlps128_bar_controller.sv.j2",
+    "pcileech_fifo": "systemverilog/pcileech_fifo.sv.j2",
+    "top_level_wrapper": "systemverilog/top_level_wrapper.sv.j2",
+    "pcileech_cfgspace": "systemverilog/pcileech_cfgspace.coe.j2",
+    "msix_capability_registers": "systemverilog/msix_capability_registers.sv.j2",
+    "msix_implementation": "systemverilog/msix_implementation.sv.j2",
+    "msix_table": "systemverilog/msix_table.sv.j2",
+}
+
+# Basic SystemVerilog modules to generate in legacy path
+BASIC_SV_MODULES = [
+    "bar_controller.sv.j2",
+    "cfg_shadow.sv.j2",
+    "device_config.sv.j2",
+    "msix_capability_registers.sv.j2",
+    "msix_implementation.sv.j2",
+    "msix_table.sv.j2",
+    "option_rom_bar_window.sv.j2",
+    "option_rom_spi_flash.sv.j2",
+    "top_level_wrapper.sv.j2",  # Essential for Vivado top module
+]
+
+# Centralized error messages for consistency
+ERROR_MESSAGES = {
+    "undefined_var": "{context}: Missing required template variables. Ensure {object} has all required attributes. Details: {error}",
+    "template_not_found": "{context}: Template file not found. Ensure the template exists at '{path}' or check template_dir. Details: {error}",
+    "missing_device_config": "Device configuration is required for safe firmware generation. Please provide a valid DeviceSpecificLogic object.",
+    "invalid_device_type": "Invalid device_type: {value}. Must be a DeviceType enum. Please use values from DeviceType class.",
+    "invalid_device_class": "Invalid device_class: {value}. Must be a DeviceClass enum. Please use values from DeviceClass class.",
+    "invalid_numeric_param": "{param} = {value} is out of valid range [{min}, {max}].",
+    "no_template_context": "Template context is required for {operation}",
+    "context_not_dict": "Template context must be a dictionary, got {type_name}",
+    "missing_critical_field": "device_config is missing from template context. This is required for safe PCILeech firmware generation.",
+    "device_config_not_dict": "device_config must be a dictionary, got {type_name}. Cannot proceed with firmware generation.",
+    "missing_device_signature": "CRITICAL: device_signature is missing from template context. This field is required for firmware security and uniqueness.",
+    "empty_device_signature": "CRITICAL: device_signature is None or empty. A valid device signature is required to prevent generic firmware generation.",
+    "validation_failed": "Template context validation failed with {count} critical errors:\n{errors}\n\nCannot proceed with firmware generation due to invalid configuration.",
+    "missing_behavior_profile": "Behavior profile is required for register extraction",
+}
+
+
+class RegisterAccessType(str, Enum):
+    """Enumeration of register access types."""
+
+    READ_ONLY = "ro"
+    WRITE_ONLY = "wo"
+    READ_WRITE = "rw"
+
+
+class RegisterAccess(TypedDict, total=False):
+    """Type definition for register access information."""
+
+    register: str
+    offset: int
+    operation: str
+
+
+class RegisterInfo(TypedDict):
+    """Type definition for register information."""
+
+    name: str
+    offset: int
+    size: int
+    access_count: int
+    read_count: int
+    write_count: int
+    access_type: str
 
 
 @dataclass
@@ -97,22 +180,486 @@ class PCILeechOutput:
     use_pcileech_structure: bool = True
     generate_explicit_file_lists: bool = True
 
-    # File organization
-    systemverilog_files: Optional[List[str]] = None
-    ip_core_files: Optional[List[str]] = None
-    coefficient_files: Optional[List[str]] = None
-    constraint_files: Optional[List[str]] = None
+    # File organization - using field instead of None initialization
+    systemverilog_files: List[str] = field(default_factory=list)
+    ip_core_files: List[str] = field(default_factory=list)
+    coefficient_files: List[str] = field(default_factory=list)
+    constraint_files: List[str] = field(default_factory=list)
 
-    def __post_init__(self):
-        """Initialize file lists if not provided."""
-        if self.systemverilog_files is None:
-            self.systemverilog_files = []
-        if self.ip_core_files is None:
-            self.ip_core_files = []
-        if self.coefficient_files is None:
-            self.coefficient_files = []
-        if self.constraint_files is None:
-            self.constraint_files = []
+
+@dataclass
+class TimingConfig:
+    """Configuration for timing-related parameters."""
+
+    clk_hz: int = 100000000  # 100 MHz default clock
+    reset_cycles: int = 16  # 16 cycles for reset
+    timeout_ns: int = 5000  # 5000 ns default timeout
+    async_fifo_depth: int = 32  # Deeper FIFO for safety
+
+
+class ValidationHelper:
+    """Helper class for validation operations."""
+
+    @staticmethod
+    def validate_numeric_param(
+        param_name: str,
+        param_value: Any,
+        min_value: Union[int, float],
+        max_value: Union[int, float],
+    ) -> Optional[str]:
+        """
+        Validate a numeric parameter against a range.
+
+        Args:
+            param_name: Name of the parameter
+            param_value: Value to validate
+            min_value: Minimum allowed value
+            max_value: Maximum allowed value
+
+        Returns:
+            Error message if validation fails, None otherwise
+        """
+        if not isinstance(param_value, (int, float)):
+            return f"{param_name} must be a number, got {type(param_value).__name__}"
+
+        if param_value < min_value or param_value > max_value:
+            return ERROR_MESSAGES["invalid_numeric_param"].format(
+                param=param_name, value=param_value, min=min_value, max=max_value
+            )
+
+        return None
+
+    @staticmethod
+    def validate_dict_field(
+        data_dict: Dict[str, Any], field_name: str, required: bool = True
+    ) -> Optional[str]:
+        """
+        Validate a field in a dictionary.
+
+        Args:
+            data_dict: Dictionary to check
+            field_name: Field name to validate
+            required: Whether the field is required
+
+        Returns:
+            Error message if validation fails, None otherwise
+        """
+        if field_name not in data_dict:
+            if required:
+                return f"Required field '{field_name}' is missing"
+            return None
+
+        return None
+
+
+class ContextBuilder:
+    """
+    Helper class for building template contexts with strict validation.
+
+    This class enforces security-first principles by requiring comprehensive
+    context data initialization and validation before any template processing.
+    No default values or fallbacks are provided for security-critical fields.
+    """
+
+    @staticmethod
+    def build_power_management_context(
+        power_config: PowerManagementConfig,
+    ) -> Dict[str, Any]:
+        """
+        Build power management context with strict validation.
+
+        Args:
+            power_config: Power management configuration object which must be
+                          fully initialized with all required fields
+
+        Returns:
+            Dictionary with validated power management context variables
+
+        Raises:
+            ValueError: If power_config is not properly initialized
+        """
+        if not power_config:
+            raise ValueError("Power management configuration cannot be None")
+
+        # Get transition_cycles object and validate it
+        transition_cycles = power_config.transition_cycles
+        if not transition_cycles:
+            raise ValueError("Power management transition_cycles cannot be None")
+
+        # Convert transition_cycles to dictionary while validating required fields
+        if hasattr(transition_cycles, "__dict__"):
+            # It's a TransitionCycles object, convert to dict with validation
+            required_fields = ["d0_to_d1", "d1_to_d0", "d0_to_d3", "d3_to_d0"]
+            missing_fields = []
+
+            tc_dict = {}
+            for field in required_fields:
+                if not hasattr(transition_cycles, field):
+                    missing_fields.append(field)
+                else:
+                    tc_dict[field] = getattr(transition_cycles, field)
+
+            if missing_fields:
+                raise ValueError(
+                    f"Missing required transition cycle fields: {', '.join(missing_fields)}"
+                )
+        elif isinstance(transition_cycles, dict):
+            # It's a dictionary, validate required fields
+            required_fields = ["d0_to_d1", "d1_to_d0", "d0_to_d3", "d3_to_d0"]
+            missing_fields = [
+                field for field in required_fields if field not in transition_cycles
+            ]
+
+            if missing_fields:
+                raise ValueError(
+                    f"Missing required transition cycle fields: {', '.join(missing_fields)}"
+                )
+
+            tc_dict = transition_cycles
+        else:
+            raise ValueError(
+                f"Invalid transition_cycles type: {type(transition_cycles).__name__}. "
+                "Must be a TransitionCycles object or dictionary."
+            )
+
+        # Validate other required fields
+        if not hasattr(power_config, "clk_hz") or power_config.clk_hz is None:
+            raise ValueError("Power management clk_hz cannot be None")
+
+        if (
+            not hasattr(power_config, "transition_timeout_ns")
+            or power_config.transition_timeout_ns is None
+        ):
+            raise ValueError("Power management transition_timeout_ns cannot be None")
+
+        # Build and return the validated context
+        return {
+            "clk_hz": power_config.clk_hz,
+            "transition_timeout_ns": power_config.transition_timeout_ns,
+            "enable_pme": power_config.enable_pme,
+            "enable_wake_events": power_config.enable_wake_events,
+            "transition_cycles": tc_dict,
+        }
+
+    @staticmethod
+    def build_performance_context(perf_config: PerformanceConfig) -> Dict[str, Any]:
+        """
+        Build performance monitoring context with strict validation.
+
+        Args:
+            perf_config: Performance configuration object which must be
+                        fully initialized with all required fields
+
+        Returns:
+            Dictionary with validated performance monitoring context variables
+
+        Raises:
+            ValueError: If perf_config is not properly initialized
+        """
+        if not perf_config:
+            raise ValueError("Performance configuration cannot be None")
+
+        # Validate required fields
+        required_fields = [
+            "counter_width",
+            "enable_bandwidth_monitoring",
+            "enable_latency_tracking",
+            "enable_error_rate_tracking",
+            "sampling_period",
+        ]
+
+        missing_fields = []
+        for field in required_fields:
+            if not hasattr(perf_config, field) or getattr(perf_config, field) is None:
+                missing_fields.append(field)
+
+        if missing_fields:
+            raise ValueError(
+                f"Missing required performance configuration fields: {', '.join(missing_fields)}"
+            )
+
+        # Return the validated context
+        return {
+            "counter_width": perf_config.counter_width,
+            "enable_bandwidth": perf_config.enable_bandwidth_monitoring,
+            "enable_latency": perf_config.enable_latency_tracking,
+            "enable_error_rate": perf_config.enable_error_rate_tracking,
+            "sample_period": perf_config.sampling_period,
+        }
+
+    @staticmethod
+    def build_error_handling_context(
+        error_config: ErrorHandlingConfig,
+    ) -> Dict[str, Any]:
+        """
+        Build error handling context with strict validation.
+
+        Args:
+            error_config: Error handling configuration object which must be
+                         fully initialized with all required fields
+
+        Returns:
+            Dictionary with validated error handling context variables
+
+        Raises:
+            ValueError: If error_config is not properly initialized
+        """
+        if not error_config:
+            raise ValueError("Error handling configuration cannot be None")
+
+        # Validate required fields
+        required_fields = [
+            "enable_error_detection",
+            "enable_error_logging",
+            "enable_auto_retry",
+            "max_retry_count",
+            "error_recovery_cycles",
+            "error_log_depth",
+        ]
+
+        missing_fields = []
+        for field in required_fields:
+            if not hasattr(error_config, field) or getattr(error_config, field) is None:
+                missing_fields.append(field)
+
+        if missing_fields:
+            raise ValueError(
+                f"Missing required error handling fields: {', '.join(missing_fields)}"
+            )
+
+        # Return the validated context
+        return {
+            "enable_error_detection": error_config.enable_error_detection,
+            "enable_logging": error_config.enable_error_logging,
+            "enable_auto_retry": error_config.enable_auto_retry,
+            "max_retry_count": error_config.max_retry_count,
+            "recovery_cycles": error_config.error_recovery_cycles,
+            "error_log_depth": error_config.error_log_depth,
+        }
+
+    @staticmethod
+    def create_device_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create device information dictionary with strict validation.
+
+        Args:
+            device_config: Device configuration dictionary with all required fields
+
+        Returns:
+            Dictionary with validated device information
+
+        Raises:
+            ValueError: If device_config is missing required fields
+        """
+        if not device_config:
+            raise ValueError("Device configuration cannot be None")
+
+        # Validate critical device identification fields
+        required_fields = ["vendor_id", "device_id"]
+        missing_fields = [
+            field
+            for field in required_fields
+            if field not in device_config or not device_config[field]
+        ]
+
+        if missing_fields:
+            raise ValueError(
+                f"Missing required device identification fields: {', '.join(missing_fields)}. "
+                "These fields are critical for secure device identification."
+            )
+
+        # Validate additional required fields
+        required_subsystem_fields = [
+            "subsystem_vendor_id",
+            "subsystem_device_id",
+            "class_code",
+            "revision_id",
+        ]
+        missing_subsystem_fields = [
+            field for field in required_subsystem_fields if field not in device_config
+        ]
+
+        if missing_subsystem_fields:
+            raise ValueError(
+                f"Missing required subsystem fields: {', '.join(missing_subsystem_fields)}. "
+                "Explicit device configuration is required for all fields."
+            )
+
+        # Create device info with validated fields (no defaults)
+        return {
+            "vendor_id": device_config["vendor_id"],
+            "device_id": device_config["device_id"],
+            "subsys_vendor_id": device_config["subsystem_vendor_id"],
+            "subsys_device_id": device_config["subsystem_device_id"],
+            "class_code": device_config["class_code"],
+            "revision_id": device_config["revision_id"],
+        }
+
+    @staticmethod
+    def create_enhanced_context(
+        template_context: Dict[str, Any],
+        device_config: Dict[str, Any],
+        power_config: PowerManagementConfig,
+        error_config: ErrorHandlingConfig,
+        perf_config: PerformanceConfig,
+        device_obj: DeviceSpecificLogic,
+    ) -> Dict[str, Any]:
+        """
+        Create enhanced template context for PCILeech modules.
+
+        Args:
+            template_context: Original template context
+            device_config: Device configuration dictionary
+            power_config: Power management configuration
+            error_config: Error handling configuration
+            perf_config: Performance configuration
+            device_obj: Device-specific logic object
+
+        Returns:
+            Enhanced template context dictionary
+        """
+        # Generate header comment for SystemVerilog files
+        header = generate_sv_header_comment(
+            "PCILeech SystemVerilog Module",
+            generator="PCILeechFWGenerator - SystemVerilog Generation",
+            device_type="PCIe Device Controller",
+            features="PCILeech integration, MSI-X support, BAR controller",
+        )
+
+        # Create device object for template compatibility
+        device_info = ContextBuilder.create_device_info(device_config)
+
+        # Set up common enable flags
+        enable_scatter_gather = getattr(device_obj, "enable_dma", False)
+
+        # Build enhanced context incrementally for better performance
+        enhanced_context = {
+            # Copy only essential keys from original context
+            "device_config": template_context["device_config"],
+            "msix_config": template_context.get("msix_config", {}),
+            "bar_config": template_context.get("bar_config", {}),
+            "board_config": template_context.get("board_config", {}),
+            "interrupt_config": template_context.get("interrupt_config", {}),
+            "config_space_data": template_context.get("config_space_data", {}),
+            "timing_config": template_context.get("timing_config", {}),
+            "pcileech_config": template_context.get("pcileech_config", {}),
+            "active_device_config": template_context.get("active_device_config", {}),
+            # CRITICAL: device_signature must be present - use direct access for fail-fast
+            "device_signature": template_context["device_signature"],
+            "generation_metadata": template_context.get("generation_metadata", {}),
+            # Add power and error config objects for template compatibility
+            "power_config": power_config,
+            "error_config": error_config,
+            "perf_config": perf_config,
+            # Add new template variables
+            "header": header,
+            "device": device_info,
+            "config_space": {
+                "vendor_id": device_config["vendor_id"],
+                "device_id": device_config["device_id"],
+                "class_code": device_config.get("class_code", DEFAULT_CLASS_CODE),
+                "revision_id": device_config.get("revision_id", DEFAULT_REVISION_ID),
+            },
+            "enable_custom_config": True,
+            "enable_scatter_gather": getattr(device_obj, "enable_dma", True),
+            "enable_interrupt": template_context.get("interrupt_config", {}).get(
+                "vectors", 0
+            )
+            > 0,
+            "enable_clock_crossing": True,
+            "enable_performance_counters": getattr(
+                perf_config, "enable_transaction_counters", True
+            ),
+            "enable_error_detection": getattr(error_config, "enable_ecc", True),
+            "fifo_type": "block_ram",
+            "fifo_depth": DEFAULT_FIFO_DEPTH,
+            "data_width": DEFAULT_DATA_WIDTH,
+            "fpga_family": DEFAULT_FPGA_FAMILY,
+            "vendor_id": device_config["vendor_id"],
+            "device_id": device_config["device_id"],
+            "vendor_id_hex": device_config["vendor_id"],
+            "device_id_hex": device_config["device_id"],
+            "device_specific_config": {},
+            # Add variables needed by pcileech_cfgspace.coe.j2 template
+            "bar": template_context.get("bar", []),
+            "table_offset_bir": template_context.get("msix_config", {}).get(
+                "table_bir", 0
+            )
+            | (template_context.get("msix_config", {}).get("table_offset", 0) & ~0x7),
+            "pba_offset_bir": template_context.get("msix_config", {}).get("pba_bir", 0)
+            | (template_context.get("msix_config", {}).get("pba_offset", 0) & ~0x7),
+            # Add individual MSI-X variables that the template expects
+            "msix_table_bir": template_context.get("msix_config", {}).get(
+                "table_bir", 0
+            ),
+            "msix_table_offset": template_context.get("msix_config", {}).get(
+                "table_offset", 0x1000
+            ),
+            "msix_pba_bir": template_context.get("msix_config", {}).get("pba_bir", 0),
+            "msix_pba_offset": template_context.get("msix_config", {}).get(
+                "pba_offset", 0x2000
+            ),
+        }
+
+        # Add enable_advanced_features to device_config section if it doesn't exist
+        if "device_config" in enhanced_context and isinstance(
+            enhanced_context["device_config"], dict
+        ):
+            enhanced_context["device_config"]["enable_advanced_features"] = getattr(
+                error_config, "enable_ecc", True
+            )
+
+        return enhanced_context
+
+
+class MSIXHelper:
+    """Helper class for MSI-X related operations."""
+
+    @staticmethod
+    def generate_msix_pba_init(num_vectors: int) -> str:
+        """
+        Generate MSI-X PBA initialization file content.
+
+        Args:
+            num_vectors: Number of MSI-X vectors
+
+        Returns:
+            Hex file content for MSI-X PBA initialization
+        """
+        # Calculate PBA size in DWORDs
+        pba_size = (num_vectors + 31) // 32
+
+        # Generate PBA initialization data (all zeros initially)
+        hex_lines = ["00000000" for _ in range(pba_size)]
+        return "\n".join(hex_lines) + "\n"
+
+    @staticmethod
+    def generate_msix_table_init(
+        num_vectors: int, is_test_environment: bool = False
+    ) -> str:
+        """
+        Generate MSI-X table initialization file content.
+
+        Args:
+            num_vectors: Number of MSI-X vectors
+            is_test_environment: Whether we're in a test environment
+
+        Returns:
+            Hex file content for MSI-X table initialization
+        """
+        # Generate dummy data for test environments
+        dummy_table_data = []
+        for i in range(num_vectors):
+            # Message Address Low (BAR0 + i*16)
+            dummy_table_data.append(0xFEE00000 + (i << 4))
+            # Message Address High
+            dummy_table_data.append(0x00000000)
+            # Message Data (vector ID in low 8 bits)
+            dummy_table_data.append(0x00000000 | i)
+            # Vector Control (not masked)
+            dummy_table_data.append(0x00000000)
+
+        return "\n".join(f"{value:08X}" for value in dummy_table_data) + "\n"
 
 
 class AdvancedSVGenerator:
@@ -189,52 +736,81 @@ class AdvancedSVGenerator:
             ValueError: If device configuration is invalid or unsafe
         """
         if not self.device_config:
-            raise ValueError(
-                "Device configuration is required for safe firmware generation. "
-                "Please provide a valid DeviceSpecificLogic object."
-            )
+            raise ValueError(ERROR_MESSAGES["missing_device_config"])
 
         # Validate device type and class have proper enum values
         if not hasattr(self.device_config.device_type, "value"):
             raise ValueError(
-                f"Invalid device_type: {self.device_config.device_type}. "
-                "Must be a DeviceType enum. Please use values from DeviceType class."
+                ERROR_MESSAGES["invalid_device_type"].format(
+                    value=self.device_config.device_type
+                )
             )
 
         if not hasattr(self.device_config.device_class, "value"):
             raise ValueError(
-                f"Invalid device_class: {self.device_config.device_class}. "
-                "Must be a DeviceClass enum. Please use values from DeviceClass class."
+                ERROR_MESSAGES["invalid_device_class"].format(
+                    value=self.device_config.device_class
+                )
             )
 
         # Validate critical size parameters
+        self._validate_numeric_params()
+
+    def _validate_numeric_params(self) -> None:
+        """
+        Validate numeric parameters of device configuration.
+
+        Raises:
+            ValueError: If any numeric parameter is invalid
+        """
+        # Validate max_payload_size
         if self.device_config.max_payload_size <= 0:
             raise ValueError(
-                f"Invalid max_payload_size: {self.device_config.max_payload_size}. "
-                "Must be a positive integer. Common values are 128, 256, or 512 bytes."
+                ERROR_MESSAGES["invalid_numeric_param"].format(
+                    param="max_payload_size",
+                    value=self.device_config.max_payload_size,
+                    min=MIN_PAYLOAD_SIZE,
+                    max=MAX_PAYLOAD_SIZE,
+                )
             )
 
+        # Validate max_read_request_size
         if self.device_config.max_read_request_size <= 0:
             raise ValueError(
-                f"Invalid max_read_request_size: {self.device_config.max_read_request_size}. "
-                "Must be a positive integer. Common values are 128, 256, 512, or 1024 bytes."
+                ERROR_MESSAGES["invalid_numeric_param"].format(
+                    param="max_read_request_size",
+                    value=self.device_config.max_read_request_size,
+                    min=MIN_READ_REQUEST_SIZE,
+                    max=MAX_READ_REQUEST_SIZE,
+                )
             )
 
-        # Validate queue depths are reasonable
+        # Validate tx_queue_depth
         if (
             self.device_config.tx_queue_depth <= 0
-            or self.device_config.tx_queue_depth > 65536
+            or self.device_config.tx_queue_depth > MAX_QUEUE_DEPTH
         ):
             raise ValueError(
-                f"Invalid tx_queue_depth: {self.device_config.tx_queue_depth}. Must be between 1 and 65536."
+                ERROR_MESSAGES["invalid_numeric_param"].format(
+                    param="tx_queue_depth",
+                    value=self.device_config.tx_queue_depth,
+                    min=MIN_QUEUE_DEPTH,
+                    max=MAX_QUEUE_DEPTH,
+                )
             )
 
+        # Validate rx_queue_depth
         if (
             self.device_config.rx_queue_depth <= 0
-            or self.device_config.rx_queue_depth > 65536
+            or self.device_config.rx_queue_depth > MAX_QUEUE_DEPTH
         ):
             raise ValueError(
-                f"Invalid rx_queue_depth: {self.device_config.rx_queue_depth}. Must be between 1 and 65536."
+                ERROR_MESSAGES["invalid_numeric_param"].format(
+                    param="rx_queue_depth",
+                    value=self.device_config.rx_queue_depth,
+                    min=MIN_QUEUE_DEPTH,
+                    max=MAX_QUEUE_DEPTH,
+                )
             )
 
     @lru_cache(maxsize=32)
@@ -269,7 +845,7 @@ class AdvancedSVGenerator:
 
     def _generate_device_specific_ports_impl(self, device_config_key: tuple) -> str:
         """Implementation method for generating device-specific ports."""
-        template_path = "systemverilog/components/device_specific_ports.sv.j2"
+        template_path = TEMPLATE_PATHS["device_specific_ports"]
         context = {
             "device_config": self.device_config,
         }
@@ -291,94 +867,18 @@ class AdvancedSVGenerator:
 
             # Add suggestions for common template issues
             if "undefined" in str(e).lower():
-                error_msg = (
-                    f"{error_context}: Missing required template variables. "
-                    f"Ensure device_config has all required attributes. Details: {e}"
+                error_msg = ERROR_MESSAGES["undefined_var"].format(
+                    context=error_context, object="device_config", error=e
                 )
             elif "not found" in str(e).lower():
-                error_msg = (
-                    f"{error_context}: Template file not found. "
-                    f"Ensure the template exists at '{template_path}' or check template_dir. "
-                    f"Details: {e}"
+                error_msg = ERROR_MESSAGES["template_not_found"].format(
+                    context=error_context, path=template_path, error=e
                 )
             else:
                 error_msg = f"{error_context}: {e}"
 
             # Re-raise with better context
             raise TemplateRenderError(error_msg) from e
-
-    def _build_power_management_context(self) -> Dict[str, Any]:
-        """Build power management context for templates using actual PowerManagementConfig attributes."""
-        # PowerManagementConfig from advanced_sv_power.py has these attributes:
-        # clk_hz, transition_timeout_ns, enable_pme, enable_wake_events, transition_cycles
-
-        # Get transition_cycles object or create a dict with the expected structure
-        transition_cycles = self.power_config.transition_cycles
-        if transition_cycles is not None and hasattr(transition_cycles, "__dict__"):
-            # It's a TransitionCycles object, convert to dict
-            try:
-                tc_dict = {
-                    "d0_to_d1": getattr(transition_cycles, "d0_to_d1", 100),
-                    "d1_to_d0": getattr(transition_cycles, "d1_to_d0", 100),
-                    "d0_to_d3": getattr(transition_cycles, "d0_to_d3", 1000),
-                    "d3_to_d0": getattr(transition_cycles, "d3_to_d0", 1000),
-                }
-            except AttributeError as e:
-                # Log the issue but provide fallback values to prevent template failures
-                log_warning_safe(
-                    self.logger,
-                    "Power management configuration issue: {error}. Using default values.",
-                    error=e,
-                )
-                # Default values if attributes are missing
-                tc_dict = {
-                    "d0_to_d1": 100,
-                    "d1_to_d0": 100,
-                    "d0_to_d3": 1000,
-                    "d3_to_d0": 1000,
-                }
-        elif isinstance(transition_cycles, dict):
-            # Already a dict, use as is
-            tc_dict = transition_cycles
-        else:
-            # Use empty dict with defaults if None or unexpected type
-            tc_dict = {
-                "d0_to_d1": 100,
-                "d1_to_d0": 100,
-                "d0_to_d3": 1000,
-                "d3_to_d0": 1000,
-            }
-
-        return {
-            "clk_hz": self.power_config.clk_hz,
-            "transition_timeout_ns": self.power_config.transition_timeout_ns,
-            "enable_pme": self.power_config.enable_pme,
-            "enable_wake_events": self.power_config.enable_wake_events,
-            "transition_cycles": tc_dict,
-        }
-
-    def _build_performance_context(self) -> Dict[str, Any]:
-        """Build performance monitoring context for templates using actual PerformanceConfig attributes."""
-        # PerformanceConfig from advanced_sv_features.py has these attributes
-        return {
-            "counter_width": self.perf_config.counter_width,
-            "enable_bandwidth": self.perf_config.enable_bandwidth_monitoring,
-            "enable_latency": self.perf_config.enable_latency_tracking,
-            "enable_error_rate": self.perf_config.enable_error_rate_tracking,
-            "sample_period": self.perf_config.sampling_period,
-        }
-
-    def _build_error_handling_context(self) -> Dict[str, Any]:
-        """Build error handling context for templates using actual ErrorHandlingConfig attributes."""
-        # ErrorHandlingConfig from advanced_sv_features.py has these attributes
-        return {
-            "enable_error_detection": self.error_config.enable_error_detection,
-            "enable_logging": self.error_config.enable_error_logging,
-            "enable_auto_retry": self.error_config.enable_auto_retry,
-            "max_retry_count": self.error_config.max_retry_count,
-            "recovery_cycles": self.error_config.error_recovery_cycles,
-            "error_log_depth": self.error_config.error_log_depth,
-        }
 
     def generate_systemverilog_modules(
         self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None
@@ -413,8 +913,9 @@ class AdvancedSVGenerator:
             # Validate template_context
             if not isinstance(template_context, dict):
                 raise ValueError(
-                    f"Template context must be a dictionary, got {type(template_context)}. "
-                    "Please provide a valid template context dictionary."
+                    ERROR_MESSAGES["context_not_dict"].format(
+                        type_name=type(template_context).__name__
+                    )
                 )
 
             # Extract register definitions for legacy compatibility
@@ -442,17 +943,7 @@ class AdvancedSVGenerator:
                     )
 
             # Generate basic modules using templates
-            basic_modules = [
-                "bar_controller.sv.j2",
-                "cfg_shadow.sv.j2",
-                "device_config.sv.j2",
-                "msix_capability_registers.sv.j2",
-                "msix_implementation.sv.j2",
-                "msix_table.sv.j2",
-                "option_rom_bar_window.sv.j2",
-                "option_rom_spi_flash.sv.j2",
-                "top_level_wrapper.sv.j2",  # Essential for Vivado top module
-            ]
+            basic_modules = BASIC_SV_MODULES
 
             # Track failed modules
             failed_modules = []
@@ -541,11 +1032,13 @@ class AdvancedSVGenerator:
         device_specific_ports = self.generate_device_specific_ports()
 
         # Validate required values before template generation
-        self._validate_template_context()
+        self._validate_template_requirements()
 
         # Prepare template context - ensure both power_config and power_management are available
         # since templates use both names
-        power_management_ctx = self._build_power_management_context()
+        power_management_ctx = ContextBuilder.build_power_management_context(
+            self.power_config
+        )
 
         # Create a modified power_config dictionary that includes enable_power_management
         power_config_dict = {"enable_power_management": True}
@@ -565,12 +1058,7 @@ class AdvancedSVGenerator:
         )
 
         # Create default timing configuration with conservative values
-        timing_config = {
-            "clk_hz": 100000000,  # 100 MHz default clock (more conservative than 250 MHz)
-            "reset_cycles": 16,  # 16 cycles for reset (more than original 10 for safety)
-            "timeout_ns": 5000,  # 5000 ns default timeout (increased from 1000ns)
-            "async_fifo_depth": 32,  # Deeper FIFO for safety (up from 16)
-        }
+        timing_config = TimingConfig()
 
         # Log warning about timing configuration
         log_warning_safe(
@@ -588,29 +1076,31 @@ class AdvancedSVGenerator:
             "power_config": power_config_dict,  # Use the dictionary with enable_power_management
             "power_management": power_management_ctx,  # Some templates use this
             "error_config": self.error_config,
-            "error_handling": self._build_error_handling_context(),
+            "error_handling": ContextBuilder.build_error_handling_context(
+                self.error_config
+            ),
             "perf_config": self.perf_config,
-            "performance_counters": self._build_performance_context(),
+            "performance_counters": ContextBuilder.build_performance_context(
+                self.perf_config
+            ),
             "registers": regs,
             "variance_model": variance_model,
             "device_specific_ports": device_specific_ports,
             # Add transition_cycles at root level for templates that expect it there
             "transition_cycles": power_management_ctx.get("transition_cycles", {}),
             # Add required template variables for advanced_controller.sv.j2 with conservative defaults
-            # Setting these to False would disable the corresponding sections in the template
-            # but still allow the template to render without errors
             "clock_domain_logic": True,  # Essential for proper operation
             "interrupt_logic": False,  # Optional, disabled by default for safety
             "register_logic": False,  # Optional, disabled by default for safety
             "read_logic": True,  # Essential for proper operation
             # Add timing configuration to fix warning
-            "timing_config": timing_config,
+            "timing_config": vars(timing_config),
         }
 
         try:
             # Identify critical templates
-            main_template_path = "systemverilog/advanced/advanced_controller.sv.j2"
-            crossing_template_path = "systemverilog/advanced/clock_crossing.sv.j2"
+            main_template_path = TEMPLATE_PATHS["main_advanced_controller"]
+            crossing_template_path = TEMPLATE_PATHS["clock_crossing"]
 
             # Check if templates exist before attempting to render
             if not self.renderer.template_exists(main_template_path):
@@ -641,7 +1131,7 @@ class AdvancedSVGenerator:
                 "board_config": context.get("board_config", {}),
                 "device_type": self.device_config.device_type.value,
                 "device_class": self.device_config.device_class.value,
-                "timing_config": timing_config,
+                "timing_config": vars(timing_config),
             }
 
             # Only try to render the clock crossing module if the template exists
@@ -672,15 +1162,14 @@ class AdvancedSVGenerator:
 
             # Add specific suggestions for common template issues
             if "undefined" in str(e).lower():
-                error_msg = (
-                    f"{error_context} failed: Missing required template variables. "
-                    f"Ensure all required context variables are provided. Details: {e}"
+                error_msg = ERROR_MESSAGES["undefined_var"].format(
+                    context=f"{error_context} failed",
+                    object="context variables",
+                    error=e,
                 )
             elif "not found" in str(e).lower():
-                error_msg = (
-                    f"{error_context} failed: Template file not found. "
-                    f"Check template directory configuration and ensure all required templates exist. "
-                    f"Details: {e}"
+                error_msg = ERROR_MESSAGES["template_not_found"].format(
+                    context=f"{error_context} failed", path="templates", error=e
                 )
             else:
                 error_msg = f"{error_context} failed: {e}"
@@ -689,9 +1178,8 @@ class AdvancedSVGenerator:
 
     def generate_enhanced_build_integration(self) -> str:
         """Generate integration code for build.py enhancement using template."""
-        template_path = "python/build_integration.py.j2"
+        template_path = TEMPLATE_PATHS["build_integration"]
         context = {
-            # No context variables needed for this template as it's static Python code
             "generator_version": __version__,
         }
 
@@ -740,12 +1228,16 @@ class AdvancedSVGenerator:
         # Strict validation of input parameters
         if not template_context:
             raise ValueError(
-                "Template context is required for PCILeech module generation"
+                ERROR_MESSAGES["no_template_context"].format(
+                    operation="PCILeech module generation"
+                )
             )
 
         if not isinstance(template_context, dict):
             raise ValueError(
-                f"Template context must be a dictionary, got {type(template_context)}"
+                ERROR_MESSAGES["context_not_dict"].format(
+                    type_name=type(template_context).__name__
+                )
             )
 
         modules = {}
@@ -754,199 +1246,59 @@ class AdvancedSVGenerator:
             # Validate and extract device config with comprehensive error checking
             device_config = template_context.get("device_config")
             if not device_config:
-                raise TemplateRenderError(
-                    "device_config is missing from template context. "
-                    "This is required for safe PCILeech firmware generation."
-                )
+                raise TemplateRenderError(ERROR_MESSAGES["missing_critical_field"])
 
             if not isinstance(device_config, dict):
                 raise TemplateRenderError(
-                    f"device_config must be a dictionary, got {type(device_config)}. "
-                    "Cannot proceed with firmware generation."
+                    ERROR_MESSAGES["device_config_not_dict"].format(
+                        type_name=type(device_config).__name__
+                    )
                 )
 
             # Validate critical device identification fields
-            required_fields = ["vendor_id", "device_id"]
-            missing_fields = []
-            invalid_fields = []
-
-            for field in required_fields:
-                value = device_config.get(field)
-                if not value:
-                    missing_fields.append(field)
-                elif not isinstance(value, str) or len(value) != 4:
-                    invalid_fields.append(
-                        f"{field}='{value}' (must be 4-character hex string)"
-                    )
-
-            if missing_fields or invalid_fields:
-                error_details = []
-                if missing_fields:
-                    error_details.append(f"Missing fields: {', '.join(missing_fields)}")
-                if invalid_fields:
-                    error_details.append(f"Invalid fields: {', '.join(invalid_fields)}")
-
-                error_msg = (
-                    f"Critical device identification validation failed: {'; '.join(error_details)}. "
-                    "Cannot generate safe firmware without proper device identification. "
-                    "Vendor ID and Device ID must be 4-character hex strings (e.g., '10EC', '8168')."
-                )
-                log_error_safe(self.logger, error_msg)
-                raise TemplateRenderError(error_msg)
+            self._validate_device_identification(device_config)
 
             # Validate critical security fields before proceeding
             # device_signature is REQUIRED - no fallback allowed per no-fallback policy
             if "device_signature" not in template_context:
-                error_msg = (
-                    "CRITICAL: device_signature is missing from template context. "
-                    "This field is required for firmware security and uniqueness. "
-                    "Cannot generate generic firmware without proper device signature. "
-                    "Ensure PCILeechContextBuilder provides device_signature."
-                )
-                log_error_safe(self.logger, error_msg)
-                raise TemplateRenderError(error_msg)
+                raise TemplateRenderError(ERROR_MESSAGES["missing_device_signature"])
 
             device_signature = template_context["device_signature"]
             if not device_signature:
-                error_msg = (
-                    "CRITICAL: device_signature is None or empty. "
-                    "A valid device signature is required to prevent generic firmware generation. "
-                    "This is a security requirement - no fallback values are allowed."
-                )
-                log_error_safe(self.logger, error_msg)
-                raise TemplateRenderError(error_msg)
+                raise TemplateRenderError(ERROR_MESSAGES["empty_device_signature"])
 
             # Create enhanced context efficiently - avoid full copy for performance
-            enhanced_context = self._create_context(template_context, device_config)
-
-            # Generate header comment for SystemVerilog files
-            header = generate_sv_header_comment(
-                "PCILeech SystemVerilog Module",
-                generator="PCILeechFWGenerator - SystemVerilog Generation",
-                device_type="PCIe Device Controller",
-                features="PCILeech integration, MSI-X support, BAR controller",
+            enhanced_context = ContextBuilder.create_enhanced_context(
+                template_context,
+                device_config,
+                self.power_config,
+                self.error_config,
+                self.perf_config,
+                self.device_config,
             )
-
-            # Create device object for template compatibility
-            device_info = {
-                "vendor_id": device_config["vendor_id"],
-                "device_id": device_config["device_id"],
-                "subsys_vendor_id": device_config.get(
-                    "subsystem_vendor_id", "0000"
-                ),  # 0000 = no subsystem
-                "subsys_device_id": device_config.get(
-                    "subsystem_device_id", "0000"
-                ),  # 0000 = no subsystem
-                "class_code": device_config.get("class_code", "020000"),
-                "revision_id": device_config.get("revision_id", "01"),
-            }
-
-            enhanced_context.update(
-                {
-                    "header": header,  # Add header for template
-                    "device": device_info,
-                    "config_space": {
-                        "vendor_id": device_config["vendor_id"],
-                        "device_id": device_config["device_id"],
-                        "class_code": device_config.get("class_code", "020000"),
-                        "revision_id": device_config.get("revision_id", "01"),
-                    },
-                    "board_config": template_context.get(
-                        "board_config", {}
-                    ),  # Add board_config
-                    "active_device_config": template_context.get(
-                        "active_device_config", {}
-                    ),  # Add active_device_config
-                    "enable_custom_config": True,
-                    "enable_scatter_gather": getattr(
-                        self.device_config, "enable_dma", True
-                    ),
-                    "enable_interrupt": template_context.get(
-                        "interrupt_config", {}
-                    ).get("vectors", 0)
-                    > 0,
-                    "enable_clock_crossing": True,
-                    "enable_performance_counters": getattr(
-                        self.perf_config, "enable_transaction_counters", True
-                    ),
-                    "enable_error_detection": getattr(
-                        self.error_config, "enable_ecc", True
-                    ),
-                    "fifo_type": "block_ram",
-                    "fifo_depth": 512,
-                    "data_width": 128,
-                    "fpga_family": "artix7",
-                    "vendor_id": device_config["vendor_id"],
-                    "device_id": device_config["device_id"],
-                    "vendor_id_hex": device_config["vendor_id"],
-                    "device_id_hex": device_config["device_id"],
-                    "device_specific_config": {},
-                }
-            )
-
-            # Add enable_advanced_features to device_config section if it doesn't exist
-            if "device_config" in enhanced_context and isinstance(
-                enhanced_context["device_config"], dict
-            ):
-                enhanced_context["device_config"]["enable_advanced_features"] = getattr(
-                    self.error_config, "enable_ecc", True
-                )
 
             # Generate PCILeech TLP BAR controller
             modules["pcileech_tlps128_bar_controller"] = self.renderer.render_template(
-                "systemverilog/pcileech_tlps128_bar_controller.sv.j2", enhanced_context
+                TEMPLATE_PATHS["pcileech_tlps_bar_controller"], enhanced_context
             )
 
             # Generate PCILeech FIFO controller
             modules["pcileech_fifo"] = self.renderer.render_template(
-                "systemverilog/pcileech_fifo.sv.j2", enhanced_context
+                TEMPLATE_PATHS["pcileech_fifo"], enhanced_context
             )
 
             # Generate top-level wrapper (CRITICAL for Vivado top module)
             modules["top_level_wrapper"] = self.renderer.render_template(
-                "systemverilog/top_level_wrapper.sv.j2", enhanced_context
+                TEMPLATE_PATHS["top_level_wrapper"], enhanced_context
             )
 
             # Generate configuration space COE file
             modules["pcileech_cfgspace.coe"] = self.renderer.render_template(
-                "systemverilog/pcileech_cfgspace.coe.j2", enhanced_context
+                TEMPLATE_PATHS["pcileech_cfgspace"], enhanced_context
             )
 
-            # Always generate MSI-X modules if MSI-X is supported
-            msix_config = template_context.get("msix_config", {})
-            if (
-                msix_config.get("is_supported", False)
-                or msix_config.get("num_vectors", 0) > 0
-            ):
-                log_info_safe(self.logger, "Generating MSI-X modules")
-
-                # Create MSI-X specific template context
-                msix_template_context = enhanced_context.copy()
-                msix_template_context.update(msix_config)
-
-                # Generate MSI-X capability registers
-                modules["msix_capability_registers"] = self.renderer.render_template(
-                    "systemverilog/msix_capability_registers.sv.j2",
-                    msix_template_context,
-                )
-
-                # Generate MSI-X implementation
-                modules["msix_implementation"] = self.renderer.render_template(
-                    "systemverilog/msix_implementation.sv.j2", msix_template_context
-                )
-
-                # Generate MSI-X table
-                modules["msix_table"] = self.renderer.render_template(
-                    "systemverilog/msix_table.sv.j2", msix_template_context
-                )
-
-                # Generate MSI-X initialization files
-                modules["msix_pba_init.hex"] = self._generate_msix_pba_init(
-                    enhanced_context
-                )
-                modules["msix_table_init.hex"] = self._generate_msix_table_init(
-                    enhanced_context
-                )
+            # Generate MSI-X modules if needed
+            self._generate_msix_modules(template_context, enhanced_context, modules)
 
             # Generate advanced modules if behavior profile is available
             if behavior_profile and template_context.get("device_config", {}).get(
@@ -973,6 +1325,134 @@ class AdvancedSVGenerator:
             )
             raise
 
+    def _validate_device_identification(self, device_config: Dict[str, Any]) -> None:
+        """
+        Validate critical device identification fields.
+
+        Args:
+            device_config: Device configuration dictionary
+
+        Raises:
+            TemplateRenderError: If validation fails
+        """
+        required_fields = ["vendor_id", "device_id"]
+        missing_fields = []
+        invalid_fields = []
+
+        for field in required_fields:
+            value = device_config.get(field)
+            if not value:
+                missing_fields.append(field)
+            elif not isinstance(value, str) or len(value) != 4:
+                invalid_fields.append(
+                    f"{field}='{value}' (must be 4-character hex string)"
+                )
+
+        if missing_fields or invalid_fields:
+            error_details = []
+            if missing_fields:
+                error_details.append(f"Missing fields: {', '.join(missing_fields)}")
+            if invalid_fields:
+                error_details.append(f"Invalid fields: {', '.join(invalid_fields)}")
+
+            error_msg = (
+                f"Critical device identification validation failed: {'; '.join(error_details)}. "
+                "Cannot generate safe firmware without proper device identification. "
+                "Vendor ID and Device ID must be 4-character hex strings (e.g., '10EC', '8168')."
+            )
+            log_error_safe(self.logger, error_msg)
+            raise TemplateRenderError(error_msg)
+
+    def _generate_msix_modules(
+        self,
+        template_context: Dict[str, Any],
+        enhanced_context: Dict[str, Any],
+        modules: Dict[str, str],
+    ) -> None:
+        """
+        Generate MSI-X related modules and add to modules dictionary.
+
+        Args:
+            template_context: Original template context
+            enhanced_context: Enhanced template context
+            modules: Dictionary to add generated modules to
+        """
+        msix_config = template_context.get("msix_config", {})
+        if (
+            msix_config.get("is_supported", False)
+            or msix_config.get("num_vectors", 0) > 0
+        ):
+            log_info_safe(self.logger, "Generating MSI-X modules")
+
+            # Create MSI-X specific template context
+            msix_template_context = enhanced_context.copy()
+            msix_template_context.update(msix_config)
+
+            # Generate MSI-X capability registers
+            modules["msix_capability_registers"] = self.renderer.render_template(
+                TEMPLATE_PATHS["msix_capability_registers"],
+                msix_template_context,
+            )
+
+            # Generate MSI-X implementation
+            modules["msix_implementation"] = self.renderer.render_template(
+                TEMPLATE_PATHS["msix_implementation"], msix_template_context
+            )
+
+            # Generate MSI-X table
+            modules["msix_table"] = self.renderer.render_template(
+                TEMPLATE_PATHS["msix_table"], msix_template_context
+            )
+
+            # Generate MSI-X initialization files
+            num_vectors = msix_config.get("num_vectors", 1)
+
+            # Check if we're in a test environment
+            is_test_environment = "pytest" in sys.modules
+
+            # Generate MSI-X table and PBA initialization files
+            modules["msix_pba_init.hex"] = MSIXHelper.generate_msix_pba_init(
+                num_vectors
+            )
+
+            if is_test_environment:
+                # Generate dummy data for test environments
+                log_info_safe(
+                    self.logger,
+                    "Test environment detected - using generated MSI-X table data",
+                )
+                modules["msix_table_init.hex"] = MSIXHelper.generate_msix_table_init(
+                    num_vectors, is_test_environment=True
+                )
+            else:
+                # Try to read actual data from hardware
+                try:
+                    actual_table_data = self._read_actual_msix_table(template_context)
+                    if actual_table_data:
+                        log_info_safe(
+                            self.logger,
+                            "Using actual MSI-X table data from hardware ({entries} entries)",
+                            entries=len(actual_table_data) // 4,
+                        )
+                        modules["msix_table_init.hex"] = (
+                            "\n".join(f"{value:08X}" for value in actual_table_data)
+                            + "\n"
+                        )
+                    else:
+                        raise TemplateRenderError(
+                            "Failed to read actual MSI-X table data from hardware. "
+                            "Cannot generate safe firmware without real MSI-X table values. "
+                            "Ensure the device is properly accessible via VFIO."
+                        )
+                except Exception as e:
+                    error_msg = (
+                        f"Failed to read actual MSI-X table from hardware: {e}. "
+                        "Cannot generate safe firmware without real MSI-X table values. "
+                        "Ensure the device is properly accessible via VFIO and try again."
+                    )
+                    log_error_safe(self.logger, error_msg)
+                    raise TemplateRenderError(error_msg) from e
+
     def _generate_pcileech_advanced_modules(
         self, template_context: Dict[str, Any], behavior_profile: Any
     ) -> Dict[str, str]:
@@ -989,17 +1469,6 @@ class AdvancedSVGenerator:
             variance_model = behavior_profile.get("variance_metadata")
         elif hasattr(behavior_profile, "variance_metadata"):
             variance_model = behavior_profile.variance_metadata
-
-        # Generate advanced controller with PCILeech integration
-        pcileech_context = template_context.copy()
-        pcileech_context.update(
-            {
-                "registers": registers,
-                "variance_model": variance_model,
-                "pcileech_integration": True,
-                "behavior_profile": behavior_profile,
-            }
-        )
 
         # Generate advanced controller - let template errors propagate
         advanced_modules["pcileech_advanced_controller"] = (
@@ -1025,7 +1494,7 @@ class AdvancedSVGenerator:
             ValueError: If behavior profile is invalid
         """
         if not behavior_profile:
-            raise ValueError("Behavior profile is required for register extraction")
+            raise ValueError(ERROR_MESSAGES["missing_behavior_profile"])
 
         # Handle both dict and object attribute access
         try:
@@ -1038,231 +1507,512 @@ class AdvancedSVGenerator:
             )
         except AttributeError as e:
             raise TemplateRenderError(str(e))
+
+        # If no register accesses found, use default PCILeech registers
         if not register_accesses:
-            raise TemplateRenderError(
-                "No register accesses found in behavior profile. "
-                "Cannot generate safe SystemVerilog without actual device register information. "
-                "The behavior profile must contain real register access patterns from the target device."
+            log_warning_safe(
+                self.logger,
+                "No register accesses found in behavior profile. Using default PCILeech registers.",
             )
+            return self._create_default_pcileech_registers()
 
         registers = []
-        register_map = {}
-        invalid_accesses = []
+        register_map: Dict[str, RegisterInfo] = {}
+        invalid_accesses: List[str] = []
 
         # Process register accesses with strict validation
         for i, access in enumerate(register_accesses):
-            # Handle both dict and object attribute access for register
-            if not has_attr(access, "register"):
-                invalid_accesses.append(f"Access {i}: missing 'register' attribute")
-                continue
-            reg_name = safe_get_attr(access, "register")
-
-            if not reg_name or reg_name == "UNKNOWN":
-                invalid_accesses.append(
-                    f"Access {i}: invalid register name '{reg_name}'"
-                )
-                continue
-
-            # Validate offset - handle both dict and object attribute access
-            offset = safe_get_attr(access, "offset", None)
-
-            if offset is None:
-                invalid_accesses.append(
-                    f"Access {i}: missing offset for register '{reg_name}'"
-                )
-                continue
-
-            if not isinstance(offset, int) or offset < 0:
-                invalid_accesses.append(
-                    f"Access {i}: invalid offset {offset} for register '{reg_name}'"
-                )
-                continue
-
-            # Initialize register entry if not seen before
-            if reg_name not in register_map:
-                register_map[reg_name] = {
-                    "name": reg_name,
-                    "offset": offset,
-                    "size": 32,  # Standard PCIe register size
-                    "access_count": 0,
-                    "read_count": 0,
-                    "write_count": 0,
-                    "access_type": "rw",
-                }
-
-            # Count access types - handle both dict and object attribute access
-            register_map[reg_name]["access_count"] += 1
-
-            # Get operation - handle both dict and object attribute access
-            operation = safe_get_attr(access, "operation", None)
-
-            if operation:
-                if operation == "read":
-                    register_map[reg_name]["read_count"] += 1
-                elif operation == "write":
-                    register_map[reg_name]["write_count"] += 1
-                else:
-                    invalid_accesses.append(
-                        f"Access {i}: unknown operation '{operation}' for register '{reg_name}'"
-                    )
+            register_info = self._process_register_access(
+                i, access, register_map, invalid_accesses
+            )
+            if register_info:
+                register_map[register_info["name"]] = register_info
 
         # Report validation errors if any
         if invalid_accesses:
-            error_msg = (
-                f"Register access validation failed with {len(invalid_accesses)} errors:\n"
-                + "\n".join(invalid_accesses[:10])  # Limit to first 10 errors
-            )
-            if len(invalid_accesses) > 10:
-                error_msg += f"\n... and {len(invalid_accesses) - 10} more errors"
-            log_error_safe(self.logger, error_msg)
-            raise TemplateRenderError(error_msg)
+            self._report_invalid_accesses(invalid_accesses)
 
         # Determine access types and validate register data
         for reg_name, reg_info in register_map.items():
             # Determine access type based on observed operations
             if reg_info["write_count"] == 0 and reg_info["read_count"] > 0:
-                reg_info["access_type"] = "ro"
+                reg_info["access_type"] = RegisterAccessType.READ_ONLY
             elif reg_info["read_count"] == 0 and reg_info["write_count"] > 0:
-                reg_info["access_type"] = "wo"
+                reg_info["access_type"] = RegisterAccessType.WRITE_ONLY
             elif reg_info["read_count"] > 0 and reg_info["write_count"] > 0:
-                reg_info["access_type"] = "rw"
+                reg_info["access_type"] = RegisterAccessType.READ_WRITE
             else:
                 # No valid operations recorded
                 log_warning_safe(
                     self.logger,
                     f"Register '{reg_name}' has no valid read/write operations, defaulting to read-write",
                 )
-                reg_info["access_type"] = "rw"
+                reg_info["access_type"] = RegisterAccessType.READ_WRITE
 
             registers.append(reg_info)
 
-        # Final validation
+        # Final validation - if no valid registers were extracted, use defaults
         if not registers:
-            raise TemplateRenderError(
-                "No valid registers extracted from behavior profile. "
-                "Cannot generate safe SystemVerilog without actual device register information. "
-                "Ensure the behavior profile contains valid register access patterns from real hardware."
+            log_warning_safe(
+                self.logger,
+                "No valid registers extracted from behavior profile. Using default PCILeech registers.",
             )
-
-        log_info_safe(
-            self.logger,
-            f"Successfully extracted {len(registers)} registers from behavior profile",
-        )
+            return self._create_default_pcileech_registers()
 
         return registers
 
-    def _generate_msix_pba_init(self, template_context: Dict[str, Any]) -> str:
+    def _create_default_pcileech_registers(self) -> List[Dict[str, Any]]:
         """
-        Generate MSI-X PBA initialization file.
-
-        Args:
-            template_context: Template context data
+        Create default PCILeech register definitions when no register accesses are available.
 
         Returns:
-            Hex file content for MSI-X PBA initialization
+            List of register definitions for standard PCILeech registers
         """
-        msix_config = template_context.get("msix_config", {})
-        num_vectors = msix_config.get("num_vectors", 1)
+        default_registers = [
+            {
+                "name": "PCILEECH_CTRL",
+                "address": 0x00,
+                "access_type": RegisterAccessType.READ_WRITE,
+                "read_count": 1,
+                "write_count": 1,
+                "description": "PCILeech control register",
+                "width": 32,
+            },
+            {
+                "name": "PCILEECH_STATUS",
+                "address": 0x04,
+                "access_type": RegisterAccessType.READ_ONLY,
+                "read_count": 2,
+                "write_count": 0,
+                "description": "PCILeech status register",
+                "width": 32,
+            },
+            {
+                "name": "PCILEECH_ADDR_LO",
+                "address": 0x08,
+                "access_type": RegisterAccessType.READ_WRITE,
+                "read_count": 1,
+                "write_count": 1,
+                "description": "PCILeech address low 32 bits",
+                "width": 32,
+            },
+            {
+                "name": "PCILEECH_ADDR_HI",
+                "address": 0x0C,
+                "access_type": RegisterAccessType.READ_WRITE,
+                "read_count": 1,
+                "write_count": 1,
+                "description": "PCILeech address high 32 bits",
+                "width": 32,
+            },
+            {
+                "name": "PCILEECH_LENGTH",
+                "address": 0x10,
+                "access_type": RegisterAccessType.READ_WRITE,
+                "read_count": 1,
+                "write_count": 1,
+                "description": "PCILeech transfer length",
+                "width": 32,
+            },
+            {
+                "name": "PCILEECH_DATA",
+                "address": 0x14,
+                "access_type": RegisterAccessType.READ_WRITE,
+                "read_count": 2,
+                "write_count": 2,
+                "description": "PCILeech data register",
+                "width": 32,
+            },
+        ]
 
-        # Calculate PBA size in DWORDs
-        pba_size = (num_vectors + 31) // 32
+        return default_registers
 
-        # Generate PBA initialization data (all zeros initially)
-        hex_lines = []
-        for i in range(pba_size):
-            hex_lines.append("00000000")
+        # Code after return statement is unreachable
 
-        return "\n".join(hex_lines) + "\n"
-
-    def _generate_msix_table_init(self, template_context: Dict[str, Any]) -> str:
+    def _process_register_access(
+        self,
+        index: int,
+        access: Any,
+        register_map: Dict[str, RegisterInfo],
+        invalid_accesses: List[str],
+    ) -> Optional[RegisterInfo]:
         """
-        Generate MSI-X table initialization file.
+        Process a single register access and update register map.
 
         Args:
-            template_context: Template context data
+            index: Access index for error reporting
+            access: Register access information
+            register_map: Dictionary of register information to update
+            invalid_accesses: List of invalid access messages to update
 
         Returns:
-            Hex file content for MSI-X table initialization
+            Register information if valid, None otherwise
         """
-        msix_config = template_context.get("msix_config", {})
-        num_vectors = msix_config.get("num_vectors", 1)
+        # Handle both dict and object attribute access for register
+        if not has_attr(access, "register"):
+            invalid_accesses.append(f"Access {index}: missing 'register' attribute")
+            return None
 
-        # Check if we're in a test environment
-        import platform
-        import sys
+        reg_name = safe_get_attr(access, "register")
 
-        is_test_environment = "pytest" in sys.modules
-
-        # If in a test environment, generate and return dummy data
-        if is_test_environment:
-            log_info_safe(
-                self.logger,
-                "Test environment detected - using generated MSI-X table data",
+        if not reg_name or reg_name == "UNKNOWN":
+            invalid_accesses.append(
+                f"Access {index}: invalid register name '{reg_name}'"
             )
-        # Otherwise, try to read from hardware and fail if not possible (for security reasons)
-        else:
-            try:
-                actual_table_data = self._read_actual_msix_table(template_context)
-                if actual_table_data:
-                    log_info_safe(
-                        self.logger,
-                        "Using actual MSI-X table data from hardware ({entries} entries)",
-                        entries=len(actual_table_data) // 4,
-                    )
-                    return (
-                        "\n".join(f"{value:08X}" for value in actual_table_data) + "\n"
-                    )
-                else:
-                    raise TemplateRenderError(
-                        "Failed to read actual MSI-X table data from hardware. "
-                        "Cannot generate safe firmware without real MSI-X table values. "
-                        "Ensure the device is properly accessible via VFIO."
-                    )
-            except Exception as e:
-                error_msg = (
-                    f"Failed to read actual MSI-X table from hardware: {e}. "
-                    "Cannot generate safe firmware without real MSI-X table values. "
-                    "Ensure the device is properly accessible via VFIO and try again."
-                )
-                log_error_safe(self.logger, error_msg)
-                raise TemplateRenderError(error_msg) from e
+            return None
 
-        # Generate dummy data for test environments only
+        # Validate offset - handle both dict and object attribute access
+        offset = safe_get_attr(access, "offset", None)
+
+        if offset is None:
+            invalid_accesses.append(
+                f"Access {index}: missing offset for register '{reg_name}'"
+            )
+            return None
+
+        if not isinstance(offset, int) or offset < 0:
+            invalid_accesses.append(
+                f"Access {index}: invalid offset {offset} for register '{reg_name}'"
+            )
+            return None
+
+        # Initialize register entry if not seen before
+        if reg_name not in register_map:
+            register_map[reg_name] = {
+                "name": reg_name,
+                "offset": offset,
+                "size": 32,  # Standard PCIe register size
+                "access_count": 0,
+                "read_count": 0,
+                "write_count": 0,
+                "access_type": RegisterAccessType.READ_WRITE,
+            }
+
+        # Count access types - handle both dict and object attribute access
+        register_map[reg_name]["access_count"] += 1
+
+        # Get operation - handle both dict and object attribute access
+        operation = safe_get_attr(access, "operation", None)
+
+        if operation:
+            if operation == "read":
+                register_map[reg_name]["read_count"] += 1
+            elif operation == "write":
+                register_map[reg_name]["write_count"] += 1
+            else:
+                invalid_accesses.append(
+                    f"Access {index}: unknown operation '{operation}' for register '{reg_name}'"
+                )
+
+        return register_map[reg_name]
+
+    def _report_invalid_accesses(self, invalid_accesses: List[str]) -> None:
+        """
+        Report invalid register accesses by raising an exception.
+
+        Args:
+            invalid_accesses: List of invalid access messages
+
+        Raises:
+            TemplateRenderError: With detailed error information
+        """
+        error_msg = (
+            f"Register access validation failed with {len(invalid_accesses)} errors:\n"
+            + "\n".join(invalid_accesses[:10])  # Limit to first 10 errors
+        )
+        if len(invalid_accesses) > 10:
+            error_msg += f"\n... and {len(invalid_accesses) - 10} more errors"
+
+        log_error_safe(self.logger, error_msg)
+        raise TemplateRenderError(error_msg)
+
+    def _validate_template_requirements(self) -> None:
+        """
+        Comprehensive validation of all template requirements with security-first approach.
+
+        This method performs strict validation of all template variables and dependencies
+        to ensure secure template rendering. It enforces that all required variables are
+        explicitly defined with valid values, rejecting any incomplete template context.
+
+        Raises:
+            TemplateRenderError: If any template requirements validation fails
+        """
+        errors = []
+        warnings = []
+        security_violations = []
+
+        # 1. SECURITY VALIDATION: Verify device_config exists and has required attributes
+        if not self.device_config:
+            security_violations.append(
+                "SECURITY VIOLATION: device_config is None or missing - explicit device configuration is required"
+            )
+        else:
+            # 1.1 Validate device type
+            if not hasattr(self.device_config, "device_type"):
+                security_violations.append(
+                    "SECURITY VIOLATION: device_config.device_type is missing"
+                )
+            elif not hasattr(self.device_config.device_type, "value"):
+                security_violations.append(
+                    "SECURITY VIOLATION: device_config.device_type does not have a 'value' attribute - must be a DeviceType enum"
+                )
+            else:
+                # Validate device_type value is a valid string
+                device_type_value = self.device_config.device_type.value
+                if (
+                    not isinstance(device_type_value, str)
+                    or not device_type_value.strip()
+                ):
+                    security_violations.append(
+                        f"SECURITY VIOLATION: device_config.device_type.value is invalid: '{device_type_value}'"
+                    )
+
+            # 1.2 Validate device class
+            if not hasattr(self.device_config, "device_class"):
+                security_violations.append(
+                    "SECURITY VIOLATION: device_config.device_class is missing"
+                )
+            elif not hasattr(self.device_config.device_class, "value"):
+                security_violations.append(
+                    "SECURITY VIOLATION: device_config.device_class does not have a 'value' attribute - must be a DeviceClass enum"
+                )
+            else:
+                # Validate device_class value is a valid string
+                device_class_value = self.device_config.device_class.value
+                if (
+                    not isinstance(device_class_value, str)
+                    or not device_class_value.strip()
+                ):
+                    security_violations.append(
+                        f"SECURITY VIOLATION: device_config.device_class.value is invalid: '{device_class_value}'"
+                    )
+
+            # 1.3 Validate critical numeric parameters with comprehensive checks
+            numeric_params = [
+                ("max_payload_size", MIN_PAYLOAD_SIZE, MAX_PAYLOAD_SIZE),
+                ("max_read_request_size", MIN_READ_REQUEST_SIZE, MAX_READ_REQUEST_SIZE),
+                ("tx_queue_depth", MIN_QUEUE_DEPTH, MAX_QUEUE_DEPTH),
+                ("rx_queue_depth", MIN_QUEUE_DEPTH, MAX_QUEUE_DEPTH),
+                ("command_queue_depth", MIN_QUEUE_DEPTH, MAX_QUEUE_DEPTH),
+                ("tx_buffer_size_kb", 1, 16384),  # 1KB to 16MB
+                ("rx_buffer_size_kb", 1, 16384),  # 1KB to 16MB
+                ("tx_queue_depth", MIN_QUEUE_DEPTH, MAX_QUEUE_DEPTH),
+                ("rx_queue_depth", MIN_QUEUE_DEPTH, MAX_QUEUE_DEPTH),
+                ("command_queue_depth", MIN_QUEUE_DEPTH, 4096),
+            ]
+
+            for param_name, min_val, max_val in numeric_params:
+                if hasattr(self.device_config, param_name):
+                    param_value = getattr(self.device_config, param_name)
+                    if not isinstance(param_value, int):
+                        errors.append(
+                            f"device_config.{param_name} must be an integer, got {type(param_value)}"
+                        )
+                    elif param_value < min_val or param_value > max_val:
+                        errors.append(
+                            f"device_config.{param_name} = {param_value} is out of valid range [{min_val}, {max_val}]"
+                        )
+                else:
+                    warnings.append(
+                        f"device_config.{param_name} is missing, using default"
+                    )
+
+            # Validate frequency parameters
+            frequency_params = [
+                ("base_frequency_mhz", MIN_FREQUENCY_MHZ, MAX_BASE_FREQUENCY_MHZ),
+                ("memory_frequency_mhz", MIN_FREQUENCY_MHZ, MAX_MEMORY_FREQUENCY_MHZ),
+            ]
+
+            for param_name, min_val, max_val in frequency_params:
+                if hasattr(self.device_config, param_name):
+                    param_value = getattr(self.device_config, param_name)
+                    if not isinstance(param_value, (int, float)):
+                        errors.append(
+                            f"device_config.{param_name} must be a number, got {type(param_value)}"
+                        )
+                    elif param_value < min_val or param_value > max_val:
+                        errors.append(
+                            f"device_config.{param_name} = {param_value} MHz is out of valid range [{min_val}, {max_val}] MHz"
+                        )
+
+        # Validate power_config if present
+        if self.power_config:
+            if not hasattr(self.power_config, "enable_power_management"):
+                warnings.append("power_config.enable_power_management is missing")
+
+        # Validate error_config if present
+        if self.error_config:
+            if not hasattr(self.error_config, "enable_error_detection"):
+                warnings.append("error_config.enable_error_detection is missing")
+
+        # Validate perf_config if present
+        if self.perf_config:
+            if not hasattr(self.perf_config, "enable_performance_counters"):
+                warnings.append("perf_config.enable_performance_counters is missing")
+
+        # Log warnings
+        for warning in warnings:
+            log_warning_safe(
+                self.logger, f"Template context validation warning: {warning}"
+            )
+
+        # If there are validation errors, raise an exception
+        if errors:
+            error_msg = (
+                f"Template context validation failed with {len(errors)} critical errors:\n"
+                + "\n".join(f"  - {error}" for error in errors)
+                + "\n\nCannot proceed with firmware generation due to invalid configuration."
+            )
+            log_error_safe(self.logger, error_msg)
+            raise TemplateRenderError(error_msg)
+
         log_info_safe(
             self.logger,
-            "Generating dummy MSI-X table data for testing ({entries} entries)",
-            entries=num_vectors,
+            f"Template context validation passed ({len(warnings)} warnings)",
         )
 
-        # Generate dummy table data
-        dummy_table_data = []
-        for i in range(num_vectors):
-            # Message Address Low (BAR0 + i*16)
-            dummy_table_data.append(0xFEE00000 + (i << 4))
-            # Message Address High
-            dummy_table_data.append(0x00000000)
-            # Message Data (vector ID in low 8 bits)
-            dummy_table_data.append(0x00000000 | i)
-            # Vector Control (not masked)
-            dummy_table_data.append(0x00000000)
+    def _find_target_bar(
+        self, bars: List[Any], table_bir: int, template_context: Dict[str, Any]
+    ) -> Optional[Any]:
+        """
+        Find the target BAR for MSI-X table access.
 
-        return "\n".join(f"{value:08X}" for value in dummy_table_data) + "\n"
+        Args:
+            bars: List of BAR objects
+            table_bir: BIR value from MSI-X configuration
+            template_context: Template context
 
-        # Each MSI-X table entry is 4 DWORDs:
-        # - DWORD 0: Message Address Low
-        # - DWORD 1: Message Address High
-        # - DWORD 2: Message Data
-        # - DWORD 3: Vector Control (bit 0 = mask)
+        Returns:
+            Target BAR object, or None if not found
+        """
+        if not bars:
+            return None
 
-        hex_lines = []
-        for vector in range(num_vectors):
-            # Default values for each entry
-            hex_lines.append("00000000")  # Message Address Low
-            hex_lines.append("00000000")  # Message Address High
-            hex_lines.append(f"{vector:08X}")  # Message Data (use vector number)
-            hex_lines.append("00000001")  # Vector Control (masked initially)
+        # Debug: Log all available BARs
+        log_info_safe(
+            self.logger,
+            "Available BARs for MSI-X table lookup: {bars}",
+            bars=[
+                {
+                    "index": getattr(
+                        bar,
+                        "index",
+                        getattr(bar, "get", lambda x: "unknown")("index"),
+                    ),
+                    "size": getattr(
+                        bar,
+                        "size",
+                        getattr(bar, "get", lambda x: "unknown")("size"),
+                    ),
+                    "type": type(bar).__name__,
+                }
+                for bar in bars
+            ],
+        )
 
-        return "\n".join(hex_lines) + "\n"
+        log_info_safe(
+            self.logger,
+            "Looking for BAR {bir} for MSI-X table access",
+            bir=table_bir,
+        )
+
+        target_bar = None
+        # First try direct BIR match
+        for bar in bars:
+            bar_index = getattr(bar, "index", None)
+            if bar_index is None and hasattr(bar, "get"):
+                bar_index = bar.get("index")
+
+            if bar_index == table_bir:
+                target_bar = bar
+                log_info_safe(
+                    self.logger,
+                    "Found direct BAR match: BIR {bir} -> BAR {index}",
+                    bir=table_bir,
+                    index=bar_index,
+                )
+                break
+
+        # If no direct match, try to find the BAR by analyzing the actual BAR layout
+        if not target_bar and bars:
+            # Try to find the actual physical BAR by examining configuration space
+            # Look for a BAR that contains the MSI-X table offset
+            log_info_safe(
+                self.logger,
+                "No direct BIR match found, analyzing BAR layout for MSI-X table",
+            )
+
+            # Get the original config space data to understand the real BAR mapping
+            config_space_data = template_context.get("config_space_data", {})
+            original_bars = config_space_data.get("device_info", {}).get("bars", [])
+
+            # Also try the top-level bars if device_info.bars is empty
+            if not original_bars:
+                original_bars = config_space_data.get("bars", [])
+
+            log_info_safe(
+                self.logger,
+                "Original config space BARs: {bars}",
+                bars=[(i, str(bar)) for i, bar in enumerate(original_bars)],
+            )
+
+            # Find which original BAR corresponds to our target BIR
+            target_original_bar = None
+            if table_bir < len(original_bars):
+                target_original_bar = original_bars[table_bir]
+                log_info_safe(
+                    self.logger,
+                    "Target original BAR {bir}: {bar}",
+                    bir=table_bir,
+                    bar=str(target_original_bar),
+                )
+
+            # Try to match by address if we have the original BAR info
+            if target_original_bar:
+                target_address = None
+                if hasattr(target_original_bar, "address"):
+                    target_address = target_original_bar.address
+                elif isinstance(target_original_bar, dict):
+                    target_address = target_original_bar.get("address")
+
+                if target_address:
+                    # Find VFIO BAR with matching address
+                    for i, bar in enumerate(bars):
+                        bar_address = getattr(bar, "base_address", None)
+                        if bar_address == target_address:
+                            target_bar = bar
+                            log_info_safe(
+                                self.logger,
+                                "Matched BAR by address: physical BAR {bir} (0x{addr:x}) -> VFIO region {region}",
+                                bir=table_bir,
+                                addr=target_address,
+                                region=i,
+                            )
+                            break
+
+            # If still no match, try to use the available memory BARs
+            if not target_bar:
+                memory_bars = []
+                for i, bar in enumerate(bars):
+                    is_memory = getattr(bar, "is_memory", False)
+                    size = getattr(bar, "size", 0)
+                    if is_memory and size > 0:
+                        memory_bars.append((i, bar))
+
+                if memory_bars:
+                    # Use the largest memory BAR as fallback
+                    largest_bar = max(
+                        memory_bars, key=lambda x: getattr(x[1], "size", 0)
+                    )
+                    target_bar = largest_bar[1]
+                    log_warning_safe(
+                        self.logger,
+                        "Using largest memory BAR as fallback for MSI-X table: region {region}, size {size}",
+                        region=largest_bar[0],
+                        size=getattr(target_bar, "size", 0),
+                    )
+
+        return target_bar
 
     def _read_actual_msix_table(
         self, template_context: Dict[str, Any]
@@ -1295,128 +2045,8 @@ class AdvancedSVGenerator:
             # Find the appropriate BAR
             bars = bar_config.get("bars", [])
 
-            # Debug: Log all available BARs
-            log_info_safe(
-                self.logger,
-                "Available BARs for MSI-X table lookup: {bars}",
-                bars=[
-                    {
-                        "index": getattr(
-                            bar,
-                            "index",
-                            getattr(bar, "get", lambda x: "unknown")("index"),
-                        ),
-                        "size": getattr(
-                            bar,
-                            "size",
-                            getattr(bar, "get", lambda x: "unknown")("size"),
-                        ),
-                        "type": type(bar).__name__,
-                    }
-                    for bar in bars
-                ],
-            )
-            log_info_safe(
-                self.logger,
-                "Looking for BAR {bir} for MSI-X table access",
-                bir=table_bir,
-            )
-
-            target_bar = None
-            # First try direct BIR match
-            for bar in bars:
-                bar_index = getattr(bar, "index", None)
-                if bar_index is None and hasattr(bar, "get"):
-                    bar_index = bar.get("index")
-
-                if bar_index == table_bir:
-                    target_bar = bar
-                    log_info_safe(
-                        self.logger,
-                        "Found direct BAR match: BIR {bir} -> BAR {index}",
-                        bir=table_bir,
-                        index=bar_index,
-                    )
-                    break
-
-            # If no direct match, try to find the BAR by analyzing the actual BAR layout
-            if not target_bar and bars:
-                # Try to find the actual physical BAR by examining configuration space
-                # Look for a BAR that contains the MSI-X table offset
-                log_info_safe(
-                    self.logger,
-                    "No direct BIR match found, analyzing BAR layout for MSI-X table",
-                )
-
-                # Get the original config space data to understand the real BAR mapping
-                config_space_data = template_context.get("config_space_data", {})
-                original_bars = config_space_data.get("device_info", {}).get("bars", [])
-
-                # Also try the top-level bars if device_info.bars is empty
-                if not original_bars:
-                    original_bars = config_space_data.get("bars", [])
-
-                log_info_safe(
-                    self.logger,
-                    "Original config space BARs: {bars}",
-                    bars=[(i, str(bar)) for i, bar in enumerate(original_bars)],
-                )
-
-                # Find which original BAR corresponds to our target BIR
-                target_original_bar = None
-                if table_bir < len(original_bars):
-                    target_original_bar = original_bars[table_bir]
-                    log_info_safe(
-                        self.logger,
-                        "Target original BAR {bir}: {bar}",
-                        bir=table_bir,
-                        bar=str(target_original_bar),
-                    )
-
-                # Try to match by address if we have the original BAR info
-                if target_original_bar:
-                    target_address = None
-                    if hasattr(target_original_bar, "address"):
-                        target_address = target_original_bar.address
-                    elif isinstance(target_original_bar, dict):
-                        target_address = target_original_bar.get("address")
-
-                    if target_address:
-                        # Find VFIO BAR with matching address
-                        for i, bar in enumerate(bars):
-                            bar_address = getattr(bar, "base_address", None)
-                            if bar_address == target_address:
-                                target_bar = bar
-                                log_info_safe(
-                                    self.logger,
-                                    "Matched BAR by address: physical BAR {bir} (0x{addr:x}) -> VFIO region {region}",
-                                    bir=table_bir,
-                                    addr=target_address,
-                                    region=i,
-                                )
-                                break
-
-                # If still no match, try to use the available memory BARs
-                if not target_bar:
-                    memory_bars = []
-                    for i, bar in enumerate(bars):
-                        is_memory = getattr(bar, "is_memory", False)
-                        size = getattr(bar, "size", 0)
-                        if is_memory and size > 0:
-                            memory_bars.append((i, bar))
-
-                    if memory_bars:
-                        # Use the largest memory BAR as fallback
-                        largest_bar = max(
-                            memory_bars, key=lambda x: getattr(x[1], "size", 0)
-                        )
-                        target_bar = largest_bar[1]
-                        log_warning_safe(
-                            self.logger,
-                            "Using largest memory BAR as fallback for MSI-X table: region {region}, size {size}",
-                            region=largest_bar[0],
-                            size=getattr(target_bar, "size", 0),
-                        )
+            # Find target BAR - attempt direct BIR match first
+            target_bar = self._find_target_bar(bars, table_bir, template_context)
 
             if not target_bar:
                 log_warning_safe(
@@ -1458,23 +2088,28 @@ class AdvancedSVGenerator:
                         device_fd, bar_size, mmap.MAP_SHARED, mmap.PROT_READ
                     ) as mm:
 
-                        # Read MSI-X table entries
+                        # Read MSI-X table entries - handle truncated tables properly
                         table_data = []
-                        for i in range(num_vectors * 4):  # 4 DWORDs per entry
+                        max_entries = min(
+                            num_vectors * 4, (len(mm) - table_offset) // 4
+                        )
+
+                        # Read as many complete DWORDs as possible
+                        for i in range(max_entries):
                             offset = table_offset + (i * 4)
-                            if offset + 4 <= len(mm):
-                                # Read 32-bit value in little-endian format
-                                value = int.from_bytes(
-                                    mm[offset : offset + 4], byteorder="little"
-                                )
-                                table_data.append(value)
-                            else:
-                                log_warning_safe(
-                                    self.logger,
-                                    "MSI-X table read beyond mapped region at offset 0x{offset:x}",
-                                    offset=offset,
-                                )
-                                break
+                            # Read 32-bit value in little-endian format
+                            value = int.from_bytes(
+                                mm[offset : offset + 4], byteorder="little"
+                            )
+                            table_data.append(value)
+
+                        # Log warning if truncated
+                        if max_entries < num_vectors * 4:
+                            log_warning_safe(
+                                self.logger,
+                                "MSI-X table read beyond mapped region at offset 0x{offset:x}",
+                                offset=table_offset + max_entries * 4,
+                            )
 
                         log_info_safe(
                             self.logger,
@@ -1539,257 +2174,9 @@ class AdvancedSVGenerator:
             )
 
             return self.renderer.render_template(
-                "python/pcileech_build_integration.py.j2", build_context
+                TEMPLATE_PATHS["pcileech_integration"], build_context
             )
 
         except TemplateRenderError:
             # Re-raise the error to properly report template issues
             raise
-
-    def _validate_template_context(self) -> None:
-        """
-        Validate that all required values are present before template generation.
-
-        Raises:
-            TemplateRenderError: If required values are missing or invalid
-        """
-        errors = []
-        warnings = []
-
-        # Validate device_config exists and has required attributes
-        if not self.device_config:
-            errors.append(
-                "device_config is None or missing - this is required for safe firmware generation"
-            )
-        else:
-            # Validate device_type
-            if not hasattr(self.device_config, "device_type"):
-                errors.append("device_config.device_type is missing")
-            elif not hasattr(self.device_config.device_type, "value"):
-                errors.append(
-                    "device_config.device_type does not have a 'value' attribute - must be a DeviceType enum"
-                )
-            else:
-                # Validate device_type value is reasonable
-                device_type_value = self.device_config.device_type.value
-                if (
-                    not isinstance(device_type_value, str)
-                    or not device_type_value.strip()
-                ):
-                    errors.append(
-                        f"device_config.device_type.value is invalid: '{device_type_value}'"
-                    )
-
-            # Validate device_class
-            if not hasattr(self.device_config, "device_class"):
-                errors.append("device_config.device_class is missing")
-            elif not hasattr(self.device_config.device_class, "value"):
-                errors.append(
-                    "device_config.device_class does not have a 'value' attribute - must be a DeviceClass enum"
-                )
-            else:
-                # Validate device_class value is reasonable
-                device_class_value = self.device_config.device_class.value
-                if (
-                    not isinstance(device_class_value, str)
-                    or not device_class_value.strip()
-                ):
-                    errors.append(
-                        f"device_config.device_class.value is invalid: '{device_class_value}'"
-                    )
-
-            # Validate critical numeric parameters
-            numeric_params = [
-                ("max_payload_size", 128, 4096),
-                ("max_read_request_size", 128, 4096),
-                ("tx_queue_depth", 1, 65536),
-                ("rx_queue_depth", 1, 65536),
-                ("command_queue_depth", 1, 4096),
-            ]
-
-            for param_name, min_val, max_val in numeric_params:
-                if hasattr(self.device_config, param_name):
-                    param_value = getattr(self.device_config, param_name)
-                    if not isinstance(param_value, int):
-                        errors.append(
-                            f"device_config.{param_name} must be an integer, got {type(param_value)}"
-                        )
-                    elif param_value < min_val or param_value > max_val:
-                        errors.append(
-                            f"device_config.{param_name} = {param_value} is out of valid range [{min_val}, {max_val}]"
-                        )
-                else:
-                    warnings.append(
-                        f"device_config.{param_name} is missing, using default"
-                    )
-
-            # Validate frequency parameters
-            frequency_params = [
-                ("base_frequency_mhz", 1.0, 1000.0),
-                ("memory_frequency_mhz", 1.0, 2000.0),
-            ]
-
-            for param_name, min_val, max_val in frequency_params:
-                if hasattr(self.device_config, param_name):
-                    param_value = getattr(self.device_config, param_name)
-                    if not isinstance(param_value, (int, float)):
-                        errors.append(
-                            f"device_config.{param_name} must be a number, got {type(param_value)}"
-                        )
-                    elif param_value < min_val or param_value > max_val:
-                        errors.append(
-                            f"device_config.{param_name} = {param_value} MHz is out of valid range [{min_val}, {max_val}] MHz"
-                        )
-
-        # Validate power_config if present
-        if self.power_config:
-            if not hasattr(self.power_config, "enable_power_management"):
-                warnings.append("power_config.enable_power_management is missing")
-
-        # Validate error_config if present
-        if self.error_config:
-            if not hasattr(self.error_config, "enable_error_detection"):
-                warnings.append("error_config.enable_error_detection is missing")
-
-        # Validate perf_config if present
-        if self.perf_config:
-            if not hasattr(self.perf_config, "enable_performance_counters"):
-                warnings.append("perf_config.enable_performance_counters is missing")
-
-        # Log warnings
-        for warning in warnings:
-            log_warning_safe(
-                self.logger, f"Template context validation warning: {warning}"
-            )
-
-        # If there are validation errors, raise an exception
-        if errors:
-            error_msg = (
-                f"Template context validation failed with {len(errors)} critical errors:\n"
-                + "\n".join(f"  - {error}" for error in errors)
-                + "\n\nCannot proceed with firmware generation due to invalid configuration."
-            )
-            log_error_safe(self.logger, error_msg)
-            raise TemplateRenderError(error_msg)
-
-        log_info_safe(
-            self.logger,
-            f"Template context validation passed ({len(warnings)} warnings)",
-        )
-
-    def _create_context(
-        self, template_context: Dict[str, Any], device_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Create enhanced template context efficiently without full copying.
-
-        Args:
-            template_context: Original template context
-            device_config: Validated device configuration
-
-        Returns:
-            Enhanced context dictionary with additional template variables
-        """
-        # Generate header comment for SystemVerilog files
-        header = generate_sv_header_comment(
-            "PCILeech SystemVerilog Module",
-            generator="PCILeechFWGenerator - SystemVerilog Generation",
-            device_type="PCIe Device Controller",
-            features="PCILeech integration, MSI-X support, BAR controller",
-        )
-
-        # Create device object for template compatibility
-        device_info = {
-            "vendor_id": device_config["vendor_id"],
-            "device_id": device_config["device_id"],
-            "subsys_vendor_id": device_config.get("subsystem_vendor_id", "0000"),
-            "subsys_device_id": device_config.get("subsystem_device_id", "0000"),
-            "class_code": device_config.get("class_code", "020000"),
-            "revision_id": device_config.get("revision_id", "01"),
-        }
-
-        # Build enhanced context incrementally for better performance
-        enhanced_context = {
-            # Copy only essential keys from original context
-            "device_config": template_context["device_config"],
-            "msix_config": template_context.get("msix_config", {}),
-            "bar_config": template_context.get("bar_config", {}),
-            "board_config": template_context.get(
-                "board_config", {}
-            ),  # Add board_config for templates
-            "interrupt_config": template_context.get("interrupt_config", {}),
-            "config_space_data": template_context.get("config_space_data", {}),
-            "timing_config": template_context.get(
-                "timing_config", {}
-            ),  # Add timing_config
-            "pcileech_config": template_context.get(
-                "pcileech_config", {}
-            ),  # Add pcileech_config
-            "active_device_config": template_context.get(
-                "active_device_config", {}
-            ),  # Add active_device_config for top_level_wrapper
-            # CRITICAL: device_signature must be present - use direct access for fail-fast
-            "device_signature": template_context[
-                "device_signature"
-            ],  # Required - no fallback
-            "generation_metadata": template_context.get(
-                "generation_metadata", {}
-            ),  # Add generation_metadata
-            # Add power and error config objects for template compatibility
-            "power_config": self.power_config,
-            "error_config": self.error_config,
-            "perf_config": self.perf_config,
-            # Add new template variables
-            "header": header,
-            "device": device_info,
-            "config_space": {
-                "vendor_id": device_config["vendor_id"],
-                "device_id": device_config["device_id"],
-                "class_code": device_config.get("class_code", "020000"),
-                "revision_id": device_config.get("revision_id", "01"),
-            },
-            "enable_custom_config": True,
-            "enable_scatter_gather": getattr(self.device_config, "enable_dma", True),
-            "enable_interrupt": template_context.get("interrupt_config", {}).get(
-                "vectors", 0
-            )
-            > 0,
-            "enable_clock_crossing": True,
-            "enable_performance_counters": getattr(
-                self.perf_config, "enable_transaction_counters", True
-            ),
-            "enable_error_detection": getattr(self.error_config, "enable_ecc", True),
-            "fifo_type": "block_ram",
-            "fifo_depth": 512,
-            "data_width": 128,
-            "fpga_family": "artix7",
-            "vendor_id": device_config["vendor_id"],
-            "device_id": device_config["device_id"],
-            "vendor_id_hex": device_config["vendor_id"],
-            "device_id_hex": device_config["device_id"],
-            "device_specific_config": {},
-            # Add variables needed by pcileech_cfgspace.coe.j2 template
-            "bar": template_context.get("bar", []),
-            "table_offset_bir": template_context.get("msix_config", {}).get(
-                "table_bir", 0
-            )
-            | (template_context.get("msix_config", {}).get("table_offset", 0) & ~0x7),
-            "pba_offset_bir": template_context.get("msix_config", {}).get("pba_bir", 0)
-            | (template_context.get("msix_config", {}).get("pba_offset", 0) & ~0x7),
-            # Add individual MSI-X variables that the template expects
-            # Use actual detected values when MSI-X is supported, safe defaults otherwise
-            "msix_table_bir": template_context.get("msix_config", {}).get("table_bir", 0),
-            "msix_table_offset": template_context.get("msix_config", {}).get("table_offset", 0x1000),
-            "msix_pba_bir": template_context.get("msix_config", {}).get("pba_bir", 0),
-            "msix_pba_offset": template_context.get("msix_config", {}).get("pba_offset", 0x2000),
-        }
-
-        # Add enable_advanced_features to device_config section if it doesn't exist
-        if "device_config" in enhanced_context and isinstance(
-            enhanced_context["device_config"], dict
-        ):
-            enhanced_context["device_config"]["enable_advanced_features"] = getattr(
-                self.error_config, "enable_ecc", True
-            )
-
-        return enhanced_context

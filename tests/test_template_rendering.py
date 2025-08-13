@@ -24,12 +24,19 @@ class TestTemplateRendering:
 
     @pytest.fixture
     def renderer(self):
-        """Create a template renderer instance."""
-        return TemplateRenderer()
+        """Create a template renderer instance with non-strict validation for testing."""
+        # For testing purposes, we use non-strict mode to avoid having to fully initialize
+        # every variable in every test. In production code, strict=True would be the default.
+        renderer = TemplateRenderer()
+        # Monkey patch the _validate_template_context method to use non-strict mode by default
+        # For security tests to work properly, we need to keep using the real validation
+        # but make sure our test contexts are complete in each test
+        # No patching is needed since we'll provide complete contexts
+        return renderer
 
     @pytest.fixture
     def base_context(self):
-        """Base context with required fields for templates."""
+        """Base context with required fields for templates - fully initialized for security."""
         return {
             "header": "// Test header",
             "device_config": {
@@ -41,10 +48,40 @@ class TestTemplateRendering:
                 "device_id": "0x1234",
                 "vendor_id": "0x10EE",
                 "class_code": "0x020000",
+                # Required subsystem fields that were missing
+                "subsystem_vendor_id": "0xABCD",
+                "subsystem_device_id": "0xEF01",
+                "revision_id": "0x01",
+                "enable_advanced_features": True,
+            },
+            # Required fields for security validation
+            "device_signature": "0xDEADBEEF",
+            "board_config": {
+                "name": "test_board",
+                "fpga_part": "xcku060-ffva1156-2-e",
+                "fpga_family": "UltraScale",
             },
             "registers": [],
             "power_management": False,
             "error_handling": False,
+            "power_config": {},  # Empty but explicitly provided
+            "error_config": {},  # Empty but explicitly provided
+            "perf_config": {"counter_width": 32},
+            "performance_counters": {"counter_width": 32},
+            "device_type": "network",
+            "device_class": "enterprise",
+            "timing_config": {"clock_frequency": 250},
+            "msix_config": {
+                "is_supported": True,
+                "num_vectors": 16,
+                "table_offset": 0x2000,
+                "table_bir": 0,
+                "pba_offset": 0x3000,
+                "pba_bir": 0,
+            },
+            "NUM_MSIX": 16,  # Required for MSIX templates
+            "RESET_CLEAR": True,
+            "USE_BYTE_ENABLES": True,
         }
 
     def test_device_specific_ports_with_string_values(self, renderer, base_context):
@@ -72,11 +109,13 @@ class TestTemplateRendering:
     def test_main_module_with_optional_performance_counters(
         self, renderer, base_context
     ):
-        """Test main_module template handles missing performance_counters."""
-        # Don't include performance_counters in context
+        """Test main_module template with optional performance_counters."""
+        # Security-first approach: must explicitly provide performance_counters
+        # even if it's just an empty dict - None values are not allowed
+        base_context["performance_counters"] = {"counter_width": 32}
         result = renderer.render_template("sv/main_module.sv.j2", base_context)
 
-        # Should use default counter width
+        # Should use explicitly provided counter width
         assert "COUNTER_WIDTH = 32" in result
 
     def test_main_module_with_performance_counters(self, renderer, base_context):
@@ -182,13 +221,15 @@ class TestTemplateRendering:
 
     def test_advanced_controller_template(self, renderer, base_context):
         """Test advanced_controller template with complete context."""
+        # Security-first: ensure all fields have non-None values
         base_context.update(
             {
                 "device_type": "network",
                 "device_class": "enterprise",
                 "perf_config": {"counter_width": 32},
-                "power_config": None,
-                "error_config": None,
+                "power_config": {},  # Empty dict instead of None
+                "error_config": {},  # Empty dict instead of None
+                "device_signature": "32'hDEADBEEF",  # Required for PCILeech templates
             }
         )
 
@@ -199,19 +240,46 @@ class TestTemplateRendering:
         assert 'DEVICE_TYPE = "network"' in result
         assert 'DEVICE_CLASS = "enterprise"' in result
 
-    def test_template_undefined_variable_handling(self, renderer, base_context):
-        """Test that templates handle undefined variables gracefully."""
-        # Remove optional fields to test undefined handling
-        minimal_context = {
+    def test_template_explicit_variable_initialization(self, renderer, base_context):
+        """Test security-first approach requiring explicit variable initialization."""
+        # Create a context with all required fields explicitly initialized
+        secure_context = {
             "header": "// Test header",
             "device_config": base_context["device_config"],
             "registers": [],
+            # Explicitly initialize all required variables, even if with empty values
+            "power_management": False,
+            "error_handling": False,
+            "performance_counters": {"counter_width": 32},
+            "power_config": {},  # Empty dict instead of None
+            "error_config": {},  # Empty dict instead of None
+            "perf_config": {"counter_width": 32},
+            "device_type": "network",
+            "device_class": "enterprise",
+            "device_signature": "32'hDEADBEEF",  # Required for PCILeech templates
         }
 
-        # Should not raise errors for undefined optional variables
-        result = renderer.render_template("sv/main_module.sv.j2", minimal_context)
+        # With all variables explicitly initialized, rendering should succeed
+        result = renderer.render_template("sv/main_module.sv.j2", secure_context)
         assert result is not None
         assert "pcileech_advanced" in result
+
+        # Test that the renderer's strict validation would reject missing variables
+        # This test simulates what would happen in the validate_template_context
+        with pytest.raises(Exception) as exc_info:
+            # Using a minimal context with missing variables should fail
+            minimal_context = {
+                "header": "// Test header",
+                "device_config": base_context["device_config"],
+                "registers": [],
+                # Missing many required variables
+            }
+
+            # Try to render with incomplete context - should fail with security violation
+            renderer.render_template("sv/main_module.sv.j2", minimal_context)
+
+        # Should get a clear security violation message
+        assert "SECURITY VIOLATION" in str(exc_info.value)
 
 
 class TestTemplateFilters:
@@ -219,7 +287,8 @@ class TestTemplateFilters:
 
     @pytest.fixture
     def renderer(self):
-        """Create a template renderer instance."""
+        """Create a template renderer instance for filter tests."""
+        # Filter tests don't need the context validation
         return TemplateRenderer()
 
     def test_sv_hex_filter(self, renderer):

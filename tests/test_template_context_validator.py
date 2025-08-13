@@ -60,12 +60,24 @@ class TestTemplateContextValidator:
         assert requirements.default_values["max_lanes"] == 1
 
     def test_validate_and_complete_context_adds_defaults(self):
-        """Test that validation adds default values for missing variables."""
+        """Test that validation adds default values only in non-strict mode."""
         template_name = "sv/msix_table.sv.j2"
         context = {
             "NUM_MSIX": 32,  # Provide required variable
+            # Include required fields for security validation
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
+                "subsystem_vendor_id": "ABCD",
+                "subsystem_device_id": "EFGH",
+                "class_code": "020000",
+                "revision_id": "10",
+            },
+            "board_config": {},
+            "device_signature": "0xDEADBEEF",
         }
 
+        # In non-strict mode, defaults should still be added
         validated = self.validator.validate_and_complete_context(
             template_name, context, strict=False
         )
@@ -77,8 +89,20 @@ class TestTemplateContextValidator:
         assert validated["WRITE_PBA_ALLOWED"] is False  # Default added
         assert validated["INIT_TABLE"] is False  # Default added
 
+        # Test that missing NUM_MSIX in strict mode fails
+        incomplete_context = context.copy()
+        del incomplete_context["NUM_MSIX"]
+
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(
+                template_name, incomplete_context, strict=True
+            )
+
+        # Error should mention security violation
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+
     def test_validate_and_complete_context_strict_mode(self):
-        """Test that strict mode raises error for missing required variables."""
+        """Test that strict mode raises security error for missing required variables."""
         template_name = "sv/pcileech_fifo.sv.j2"
         context = {}  # Missing required variables
 
@@ -87,8 +111,11 @@ class TestTemplateContextValidator:
                 template_name, context, strict=True
             )
 
-        assert "missing required variables" in str(exc_info.value).lower()
-        assert "device_config" in str(exc_info.value)
+        # Check for security-focused error message
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+        assert "Required variable 'device_config' is missing or None" in str(
+            exc_info.value
+        )
 
     def test_pattern_matching(self):
         """Test that template pattern matching works correctly."""
@@ -166,25 +193,45 @@ class TestTemplateContextValidator:
         assert req1 is req2
 
     def test_power_management_template_defaults(self):
-        """Test that power management templates get correct defaults."""
+        """Test power management templates with security validation."""
         template_name = "sv/power_management.sv.j2"
-        context = {}
 
+        # Complete context with all required fields
+        complete_context = {
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
+                "subsystem_vendor_id": "ABCD",
+                "subsystem_device_id": "EFGH",
+                "class_code": "020000",
+                "revision_id": "10",
+            },
+            "board_config": {},
+            "device_signature": "0xDEADBEEF",
+        }
+
+        # In non-strict mode, defaults can still be added
         validated = self.validator.validate_and_complete_context(
-            template_name, context, strict=False
+            template_name, complete_context, strict=False
         )
 
         # Check power-specific defaults
         assert validated["enable_wake_events"] is False
         assert validated["enable_pme"] is False
 
-    def test_performance_counter_template_defaults(self):
-        """Test that performance counter templates get correct defaults."""
-        template_name = "sv/performance_counters.sv.j2"
-        context = {}
+        # In strict mode, missing required vars should cause security error
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(template_name, {}, strict=True)
 
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+
+    def test_performance_counter_template_defaults(self):
+        """Test performance counter templates with security validation."""
+        template_name = "sv/performance_counters.sv.j2"
+
+        # In non-strict mode with required vars, defaults can be added
         validated = self.validator.validate_and_complete_context(
-            template_name, context, strict=False
+            template_name, {"device_config": {}, "board_config": {}}, strict=False
         )
 
         # Check performance-specific defaults
@@ -193,13 +240,19 @@ class TestTemplateContextValidator:
         assert validated["enable_error_rate_tracking"] is False
         assert validated["error_signals_available"] is False
 
-    def test_option_rom_template_defaults(self):
-        """Test that option ROM templates get correct defaults."""
-        template_name = "sv/option_rom_spi_flash.sv.j2"
-        context = {}
+        # In strict mode, this should enforce all variables have values
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(template_name, {}, strict=True)
 
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+
+    def test_option_rom_template_defaults(self):
+        """Test option ROM templates with security validation."""
+        template_name = "sv/option_rom_spi_flash.sv.j2"
+
+        # In non-strict mode with required vars, defaults can be added
         validated = self.validator.validate_and_complete_context(
-            template_name, context, strict=False
+            template_name, {"device_config": {}, "board_config": {}}, strict=False
         )
 
         # Check option ROM-specific defaults
@@ -208,16 +261,42 @@ class TestTemplateContextValidator:
         assert validated["SPI_FAST_CMD"] == "0Bh"
         assert validated["FLASH_ADDR_OFFSET"] == "24'h000000"
 
+        # In strict mode, missing required vars should cause security error
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(template_name, {}, strict=True)
+
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+
     def test_global_functions(self):
-        """Test the global helper functions."""
-        # Test validate_template_context
-        context = {"NUM_MSIX": 16}
-        validated = validate_template_context("sv/msix_table.sv.j2", context)
+        """Test the global helper functions with security focus."""
+        # Test validate_template_context with strict=False to allow defaults
+        context = {
+            "NUM_MSIX": 16,
+            # Include required fields for security validation
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
+                "subsystem_vendor_id": "ABCD",
+                "subsystem_device_id": "EFGH",
+                "class_code": "020000",
+                "revision_id": "10",
+            },
+            "board_config": {},
+            "device_signature": "0xDEADBEEF",
+        }
+        validated = validate_template_context(
+            "sv/msix_table.sv.j2", context, strict=False
+        )
         assert validated["RESET_CLEAR"] is True
 
         # Test get_template_requirements
         requirements = get_template_requirements("sv/pcileech_fifo.sv.j2")
         assert "device_config" in requirements.required_vars
+
+        # Test strict validation failure with global function
+        with pytest.raises(ValueError) as exc_info:
+            validate_template_context("sv/pcileech_fifo.sv.j2", {}, strict=True)
+        assert "SECURITY VIOLATION" in str(exc_info.value)
 
     def test_context_preservation(self):
         """Test that existing context values are preserved."""
@@ -226,6 +305,18 @@ class TestTemplateContextValidator:
             "NUM_MSIX": 64,
             "RESET_CLEAR": False,  # Override default
             "custom_field": "custom_value",  # Extra field
+            # Include required fields for security validation
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
+                "subsystem_vendor_id": "ABCD",
+                "subsystem_device_id": "EFGH",
+                "class_code": "020000",
+                "revision_id": "10",
+            },
+            "board_config": {},
+            "device_signature": "0xDEADBEEF",
+            "USE_BYTE_ENABLES": True,
         }
 
         validated = self.validator.validate_and_complete_context(
@@ -237,13 +328,26 @@ class TestTemplateContextValidator:
         assert validated["RESET_CLEAR"] is False
         assert validated["custom_field"] == "custom_value"
 
-        # Defaults should still be added for missing fields
+        # Explicitly provided values should be preserved
         assert validated["USE_BYTE_ENABLES"] is True
 
     def test_nested_template_patterns(self):
         """Test that multiple patterns can apply to the same template."""
         template_name = "sv/msix_implementation.sv.j2"
-        context = {}
+        context = {
+            # Include required fields for security validation
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
+                "subsystem_vendor_id": "ABCD",
+                "subsystem_device_id": "EFGH",
+                "class_code": "020000",
+                "revision_id": "10",
+            },
+            "board_config": {},
+            "device_signature": "0xDEADBEEF",
+            "NUM_MSIX": 16,
+        }
 
         validated = self.validator.validate_and_complete_context(
             template_name, context, strict=False
@@ -254,6 +358,46 @@ class TestTemplateContextValidator:
         assert "NUM_MSIX" in validated  # From sv/msix_*.sv.j2
         assert validated["supports_msix"] is False  # From sv/*.sv.j2
         assert validated["RESET_CLEAR"] is True  # From sv/msix_*.sv.j2
+
+    def test_none_value_detection(self):
+        """Test detection of None values in context variables."""
+        template_name = "sv/msix_table.sv.j2"
+        context = {
+            "NUM_MSIX": None,  # Required variable is None
+            "device_config": {},
+            "board_config": {},
+        }
+
+        # Should fail in strict mode due to None value
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(
+                template_name, context, strict=True
+            )
+
+        assert "SECURITY VIOLATION" in str(exc_info.value)
+        assert "Variable 'NUM_MSIX' has None value" in str(exc_info.value)
+
+    def test_strict_mode_comprehensive_validation(self):
+        """Test comprehensive validation in strict mode."""
+        template_name = "sv/pcileech_fifo.sv.j2"
+
+        # Partial context with missing required vars
+        partial_context = {
+            "device_config": {},  # Empty but not None
+            "supports_msix": None,  # Optional var with None value
+        }
+
+        # Should fail in strict mode with detailed error message
+        with pytest.raises(ValueError) as exc_info:
+            self.validator.validate_and_complete_context(
+                template_name, partial_context, strict=True
+            )
+
+        error_msg = str(exc_info.value)
+        assert "SECURITY VIOLATION" in error_msg
+        assert (
+            "Explicit initialization of all template variables is required" in error_msg
+        )
 
 
 if __name__ == "__main__":

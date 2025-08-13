@@ -311,7 +311,8 @@ def main(argv: Optional[List[str]] = None):
         flash_bin(Path(args.firmware))
 
     elif args.cmd == "donor-template":
-        from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
+        from ..device_clone.donor_info_template import \
+            DonorInfoTemplateGenerator
 
         if args.with_comments:
             # Generate template with comments (for documentation)

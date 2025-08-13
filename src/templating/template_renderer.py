@@ -380,15 +380,71 @@ class TemplateRenderer:
     def _preflight_undeclared(
         self, template_name: str, context: Dict[str, Any]
     ) -> None:
-        """Check for undeclared variables before rendering."""
-        src, _, _ = self.env.loader.get_source(self.env, template_name)
-        ast = self.env.parse(src)
-        declared = set(context.keys()) | set(self.env.globals.keys())
-        missing = meta.find_undeclared_variables(ast) - declared
-        if missing:
-            raise TemplateRenderError(
-                f"Template '{template_name}' requires undefined vars: {sorted(missing)}"
+        """
+        Comprehensive validation of all variables referenced in a template.
+
+        This method enforces that all variables used in a template are properly defined
+        in the context before rendering begins. It strictly prevents template rendering
+        with incomplete context data to maintain security and data integrity.
+
+        Args:
+            template_name: Name of the template to validate
+            context: Template context to check against
+
+        Raises:
+            TemplateRenderError: If any variable used in the template is undefined
+        """
+        try:
+            # Get template source and parse it
+            src, file_path, _ = self.env.loader.get_source(self.env, template_name)
+            ast = self.env.parse(src)
+
+            # Collect all variables that are declared/available
+            declared = set(context.keys()) | set(self.env.globals.keys())
+
+            # Find all referenced variables in the template
+            referenced_vars = meta.find_undeclared_variables(ast)
+
+            # Check for missing variables
+            missing = referenced_vars - declared
+
+            if missing:
+                # Prepare a clear, security-focused error message
+                missing_sorted = sorted(missing)
+                error_msg = (
+                    f"SECURITY VIOLATION: Template '{template_name}' references undefined variables: "
+                    f"{', '.join(missing_sorted)}.\n"
+                    f"Template path: {file_path}\n"
+                    f"To maintain template integrity and security, all variables must be explicitly defined."
+                )
+
+                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+                raise TemplateRenderError(error_msg)
+
+            # ENHANCEMENT: Also check for None values in critical variables
+            none_vars = [
+                k for k in referenced_vars if k in context and context[k] is None
+            ]
+            if none_vars:
+                error_msg = (
+                    f"SECURITY VIOLATION: Template '{template_name}' contains None values for "
+                    f"critical variables: {', '.join(sorted(none_vars))}.\n"
+                    f"Template path: {file_path}\n"
+                    f"Complete initialization of all template variables is required for secure rendering."
+                )
+                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+                raise TemplateRenderError(error_msg)
+
+        except TemplateNotFound as e:
+            error_msg = f"Template '{template_name}' not found: {e}"
+            log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+            raise TemplateRenderError(error_msg) from e
+        except Exception as e:
+            error_msg = (
+                f"Error during preflight validation of template '{template_name}': {e}"
             )
+            log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+            raise TemplateRenderError(error_msg) from e
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """
@@ -406,20 +462,26 @@ class TemplateRenderer:
         """
         template_name = update_template_path(template_name)
         try:
+            # First perform internal validation
             validated = self._validate_template_context(context, template_name)
+
+            # Then use comprehensive validation with preflight check
             self._preflight_undeclared(template_name, validated)
 
-            # Optional external validator
+            # Apply external validator with strict validation
             try:
                 from src.templating.template_context_validator import \
                     validate_template_context
 
+                # Validate with strict mode (security first)
                 validated = validate_template_context(
-                    template_name, validated, strict=False
+                    template_name, validated, strict=True
                 )
             except ImportError:
+                # If validator not available, proceed with basic validation
                 pass
 
+            # Finally render the template with validated context
             template = self.env.get_template(template_name)
             return template.render(**validated)
 
@@ -565,23 +627,32 @@ class TemplateRenderer:
         optional_fields: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
-        Validate and sanitize template context to prevent rendering errors.
+        Validate template context with strict security-first approach.
+
+        This method enforces complete context validation before allowing template rendering.
+        It rejects any missing or undefined variables rather than providing defaults,
+        ensuring the integrity of rendered templates.
 
         Args:
             context: Original template context
-            template_name: Name of the template being rendered (optional)
-            required_fields: List of required fields (optional)
-            optional_fields: List of optional fields (optional)
+            template_name: Name of the template being rendered (required for better error messages)
+            required_fields: List of required fields (will be enforced)
+            optional_fields: List of optional fields (validated if present)
 
         Returns:
-            Validated and sanitized context
+            Validated context with explicit type conversions where necessary
 
         Raises:
-            TemplateRenderError: If context validation fails
+            TemplateRenderError: If any required field is missing or invalid
         """
+        if not context:
+            raise TemplateRenderError(
+                f"Template context cannot be empty for template '{template_name or 'unknown'}'"
+            )
+
         validated_context = context.copy()
 
-        # Check for required fields if specified
+        # SECURITY ENFORCEMENT: Check for required fields and fail immediately if any are missing
         if required_fields:
             missing_fields = []
             for field in required_fields:
@@ -590,7 +661,7 @@ class TemplateRenderer:
 
             if missing_fields:
                 error_msg = safe_format(
-                    "Missing required fields: {fields}",
+                    "SECURITY VIOLATION: Missing required fields: {fields}",
                     fields=", ".join(missing_fields),
                 )
                 if template_name:
@@ -599,92 +670,78 @@ class TemplateRenderer:
                         template_name=template_name,
                         error_msg=error_msg,
                     )
+                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
                 raise TemplateRenderError(error_msg)
 
-        # Special validation for PCILeech build integration template
-        if template_name == "python/pcileech_build_integration.py.j2":
-            # Ensure pcileech_modules is a proper list
-            pcileech_modules = validated_context.get("pcileech_modules", [])
-            if not isinstance(pcileech_modules, list):
-                log_warning_safe(
-                    logger,
-                    "pcileech_modules is not a list: {module_type}, converting to list",
-                    prefix="TEMPLATE",
-                    module_type=type(pcileech_modules),
-                )
-                if isinstance(pcileech_modules, (str, dict)):
-                    # Convert single string to list, or extract from dict
-                    if isinstance(pcileech_modules, str):
-                        validated_context["pcileech_modules"] = [pcileech_modules]
-                    else:
-                        # If it's a dict, try to extract a list from common keys
-                        validated_context["pcileech_modules"] = (
-                            list(pcileech_modules.keys()) if pcileech_modules else []
-                        )
-                else:
-                    validated_context["pcileech_modules"] = []
-
-            # Ensure all required context keys have safe defaults
-            safe_defaults = {
-                "build_system_version": __version__,  # Use dynamic version from package
-                "integration_type": "pcileech",
-                "pcileech_modules": [],
-            }
-
-            for key, default_value in safe_defaults.items():
-                if key not in validated_context or validated_context[key] is None:
-                    validated_context[key] = default_value
-                    log_debug_safe(
-                        logger,
-                        "Set default value for {key}: {value}",
-                        prefix="TEMPLATE",
-                        key=key,
-                        value=default_value,
-                    )
-
-        # Special validation for SystemVerilog templates that use timing_config
+        # Dedicated SystemVerilog template validation with strict requirements
         if template_name and template_name.endswith(".sv.j2"):
+            # Automatically enforce critical device identification parameters
+            critical_sv_params = ["device_config"]
+            missing_critical = [
+                p
+                for p in critical_sv_params
+                if p not in validated_context or validated_context[p] is None
+            ]
+
+            if missing_critical:
+                error_msg = safe_format(
+                    "SECURITY VIOLATION: SystemVerilog template missing critical parameters: {params}. "
+                    "Template rendering aborted to prevent generation of insecure firmware.",
+                    params=", ".join(missing_critical),
+                )
+                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+                raise TemplateRenderError(error_msg)
+
+            # Verify timing_config is properly initialized
             timing_config = validated_context.get("timing_config")
-            if timing_config and hasattr(timing_config, "__dataclass_fields__"):
-                # Convert dataclass to dictionary for Jinja2 access
-                log_debug_safe(
-                    logger,
-                    "Converting timing_config dataclass to dictionary for template access",
-                    prefix="TEMPLATE",
-                )
-                from dataclasses import asdict
+            if timing_config:
+                if hasattr(timing_config, "__dataclass_fields__"):
+                    # Convert dataclass to dictionary for Jinja2 access
+                    from dataclasses import asdict
 
-                validated_context["timing_config"] = asdict(timing_config)
-            elif timing_config is None:
-                # Provide default timing config if missing
-                log_warning_safe(
-                    logger,
-                    "timing_config is missing, providing default values",
-                    prefix="TEMPLATE",
+                    validated_context["timing_config"] = asdict(timing_config)
+            elif "timing_config" in validated_context:
+                # Reject None timing_config if it was explicitly provided
+                raise TemplateRenderError(
+                    f"SECURITY VIOLATION: Template '{template_name}' has timing_config=None. "
+                    "Explicit timing configuration is required for secure template rendering."
                 )
-                validated_context["timing_config"] = {
-                    "read_latency": 4,
-                    "write_latency": 2,
-                    "burst_length": 16,
-                    "inter_burst_gap": 8,
-                    "timeout_cycles": 1024,
-                    "clock_frequency_mhz": 100.0,
-                    "timing_regularity": 0.8,
-                }
 
-        # General validation for all templates
-        # Only replace None values with empty strings for basic string fields
-        # Complex objects like configs should be left as None if that's their intended value
+        # SECURITY ENHANCEMENT: PCILeech-specific critical validation
+        if template_name and "pcileech" in template_name.lower():
+            # PCILeech templates require device_signature for security
+            if (
+                "device_signature" not in validated_context
+                or not validated_context["device_signature"]
+            ):
+                raise TemplateRenderError(
+                    f"SECURITY VIOLATION: PCILeech template '{template_name}' missing required device_signature. "
+                    "Firmware generation aborted to prevent generic device creation."
+                )
+
+            # Validate pcileech_modules if present
+            if "pcileech_modules" in validated_context:
+                pcileech_modules = validated_context["pcileech_modules"]
+                if not isinstance(pcileech_modules, list):
+                    error_msg = safe_format(
+                        "SECURITY VIOLATION: pcileech_modules must be a list, got {type_name}. "
+                        "Template rendering aborted to maintain data integrity.",
+                        type_name=type(pcileech_modules).__name__,
+                    )
+                    log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+                    raise TemplateRenderError(error_msg)
+
+        # Validate string fields are properly initialized
         string_fields = ["header", "title", "description", "comment"]
-        for key, value in validated_context.items():
-            if value is None and key in string_fields:
-                log_warning_safe(
-                    logger,
-                    "Template context key '{key}' is None, replacing with empty string",
-                    prefix="TEMPLATE",
+        for key in string_fields:
+            if key in validated_context and validated_context[key] is None:
+                error_msg = safe_format(
+                    "SECURITY VIOLATION: Template context key '{key}' is None. "
+                    "Explicit initialization required for all template variables.",
                     key=key,
                 )
-                validated_context[key] = ""
+                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
+                raise TemplateRenderError(error_msg)
 
         return validated_context
 

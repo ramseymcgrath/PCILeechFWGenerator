@@ -261,68 +261,93 @@ class TemplateContextValidator:
         return bool(re.match(regex_pattern, template_name))
 
     def validate_and_complete_context(
-        self, template_name: str, context: Dict[str, Any], strict: bool = False
+        self,
+        template_name: str,
+        context: Dict[str, Any],
+        strict: bool = True,
     ) -> Dict[str, Any]:
         """
-        Validate and complete a template context with required defaults.
+        Strictly validate template context with security-first approach.
 
-        This ensures all required variables are present and adds default values
-        for optional variables that are commonly checked in templates.
+        This method enforces that all required template variables are explicitly
+        defined in the context. It rejects incomplete context data and does not
+        provide defaults for critical template variables.
 
         Args:
             template_name: Name of the template being rendered
             context: Original template context
-            strict: If True, raise error for missing required vars
+            strict: Controls validation strictness (default: True for security)
 
         Returns:
-            Completed context with all required variables defined
+            Validated context without adding defaults for required variables
 
         Raises:
-            ValueError: If strict=True and required variables are missing
+            ValueError: If any required variables are missing or None
         """
         requirements = self.get_template_requirements(template_name)
         validated_context = context.copy()
 
-        # Check required variables
+        # SECURITY ENHANCEMENT: Track all validation issues for comprehensive reporting
+        validation_errors = []
+
+        # Check required variables with strict validation
         missing_required = []
         for var in requirements.required_vars:
             if var not in validated_context or validated_context[var] is None:
-                if var in requirements.default_values:
-                    validated_context[var] = requirements.default_values[var]
-                    log_debug_safe(
-                        logger,
-                        f"Added default value for required variable '{var}' in template '{template_name}'",
-                        prefix="TEMPLATE",
-                    )
-                else:
-                    missing_required.append(var)
+                missing_required.append(var)
+                validation_errors.append(
+                    f"Required variable '{var}' is missing or None"
+                )
 
-        if missing_required:
-            # Always raise error for missing required variables - no fallbacks for security
-            error_msg = f"Template '{template_name}' missing required variables: {', '.join(missing_required)}"
+        # SECURITY ENHANCEMENT: Check for None values in all context variables
+        none_values = []
+        for var, value in validated_context.items():
+            if value is None:
+                none_values.append(var)
+                validation_errors.append(f"Variable '{var}' has None value")
+
+        # SECURITY ENHANCEMENT: Fail immediately on any validation errors
+        if validation_errors:
+            error_msg = (
+                f"SECURITY VIOLATION: Template '{template_name}' context validation failed:\n"
+                f"- " + "\n- ".join(validation_errors) + "\n\n"
+                f"Explicit initialization of all template variables is required."
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        # Add defaults for optional variables
-        for var in requirements.optional_vars:
-            if var not in validated_context:
-                if var in requirements.default_values:
-                    validated_context[var] = requirements.default_values[var]
-                    log_debug_safe(
-                        logger,
-                        f"Added default value for optional variable '{var}' in template '{template_name}'",
-                        prefix="TEMPLATE",
-                    )
+        # SECURITY CHANGE: Never add defaults for required variables
+        # Instead, raise an error if they're missing
 
-        # Add all default values that aren't already in context
-        for var, default_value in requirements.default_values.items():
-            if var not in validated_context:
-                validated_context[var] = default_value
-                log_debug_safe(
-                    logger,
-                    f"Added default value for variable '{var}' in template '{template_name}'",
-                    prefix="TEMPLATE",
+        # Only provide defaults for explicitly optional variables
+        # and only if strict=False (not security critical)
+        if not strict:
+            # Add defaults for optional variables only
+            for var in requirements.optional_vars:
+                if var not in validated_context:
+                    if var in requirements.default_values:
+                        validated_context[var] = requirements.default_values[var]
+                        log_debug_safe(
+                            logger,
+                            f"Added default value for optional variable '{var}' in template '{template_name}'",
+                            prefix="TEMPLATE",
+                        )
+        else:
+            # In strict mode, check if all provided variables (including optional ones)
+            # have non-None values
+            invalid_optional = []
+            for var in requirements.optional_vars:
+                if var in validated_context and validated_context[var] is None:
+                    invalid_optional.append(var)
+
+            if invalid_optional:
+                error_msg = (
+                    f"SECURITY VIOLATION: Template '{template_name}' has None values for "
+                    f"optional variables: {', '.join(invalid_optional)}.\n"
+                    f"Explicit initialization of all template variables is required in strict mode."
                 )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
         return validated_context
 
@@ -407,18 +432,27 @@ _validator = TemplateContextValidator()
 
 
 def validate_template_context(
-    template_name: str, context: Dict[str, Any], strict: bool = False
+    template_name: str,
+    context: Dict[str, Any],
+    strict: bool = True,
 ) -> Dict[str, Any]:
     """
-    Validate and complete a template context.
+    Validate template context with security-first approach.
+
+    This function enforces strict validation of all template variables,
+    rejecting incomplete context data to prevent security issues from
+    undefined template variables.
 
     Args:
         template_name: Name of the template being rendered
         context: Original template context
-        strict: If True, raise error for missing required vars
+        strict: Controls validation strictness (default: True for security)
 
     Returns:
-        Completed context with all required variables defined
+        Validated context without adding defaults for required variables
+
+    Raises:
+        ValueError: If any required variables are missing or None
     """
     return _validator.validate_and_complete_context(template_name, context, strict)
 
