@@ -509,27 +509,4 @@ VerticalScroll {
     background: $surface;
 }
 
-/* Responsive adjustments */
-@media (max-width: 120) {
-    #top-section {
-        height: 20;
-    }
-    
-    .button-row Button {
-        min-width: 10;
-    }
-}
-
-@media (max-width: 80) {
-    #profile-list-panel {
-        width: 100%;
-    }
-    
-    #profile-details-panel {
-        width: 100%;
-        border-left: none;
-        border-top: solid $primary;
-        padding-left: 0;
-        padding-top: 1;
-    }
-}
+/* Responsive adjustments removed: @media queries are not supported in Textual TCSS.*/
