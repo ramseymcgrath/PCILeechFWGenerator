@@ -239,13 +239,49 @@ class StatusMonitor:
     async def _check_root_access(self) -> Dict[str, Any]:
         """Check if running with root privileges"""
         try:
-            has_root = os.geteuid() == 0
-            return {
-                "available": has_root,
-                "message": (
-                    "Root access available" if has_root else "Root access required"
-                ),
-            }
+            # Check for Unix-like systems (Linux, macOS)
+            if hasattr(os, "geteuid"):
+                has_root = os.geteuid() == 0
+                return {
+                    "available": has_root,
+                    "message": (
+                        "Root access available" if has_root else "Root access required"
+                    ),
+                }
+            # For Windows systems
+            elif platform.system() == "Windows":
+                # Check if running with admin privileges
+                # This is simplified as Windows is not a primary target platform
+                try:
+                    import ctypes
+
+                    # This is a platform-specific attribute
+                    # pylint: disable=no-member
+                    if hasattr(ctypes, "windll"):
+                        has_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+                        return {
+                            "available": has_admin,
+                            "message": (
+                                "Admin privileges available"
+                                if has_admin
+                                else "Admin privileges required"
+                            ),
+                        }
+                    # Fall back if we can't check properly
+                    return {
+                        "available": False,
+                        "message": "Unable to determine admin status",
+                    }
+                except Exception:
+                    return {
+                        "available": False,
+                        "message": "Unable to determine admin status",
+                    }
+            else:
+                return {
+                    "available": False,
+                    "message": "Unable to determine root access on this platform",
+                }
         except Exception as e:
             return {"available": False, "error": str(e)}
 
@@ -269,6 +305,15 @@ class StatusMonitor:
     async def _check_vfio_support(self) -> Dict[str, Any]:
         """Check VFIO support"""
         try:
+            # VFIO is a Linux-specific feature
+            if platform.system() != "Linux":
+                return {
+                    "supported": False,
+                    "checks": {"platform_supported": False},
+                    "message": f"PCILeech requires Linux for hardware operations (current OS: {platform.system()})",
+                }
+
+            # For Linux, check VFIO modules and configuration
             vfio_checks = {
                 "vfio_module": os.path.exists("/sys/module/vfio"),
                 "vfio_pci_driver": os.path.exists("/sys/bus/pci/drivers/vfio-pci"),
@@ -290,6 +335,11 @@ class StatusMonitor:
 
     def _check_iommu_enabled(self) -> bool:
         """Check if IOMMU is enabled"""
+        # IOMMU is a Linux-specific feature
+        if platform.system() != "Linux":
+            # PCILeech requires Linux, so IOMMU is not available on other platforms
+            return False
+
         try:
             # Check kernel command line for IOMMU parameters
             with open("/proc/cmdline", "r") as f:
@@ -299,6 +349,9 @@ class StatusMonitor:
                     or "intel_iommu=on" in cmdline
                     or "amd_iommu=on" in cmdline
                 )
+        except FileNotFoundError:
+            # /proc/cmdline doesn't exist on non-Linux platforms
+            return False
         except Exception:
             return False
 

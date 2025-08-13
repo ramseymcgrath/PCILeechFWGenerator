@@ -16,9 +16,23 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
-                             ProgressBar, RichLog, Select, Static, Switch,
-                             TabbedContent, TabPane, TextArea, Tree)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    RichLog,
+    Select,
+    Static,
+    Switch,
+    TabbedContent,
+    TabPane,
+    TextArea,
+    Tree,
+)
 
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -1861,8 +1875,7 @@ Tips:
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import \
-                DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")
@@ -2174,6 +2187,76 @@ Tips:
             pass
 
 
+def check_sudo():
+    """Check if running as root/sudo and warn if not."""
+    import os
+
+    try:
+        # On Unix-like systems (Linux, macOS)
+        if hasattr(os, "geteuid"):
+            if os.geteuid() != 0:
+                print(
+                    "⚠️  Warning: PCILeech requires root privileges for hardware access."
+                )
+                print("⚠️  Warning: Please run with sudo or as root user.")
+                return False
+            return True
+        # On Windows, just return True (will handle UAC elsewhere)
+        return True
+    except Exception as e:
+        print(f"⚠️  Error checking sudo access: {e}")
+        return False
+
+
+def check_os_compatibility():
+    """Check if the current OS is compatible with PCILeech operations."""
+    import platform
+    import sys
+
+    system = platform.system()
+    if system == "Linux":
+        # Check if VFIO modules are loaded
+        try:
+            with open("/proc/modules", "r") as f:
+                modules = f.read()
+                if "vfio " not in modules or "vfio_pci " not in modules:
+                    print("⚠️  Warning: VFIO modules not loaded. Run:")
+                    print("⚠️  Warning:   sudo modprobe vfio vfio-pci")
+        except FileNotFoundError:
+            # /proc/modules not available, skip check
+            pass
+
+        return True, None
+    elif system == "Darwin":  # macOS
+        return (
+            False,
+            "PCILeech requires Linux. macOS is not supported for firmware generation.",
+        )
+    elif system == "Windows":
+        return False, "PCILeech requires Linux. Windows is not supported."
+    else:
+        return (
+            False,
+            f"Unsupported operating system: {system}. PCILeech requires Linux.",
+        )
+
+
 if __name__ == "__main__":
+    # Check OS compatibility
+    is_compatible, os_message = check_os_compatibility()
+    if not is_compatible:
+        print(f"❌ Error: {os_message}")
+        print("PCILeech requires Linux for full functionality.")
+        import sys
+
+        sys.exit(1)
+    elif os_message:
+        print(f"⚠️  Warning: {os_message}")
+
+    # Check sudo/root access
+    if not check_sudo():
+        print("⚠️  Warning: Continuing without root privileges - limited functionality.")
+
+    # Run the application
     app = PCILeechTUI()
     app.run()

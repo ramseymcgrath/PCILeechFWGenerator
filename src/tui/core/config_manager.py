@@ -381,7 +381,7 @@ class ConfigManager:
                     "name": "Network Device Standard",
                     "description": "Standard configuration for network devices",
                     "config": BuildConfiguration(
-                        board_type="pcileech_35t325_x1",
+                        board_type="pcileech_75t484_x1",
                         advanced_sv=True,
                         enable_variance=True,
                         behavior_profiling=False,
@@ -396,7 +396,7 @@ class ConfigManager:
                     "name": "Storage Device Optimized",
                     "description": "Optimized configuration for storage devices",
                     "config": BuildConfiguration(
-                        board_type="100t",
+                        board_type="pcileech_100t484_x1",
                         device_type="storage",
                         advanced_sv=True,
                         enable_variance=True,
@@ -412,7 +412,7 @@ class ConfigManager:
                     "name": "Quick Development",
                     "description": "Fast configuration for development and testing",
                     "config": BuildConfiguration(
-                        board_type="35t",
+                        board_type="pcileech_35t325_x1",
                         device_type="generic",
                         advanced_sv=False,
                         enable_variance=False,
@@ -428,7 +428,7 @@ class ConfigManager:
                     "name": "Full Featured",
                     "description": "All features enabled for comprehensive analysis",
                     "config": BuildConfiguration(
-                        board_type="100t",
+                        board_type="pcileech_100t484_x1",
                         device_type="generic",
                         advanced_sv=True,
                         enable_variance=True,
