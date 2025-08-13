@@ -82,16 +82,12 @@ def choose_device() -> Dict[str, str]:
     return devs[int(input("Select donor device #: "))]
 
 
-SUPPORTED_BOARDS = [
-    "pcileech_75t484_x1",
-    "pcileech_35t484_x1",
-    "pcileech_35t325_x4",
-    "pcileech_35t325_x1",
-    "pcileech_100t484_x1",
-    "pcileech_enigma_x1",
-    "pcileech_squirrel",
-    "pcileech_pciescreamer_xc7a35",
-]
+# Use dynamic board discovery for supported boards
+from src.device_clone.board_config import list_supported_boards
+
+
+def get_supported_boards():
+    return list_supported_boards()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -102,7 +98,7 @@ SUPPORTED_BOARDS = [
 def build_sub(parser: argparse._SubParsersAction):
     p = parser.add_parser("build", help="Build firmware (guided or scripted)")
     p.add_argument("--bdf", help="PCI BDF (skip for interactive picker)")
-    p.add_argument("--board", choices=SUPPORTED_BOARDS, help="FPGA board")
+    p.add_argument("--board", choices=get_supported_boards(), help="FPGA board")
     p.add_argument(
         "--advanced-sv", action="store_true", help="Enable advanced SV features"
     )
@@ -176,7 +172,7 @@ def flash_sub(parser: argparse._SubParsersAction):
     p = parser.add_parser("flash", help="Flash a firmware binary via usbloader")
     p.add_argument("firmware", help="Path to .bin")
     p.add_argument(
-        "--board", required=True, choices=SUPPORTED_BOARDS, help="FPGA board"
+        "--board", required=True, choices=get_supported_boards(), help="FPGA board"
     )
 
 
@@ -263,7 +259,7 @@ def main(argv: Optional[List[str]] = None):
 
     if args.cmd == "build":
         bdf = args.bdf or choose_device()["bdf"]
-        board = args.board or pick(SUPPORTED_BOARDS, "Board #: ")
+        board = args.board or pick(get_supported_boards(), "Board #: ")
         # Process fallback lists
         allowed_fallbacks = []
         if hasattr(args, "allow_fallbacks") and args.allow_fallbacks:
@@ -315,8 +311,7 @@ def main(argv: Optional[List[str]] = None):
         flash_bin(Path(args.firmware))
 
     elif args.cmd == "donor-template":
-        from ..device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         if args.with_comments:
             # Generate template with comments (for documentation)
