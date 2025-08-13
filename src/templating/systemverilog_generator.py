@@ -1776,6 +1776,12 @@ class AdvancedSVGenerator:
             | (template_context.get("msix_config", {}).get("table_offset", 0) & ~0x7),
             "pba_offset_bir": template_context.get("msix_config", {}).get("pba_bir", 0)
             | (template_context.get("msix_config", {}).get("pba_offset", 0) & ~0x7),
+            # Add individual MSI-X variables that the template expects
+            # Use actual detected values when MSI-X is supported, safe defaults otherwise
+            "msix_table_bir": template_context.get("msix_config", {}).get("table_bir", 0),
+            "msix_table_offset": template_context.get("msix_config", {}).get("table_offset", 0x1000),
+            "msix_pba_bir": template_context.get("msix_config", {}).get("pba_bir", 0),
+            "msix_pba_offset": template_context.get("msix_config", {}).get("pba_offset", 0x2000),
         }
 
         # Add enable_advanced_features to device_config section if it doesn't exist
