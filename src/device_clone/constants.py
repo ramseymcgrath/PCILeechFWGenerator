@@ -19,7 +19,7 @@ BOARD_PARTS = {
     "pcileech_100t484_x1": "xczu3eg-sbva484-1-e",
     # Other boards
     "pcileech_enigma_x1": "xc7a75tfgg484-2",
-    "pcileech_squirrel": "xc7a35tcsg324-2",
+    "pcileech_squirrel": "xc7a35tfgg484-2",
     "pcileech_pciescreamer_xc7a35": "xc7a35tcsg324-2",
 }
 

@@ -30,7 +30,7 @@ class BoardDiscovery:
     # Known board directory patterns in pcileech-fpga
     BOARD_DIR_PATTERNS = {
         # Legacy boards
-        "PCIeSquirrel": {"name": "35t", "fpga_part": "xc7a35tcsg324-2"},
+        "PCIeSquirrel": {"name": "35t", "fpga_part": "xc7a35tfgg484-2"},
         "PCIeEnigmaX1": {"name": "75t", "fpga_part": "xc7a75tfgg484-2"},
         "XilinxZDMA": {"name": "100t", "fpga_part": "xczu3eg-sbva484-1-e"},
         # Modern boards with more specific patterns
