@@ -16,9 +16,23 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
-                             ProgressBar, RichLog, Select, Static, Switch,
-                             TabbedContent, TabPane, TextArea, Tree)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    RichLog,
+    Select,
+    Static,
+    Switch,
+    TabbedContent,
+    TabPane,
+    TextArea,
+    Tree,
+)
 
 from .core.background_monitor import BackgroundMonitor
 from .core.build_orchestrator import BuildOrchestrator
@@ -27,6 +41,8 @@ from .core.device_manager import DeviceManager
 from .core.error_handler import ErrorHandler
 from .core.status_monitor import StatusMonitor
 from .core.ui_coordinator import UICoordinator
+from .core.app_state import AppState
+from .core.app_state import AppState
 from .models.config import BuildConfiguration
 from .models.device import PCIDevice
 from .models.progress import BuildProgress
@@ -1011,10 +1027,14 @@ class PCILeechTUI(App):
     error_handler: ErrorHandler
     ui_coordinator: UICoordinator
     background_monitor: BackgroundMonitor
+    app_state: AppState
 
     def __init__(self):
         # Initialize Textual app first to set up reactive system
         super().__init__()
+
+        # Initialize app state
+        self.app_state = AppState()
 
         # Core services
         self.device_manager = DeviceManager()
@@ -1026,15 +1046,17 @@ class PCILeechTUI(App):
         # Performance optimizations
         self.debounced_search = DebouncedSearch(delay=0.3)
 
-        # State
-        self._devices = []
-        self._filtered_devices = []
+        # System state that isn't part of the app state
         self._system_status = {}
         self._build_history = []
 
-        # Initialize current_config from config manager
-        # This must be done after super().__init__() to avoid ReactiveError
-        self.current_config = self.config_manager.get_current_config()
+        # Initialize app state with default config
+        initial_config = self.config_manager.get_current_config()
+        self.app_state.set_config(initial_config)
+        self.current_config = initial_config
+
+        # Set up state change handler
+        self.app_state.subscribe(self._on_state_change)
 
     # Keyboard action handlers
     def action_quit(self) -> None:
@@ -1219,7 +1241,7 @@ class PCILeechTUI(App):
         self.background_monitor.start_monitoring()
 
         # Initial device scan
-        await self._scan_devices()
+        await self.ui_coordinator.scan_devices()
 
         # Update UI with current config
         self._update_config_display()
@@ -1394,7 +1416,7 @@ Tips:
 
             config_data = {
                 "backup_time": self._get_current_timestamp(),
-                "current_config": self.current_config.to_dict(),
+                "current_config": self.app_state.get_state("config").to_dict(),
                 "profiles": self.config_manager.list_profiles(),
             }
 
@@ -1564,13 +1586,15 @@ Tips:
 
         # Find selected device
         selected_device = None
-        for device in self._filtered_devices:  # Use filtered devices
+        for device in self.filtered_devices:  # Use computed property
             if device.bdf == row_key:
                 selected_device = device
                 break
 
         if selected_device:
-            # Delegate to UI coordinator
+            # Update app state first
+            self.app_state.set_selected_device(selected_device)
+            # Then delegate to UI coordinator
             await self.ui_coordinator.handle_device_selection(selected_device)
 
     # Method removed - functionality moved to UICoordinator
@@ -1587,12 +1611,14 @@ Tips:
         try:
             # Log current configuration before opening dialog
             print(
-                f"Current configuration device_type: {self.current_config.device_type}"
+                f"Current configuration device_type: {self.app_state.get_state('config').device_type}"
             )
 
             result = await self.push_screen(ConfigurationDialog())
             if result is not None:
-                # Delegate configuration update to UI coordinator
+                # Update app state first
+                self.app_state.set_config(result)
+                # Then delegate configuration update to UI coordinator
                 await self.ui_coordinator.handle_configuration_update(result)
         except Exception as e:
             if hasattr(self, "error_handler"):
@@ -1625,8 +1651,7 @@ Tips:
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import \
-                DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")
@@ -1645,6 +1670,98 @@ Tips:
         except Exception as e:
             self.notify(f"Failed to generate donor template: {e}", severity="error")
 
+    # App state handler
+    def _on_state_change(
+        self, old_state: Dict[str, Any], new_state: Dict[str, Any]
+    ) -> None:
+        """
+        Handle app state changes.
+
+        This method is called whenever the app state changes, and can be used to
+        update UI elements or perform other actions in response to state changes.
+
+        Args:
+            old_state: The previous state
+            new_state: The new state
+        """
+        # Update reactive attributes when app state changes
+        if old_state.get("selected_device") != new_state.get("selected_device"):
+            self.selected_device = new_state.get("selected_device")
+
+        if old_state.get("config") != new_state.get("config"):
+            self.current_config = new_state.get("config")
+
+        if old_state.get("build_progress") != new_state.get("build_progress"):
+            self.build_progress = new_state.get("build_progress")
+
+        if old_state.get("filters") != new_state.get("filters"):
+            self.device_filters = new_state.get("filters") or {}
+
+    # Computed properties
+    @property
+    def devices(self) -> List[PCIDevice]:
+        """Get all devices from app state."""
+        return self.app_state.get_state("devices") or []
+
+    @property
+    def filtered_devices(self) -> List[PCIDevice]:
+        """Get filtered devices based on search criteria and filters."""
+        devices = self.devices
+        filters = self.device_filters
+
+        if not devices:
+            return []
+
+        # Apply filters if they exist
+        if filters:
+            # Filter by search text
+            search_text = filters.get("search_text", "").lower()
+            if search_text:
+                devices = [
+                    device
+                    for device in devices
+                    if search_text in device.display_name.lower()
+                    or search_text in device.bdf.lower()
+                    or search_text in device.vendor_name.lower()
+                ]
+
+            # Apply class filter
+            if filters.get("class_filter") and filters["class_filter"] != "all":
+                devices = [
+                    device
+                    for device in devices
+                    if filters["class_filter"] in device.device_class.lower()
+                ]
+
+            # Apply status filter
+            if filters.get("status_filter") and filters["status_filter"] != "all":
+                status_filter = filters["status_filter"]
+                if status_filter == "suitable":
+                    devices = [d for d in devices if d.is_suitable]
+                elif status_filter == "bound":
+                    devices = [d for d in devices if d.has_driver]
+                elif status_filter == "unbound":
+                    devices = [d for d in devices if not d.has_driver]
+                elif status_filter == "vfio":
+                    devices = [d for d in devices if d.vfio_compatible]
+
+            # Apply minimum score filter
+            if filters.get("min_score", 0) > 0:
+                min_score = filters["min_score"]
+                devices = [
+                    device
+                    for device in devices
+                    if device.suitability_score >= min_score
+                ]
+
+        return devices
+
+    @property
+    def can_start_build(self) -> bool:
+        """Determine if a build can be started based on current state."""
+        device = self.selected_device
+        return device is not None and device.is_suitable and self.build_progress is None
+
     # Reactive watchers
     def watch_selected_device(self, device: Optional[PCIDevice]) -> None:
         """React to device selection changes"""
@@ -1655,11 +1772,13 @@ Tips:
             self.sub_title = "Interactive firmware generation for PCIe devices"
             self.ui_coordinator.clear_compatibility_display()
 
-    # Method removed - functionality moved to UICoordinator
-
-    # Method removed - functionality moved to UICoordinator
-
-    # Method removed - functionality moved to UICoordinator
+        # Update button states based on device selection
+        try:
+            start_button = self.query_one("#start-build", Button)
+            start_button.disabled = not self.can_start_build
+        except Exception:
+            # Widget might not be available yet
+            pass
 
     def watch_build_progress(self, progress: Optional[BuildProgress]) -> None:
         """React to build progress changes"""

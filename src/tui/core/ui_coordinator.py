@@ -45,8 +45,8 @@ class UICoordinator:
         Args:
             device: The selected device
         """
-        # Update UI based on selection
-        self.app.selected_device = device
+        # Update app state
+        self.app.app_state.set_selected_device(device)
         self._update_compatibility_display(device)
 
         # Enable relevant buttons
@@ -64,7 +64,8 @@ class UICoordinator:
         """
         try:
             devices = await self.device_manager.scan_devices()
-            self.app._devices = devices
+            # Update app state instead of directly modifying app._devices
+            self.app.app_state.set_devices(devices)
             self.apply_device_filters()
             self.update_device_table()
 
@@ -81,65 +82,30 @@ class UICoordinator:
 
     def apply_device_filters(self) -> None:
         """Apply current filters to device list"""
-        self.app._filtered_devices = self.app._devices.copy()
-
-        # Apply search filter from quick search
+        # The filtering logic is now in PCILeechTUI.filtered_devices property
+        # This method is kept for backwards compatibility, but delegates to the app state
+        # Update the filters in the app state from the current UI
         try:
             search_text = self.app.query_one("#quick-search").value.lower()
+            current_filters = (
+                self.app.device_filters.copy() if self.app.device_filters else {}
+            )
+
             if search_text:
-                self.app._filtered_devices = [
-                    device
-                    for device in self.app._filtered_devices
-                    if search_text in device.display_name.lower()
-                    or search_text in device.bdf.lower()
-                    or search_text in device.vendor_name.lower()
-                ]
+                current_filters["search_text"] = search_text
+
+            # Update app state with filters
+            self.app.app_state.set_filters(current_filters)
         except Exception:
             pass  # Ignore if search widget not ready
-
-        # Apply additional filters from device_filters reactive
-        filters = self.app.device_filters
-
-        if filters.get("class_filter") and filters["class_filter"] != "all":
-            self.app._filtered_devices = [
-                device
-                for device in self.app._filtered_devices
-                if filters["class_filter"] in device.device_class.lower()
-            ]
-
-        if filters.get("status_filter") and filters["status_filter"] != "all":
-            status_filter = filters["status_filter"]
-            if status_filter == "suitable":
-                self.app._filtered_devices = [
-                    d for d in self.app._filtered_devices if d.is_suitable
-                ]
-            elif status_filter == "bound":
-                self.app._filtered_devices = [
-                    d for d in self.app._filtered_devices if d.has_driver
-                ]
-            elif status_filter == "unbound":
-                self.app._filtered_devices = [
-                    d for d in self.app._filtered_devices if not d.has_driver
-                ]
-            elif status_filter == "vfio":
-                self.app._filtered_devices = [
-                    d for d in self.app._filtered_devices if d.vfio_compatible
-                ]
-
-        if filters.get("min_score", 0) > 0:
-            min_score = filters["min_score"]
-            self.app._filtered_devices = [
-                device
-                for device in self.app._filtered_devices
-                if device.suitability_score >= min_score
-            ]
 
     def update_device_table(self) -> None:
         """Update the device table with current filtered devices"""
         device_table = self.app.query_one("#device-table")
         device_table.clear()
 
-        for device in self.app._filtered_devices:
+        # Use the app's filtered_devices property which uses app_state
+        for device in self.app.filtered_devices:
             device_table.add_row(
                 device.status_indicator,
                 device.bdf,
@@ -152,8 +118,9 @@ class UICoordinator:
 
     def _update_device_panel_title(self) -> None:
         """Update the device panel title with device count"""
-        device_count = len(self.app._filtered_devices)
-        total_count = len(self.app._devices)
+        # Use the app's properties which use app_state
+        device_count = len(self.app.filtered_devices)
+        total_count = len(self.app.devices)
         device_panel = self.app.query_one("#device-panel .panel-title")
 
         if device_count == total_count:
@@ -249,7 +216,7 @@ class UICoordinator:
         Args:
             progress: The current build progress
         """
-        self.app.build_progress = progress
+        self.app.app_state.set_build_progress(progress)
         self._update_build_progress_display()
 
     def _on_build_progress(self, progress: BuildProgress) -> None:
@@ -339,8 +306,8 @@ class UICoordinator:
             config: The updated configuration
         """
         if config is not None:
-            # Update current configuration
-            self.app.current_config = config
+            # Update app state instead of directly modifying app.current_config
+            self.app.app_state.set_config(config)
             # Save the configuration to the config manager
             self.config_manager.set_current_config(config)
             self._update_config_display()

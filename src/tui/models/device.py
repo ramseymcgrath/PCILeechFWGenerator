@@ -1,7 +1,7 @@
 """
-PCIe Device Data Model
+Device models for the PCILeech TUI application.
 
-Enhanced PCIe device information for the TUI interface.
+This module defines data classes for representing PCI devices in the application.
 """
 
 from dataclasses import dataclass, field
@@ -12,125 +12,111 @@ from typing import Any, Dict, List, Optional
 class PCIDevice:
     """Enhanced PCIe device information."""
 
-    bdf: str
+    bdf: str  # Bus/Device/Function identifier (e.g., "0000:00:00.0")
     vendor_id: str
     device_id: str
     vendor_name: str
     device_name: str
     device_class: str
-    subsystem_vendor: str
-    subsystem_device: str
-    driver: Optional[str]
-    iommu_group: str
-    power_state: str
-    link_speed: str
-    bars: List[Dict[str, Any]]
-    suitability_score: float
-    compatibility_issues: List[str]
-    compatibility_factors: List[Dict[str, Any]] = field(default_factory=list)
-
-    # Enhanced compatibility indicators
+    subsystem_vendor: Optional[str] = None
+    subsystem_device: Optional[str] = None
+    driver: Optional[str] = None
+    iommu_group: Optional[int] = None
+    power_state: Optional[str] = None
+    link_speed: Optional[str] = None
+    bars: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    suitability_score: int = 0
+    compatibility_issues: List[str] = field(default_factory=list)
+    compatibility_factors: List[str] = field(default_factory=list)
+    detailed_status: Dict[str, str] = field(default_factory=dict)
     is_valid: bool = True
     has_driver: bool = False
     is_detached: bool = False
     vfio_compatible: bool = False
     iommu_enabled: bool = False
-    detailed_status: Dict[str, Any] = field(default_factory=dict)
+    compatibility_factors: List[str] = field(default_factory=list)
+    detailed_status: Dict[str, str] = field(default_factory=dict)
+    is_valid: bool = True
+    has_driver: bool = False
+    is_detached: bool = False
+    vfio_compatible: bool = False
+    iommu_enabled: bool = False
 
     @property
     def display_name(self) -> str:
-        """Human-readable device name for display."""
-        return f"{self.vendor_name} {self.device_name}"
+        """Return a user-friendly display name for the device."""
+        return f"{self.vendor_name} {self.device_name} ({self.bdf})"
+
+    @property
+    def is_supported(self) -> bool:
+        """Check if the device is supported for firmware generation."""
+        return self.compatibility_issues == []
 
     @property
     def is_suitable(self) -> bool:
-        """Check if device is suitable for firmware generation."""
-        return self.suitability_score >= 0.7 and len(self.compatibility_issues) == 0
+        """Check if the device is suitable for firmware generation."""
+        return (
+            self.is_valid
+            and self.vfio_compatible
+            and len(self.compatibility_issues) == 0
+        )
 
     @property
-    def status_indicator(self) -> str:
-        """Status indicator for UI display."""
-        if not self.is_suitable:
-            return "❌"
-        elif self.driver:
-            return "⚠️"
-        else:
-            return "✅"
+    def id(self) -> str:
+        """Return the BDF as the device ID for backward compatibility."""
+        return self.bdf
 
     @property
-    def validity_indicator(self) -> str:
-        """Device validity indicator."""
-        return "✅" if self.is_valid else "❌"
+    def name(self) -> str:
+        """Return the device name for backward compatibility."""
+        return self.device_name
 
     @property
-    def driver_indicator(self) -> str:
-        """Driver status indicator."""
-        if not self.has_driver:
-            return "🔌"  # No driver
-        elif self.is_detached:
-            return "🔓"  # Detached
-        else:
-            return "🔒"  # Bound
+    def class_id(self) -> str:
+        """Return the class ID for backward compatibility."""
+        return self.device_class[:4]
 
     @property
-    def vfio_indicator(self) -> str:
-        """VFIO compatibility indicator."""
-        return "🛡️" if self.vfio_compatible else "❌"
-
-    @property
-    def iommu_indicator(self) -> str:
-        """IOMMU status indicator."""
-        return "🔒" if self.iommu_enabled else "❌"
-
-    @property
-    def ready_indicator(self) -> str:
-        """Overall readiness indicator."""
-        if self.is_valid and self.vfio_compatible and self.iommu_enabled:
-            return "⚡"
-        elif self.is_suitable:
-            return "⚠️"
-        else:
-            return "❌"
-
-    @property
-    def compact_status(self) -> str:
-        """Compact multi-indicator status for table display."""
-        indicators = []
-        indicators.append(self.validity_indicator)
-        indicators.append(self.driver_indicator)
-        indicators.append(self.vfio_indicator)
-        indicators.append(self.iommu_indicator)
-        indicators.append(self.ready_indicator)
-        return "".join(indicators)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "bd": self.bdf,
-            "vendor_id": self.vendor_id,
-            "device_id": self.device_id,
-            "vendor_name": self.vendor_name,
-            "device_name": self.device_name,
-            "device_class": self.device_class,
-            "subsystem_vendor": self.subsystem_vendor,
-            "subsystem_device": self.subsystem_device,
-            "driver": self.driver,
-            "iommu_group": self.iommu_group,
-            "power_state": self.power_state,
-            "link_speed": self.link_speed,
-            "bars": self.bars,
-            "suitability_score": self.suitability_score,
-            "compatibility_issues": self.compatibility_issues,
-            "compatibility_factors": self.compatibility_factors,
-            "is_valid": self.is_valid,
-            "has_driver": self.has_driver,
-            "is_detached": self.is_detached,
-            "vfio_compatible": self.vfio_compatible,
-            "iommu_enabled": self.iommu_enabled,
-            "detailed_status": self.detailed_status,
+    def class_name(self) -> str:
+        """Return a human-readable class name based on the class ID."""
+        class_names = {
+            "0100": "SCSI Storage Controller",
+            "0101": "IDE Controller",
+            "0102": "Floppy Controller",
+            "0103": "IPI Controller",
+            "0104": "RAID Controller",
+            "0105": "ATA Controller",
+            "0106": "SATA Controller",
+            "0107": "SAS Controller",
+            "0180": "Other Storage Controller",
+            "0200": "Ethernet Controller",
+            "0280": "Other Network Controller",
+            "0300": "VGA Compatible Controller",
+            "0301": "XGA Controller",
+            "0302": "3D Controller",
+            "0380": "Other Display Controller",
+            "0400": "Multimedia Video Controller",
+            "0401": "Multimedia Audio Controller",
+            "0402": "Computer Telephony Device",
+            "0403": "Audio Device",
+            "0480": "Other Multimedia Controller",
         }
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PCIDevice":
-        """Create instance from dictionary."""
-        return cls(**data)
+        class_id = self.class_id
+        return class_names.get(class_id, f"Unknown Device Class ({class_id})")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert device information to a dictionary for serialization."""
+        from dataclasses import asdict
+        import copy
+
+        # Create a deep copy to avoid modifying the original
+        device_dict = asdict(self)
+
+        # Add any computed properties that should be included
+        device_dict["is_suitable"] = self.is_suitable
+        device_dict["is_supported"] = self.is_supported
+        device_dict["class_name"] = self.class_name
+        device_dict["display_name"] = self.display_name
+
+        return device_dict
