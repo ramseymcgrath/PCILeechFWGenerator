@@ -129,6 +129,22 @@ security:
 	bandit -r src/
 	safety check
 
+# Version utilities
+set-version:
+	@echo "Set explicit package version (use: make set-version VERSION=1.2.3)"
+	python3 scripts/set_version.py --version $(VERSION)
+
+bump-version:
+	@echo "Bump package version using automation (patch/minor/major)"
+	python3 scripts/update_version.py --bump-type ${TYPE:-patch} --force
+
+# Convenience pattern target so maintainers can run:
+#   make set-version-1.2.3
+.PHONY: set-version-%
+set-version-%:
+	@echo "Set explicit package version -> $*"
+	python3 scripts/set_version.py --version $*
+
 # Container targets
 container:
 	./scripts/build_container.sh --tag dma-fw
