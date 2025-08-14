@@ -287,12 +287,31 @@ class TemplateContextValidator:
         requirements = self.get_template_requirements(template_name)
         validated_context = context.copy()
 
+        # Detect variables that the template itself assigns via `{% set var = ... %}`
+        # and treat them as implicitly present for validation purposes. This allows
+        # templates to provide safe fallbacks without requiring the caller to
+        # explicitly populate every variable.
+        assigned_in_template: Set[str] = set()
+        try:
+            template_path = Path(__file__).parent.parent / "templates" / template_name
+            if template_path.exists():
+                content = template_path.read_text()
+                for m in re.finditer(r"\{%-?\s*set\s+([A-Za-z_][A-Za-z0-9_]*)", content):
+                    assigned_in_template.add(m.group(1))
+        except Exception:
+            # If anything goes wrong reading the template, be conservative and
+            # continue validation without assigned_in_template enhancements.
+            assigned_in_template = set()
+
         # SECURITY ENHANCEMENT: Track all validation issues for comprehensive reporting
         validation_errors = []
 
         # Check required variables with strict validation
         missing_required = []
         for var in requirements.required_vars:
+            # If the template assigns this variable itself, consider it present
+            if var in assigned_in_template:
+                continue
             if var not in validated_context or validated_context[var] is None:
                 missing_required.append(var)
                 validation_errors.append(

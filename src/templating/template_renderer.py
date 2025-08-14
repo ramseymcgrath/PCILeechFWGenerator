@@ -405,6 +405,23 @@ class TemplateRenderer:
             # Find all referenced variables in the template
             referenced_vars = meta.find_undeclared_variables(ast)
 
+            # Detect variables that are assigned/defined inside the template
+            # (e.g. via {% set var = ... %} or {% set var %}...{% endset %}) and
+            # treat them as declared for the purposes of preflight validation.
+            import re
+
+            assigned_in_template = set()
+            try:
+                # Find simple set statements: {% set var = ... %}
+                # Handle whitespace-control variants like '{% set', '{%- set', '{% set -%}', etc.
+                for m in re.finditer(r"\{%-?\s*set\s+([A-Za-z_][A-Za-z0-9_]*)", src):
+                    assigned_in_template.add(m.group(1))
+            except Exception:
+                assigned_in_template = set()
+
+            # Consider template-assigned names as declared for preflight
+            declared = declared | assigned_in_template
+
             # Check for missing variables
             missing = referenced_vars - declared
 
