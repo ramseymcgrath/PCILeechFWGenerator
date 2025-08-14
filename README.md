@@ -133,6 +133,18 @@ Quick diagnostic command:
 sudo python3 pcileech.py check --device 0000:03:00.0 --interactive
 ``` 
 
+Bundled IOMMU viewer
+
+We include a small, zero-dependency Python script to snapshot IOMMU groups and PCI device driver bindings. This is useful when filing bugs or debugging VFIO issues locally.
+
+```bash
+# Human readable
+python3 scripts/iommu_viewer.py
+
+# JSON output for pasting into issues
+python3 scripts/iommu_viewer.py --json > iommu_snapshot.json
+```
+
 ## Direct Documentation Links
 
 - **[Troubleshooting Guide](https://pcileechfwgenerator.ramseymcgrath.com/troubleshooting)** - Comprehensive troubleshooting and diagnostic guide

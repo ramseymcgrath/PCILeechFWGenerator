@@ -82,11 +82,14 @@ VFIO_CHECK_EXTENSION = _IOW(VFIO_TYPE, 1, ctypes.sizeof(ctypes.c_int))
 VFIO_SET_IOMMU = _IOW(VFIO_TYPE, 2, ctypes.sizeof(ctypes.c_int))
 
 # VFIO Group IOCTLs
-VFIO_GROUP_GET_STATUS = _IOR(VFIO_TYPE, 3, ctypes.sizeof(ctypes.c_uint32))
+# Use the actual struct size for group status (vfio_group_status)
+VFIO_GROUP_GET_STATUS = _IOR(VFIO_TYPE, 3, ctypes.sizeof(vfio_group_status))
 VFIO_GROUP_SET_CONTAINER = _IOW(VFIO_TYPE, 4, ctypes.sizeof(ctypes.c_int))
-VFIO_GROUP_GET_DEVICE_FD = _IOW(
-    VFIO_TYPE, 6, VFIO_DEVICE_NAME_MAX_LENGTH
-)  # Device name max 256 chars
+# The VFIO_GROUP_GET_DEVICE_FD ioctl does not encode a write buffer size in the
+# ioctl number; it is an _IO() command. Using _IOW() with an artificial size
+# produced a mismatched ioctl number and caused ENOTTY (Inappropriate ioctl)
+# errors on some kernels. Use _IO to match the kernel uapi definition.
+VFIO_GROUP_GET_DEVICE_FD = _IO(VFIO_TYPE, 6)
 
 # VFIO Device IOCTLs
 VFIO_DEVICE_GET_REGION_INFO = _IOWR(

@@ -218,6 +218,7 @@ make clean
 - `scripts/check_templates.sh` - Convenient template checking
 - `scripts/analyze_imports.py` - Import analysis
 - `scripts/generate_api_docs.py` - Documentation generation
+- `scripts/iommu_viewer.py` - Lightweight IOMMU group and device viewer (useful for VFIO debugging)
 
 ### Make Targets
 
