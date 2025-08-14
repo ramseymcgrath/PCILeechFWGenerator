@@ -651,20 +651,23 @@ def handle_tui(args):
         )
 
         # Import TUI components
-        from src.tui.main import PCILeechTUI, check_os_compatibility
+        import platform
+
+        from src.tui.main import PCILeechTUI
 
         # Check OS compatibility first - PCILeech only supports Linux
-        is_compatible, os_message = check_os_compatibility()
+        current_os = platform.system()
+        is_compatible = current_os.lower() == "linux"
+
         if not is_compatible:
             log_error_safe(
                 logger,
-                "OS compatibility error: {message}",
+                "OS compatibility error: PCILeech requires Linux",
                 prefix="TUI",
-                message=os_message,
             )
             log_error_safe(
                 logger,
-                "PCILeech requires Linux. Other operating systems are not supported.",
+                f"Current platform: {current_os}. PCILeech TUI is only supported on Linux systems.",
                 prefix="TUI",
             )
             return 1

@@ -438,7 +438,6 @@ class TemplateRenderer:
                 log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
                 raise TemplateRenderError(error_msg)
 
-            # ENHANCEMENT: Also check for None values in critical variables
             none_vars = [
                 k for k in referenced_vars if k in context and context[k] is None
             ]

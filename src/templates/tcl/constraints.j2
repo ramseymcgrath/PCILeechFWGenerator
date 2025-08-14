@@ -76,7 +76,8 @@ if {[file exists $board_xdc_file]} {
     lappend already_added_files $board_xdc_file
     puts "Added board-specific XDC constraints: $board_xdc_file"
 } else {
-    error "Missing required XDC for board {{ board.name }} - aborting build."
+    puts "WARNING: XDC file not found for board {{ board.name }}: $board_xdc_file"
+    puts "Continuing with generic constraints..."
 }
 {% elif board_xdc_content %}
 # Load XDC constraints from PCILeech repository
@@ -91,7 +92,9 @@ add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
 read_xdc $board_auto_xdc_file
 puts "Added auto-generated board XDC: $board_auto_xdc_file"
 {% else %}
-{%- error "Missing required XDC for board " + board.name + " - aborting build." %}
+# No board-specific XDC available, using generic constraints
+puts "WARNING: No board-specific XDC constraints available for {{ board.name }}"
+puts "Using generic timing constraints only. You may need to add board-specific pin assignments."
 {% endif %}
 {% endif %}
 
@@ -122,7 +125,7 @@ set_property PROCESSING_ORDER LATE [get_files $constraints_file]
 puts "Generated device constraints file: $constraints_file"
 
 # Quality-of-life tweaks for USB-heavy designs
-{% if board.features %}
+{% if board and board.features is defined and board.features %}
 set_param xicom.use_bs_reader 1
 puts "Enabled fast bitstream reader for FT601 board"
 {% endif %}

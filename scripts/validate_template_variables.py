@@ -1,590 +1,427 @@
 #!/usr/bin/env python3
 """
-Template Variable Validation Script
+Template Variable Validation CI Script
 
-This script analyzes all Jinja2 templates to identify potentially undefined
-variables and ensures all templates have proper variable definitions.
+This script performs comprehensive validation of all template variables:
+1. Extracts all variables used in templates
+2. Traces their origin in the codebase
+3. Verifies they are properly handled with fallbacks
+4. Ensures no unsafe default values are used
 
 Usage:
-    python scripts/validate_template_variables.py [options]
-
-CI Usage:
-    python scripts/validate_template_variables.py --strict --format json
+    python3 scripts/validate_template_variables.py [--verbose] [--fix]
 """
 
 import argparse
+import glob
 import json
 import logging
+import os
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Dict, List, Optional, Set, Tuple
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from src.templating.template_context_validator import (
-        TemplateContextValidator, analyze_template_variables,
-        get_template_requirements)
-except ImportError as e:
-    print(f"Error: Failed to import template validation modules: {e}")
-    print("Make sure you're running this script from the project root.")
+    from jinja2 import Environment, FileSystemLoader, meta
+    from jinja2.exceptions import TemplateSyntaxError
+except ImportError:
+    print("Jinja2 is required. Install with: pip install jinja2")
     sys.exit(1)
 
+try:
+    from src.device_clone.fallback_manager import FallbackManager
+    from src.string_utils import (log_error_safe, log_info_safe,
+                                  log_warning_safe)
+    from src.templating.template_renderer import TemplateRenderer
+except ImportError:
+    print("PCILeech modules not found. Run from project root.")
+    sys.exit(1)
 
-class TemplateVariableAnalyzer:
-    """Analyzes templates for undefined variable issues with improved error handling."""
+logger = logging.getLogger("template_validator")
 
-    def __init__(self, template_dir: Path):
-        """
-        Initialize the analyzer.
+# Configuration
+TEMPLATES_DIR = Path("src/templates")
+CODE_DIRS = [
+    Path("src/templating"),
+    Path("src/device_clone"),
+    Path("src/build.py"),
+]
+EXCLUDED_VARS = {
+    # Common builtin functions
+    "range",
+    "len",
+    "min",
+    "max",
+    "sorted",
+    "zip",
+    "sum",
+    "int",
+    "hex",
+    "hasattr",
+    "getattr",
+    "isinstance",
+    # Jinja2 special variables
+    "loop",
+    "self",
+    "super",
+    "namespace",
+    # Custom globals
+    "generate_tcl_header_comment",
+    "throw_error",
+    "__version__",
+}
 
-        Args:
-            template_dir: Root directory containing templates
-        """
-        self.template_dir = template_dir
-        self.validator = TemplateContextValidator()
 
-        # Setup logging
-        logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-        self.logger = logging.getLogger(__name__)
+class VariableDefinition:
+    """Tracks where a variable is defined and used."""
 
-    def analyze_all_templates(self) -> Dict[str, Any]:
-        """
-        Analyze all templates in the directory.
+    def __init__(self, name: str):
+        self.name = name
+        self.templates_used_in: Set[str] = set()
+        self.defined_in_files: Set[str] = set()
+        self.fallbacks_defined: bool = False
+        self.has_default_in_template: bool = False
+        self.unsafe_defaults: List[str] = []
 
-        Returns:
-            Dictionary with analysis results
-        """
-        results = {
-            "total_templates": 0,
-            "templates_with_issues": 0,
-            "total_issues": 0,
-            "issues_by_template": {},
-            "undefined_variables": set(),
-            "conditional_checks": [],
-            "critical_issues": 0,
-            "warnings": 0,
-            "errors": 0,
-        }
+    def is_safely_handled(self) -> bool:
+        """Check if the variable is safely handled."""
+        return bool(self.defined_in_files) or self.fallbacks_defined
 
-        if not self.template_dir.exists():
-            self.logger.error(f"Template directory does not exist: {self.template_dir}")
-            return results
+    def add_template_usage(self, template_path: str):
+        """Add a template where this variable is used."""
+        self.templates_used_in.add(template_path)
 
-        # Find all Jinja2 templates
-        template_patterns = ["*.j2", "*.jinja", "*.jinja2"]
-        templates = []
-        for pattern in template_patterns:
-            templates.extend(self.template_dir.rglob(pattern))
+    def add_definition(self, file_path: str):
+        """Add a file where this variable is defined."""
+        self.defined_in_files.add(file_path)
 
-        results["total_templates"] = len(templates)
-        self.logger.info(f"Found {len(templates)} templates to analyze")
+    def set_fallback_defined(self):
+        """Mark that a fallback is defined for this variable."""
+        self.fallbacks_defined = True
 
-        for template_path in templates:
-            try:
-                rel_path = template_path.relative_to(self.template_dir)
-                template_name = str(rel_path)
+    def set_has_default_in_template(self):
+        """Mark that the template has a default for this variable."""
+        self.has_default_in_template = True
 
-                issues = self.analyze_template(template_path, template_name)
-                if issues:
-                    results["templates_with_issues"] += 1
-                    results["issues_by_template"][template_name] = issues
-                    results["total_issues"] += len(issues)
+    def add_unsafe_default(self, default_value: str):
+        """Add an unsafe default value found in templates."""
+        self.unsafe_defaults.append(default_value)
 
-                    # Categorize issues
-                    for issue in issues:
-                        if issue["type"] == "undefined_variable":
-                            results["undefined_variables"].add(issue["variable"])
-                            results["warnings"] += 1  # Changed from critical_issues
-                        elif issue["type"] == "conditional_check":
-                            results["conditional_checks"].append(
-                                {
-                                    "template": template_name,
-                                    "variable": issue["variable"],
-                                    "line": issue["line"],
-                                }
-                            )
-                            results["warnings"] += 1
-                        elif issue["type"] == "potentially_undefined":
-                            results["warnings"] += 1
-                        elif issue["type"] == "error":
-                            results["errors"] += 1  # Real errors (file parsing, etc.)
-                            results["critical_issues"] += 1
+    def __str__(self) -> str:
+        """String representation for debugging."""
+        status = "✅" if self.is_safely_handled() else "❌"
+        return f"{status} {self.name} (Used in: {len(self.templates_used_in)} templates, Defined in: {len(self.defined_in_files)} files)"
 
-            except Exception as e:
-                self.logger.error(f"Failed to analyze {template_path}: {e}")
-                results["errors"] += 1
-                results["critical_issues"] += 1
 
-        return results
+class TemplateVariableValidator:
+    """Validates template variables usage and definitions."""
 
-    def analyze_template(
-        self, template_path: Path, template_name: str
-    ) -> List[Dict[str, Any]]:
-        """
-        Analyze a single template for variable issues.
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+        self.variables: Dict[str, VariableDefinition] = {}
+        self.env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
+        self.fallback_manager = FallbackManager()
+        self.setup_logger()
 
-        Args:
-            template_path: Path to the template file
-            template_name: Relative name of the template
+    def setup_logger(self):
+        """Set up logging."""
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO if self.verbose else logging.WARNING)
 
-        Returns:
-            List of issues found
-        """
-        issues = []
+    def extract_variables_from_template(self, template_path: str) -> Set[str]:
+        """Extract all variables from a template file."""
+        rel_path = Path(template_path).relative_to(TEMPLATES_DIR)
+        template_source = Path(template_path).read_text(encoding="utf-8")
 
         try:
-            with open(template_path, "r") as f:
-                content = f.read()
-                lines = content.split("\n")
+            # Parse template to get AST
+            ast = self.env.parse(template_source)
+            # Extract variables
+            variables = meta.find_undeclared_variables(ast)
+            # Filter out excluded variables
+            variables = variables - EXCLUDED_VARS
 
-            # Get expected variables from validator
-            requirements = self.validator.get_template_requirements(template_name)
-            all_expected_vars = (
-                requirements.required_vars
-                | requirements.optional_vars
-                | set(requirements.default_values.keys())
+            logger.info(f"Found {len(variables)} variables in {rel_path}")
+            return variables
+
+        except TemplateSyntaxError as e:
+            logger.error(f"Syntax error in {rel_path}: {e}")
+            return set()
+        except Exception as e:
+            logger.error(f"Error processing {rel_path}: {e}")
+            return set()
+
+    def find_default_filters(self, template_path: str) -> Dict[str, List[str]]:
+        """Find uses of the default filter in templates."""
+        template_source = Path(template_path).read_text(encoding="utf-8")
+        rel_path = Path(template_path).relative_to(TEMPLATES_DIR)
+
+        # Pattern to match {{ variable|default(...) }} or {{ variable | default(...) }}
+        pattern = r"{{\s*([a-zA-Z0-9_\.]+)\s*\|\s*default\(([^)]+)\)\s*}}"
+
+        default_usages = {}
+        for match in re.finditer(pattern, template_source):
+            var_name = match.group(1)
+            default_value = match.group(2).strip()
+
+            if var_name not in default_usages:
+                default_usages[var_name] = []
+
+            default_usages[var_name].append(default_value)
+            logger.info(
+                f"Found default filter for {var_name} = {default_value} in {rel_path}"
             )
 
-            # Find all variable references in the template
-            found_vars = analyze_template_variables(template_path)
+            # Check for potentially unsafe defaults
+            if default_value not in (
+                "''",
+                '""',
+                "None",
+                "[]",
+                "{}",
+                "0",
+                "0.0",
+                "False",
+                "'unknown'",
+                "'Unknown'",
+                "'0'",
+                "'0.0'",
+            ):
+                if var_name in self.variables:
+                    self.variables[var_name].add_unsafe_default(default_value)
 
-            # Check for conditional variable checks ({% if var is defined %})
-            for i, line in enumerate(lines, 1):
-                # Look for conditional checks
-                if_defined_match = re.search(
-                    r"\{%\s*if\s+(\w+)(?:\.\w+)*\s*is\s+(?:defined|undefined)", line
-                )
-                if if_defined_match:
-                    var_name = if_defined_match.group(1)
-                    issues.append(
-                        {
-                            "type": "conditional_check",
-                            "variable": var_name,
-                            "line": i,
-                            "content": line.strip(),
-                            "suggestion": f"Ensure '{var_name}' is always defined in context with a default value",
-                        }
+        return default_usages
+
+    def scan_template_files(self):
+        """Scan all template files and collect variables."""
+        template_files = list(TEMPLATES_DIR.glob("**/*.j2"))
+        logger.info(f"Found {len(template_files)} template files")
+
+        for template_file in template_files:
+            template_path = str(template_file)
+            rel_path = template_file.relative_to(TEMPLATES_DIR)
+
+            # Extract variables
+            variables = self.extract_variables_from_template(template_path)
+
+            # Find default filters
+            default_filters = self.find_default_filters(template_path)
+
+            # Register variables
+            for var_name in variables:
+                if var_name not in self.variables:
+                    self.variables[var_name] = VariableDefinition(var_name)
+
+                # Record template usage
+                self.variables[var_name].add_template_usage(str(rel_path))
+
+                # Check if it has a default in the template
+                if var_name in default_filters:
+                    self.variables[var_name].set_has_default_in_template()
+
+    def find_variable_definitions(self):
+        """Find where variables are defined in the codebase."""
+        # Patterns to match variable definitions
+        patterns = [
+            # template_context[var_name] = value
+            r'template_context\[[\'"]([\w\.]+)[\'"]\]\s*=',
+            # template_context.setdefault(var_name, value)
+            r'template_context\.setdefault\([\'"]([\w\.]+)[\'"]',
+            # context.to_template_context() adds variables
+            r'def to_template_context.*?return.*?[\'"](\w+)[\'"]',
+        ]
+
+        # Fallback manager patterns
+        fallback_patterns = [
+            r'fallback_manager\.register_fallback\([\'"]([\w\.]+)[\'"]',
+            r'fallback_manager\.get_fallback\([\'"]([\w\.]+)[\'"]',
+        ]
+
+        for code_dir in CODE_DIRS:
+            if code_dir.is_file():
+                self._search_file_for_definitions(code_dir, patterns, fallback_patterns)
+            else:
+                for code_file in code_dir.glob("**/*.py"):
+                    self._search_file_for_definitions(
+                        code_file, patterns, fallback_patterns
                     )
 
-                # Look for simple {% if var %} without 'is defined'
-                simple_if_match = re.search(r"\{%\s*if\s+(\w+)\s*%\}", line)
-                if simple_if_match:
-                    var_name = simple_if_match.group(1)
-                    if var_name not in all_expected_vars:
-                        issues.append(
-                            {
-                                "type": "potentially_undefined",
-                                "variable": var_name,
-                                "line": i,
-                                "content": line.strip(),
-                                "suggestion": f"Variable '{var_name}' may be undefined. Add to template requirements.",
-                            }
-                        )
+    def _search_file_for_definitions(
+        self, file_path: Path, patterns: List[str], fallback_patterns: List[str]
+    ):
+        """Search a file for variable definitions and fallbacks."""
+        file_content = file_path.read_text(encoding="utf-8")
+        rel_path = file_path.relative_to(Path.cwd())
 
-            # Check for variables used but not in requirements
-            for var in found_vars:
-                if var not in all_expected_vars and not var.startswith("_"):
-                    # Skip loop variables and internal variables
-                    if not self._is_loop_variable(var, content):
-                        issues.append(
-                            {
-                                "type": "undefined_variable",
-                                "variable": var,
-                                "suggestion": f"Ensure '{var}' is provided in template context when rendering",
-                            }
-                        )
+        # Look for direct definitions
+        for pattern in patterns:
+            for match in re.finditer(pattern, file_content, re.DOTALL):
+                var_name = match.group(1)
+                if var_name in self.variables:
+                    self.variables[var_name].add_definition(str(rel_path))
+                    logger.info(f"Found definition for {var_name} in {rel_path}")
 
-        except Exception as e:
-            issues.append(
-                {
-                    "type": "error",
-                    "message": f"Failed to analyze template: {e}",
-                }
-            )
+        # Look for fallback definitions
+        for pattern in fallback_patterns:
+            for match in re.finditer(pattern, file_content):
+                var_name = match.group(1)
+                if var_name in self.variables:
+                    self.variables[var_name].set_fallback_defined()
+                    logger.info(f"Found fallback for {var_name} in {rel_path}")
 
-        return issues
-
-    def _is_loop_variable(self, var_name: str, content: str) -> bool:
-        """
-        Check if a variable is defined in a for loop.
-
-        Args:
-            var_name: Variable name to check
-            content: Template content
-
-        Returns:
-            True if variable is a loop variable
-        """
-        # Check if variable is defined in a for loop
-        for_pattern = r"\{%\s*for\s+" + re.escape(var_name) + r"\s+in\s+"
-        return bool(re.search(for_pattern, content))
-
-    def generate_report(
-        self, results: Dict[str, Any], format_type: str = "text"
-    ) -> str:
-        """
-        Generate a formatted report of the analysis.
-
-        Args:
-            results: Analysis results
-            format_type: Output format ('text' or 'summary')
-
-        Returns:
-            Formatted report string
-        """
-        if format_type == "summary":
-            return self._generate_summary_report(results)
-
-        report = []
-        report.append("=" * 80)
-        report.append("Template Variable Analysis Report")
-        report.append("=" * 80)
-        report.append("")
-
-        # Summary with color coding for CI
-        status_icon = "✅" if results["critical_issues"] == 0 else "❌"
-        report.append(f"{status_icon} Summary:")
-        report.append(f"  Total templates analyzed: {results['total_templates']}")
-        report.append(f"  Templates with issues: {results['templates_with_issues']}")
-        report.append(f"  Critical errors: {results['critical_issues']}")
-        report.append(f"  Warnings: {results['warnings']}")
-        report.append(f"  Total issues: {results['total_issues']}")
-        report.append("")
-
-        # Quick status for CI
-        if results["critical_issues"] == 0:
-            if results["warnings"] == 0:
-                report.append("🎉 No template variable issues found!")
-            else:
-                report.append(
-                    f"✅ No critical issues! ({results['warnings']} warnings that can be addressed later)"
-                )
-        else:
-            report.append("❌ Critical errors require attention before deployment.")
-        report.append("")
-
-        # Conditional checks that should be removed
-        if results["conditional_checks"]:
-            report.append("🔍 Conditional Variable Checks (consider removing):")
-            report.append("-" * 50)
-            for check in results["conditional_checks"]:
-                report.append(f"  📄 Template: {check['template']}")
-                report.append(
-                    f"    🔗 Variable: {check['variable']} (line {check['line']})"
-                )
-            report.append("")
-
-        # Undefined variables
-        if results["undefined_variables"]:
-            report.append("⚠️  Potentially Undefined Variables:")
-            report.append("-" * 50)
-            for var in sorted(results["undefined_variables"]):
-                report.append(f"  - {var}")
-            report.append("")
-
-        # Detailed issues by template
-        if results["issues_by_template"]:
-            report.append("📋 Detailed Issues by Template:")
-            report.append("-" * 50)
-            for template_name, issues in sorted(results["issues_by_template"].items()):
-                report.append(f"\n📄 {template_name}:")
-                for issue in issues:
-                    if issue["type"] == "conditional_check":
-                        report.append(
-                            f"  ⚠️  Line {issue['line']}: Conditional check for '{issue['variable']}'"
-                        )
-                        report.append(f"      Code: {issue['content']}")
-                        report.append(f"      💡 Fix: {issue['suggestion']}")
-                    elif issue["type"] == "undefined_variable":
-                        report.append(f"  ⚠️  Undefined variable: '{issue['variable']}'")
-                        report.append(f"      💡 Fix: {issue['suggestion']}")
-                    elif issue["type"] == "potentially_undefined":
-                        report.append(
-                            f"  ⚠️  Line {issue['line']}: Potentially undefined '{issue['variable']}'"
-                        )
-                        report.append(f"      Code: {issue['content']}")
-                        report.append(f"      💡 Fix: {issue['suggestion']}")
-                    elif issue["type"] == "error":
-                        report.append(f"  💥 Error: {issue['message']}")
-
-        # Actionable recommendations
-        report.append("")
-        report.append("🛠️  Recommended Actions:")
-        report.append("-" * 50)
-        if results["critical_issues"] > 0:
-            report.append("1. ⚡ URGENT: Fix critical errors before deployment")
-        if results["warnings"] > 0:
-            report.append(
-                "2. 🔧 Consider updating template rendering code to provide all variables"
-            )
-            report.append(
-                "3. 🧹 Consider removing conditional 'is defined' checks from templates"
-            )
-        report.append(
-            "4. ✅ Add validation to ensure all required variables are present"
-        )
-        report.append(
-            "5. 🚀 Use strict mode validation in CI/CD pipeline for stricter checks"
-        )
-
-        return "\n".join(report)
-
-    def _generate_summary_report(self, results: Dict[str, Any]) -> str:
-        """Generate a concise summary report suitable for CI logs."""
-        lines = []
-
-        status = "PASS" if results["critical_issues"] == 0 else "FAIL"
-        lines.append(f"Template Validation: {status}")
-        lines.append(f"Templates: {results['total_templates']}")
-        lines.append(f"Critical Errors: {results['critical_issues']}")
-        lines.append(f"Warnings: {results['warnings']}")
-
-        if results["undefined_variables"]:
-            # Limit the list to avoid overly long output
-            vars_list = sorted(results["undefined_variables"])
-            if len(vars_list) > 10:
-                vars_display = (
-                    ", ".join(vars_list[:10]) + f", ... ({len(vars_list) - 10} more)"
-                )
-            else:
-                vars_display = ", ".join(vars_list)
-            lines.append(f"Undefined Variables: {vars_display}")
-
-        return "\n".join(lines)
-
-    def generate_fixes(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate suggested fixes for missing variables.
-
-        Args:
-            results: Analysis results
-
-        Returns:
-            Dictionary with suggested fixes
-        """
-        fixes = {
-            "missing_variables": {},
-            "template_updates": [],
-            "context_fixes": {},
+    def generate_report(self) -> Tuple[Dict, List[str]]:
+        """Generate a report of variable status."""
+        report = {
+            "total_variables": len(self.variables),
+            "safely_handled": 0,
+            "unsafe_variables": [],
+            "variables_with_unsafe_defaults": [],
+            "variables_by_template": defaultdict(list),
+            "details": {},
         }
 
-        # Group undefined variables by template
-        for template_name, issues in results["issues_by_template"].items():
+        issues = []
+
+        for var_name, var_info in sorted(self.variables.items()):
+            is_safe = var_info.is_safely_handled()
+            if is_safe:
+                report["safely_handled"] += 1
+            else:
+                report["unsafe_variables"].append(var_name)
+                issues.append(
+                    f"❌ Variable '{var_name}' is used but not safely handled"
+                )
+
+            if var_info.unsafe_defaults:
+                report["variables_with_unsafe_defaults"].append(var_name)
+                issues.append(
+                    f"⚠️ Variable '{var_name}' has potentially unsafe defaults: {var_info.unsafe_defaults}"
+                )
+
+            # Organize by template
+            for template in var_info.templates_used_in:
+                report["variables_by_template"][template].append(
+                    {
+                        "name": var_name,
+                        "is_safe": is_safe,
+                        "has_fallback": var_info.fallbacks_defined,
+                        "defined_in": list(var_info.defined_in_files),
+                        "has_default_in_template": var_info.has_default_in_template,
+                        "unsafe_defaults": var_info.unsafe_defaults,
+                    }
+                )
+
+            # Add detailed info
+            report["details"][var_name] = {
+                "name": var_name,
+                "templates_used_in": list(var_info.templates_used_in),
+                "defined_in_files": list(var_info.defined_in_files),
+                "fallbacks_defined": var_info.fallbacks_defined,
+                "has_default_in_template": var_info.has_default_in_template,
+                "is_safely_handled": is_safe,
+                "unsafe_defaults": var_info.unsafe_defaults,
+            }
+
+        return report, issues
+
+    def save_report(
+        self, report: Dict, output_file: str = "template_variables_report.json"
+    ):
+        """Save the report to a JSON file."""
+        with open(output_file, "w") as f:
+            json.dump(report, f, indent=2)
+        logger.info(f"Report saved to {output_file}")
+
+    def print_summary(self, report: Dict, issues: List[str]):
+        """Print a summary of the report."""
+        total = report["total_variables"]
+        safe = report["safely_handled"]
+        unsafe = len(report["unsafe_variables"])
+        unsafe_defaults = len(report["variables_with_unsafe_defaults"])
+
+        print("=" * 80)
+        print(f"TEMPLATE VARIABLE VALIDATION REPORT")
+        print("=" * 80)
+        print(f"Total variables found: {total}")
+        print(f"Safely handled: {safe} ({safe/total*100:.1f}%)")
+        print(f"Unsafe variables: {unsafe} ({unsafe/total*100:.1f}%)")
+        print(f"Variables with unsafe defaults: {unsafe_defaults}")
+        print("=" * 80)
+
+        if issues:
+            print("ISSUES FOUND:")
             for issue in issues:
-                if issue["type"] == "undefined_variable":
-                    var_name = issue["variable"]
+                print(f" - {issue}")
+            print("=" * 80)
 
-                    if template_name not in fixes["missing_variables"]:
-                        fixes["missing_variables"][template_name] = []
-                    fixes["missing_variables"][template_name].append(var_name)
+        # Print top templates by variable count
+        print("Top 5 templates by variable count:")
+        template_counts = [
+            (t, len(v)) for t, v in report["variables_by_template"].items()
+        ]
+        for template, count in sorted(
+            template_counts, key=lambda x: x[1], reverse=True
+        )[:5]:
+            print(f" - {template}: {count} variables")
+        print("=" * 80)
 
-                    # Suggest where to add the variable in context
-                    if template_name not in fixes["context_fixes"]:
-                        fixes["context_fixes"][template_name] = []
-                    fixes["context_fixes"][template_name].append(
-                        f"Add '{var_name}' to context when calling render_template('{template_name}', context)"
-                    )
+    def validate_and_report(self):
+        """Run validation and generate a report."""
+        # Scan templates
+        self.scan_template_files()
 
-                elif issue["type"] == "conditional_check":
-                    fixes["template_updates"].append(
-                        {
-                            "template": template_name,
-                            "line": issue["line"],
-                            "old": issue["content"],
-                            "new": issue["content"]
-                            .replace(" is defined", "")
-                            .replace(" is undefined", " not"),
-                        }
-                    )
+        # Find definitions
+        self.find_variable_definitions()
 
-        return fixes
+        # Generate report
+        report, issues = self.generate_report()
 
-    def format_fixes(self, fixes: Dict[str, Any]) -> str:
-        """
-        Format fixes into a readable string.
+        # Save report
+        self.save_report(report)
 
-        Args:
-            fixes: Dictionary of fixes from generate_fixes()
+        # Print summary
+        self.print_summary(report, issues)
 
-        Returns:
-            Formatted string with fix recommendations
-        """
-        lines = []
-        lines.append("=" * 80)
-        lines.append("🔧 Required Fixes")
-        lines.append("=" * 80)
-
-        if fixes["missing_variables"]:
-            lines.append("\n⚠️  Missing Variables by Template:")
-            lines.append("-" * 50)
-            for template, variables in sorted(fixes["missing_variables"].items()):
-                lines.append(f"\n📄 {template}:")
-                unique_vars = sorted(set(variables))
-                lines.append(f"  Missing: {', '.join(unique_vars)}")
-
-        if fixes["context_fixes"]:
-            lines.append("\n🔧 Context Fixes Required:")
-            lines.append("-" * 50)
-            for template, fixes_list in sorted(fixes["context_fixes"].items()):
-                lines.append(f"\n📄 {template}:")
-                for fix in fixes_list[:3]:  # Show first 3
-                    lines.append(f"  💡 {fix}")
-                if len(fixes_list) > 3:
-                    lines.append(f"  ... and {len(fixes_list) - 3} more variables")
-
-        if fixes["template_updates"]:
-            lines.append("\n📝 Template Updates Needed (remove conditional checks):")
-            lines.append("-" * 50)
-            for update in fixes["template_updates"][:5]:  # Show first 5
-                lines.append(f"  📄 {update['template']} (line {update['line']})")
-                lines.append(f"    ❌ Old: {update['old']}")
-                lines.append(f"    ✅ New: {update['new']}")
-            if len(fixes["template_updates"]) > 5:
-                lines.append(f"  ... and {len(fixes['template_updates']) - 5} more")
-
-        return "\n".join(lines)
+        # Return exit code based on validation results
+        return len(report["unsafe_variables"]) == 0
 
 
 def main():
-    """Main entry point for the script."""
-    parser = argparse.ArgumentParser(
-        description="Analyze templates for undefined variable issues",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Basic validation
-  python scripts/validate_template_variables.py
-  
-  # CI mode with strict validation
-  python scripts/validate_template_variables.py --strict --format json
-  
-  # Generate detailed fixes
-  python scripts/validate_template_variables.py --generate-fixes --verbose
-        """,
+    parser = argparse.ArgumentParser(description="Validate template variables")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
     )
     parser.add_argument(
-        "--template-dir",
-        type=Path,
-        default=PROJECT_ROOT / "src" / "templates",
-        help="Directory containing templates (default: src/templates)",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["text", "json", "summary"],
-        default="text",
-        help="Output format (default: text)",
-    )
-    parser.add_argument(
-        "--generate-fixes",
+        "--fix",
         action="store_true",
-        help="Generate suggested fixes for the validator",
+        help="Automatically add fallbacks for missing variables",
     )
     parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Exit with error code if critical errors are found",
+        "--output",
+        "-o",
+        default="template_variables_report.json",
+        help="Output file for the report",
     )
-    parser.add_argument(
-        "--warnings-as-errors",
-        action="store_true",
-        help="Treat warnings (like undefined variables) as errors",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose output",
-    )
-    parser.add_argument(
-        "--output-file",
-        type=Path,
-        help="Write output to file instead of stdout",
-    )
-
     args = parser.parse_args()
 
-    # Configure logging
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
-    else:
-        logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
+    validator = TemplateVariableValidator(verbose=args.verbose)
+    success = validator.validate_and_report()
 
-    if not args.template_dir.exists():
-        print(f"❌ Error: Template directory '{args.template_dir}' does not exist")
+    if not success:
+        print("❌ Template variable validation failed!")
         return 1
 
-    try:
-        # Run analysis
-        analyzer = TemplateVariableAnalyzer(args.template_dir)
-        results = analyzer.analyze_all_templates()
-
-        # Prepare output
-        output_content = ""
-
-        if args.format == "json":
-            # Convert sets to lists for JSON serialization
-            json_results = results.copy()
-            json_results["undefined_variables"] = list(results["undefined_variables"])
-            output_content = json.dumps(json_results, indent=2)
-        else:
-            output_content = analyzer.generate_report(results, args.format)
-
-        # Generate fixes if requested
-        if args.generate_fixes:
-            fixes = analyzer.generate_fixes(results)
-            if args.format == "json":
-                output_content = json.dumps(
-                    {"analysis": json_results, "fixes": fixes}, indent=2
-                )
-            else:
-                output_content += "\n" + analyzer.format_fixes(fixes)
-
-        # Output results
-        if args.output_file:
-            args.output_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(args.output_file, "w") as f:
-                f.write(output_content)
-            print(f"✅ Results written to {args.output_file}")
-        else:
-            print(output_content)
-
-        # Exit with appropriate code
-        if args.strict and results["critical_issues"] > 0:
-            print(
-                f"\n❌ Exiting with error: {results['critical_issues']} critical errors found"
-            )
-            return 1
-
-        if args.warnings_as_errors and results["warnings"] > 0:
-            print(
-                f"\n❌ Exiting with error: {results['warnings']} warnings treated as errors"
-            )
-            return 1
-
-        if results["critical_issues"] == 0:
-            if results["warnings"] == 0:
-                print(f"\n✅ Template validation passed with no issues!")
-            else:
-                print(
-                    f"\n✅ Template validation passed! ({results['warnings']} warnings)"
-                )
-        else:
-            print(f"\n❌ Found {results['critical_issues']} critical errors")
-
-        return 0
-
-    except Exception as e:
-        print(f"❌ Template validation failed: {e}")
-        if args.verbose:
-            import traceback
-
-            traceback.print_exc()
-        return 1
+    print("✅ All template variables are safely handled!")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

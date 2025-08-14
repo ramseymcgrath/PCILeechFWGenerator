@@ -968,6 +968,7 @@ class FirmwareBuilder:
         self.gen = PCILeechGenerator(
             PCILeechGenerationConfig(
                 device_bdf=self.config.bdf,
+                board=self.config.board,
                 template_dir=None,
                 output_dir=self.config.output_dir,
                 enable_behavior_profiling=self.config.enable_profiling,

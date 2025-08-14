@@ -1,0 +1,66 @@
+name: Template Variable Validation
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'src/templates/**'
+      - 'src/templating/**'
+      - 'src/device_clone/**'
+      - 'src/build.py'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'src/templates/**'
+      - 'src/templating/**'
+      - 'src/device_clone/**'
+      - 'src/build.py'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Fetch all history for proper branch comparison
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install jinja2 pyyaml
+    
+    - name: Run template variable validation
+      run: |
+        python scripts/validate_template_variables.py --verbose
+      
+    - name: Upload validation report
+      uses: actions/upload-artifact@v3
+      with:
+        name: template-validation-report
+        path: template_variables_report.json
+        if-no-files-found: warn
+
+    - name: Create report summary
+      if: always()
+      run: |
+        if [ -f template_variables_report.json ]; then
+          echo "### Template Variable Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "$(python -c 'import json; r=json.load(open("template_variables_report.json")); print(f"- Total variables: {r[\"total_variables\"]}\n- Safely handled: {r[\"safely_handled\"]}\n- Unsafe variables: {len(r[\"unsafe_variables\"])}")' 2>/dev/null || echo 'Error parsing report')" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$(python -c 'import json; print(len(json.load(open("template_variables_report.json"))["unsafe_variables"]))' 2>/dev/null || echo '0')" != "0" ]; then
+            echo "#### Unsafe Variables" >> $GITHUB_STEP_SUMMARY
+            echo "$(python -c 'import json; print("\n".join([f"- `{v}`" for v in json.load(open("template_variables_report.json"))["unsafe_variables"]]))' 2>/dev/null)" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "### ⚠️ No validation report found" >> $GITHUB_STEP_SUMMARY
+        fi

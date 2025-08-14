@@ -151,11 +151,25 @@ class TestSystemVerilogGeneratorValidation:
     def test_context_builder_preserves_device_signature(self):
         """Test that ContextBuilder properly preserves device_signature."""
         template_context = {
-            "device_config": {"vendor_id": "10EC", "device_id": "8168"},
+            "device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+            },
             "device_signature": "0x12345678",
         }
 
-        device_config = {"vendor_id": "10EC", "device_id": "8168"}
+        device_config = {
+            "vendor_id": "10EC",
+            "device_id": "8168",
+            "subsystem_vendor_id": "10EC",
+            "subsystem_device_id": "8168",
+            "class_code": "020000",
+            "revision_id": "01",
+        }
 
         # Call create_enhanced_context
         enhanced_context = ContextBuilder.create_enhanced_context(

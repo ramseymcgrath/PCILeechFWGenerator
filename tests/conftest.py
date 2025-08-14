@@ -7,6 +7,7 @@ Read more about conftest.py under:
 - https://docs.pytest.org/en/stable/writing_plugins.html
 """
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -67,3 +68,35 @@ def mock_textual_app():
     app.build_orchestrator = Mock()
     app.status_monitor = Mock()
     return app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def explicit_config_dir():
+    """Configure a global DeviceConfigManager for tests that expect on-disk
+    profiles.
+
+    This fixture sets `src.device_clone.device_config._config_manager` to an
+    instance with `config_dir` pointed at `configs/devices` inside the repo
+    root when that directory exists. It avoids changing runtime defaults while
+    keeping tests passing.
+    """
+    try:
+        import src.device_clone.device_config as dc
+    except Exception:
+        # If import fails, nothing to configure
+        yield
+        return
+
+    prev = getattr(dc, "_config_manager", None)
+    repo_root = Path(__file__).resolve().parents[1]
+    configs_dir = repo_root / "configs" / "devices"
+
+    if configs_dir.exists():
+        dc._config_manager = dc.DeviceConfigManager(config_dir=configs_dir)
+    else:
+        dc._config_manager = None
+
+    yield
+
+    # Restore previous manager
+    dc._config_manager = prev

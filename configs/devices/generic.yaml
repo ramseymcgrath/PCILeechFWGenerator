@@ -3,12 +3,7 @@
 name: "Generic PCIe Device"
 device_type: "generic"
 device_class: "consumer"
-identification:
-  vendor_id: 0x1234  # Generic vendor ID
-  device_id: 0x5678  # Generic device ID
-  class_code: 0x000000  # Generic class code
-  subsystem_vendor_id: 0x1234
-  subsystem_device_id: 0x5678
+
 registers:
   command: 0x0006  # Memory Space + Bus Master
   status: 0x0210  # Capability List

@@ -8,11 +8,6 @@ name: active_device_minimal
 device_type: generic
 device_class: consumer
 
-identification:
-  vendor_id: 0x1AF4  # Red Hat/Virtio
-  device_id: 0x1000  # Virtio network device
-  class_code: 0x020000
-  revision_id: 0x00
 
 registers:
   command: 0x0006      # Memory space enabled

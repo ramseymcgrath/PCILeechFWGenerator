@@ -308,14 +308,18 @@ class DeviceConfiguration:
 class DeviceConfigManager:
     """Manages device configurations with file loading and validation."""
 
-    # Previously contained hardcoded vendor/device IDs that could create
-    # insecure generic firmware. Use live device detection or explicit
-    # configuration files instead.
     DEFAULT_PROFILES = {}
 
     def __init__(self, config_dir: Optional[Path] = None):
-        """Initialize configuration manager."""
-        self.config_dir = config_dir or Path("configs/devices")
+        """Initialize configuration manager.
+
+        If `config_dir` is provided it enables loading and saving profiles from
+        the filesystem. If `config_dir` is None, no filesystem-backed profiles
+        will be used.
+        """
+        # Do not assume any implicit on-disk directory. Keep as None unless
+        # explicitly provided.
+        self.config_dir = Path(config_dir) if config_dir is not None else None
         self.profiles: Dict[str, DeviceConfiguration] = {}
         self._load_default_profiles()
 
@@ -447,57 +451,59 @@ class DeviceConfigManager:
         """Get device profile by name."""
         if name in self.profiles:
             return self.profiles[name]
+        # If a config_dir was provided, attempt to load YAML or JSON files.
+        if self.config_dir is not None:
+            # Try YAML
+            config_file = self.config_dir / f"{name}.yaml"
+            if config_file.exists():
+                log_warning_safe(logger, "=" * 80)
+                log_warning_safe(
+                    logger, "⚠️  WARNING: USING PRECONFIGURED YAML DEVICE CONFIGURATION"
+                )
+                log_warning_safe(
+                    logger,
+                    "   Loading device profile from: {config_file}",
+                    config_file=str(config_file),
+                )
+                log_warning_safe(
+                    logger,
+                    "   This uses hardcoded vendor/device IDs that may not be unique!",
+                )
+                log_warning_safe(
+                    logger,
+                    "   Consider using live device detection instead of YAML configs.",
+                )
+                log_warning_safe(logger, "=" * 80)
+                config = self.load_config_file(config_file)
+                self.profiles[name] = config
+                return config
 
-        # Try to load from file
-        config_file = self.config_dir / f"{name}.yaml"
-        if config_file.exists():
-            log_warning_safe(logger, "=" * 80)
-            log_warning_safe(
-                logger, "⚠️  WARNING: USING PRECONFIGURED YAML DEVICE CONFIGURATION"
-            )
-            log_warning_safe(
-                logger,
-                "   Loading device profile from: {config_file}",
-                config_file=str(config_file),
-            )
-            log_warning_safe(
-                logger,
-                "   This uses hardcoded vendor/device IDs that may not be unique!",
-            )
-            log_warning_safe(
-                logger,
-                "   Consider using live device detection instead of YAML configs.",
-            )
-            log_warning_safe(logger, "=" * 80)
-            config = self.load_config_file(config_file)
-            self.profiles[name] = config
-            return config
+            # Try JSON
+            config_file = self.config_dir / f"{name}.json"
+            if config_file.exists():
+                log_warning_safe(logger, "=" * 80)
+                log_warning_safe(
+                    logger, "⚠️  WARNING: USING PRECONFIGURED JSON DEVICE CONFIGURATION"
+                )
+                log_warning_safe(
+                    logger,
+                    "   Loading device profile from: {config_file}",
+                    config_file=str(config_file),
+                )
+                log_warning_safe(
+                    logger,
+                    "   This uses hardcoded vendor/device IDs that may not be unique!",
+                )
+                log_warning_safe(
+                    logger,
+                    "   Consider using live device detection instead of JSON configs.",
+                )
+                log_warning_safe(logger, "=" * 80)
+                config = self.load_config_file(config_file)
+                self.profiles[name] = config
+                return config
 
-        # Try JSON file
-        config_file = self.config_dir / f"{name}.json"
-        if config_file.exists():
-            log_warning_safe(logger, "=" * 80)
-            log_warning_safe(
-                logger, "⚠️  WARNING: USING PRECONFIGURED JSON DEVICE CONFIGURATION"
-            )
-            log_warning_safe(
-                logger,
-                "   Loading device profile from: {config_file}",
-                config_file=str(config_file),
-            )
-            log_warning_safe(
-                logger,
-                "   This uses hardcoded vendor/device IDs that may not be unique!",
-            )
-            log_warning_safe(
-                logger,
-                "   Consider using live device detection instead of JSON configs.",
-            )
-            log_warning_safe(logger, "=" * 80)
-            config = self.load_config_file(config_file)
-            self.profiles[name] = config
-            return config
-
+        # No profile found either in-memory or on-disk
         raise ValueError(f"Device profile not found: {name}")
 
     def create_profile_from_env(self, name: str) -> DeviceConfiguration:
@@ -562,7 +568,7 @@ class DeviceConfigManager:
         profiles = list(self.profiles.keys())
 
         # Add profiles from config directory
-        if self.config_dir.exists():
+        if self.config_dir and self.config_dir.exists():
             for file_path in self.config_dir.glob("*.yaml"):
                 profile_name = file_path.stem
                 if profile_name not in profiles:
@@ -580,6 +586,10 @@ class DeviceConfigManager:
     ) -> None:
         """Save device configuration to file."""
         if file_path is None:
+            if self.config_dir is None:
+                raise ValueError(
+                    "No config_dir set: provide file_path or initialize DeviceConfigManager with a config_dir"
+                )
             self.config_dir.mkdir(parents=True, exist_ok=True)
             file_path = self.config_dir / f"{config.name}.yaml"
 

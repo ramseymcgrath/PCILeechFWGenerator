@@ -751,19 +751,16 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
     missing_fields = [field for field in required_fields if field not in msix_info]
     if missing_fields:
         log_error_safe(
-            logger, "Missing required MSI-X fields: {fields}", fields=missing_fields
+            logger,
+            "CRITICAL: Missing required MSI-X fields: {fields}",
+            fields=missing_fields,
         )
-        # Return a disabled MSI-X module instead of failing
-        msix_info = {
-            "table_size": 1,
-            "table_bir": 0,
-            "table_offset": 0x1000,
-            "pba_bir": 0,
-            "pba_offset": 0x2000,
-            "enabled": False,
-            "function_mask": True,
-            **{k: v for k, v in msix_info.items() if k not in missing_fields},
-        }
+        # CRITICAL: Cannot generate MSI-X module without proper BAR/offset information
+        # These values are hardware-specific and cannot be guessed
+        raise ValueError(
+            f"Cannot generate MSI-X module - missing critical fields: {missing_fields}. "
+            f"MSI-X BAR indices and offsets must come from actual hardware configuration."
+        )
 
     if msix_info["table_size"] == 0:
         log_debug_safe(

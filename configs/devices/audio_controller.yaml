@@ -1,12 +1,7 @@
 name: audio_controller
 device_type: audio
 device_class: consumer
-identification:
-  vendor_id: 0x8086  # Intel Corporation
-  device_id: 0x2668  # ICH6 AC'97 Audio Controller
-  subsystem_vendor_id: 0x8086
-  subsystem_device_id: 0x2668
-  class_code: 0x040100  # Audio device
+
 registers:
   command: 0x0006  # Memory Space + Bus Master
   status: 0x0210   # Cap List + Fast B2B

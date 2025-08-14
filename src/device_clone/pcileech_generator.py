@@ -50,6 +50,10 @@ class PCILeechGenerationConfig:
     # Device identification
     device_bdf: str
 
+    # Board configuration
+    board: Optional[str] = None
+    fpga_part: Optional[str] = None
+
     # Generation options
     enable_behavior_profiling: bool = True
     behavior_capture_duration: float = 30.0
@@ -73,7 +77,6 @@ class PCILeechGenerationConfig:
     # Fallback control options
     fallback_mode: str = "none"  # "none", "prompt", or "auto"
     allowed_fallbacks: List[str] = field(default_factory=list)
-    denied_fallbacks: List[str] = field(default_factory=list)
 
     # Donor template
     donor_template: Optional[Dict[str, Any]] = None
@@ -115,7 +118,6 @@ class PCILeechGenerator:
         self.fallback_manager = FallbackManager(
             mode=config.fallback_mode,
             allowed_fallbacks=config.allowed_fallbacks,
-            denied_fallbacks=config.denied_fallbacks,
         )
 
         # Initialize infrastructure components
@@ -367,10 +369,11 @@ class PCILeechGenerator:
             return behavior_profile
 
         except Exception as e:
-            implications = "Without behavior profiling, the generated firmware may not accurately reflect device timing patterns and behavior."
+            # Behavior profiling is optional - can use fallback manager
+            details = "Without behavior profiling, the generated firmware may not accurately reflect device timing patterns and behavior."
 
             if self.fallback_manager.confirm_fallback(
-                "behavior-profiling", str(e), implications=implications
+                "behavior-profiling", str(e), details=details
             ):
                 log_warning_safe(
                     self.logger,
@@ -435,25 +438,16 @@ class PCILeechGenerator:
             return config_space_data
 
         except Exception as e:
-            # Configuration space is critical for device identity - no hardcoded fallbacks
-            implications = "Configuration space analysis is required for device identity and security. No fallback data will be provided."
-
-            if self.fallback_manager.is_fallback_allowed("config-space-analysis"):
-                log_warning_safe(
-                    self.logger,
-                    "Configuration space analysis failed, checking fallback options: {error}",
-                    error=str(e),
-                    prefix="MSIX",
-                )
-                # Let the fallback manager handle providing fallback data
-                # This should not provide hardcoded defaults
-                raise PCILeechGenerationError(
-                    f"Configuration space analysis failed and no fallback data available: {e}"
-                ) from e
-            else:
-                raise PCILeechGenerationError(
-                    f"Configuration space analysis failed: {e}"
-                ) from e
+            # Configuration space is critical for device identity - MUST FAIL, no fallbacks allowed
+            log_error_safe(
+                self.logger,
+                "CRITICAL: Configuration space analysis failed - cannot continue without device identity: {error}",
+                error=str(e),
+                prefix="MSIX",
+            )
+            raise PCILeechGenerationError(
+                f"Configuration space analysis failed (critical for device identity): {e}"
+            ) from e
 
     def _analyze_configuration_space_with_vfio(self) -> Dict[str, Any]:
         """
@@ -508,27 +502,16 @@ class PCILeechGenerator:
             return config_space_data
 
         except Exception as e:
-            # Configuration space is critical for device identity - no hardcoded fallbacks
-            implications = "Configuration space analysis is required for device identity and security. No fallback data will be provided."
-
-            if self.fallback_manager.confirm_fallback(
-                "config-space", str(e), implications=implications
-            ):
-                log_warning_safe(
-                    self.logger,
-                    "Configuration space analysis failed, but fallback manager approved continuation: {error}",
-                    error=str(e),
-                    prefix="MSIX",
-                )
-                # Let the fallback manager handle providing fallback data
-                # This should not provide hardcoded defaults
-                raise PCILeechGenerationError(
-                    f"Configuration space analysis failed and no fallback data available: {e}"
-                ) from e
-            else:
-                raise PCILeechGenerationError(
-                    f"Configuration space analysis failed: {e}"
-                ) from e
+            # Configuration space is critical for device identity - MUST FAIL, no fallbacks allowed
+            log_error_safe(
+                self.logger,
+                "CRITICAL: Configuration space analysis failed - cannot continue without device identity: {error}",
+                error=str(e),
+                prefix="MSIX",
+            )
+            raise PCILeechGenerationError(
+                f"Configuration space analysis failed (critical for device identity): {e}"
+            ) from e
 
     def _process_msix_capabilities(
         self, config_space_data: Dict[str, Any]
@@ -640,6 +623,110 @@ class PCILeechGenerator:
                 interrupt_vectors=interrupt_vectors,
                 donor_template=self.config.donor_template,
             )
+
+            # Add board information to template context
+            if self.config.board:
+                from src.device_clone.board_config import (
+                    get_fpga_part, get_pcileech_board_config)
+
+                # Get board configuration
+                try:
+                    board_config = get_pcileech_board_config(self.config.board)
+                    fpga_part = self.config.fpga_part or get_fpga_part(
+                        self.config.board
+                    )
+
+                    # Add board information to context
+                    template_context["board"] = {
+                        "name": self.config.board,
+                        "fpga_part": fpga_part,
+                        "fpga_family": board_config.get("fpga_family", ""),
+                        "constraints": board_config.get("constraints", {}),
+                    }
+                    template_context["board_name"] = self.config.board
+                    template_context["fpga_part"] = fpga_part
+                    template_context["board_xdc_content"] = ""
+                    template_context["generated_xdc_path"] = ""
+                    template_context["sys_clk_freq_mhz"] = 100  # Default to 100MHz
+                    template_context["header"] = (
+                        f"# PCILeech Firmware for {self.config.board}"
+                    )
+
+                    # Add device info for template compatibility
+                    if "device_config" in template_context:
+                        device_config = template_context["device_config"]
+                        # CRITICAL: Do not provide fallback IDs
+                        vendor_id = device_config.get("vendor_id")
+                        device_id = device_config.get("device_id")
+                        if vendor_id and device_id:
+                            template_context["device"] = {
+                                "vendor_id": vendor_id,
+                                "device_id": device_id,
+                            }
+
+                    log_info_safe(
+                        self.logger,
+                        "Added board configuration for {board}",
+                        board=self.config.board,
+                    )
+                except Exception as e:
+                    log_warning_safe(
+                        self.logger,
+                        "Failed to get board configuration for {board}: {error}",
+                        board=self.config.board,
+                        error=str(e),
+                    )
+                    # Add minimal board info even if full config fails
+                    template_context["board"] = {
+                        "name": self.config.board or "default",
+                        "fpga_part": self.config.fpga_part or "",
+                        "fpga_family": "",
+                        "constraints": {},
+                    }
+                    template_context["board_name"] = self.config.board or "default"
+                    template_context["fpga_part"] = self.config.fpga_part or ""
+                    template_context["board_xdc_content"] = ""
+                    template_context["generated_xdc_path"] = ""
+                    template_context["sys_clk_freq_mhz"] = 100
+                    template_context["header"] = "# PCILeech Firmware"
+
+                    # Add device info for template compatibility
+                    if "device_config" in template_context:
+                        device_config = template_context["device_config"]
+                        # CRITICAL: Do not provide fallback IDs
+                        vendor_id = device_config.get("vendor_id")
+                        device_id = device_config.get("device_id")
+                        if vendor_id and device_id:
+                            template_context["device"] = {
+                                "vendor_id": vendor_id,
+                                "device_id": device_id,
+                            }
+            else:
+                # Provide default board information if no board specified
+                template_context["board"] = {
+                    "name": "default",
+                    "fpga_part": "",
+                    "fpga_family": "",
+                    "constraints": {},
+                }
+                template_context["board_name"] = "default"
+                template_context["fpga_part"] = ""
+                template_context["board_xdc_content"] = ""
+                template_context["generated_xdc_path"] = ""
+                template_context["sys_clk_freq_mhz"] = 100
+                template_context["header"] = "# PCILeech Firmware"
+
+                # Add device info for template compatibility
+                if "device_config" in template_context:
+                    device_config = template_context["device_config"]
+                    # CRITICAL: Do not provide fallback IDs
+                    vendor_id = device_config.get("vendor_id")
+                    device_id = device_config.get("device_id")
+                    if vendor_id and device_id:
+                        template_context["device"] = {
+                            "vendor_id": vendor_id,
+                            "device_id": device_id,
+                        }
 
             # Validate context completeness
             self._validate_template_context(template_context)
@@ -832,10 +919,10 @@ class PCILeechGenerator:
                 template_context
             )
         except Exception as e:
-            implications = "Using fallback build integration may result in inconsistent or unpredictable build behavior."
+            details = "Using fallback build integration may result in inconsistent or unpredictable build behavior."
 
             if self.fallback_manager.confirm_fallback(
-                "build-integration", str(e), implications=implications
+                "build-integration", str(e), details=details
             ):
                 log_warning_safe(
                     self.logger,
@@ -846,21 +933,15 @@ class PCILeechGenerator:
                 try:
                     return self.sv_generator.generate_enhanced_build_integration()
                 except Exception as fallback_e:
-                    if self.fallback_manager.confirm_fallback(
-                        "basic-build-integration",
-                        str(fallback_e),
-                        implications="Using minimal build integration may result in build failures.",
-                    ):
-                        log_warning_safe(
-                            self.logger,
-                            "Enhanced build integration also failed, using minimal integration: {error}",
-                            error=str(fallback_e),
-                        )
-                        return "# Build integration generation failed"
-                    else:
-                        raise PCILeechGenerationError(
-                            f"Build integration generation failed: {fallback_e}"
-                        ) from fallback_e
+                    # Build integration is critical - cannot use minimal fallback
+                    log_error_safe(
+                        self.logger,
+                        "CRITICAL: Build integration generation failed completely: {error}",
+                        error=str(fallback_e),
+                    )
+                    raise PCILeechGenerationError(
+                        f"Build integration generation failed (no safe fallback available): {fallback_e}"
+                    ) from fallback_e
             else:
                 raise PCILeechGenerationError(
                     f"Build integration generation failed: {e}"
@@ -882,16 +963,52 @@ class PCILeechGenerator:
             # Build constraints using the TCL builder
             tcl_builder = TCLBuilder(output_dir=Path("./output"))
 
-            # Generate timing constraints
-            timing_context = {
+            # Build comprehensive context for constraints template
+            # CRITICAL: Device IDs must be present - no fallbacks allowed
+            if not template_context.get("vendor_id") or not template_context.get(
+                "device_id"
+            ):
+                raise PCILeechGenerationError(
+                    "CRITICAL: Missing vendor_id or device_id in template context - cannot generate constraints with fallback IDs"
+                )
+
+            constraints_context = {
+                # Device information - NO FALLBACKS for critical IDs
+                "device": {
+                    "vendor_id": template_context["vendor_id"],  # Required, no fallback
+                    "device_id": template_context["device_id"],  # Required, no fallback
+                    "revision_id": template_context.get(
+                        "revision_id", "00"
+                    ),  # Less critical, can have fallback
+                    "class_code": template_context.get(
+                        "class_code"
+                    ),  # Should be present but not using fallback
+                },
+                # Board information
+                "board": {
+                    "name": template_context.get("board_name", "default"),
+                    "fpga_part": template_context.get("fpga_part", ""),
+                    "fpga_family": template_context.get("fpga_family", ""),
+                    "constraints": template_context.get("board_constraints", {}),
+                },
+                # Timing parameters
+                "sys_clk_freq_mhz": int(
+                    float(1000.0 / float(template_context.get("clock_period", "10.0")))
+                ),
                 "clock_period": template_context.get("clock_period", "10.0"),
                 "setup_time": template_context.get("setup_time", "0.5"),
                 "hold_time": template_context.get("hold_time", "0.5"),
-                "board_name": template_context.get("board_name", "default"),
+                # XDC paths and content
+                "generated_xdc_path": template_context.get("generated_xdc_path", ""),
+                "board_xdc_content": template_context.get("board_xdc_content", ""),
+                # Header comment
+                "header": template_context.get(
+                    "header", "# TCL Constraints Generated by PCILeech FW Generator"
+                ),
             }
 
             timing_constraints = (
-                renderer.render_template("tcl/constraints.j2", timing_context)
+                renderer.render_template("tcl/constraints.j2", constraints_context)
                 if renderer.template_exists("tcl/constraints.j2")
                 else self._generate_default_timing_constraints(template_context)
             )

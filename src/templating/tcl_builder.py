@@ -19,6 +19,7 @@ from typing import (Any, Dict, List, Optional, Protocol, Union,
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.device_clone.fallback_manager import FallbackManager
 from src.exceptions import (DeviceConfigError, TCLBuilderError,
                             TemplateNotFoundError, XDCConstraintError)
 from src.import_utils import safe_import, safe_import_class
@@ -328,6 +329,9 @@ class TCLBuilder:
         self._init_constants()
         self._init_repo_manager()
 
+        # Initialize fallback manager
+        self.fallback_manager = FallbackManager()
+
         # Initialize script builder
         self.script_builder = TCLScriptBuilder(self.template_renderer, self.logger)
 
@@ -609,6 +613,90 @@ class TCLBuilder:
             except XDCConstraintError as e:
                 self.logger.error(f"XDC constraint error: {e}")
                 raise
+
+        # Add required variables for constraints template
+        template_context.setdefault("sys_clk_freq_mhz", 100)  # Default to 100MHz
+        template_context.setdefault(
+            "generated_xdc_path", ""
+        )  # Empty path if not generated
+        template_context.setdefault(
+            "board_xdc_content", ""
+        )  # Empty content if not available
+
+        # Ensure header is defined
+        template_context.setdefault(
+            "header", f"# TCL constraints for {context.board_name}"
+        )
+
+        # COMPREHENSIVE TEMPLATE CONTEXT HANDLING
+        # 1. Handle device information - extract from BuildContext if available
+        if not template_context.get("device") or not isinstance(
+            template_context["device"], dict
+        ):
+            template_context["device"] = {}
+
+        # Extract all device properties directly from context
+        if hasattr(context, "vendor_id") and context.vendor_id:
+            template_context["device"]["vendor_id"] = format_hex(context.vendor_id, 4)
+        if hasattr(context, "device_id") and context.device_id:
+            template_context["device"]["device_id"] = format_hex(context.device_id, 4)
+        if hasattr(context, "revision_id") and context.revision_id:
+            template_context["device"]["revision_id"] = format_hex(
+                context.revision_id, 2
+            )
+        if hasattr(context, "class_code") and context.class_code:
+            template_context["device"]["class_code"] = format_hex(context.class_code, 6)
+        if hasattr(context, "subsys_vendor_id") and context.subsys_vendor_id:
+            template_context["device"]["subsys_vendor_id"] = format_hex(
+                context.subsys_vendor_id, 4
+            )
+        if hasattr(context, "subsys_device_id") and context.subsys_device_id:
+            template_context["device"]["subsys_device_id"] = format_hex(
+                context.subsys_device_id, 4
+            )
+
+        # Log device info being used
+        self.logger.info(
+            f"Using device information: {template_context['device'].get('vendor_id', 'N/A')}:"
+            f"{template_context['device'].get('device_id', 'N/A')} "
+            f"(Class: {template_context['device'].get('class_code', 'N/A')})"
+        )
+
+        # 2. Handle board information - extract from BuildContext if available
+        if not template_context.get("board") or not isinstance(
+            template_context["board"], dict
+        ):
+            template_context["board"] = {}
+
+        # Always ensure board name is available
+        if not template_context["board"].get("name") and hasattr(context, "board_name"):
+            template_context["board"]["name"] = context.board_name
+
+        # Add other board properties if available
+        if hasattr(context, "fpga_part") and context.fpga_part:
+            template_context["board"]["fpga_part"] = context.fpga_part
+        if hasattr(context, "fpga_family") and context.fpga_family:
+            template_context["board"]["fpga_family"] = context.fpga_family
+        if hasattr(context, "pcie_ip_type") and context.pcie_ip_type:
+            template_context["board"]["pcie_ip_type"] = context.pcie_ip_type
+
+        # 3. Add required variables for constraints template
+        template_context.setdefault("sys_clk_freq_mhz", 100)  # Default to 100MHz
+        template_context.setdefault(
+            "generated_xdc_path", ""
+        )  # Empty path if not generated
+        template_context.setdefault(
+            "board_xdc_content", ""
+        )  # Empty content if not available
+
+        # 4. Ensure header is defined
+        template_context.setdefault(
+            "header",
+            (
+                f"# TCL constraints for {template_context['device'].get('vendor_id', 'Unknown')}:"
+                f"{template_context['device'].get('device_id', 'Unknown')}"
+            ),
+        )
 
         return self.script_builder.build_script(
             TCLScriptType.CONSTRAINTS, template_context

@@ -8,11 +8,6 @@ name: active_device_multi_source
 device_type: network
 device_class: enterprise
 
-identification:
-  vendor_id: 0x8086
-  device_id: 0x10FB  # Intel 82599 10GbE
-  class_code: 0x020000
-  revision_id: 0x01
 
 registers:
   command: 0x0407      # Bus master + memory + I/O space enabled

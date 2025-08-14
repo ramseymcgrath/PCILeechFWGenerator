@@ -1,12 +1,7 @@
 name: network_card
 device_type: network
 device_class: consumer
-identification:
-  vendor_id: 0x8086  # Intel Corporation
-  device_id: 0x10D3  # 82574L Gigabit Network Connection
-  subsystem_vendor_id: 0x8086
-  subsystem_device_id: 0x10D3
-  class_code: 0x020000  # Ethernet controller
+
 registers:
   command: 0x0006  # Memory Space + Bus Master
   status: 0x0210   # Cap List + Fast B2B

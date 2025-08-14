@@ -66,6 +66,8 @@ class TestTemplateRendering:
             "error_handling": False,
             "power_config": {},  # Empty but explicitly provided
             "error_config": {},  # Empty but explicitly provided
+            # Add variance_model for templates that check for it
+            "variance_model": {},  # Empty dict instead of None to satisfy validator
             "perf_config": {"counter_width": 32},
             "performance_counters": {"counter_width": 32},
             "device_type": "network",
