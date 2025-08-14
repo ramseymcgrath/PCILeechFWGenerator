@@ -106,21 +106,65 @@ class UICoordinator:
 
         # Use the app's filtered_devices property which uses app_state
         for device in self.app.filtered_devices:
-            device_table.add_row(
-                device.status_indicator,
-                device.bdf,
-                f"{device.vendor_name} {device.device_name}"[:40],
-                device.compact_status,
-                device.driver or "None",
-                device.iommu_group,
-                key=device.bdf,
-            )
+            try:
+                # Safely access device attributes with fallbacks
+                status = getattr(device, "status_indicator", "❓")
+                bdf = getattr(device, "bdf", "Unknown")
+                name = f"{getattr(device, 'vendor_name', 'Unknown')} {getattr(device, 'device_name', 'Unknown')}"[
+                    :40
+                ]
+
+                # Get compact status with error handling
+                try:
+                    status_text = getattr(device, "compact_status", "N/A")
+                except Exception:
+                    try:
+                        score = float(getattr(device, "suitability_score", 0.0))
+                        status_text = f"Score: {score:.2f}"
+                    except (ValueError, TypeError):
+                        status_text = "Score: N/A"
+
+                # Get driver with fallback
+                driver = getattr(device, "driver", None) or "None"
+
+                # Safe conversion for IOMMU group
+                try:
+                    iommu = str(getattr(device, "iommu_group", "N/A"))
+                except Exception:
+                    iommu = "N/A"
+
+                device_table.add_row(
+                    status,
+                    bdf,
+                    name,
+                    status_text,
+                    driver,
+                    iommu,
+                    key=bdf,
+                )
+            except Exception as e:
+                # Fallback for any unexpected errors
+                print(f"Error adding device to table: {e}")
+                device_table.add_row(
+                    "❌",
+                    getattr(device, "bdf", "Unknown"),
+                    "Error displaying device",
+                    "N/A",
+                    "N/A",
+                    "N/A",
+                    key=getattr(device, "bdf", f"error_{id(device)}"),
+                )
 
     def _update_device_panel_title(self) -> None:
         """Update the device panel title with device count"""
         # Use the app's properties which use app_state
-        device_count = len(self.app.filtered_devices)
-        total_count = len(self.app.devices)
+        device_count = len(getattr(self.app, "filtered_devices", []) or [])
+        # Some minimal test apps may not expose a full `devices` property; fall back
+        # to the filtered list if `devices` is not available.
+        total_count = len(
+            getattr(self.app, "devices", getattr(self.app, "filtered_devices", []))
+            or []
+        )
         device_panel = self.app.query_one("#device-panel .panel-title")
 
         if device_count == total_count:
@@ -296,6 +340,186 @@ class UICoordinator:
 
         return True
 
+    # Public convenience methods (UI-facing helpers)
+
+    async def load_profile_by_name(
+        self, profile_name: str
+    ) -> Optional[BuildConfiguration]:
+        """
+        Load a profile by name and update the application state.
+
+        Returns the loaded BuildConfiguration or None on failure.
+        """
+        try:
+            config = self.config_manager.load_profile(profile_name)
+            if config:
+                # Update app state and config manager
+                self.app.app_state.set_config(config)
+                self.config_manager.set_current_config(config)
+                # Update UI displays
+                self._update_config_display()
+                self.app.notify(f"Loaded profile: {profile_name}", severity="success")
+                return config
+            return None
+        except Exception as e:
+            if hasattr(self.app, "error_handler"):
+                self.app.error_handler.handle_operation_error("loading profile", e)
+            else:
+                if hasattr(self.app, "notify"):
+                    self.app.notify(f"Failed to load profile: {e}", severity="error")
+            return None
+
+    async def apply_filters(self, filters: Dict[str, Any]) -> None:
+        """Apply filter dictionary to the app state and refresh displayed devices."""
+        try:
+            # Normalize filter keys to the app's expectation
+            self.app.app_state.set_filters(filters or {})
+            # Let the app's computed property and coordinator update the table
+            self.update_device_table()
+            # Update device panel title
+            self._update_device_panel_title()
+            if hasattr(self.app, "notify"):
+                self.app.notify("Filters applied", severity="success")
+        except Exception as e:
+            if hasattr(self.app, "error_handler"):
+                self.app.error_handler.handle_operation_error("applying filters", e)
+            else:
+                if hasattr(self.app, "notify"):
+                    self.app.notify(f"Failed to apply filters: {e}", severity="error")
+
+    def get_current_build_log(self) -> List[str]:
+        """Return current build log lines via the build orchestrator."""
+        try:
+            return self.build_orchestrator.get_current_build_log()
+        except Exception:
+            return []
+
+    def get_build_history(self) -> List[Any]:
+        """Return a lightweight build history list."""
+        try:
+            # Defer to build_orchestrator if it implements history retrieval
+            if hasattr(self.build_orchestrator, "get_build_history"):
+                return self.build_orchestrator.get_build_history()
+            # Otherwise return a minimal, empty history
+            return []
+        except Exception:
+            return []
+
+    async def generate_donor_template(self) -> Optional[Path]:
+        """Generate a donor info template file and return its path if created."""
+        try:
+            from pathlib import Path
+
+            # Prefer build module's generation if available, but keep a device_clone fallback
+            try:
+                from src.build import FirmwareBuilder  # noqa: F401
+                from src.device_clone.donor_info_template import \
+                    DonorInfoTemplateGenerator
+
+                output_path = Path("donor_info_template.json")
+                DonorInfoTemplateGenerator.save_template(output_path, pretty=True)
+            except Exception:
+                from src.device_clone.donor_info_template import \
+                    DonorInfoTemplateGenerator
+
+                output_path = Path("donor_info_template.json")
+                DonorInfoTemplateGenerator.save_template(output_path, pretty=True)
+
+            if hasattr(self.app, "notify"):
+                self.app.notify(
+                    f"✓ Donor info template saved to: {output_path}", severity="success"
+                )
+            return output_path
+        except Exception as e:
+            if hasattr(self.app, "error_handler"):
+                self.app.error_handler.handle_operation_error(
+                    "generating donor template", e
+                )
+            else:
+                if hasattr(self.app, "notify"):
+                    self.app.notify(
+                        f"Failed to generate donor template: {e}", severity="error"
+                    )
+            return None
+
+    async def check_donor_module_status(
+        self, show_notification: bool = True
+    ) -> Dict[str, Any]:
+        """Check donor dump kernel module status and return status dict."""
+        try:
+            try:
+                from src.file_management.donor_dump_manager import \
+                    DonorDumpManager
+            except Exception:
+                from file_management.donor_dump_manager import DonorDumpManager
+
+            manager = DonorDumpManager()
+            module_status = manager.check_module_installation()
+
+            # Update system status and display via core update
+            if getattr(self.app, "_system_status", None) is not None:
+                self.app._system_status["donor_module"] = module_status
+
+            if show_notification and hasattr(self.app, "notify"):
+                status = module_status.get("status")
+                details = module_status.get("details")
+                if status == "installed":
+                    self.app.notify(
+                        f"Donor module status: {details}", severity="success"
+                    )
+                elif status in ["built_not_loaded", "loaded_but_error"]:
+                    self.app.notify(
+                        f"Donor module status: {details}", severity="warning"
+                    )
+                else:
+                    self.app.notify(f"Donor module status: {details}", severity="error")
+
+            return module_status
+        except Exception as e:
+            # Return an error-shaped dictionary
+            err = {
+                "status": "error",
+                "details": f"Error checking module: {str(e)}",
+                "issues": [str(e)],
+                "fixes": [
+                    "Check if src/file_management/donor_dump_manager.py is accessible"
+                ],
+            }
+            if show_notification and hasattr(self.app, "notify"):
+                self.app.notify(
+                    f"Failed to check donor module status: {e}", severity="error"
+                )
+            if getattr(self.app, "_system_status", None) is not None:
+                self.app._system_status["donor_module"] = err
+            return err
+
+    # Public wrappers for UI usage
+    def update_compatibility_display(self, device: PCIDevice) -> None:
+        """Public wrapper to update compatibility display for a device.
+
+        This delegates to the internal implementation but gives a stable
+        public API for callers in the TUI layer.
+        """
+        try:
+            self._update_compatibility_display(device)
+        except Exception:
+            # Ignore UI update errors to avoid bubbling into app logic
+            pass
+
+    def update_build_progress_display(self) -> None:
+        """Public wrapper to refresh build progress display in the UI."""
+        try:
+            self._update_build_progress_display()
+        except Exception:
+            pass
+
+    def update_config_display(self) -> None:
+        """Public wrapper to refresh configuration-related UI elements."""
+        try:
+            self._update_config_display()
+        except Exception:
+            pass
+
     # Configuration Management
 
     async def handle_configuration_update(self, config: BuildConfiguration) -> None:
@@ -318,18 +542,24 @@ class UICoordinator:
         config = self.app.current_config
 
         try:
-            self.app.query_one("#board-type").update(f"Board Type: {config.board_type}")
+            # Import here to avoid circular import
+            from src.tui.utils.ui_helpers import (format_build_mode,
+                                                  safely_update_static)
 
-            features = "Enabled" if config.is_advanced else "Basic"
-            self.app.query_one("#advanced-features").update(
-                f"Advanced Features: {features}"
+            # Update board type
+            safely_update_static(
+                self.app, "#board-type", f"Board Type: {config.board_type}"
             )
 
-            if config.local_build:
-                build_mode = "Local Build (No Donor Dump)"
-            else:
-                build_mode = "Standard (With Donor Dump)"
-            self.app.query_one("#build-mode").update(f"Build Mode: {build_mode}")
+            # Update features display
+            features = "Enabled" if config.is_advanced else "Basic"
+            safely_update_static(
+                self.app, "#advanced-features", f"Advanced Features: {features}"
+            )
+
+            # Update build mode with helper function
+            build_mode = format_build_mode(config)
+            safely_update_static(self.app, "#build-mode", build_mode)
 
             # Update donor dump button
             self._update_donor_dump_button()
@@ -366,56 +596,98 @@ class UICoordinator:
         Args:
             device: The selected device
         """
-        # Update title and score
-        compatibility_title = self.app.query_one("#compatibility-title")
-        compatibility_title.update(f"Device: {device.display_name}")
+        try:
+            # Update title and score safely
+            compatibility_title = self.app.query_one("#compatibility-title")
+            display_name = getattr(device, "display_name", "Unknown Device")
+            compatibility_title.update(f"Device: {display_name}")
 
-        compatibility_score = self.app.query_one("#compatibility-score")
-        score_text = f"Final Score: [bold]{device.suitability_score:.2f}[/bold]"
-        if device.is_suitable:
-            score_text = f"[green]{score_text}[/green]"
-        else:
-            score_text = f"[red]{score_text}[/red]"
+            compatibility_score = self.app.query_one("#compatibility-score")
 
-        # Add detailed status indicators
-        status_indicators = []
-        status_indicators.append(f"Valid: {device.validity_indicator}")
-        status_indicators.append(f"Driver: {device.driver_indicator}")
-        status_indicators.append(f"VFIO: {device.vfio_indicator}")
-        status_indicators.append(f"IOMMU: {device.iommu_indicator}")
-        status_indicators.append(f"Ready: {device.ready_indicator}")
+            # Format score safely
+            try:
+                score = float(getattr(device, "suitability_score", 0.0))
+                score_text = f"Final Score: [bold]{score:.2f}[/bold]"
 
-        status_line = " | ".join(status_indicators)
-        score_text += f"\n{status_line}"
-        compatibility_score.update(score_text)
+                # Check if suitable (safely)
+                is_suitable = getattr(device, "is_suitable", False)
+                if is_suitable:
+                    score_text = f"[green]{score_text}[/green]"
+                else:
+                    score_text = f"[red]{score_text}[/red]"
+            except (ValueError, TypeError):
+                score_text = "Final Score: [bold]N/A[/bold]"
 
-        # Update factors table
-        factors_table = self.app.query_one("#compatibility-table")
-        factors_table.clear()
+            # Add detailed status indicators with safe attribute access
+            status_indicators = []
 
-        # Set up columns if not already done
-        if not factors_table.columns:
-            factors_table.add_columns("Status Check", "Result", "Details")
+            # Safe access to all indicator attributes
+            for indicator_name, attr_name in [
+                ("Valid", "validity_indicator"),
+                ("Driver", "driver_indicator"),
+                ("VFIO", "vfio_indicator"),
+                ("IOMMU", "iommu_indicator"),
+                ("Ready", "ready_indicator"),
+            ]:
+                try:
+                    indicator_value = getattr(device, attr_name, "❓")
+                    status_indicators.append(f"{indicator_name}: {indicator_value}")
+                except Exception:
+                    status_indicators.append(f"{indicator_name}: ❓")
 
-        # Add detailed status information
-        self._add_detailed_status_rows(factors_table, device)
+            status_line = " | ".join(status_indicators)
+            score_text += f"\n{status_line}"
+            compatibility_score.update(score_text)
 
-        # Add compatibility factors if available
-        for factor in device.compatibility_factors:
-            name = factor["name"]
-            adjustment = factor["adjustment"]
-            description = factor["description"]
+            # Update factors table
+            factors_table = self.app.query_one("#compatibility-table")
+            factors_table.clear()
 
-            # Format adjustment with sign and color
-            if adjustment > 0:
-                adj_text = f"[green]+{adjustment:.1f}[/green]"
-            elif adjustment < 0:
-                adj_text = f"[red]{adjustment:.1f}[/red]"
-            else:
-                adj_text = f"{adjustment:.1f}"
+            # Set up columns if not already done
+            if not factors_table.columns:
+                factors_table.add_columns("Status Check", "Result", "Details")
 
-            # Add row with appropriate styling
-            factors_table.add_row(name, adj_text, description)
+            # Add detailed status information
+            self._add_detailed_status_rows(factors_table, device)
+
+            # Add compatibility factors if available
+            factors = getattr(device, "compatibility_factors", [])
+            for factor in factors:
+                try:
+                    name = factor.get("name", "Unknown Factor")
+
+                    # Safe conversion for adjustment
+                    try:
+                        adjustment = float(factor.get("adjustment", 0.0))
+                        # Format adjustment with sign and color
+                        if adjustment > 0:
+                            adj_text = f"[green]+{adjustment:.1f}[/green]"
+                        elif adjustment < 0:
+                            adj_text = f"[red]{adjustment:.1f}[/red]"
+                        else:
+                            adj_text = f"{adjustment:.1f}"
+                    except (ValueError, TypeError):
+                        adj_text = "0.0"
+
+                    description = factor.get("description", "No description")
+                    # Add row with appropriate styling
+                    factors_table.add_row(name, adj_text, description)
+                except Exception as e:
+                    print(f"Error adding factor row: {e}")
+                    # Add fallback row for errors
+                    factors_table.add_row(
+                        "Factor Error", "N/A", f"Error: {str(e)[:50]}"
+                    )
+        except Exception as e:
+            print(f"Error updating compatibility display: {e}")
+            # Try to show error in compatibility title as fallback
+            try:
+                compatibility_title = self.app.query_one("#compatibility-title")
+                compatibility_title.update(
+                    f"Error displaying compatibility: {str(e)[:50]}"
+                )
+            except Exception:
+                pass
 
     def _add_detailed_status_rows(self, table, device: PCIDevice) -> None:
         """
@@ -425,66 +697,88 @@ class UICoordinator:
             table: The DataTable to add rows to
             device: The device to display status for
         """
-        # Device validity
-        valid_status = (
-            "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]"
-        )
-        table.add_row(
-            "Device Accessibility",
-            valid_status,
-            "Device is properly detected and accessible",
-        )
+        try:
+            # Device validity (with safe access)
+            is_valid = getattr(device, "is_valid", False)
+            valid_status = (
+                "[green]✅ Valid[/green]" if is_valid else "[red]❌ Invalid[/red]"
+            )
+            table.add_row(
+                "Device Accessibility",
+                valid_status,
+                "Device is properly detected and accessible",
+            )
 
-        # Driver status
-        if device.has_driver:
-            if device.is_detached:
-                driver_status = "[green]🔓 Detached[/green]"
-                driver_details = f"Device detached from {device.driver} for VFIO use"
+            # Driver status (with safe access)
+            has_driver = getattr(device, "has_driver", False)
+            is_detached = getattr(device, "is_detached", False)
+            driver = getattr(device, "driver", "unknown")
+
+            if has_driver:
+                if is_detached:
+                    driver_status = "[green]🔓 Detached[/green]"
+                    driver_details = f"Device detached from {driver} for VFIO use"
+                else:
+                    driver_status = "[yellow]🔒 Bound[/yellow]"
+                    driver_details = f"Device bound to {driver} driver"
             else:
-                driver_status = "[yellow]🔒 Bound[/yellow]"
-                driver_details = f"Device bound to {device.driver} driver"
-        else:
-            driver_status = "[blue]🔌 No Driver[/blue]"
-            driver_details = "No driver currently bound to device"
-        table.add_row("Driver Status", driver_status, driver_details)
+                driver_status = "[blue]🔌 No Driver[/blue]"
+                driver_details = "No driver currently bound to device"
+            table.add_row("Driver Status", driver_status, driver_details)
 
-        # VFIO compatibility
-        vfio_status = (
-            "[green]🛡️ Compatible[/green]"
-            if device.vfio_compatible
-            else "[red]❌ Incompatible[/red]"
-        )
-        vfio_details = (
-            "Device supports VFIO passthrough"
-            if device.vfio_compatible
-            else "Device cannot use VFIO passthrough"
-        )
-        table.add_row("VFIO Support", vfio_status, vfio_details)
+            # VFIO compatibility (with safe access)
+            vfio_compatible = getattr(device, "vfio_compatible", False)
+            vfio_status = (
+                "[green]🛡️ Compatible[/green]"
+                if vfio_compatible
+                else "[red]❌ Incompatible[/red]"
+            )
+            vfio_details = (
+                "Device supports VFIO passthrough"
+                if vfio_compatible
+                else "Device cannot use VFIO passthrough"
+            )
+            table.add_row("VFIO Support", vfio_status, vfio_details)
 
-        # IOMMU status
-        iommu_status = (
-            "[green]🔒 Enabled[/green]"
-            if device.iommu_enabled
-            else "[red]❌ Disabled[/red]"
-        )
-        iommu_details = (
-            f"IOMMU group: {device.iommu_group}"
-            if device.iommu_enabled
-            else "IOMMU not properly configured"
-        )
-        table.add_row("IOMMU Configuration", iommu_status, iommu_details)
+            # IOMMU status (with safe access)
+            iommu_enabled = getattr(device, "iommu_enabled", False)
+            iommu_group = getattr(device, "iommu_group", None)
 
-        # Overall readiness
-        if device.is_valid and device.vfio_compatible and device.iommu_enabled:
-            ready_status = "[green]⚡ Ready[/green]"
-            ready_details = "Device is ready for firmware generation"
-        elif device.is_suitable:
-            ready_status = "[yellow]⚠️ Caution[/yellow]"
-            ready_details = "Device may work but has some compatibility issues"
-        else:
-            ready_status = "[red]❌ Not Ready[/red]"
-            ready_details = "Device has significant compatibility issues"
-        table.add_row("Overall Status", ready_status, ready_details)
+            iommu_status = (
+                "[green]🔒 Enabled[/green]"
+                if iommu_enabled
+                else "[red]❌ Disabled[/red]"
+            )
+
+            iommu_details = (
+                f"IOMMU group: {iommu_group}"
+                if iommu_enabled and iommu_group is not None
+                else "IOMMU not properly configured"
+            )
+            table.add_row("IOMMU Configuration", iommu_status, iommu_details)
+
+            # Overall readiness (with safe access)
+            is_suitable = getattr(device, "is_suitable", False)
+
+            if is_valid and vfio_compatible and iommu_enabled:
+                ready_status = "[green]⚡ Ready[/green]"
+                ready_details = "Device is ready for firmware generation"
+            elif is_suitable:
+                ready_status = "[yellow]⚠️ Caution[/yellow]"
+                ready_details = "Device may work but has some compatibility issues"
+            else:
+                ready_status = "[red]❌ Not Ready[/red]"
+                ready_details = "Device has significant compatibility issues"
+            table.add_row("Overall Status", ready_status, ready_details)
+
+        except Exception as e:
+            # Add error row if anything fails
+            print(f"Error adding detailed status rows: {e}")
+            table.add_row(
+                "Status Error",
+                "[red]❌ Error[/red]",
+                f"Error displaying device status: {str(e)[:50]}",
+            )
 
     def clear_compatibility_display(self) -> None:
         """Clear the compatibility display when no device is selected"""
@@ -504,15 +798,23 @@ class UICoordinator:
     # Utility Methods
 
     async def export_device_list(self) -> None:
-        """Export current device list to JSON"""
+        """Export current device list to JSON.
+
+        Uses the public `filtered_devices` property on the app rather than
+        referencing private attributes. This is safer and easier to test.
+        """
         try:
-            devices_data = [device.to_dict() for device in self.app._filtered_devices]
+            # Prefer public property; fall back to empty list
+            devices = getattr(self.app, "filtered_devices", []) or []
+            devices_data = [device.to_dict() for device in devices]
             export_path = Path("pcie_devices.json")
 
             with open(export_path, "w") as f:
                 json.dump(
                     {
-                        "export_time": self.app._get_current_timestamp(),
+                        "export_time": getattr(
+                            self.app, "_get_current_timestamp", lambda: ""
+                        )(),
                         "device_count": len(devices_data),
                         "devices": devices_data,
                     },
@@ -520,13 +822,18 @@ class UICoordinator:
                     indent=2,
                 )
 
-            self.app.notify(
-                f"Device list exported to {export_path}", severity="success"
-            )
+            # Notify through app
+            if hasattr(self.app, "notify"):
+                self.app.notify(
+                    f"Device list exported to {export_path}", severity="success"
+                )
         except Exception as e:
             if hasattr(self.app, "error_handler"):
                 self.app.error_handler.handle_operation_error(
                     "exporting device list", e
                 )
             else:
-                self.app.notify(f"Failed to export device list: {e}", severity="error")
+                if hasattr(self.app, "notify"):
+                    self.app.notify(
+                        f"Failed to export device list: {e}", severity="error"
+                    )

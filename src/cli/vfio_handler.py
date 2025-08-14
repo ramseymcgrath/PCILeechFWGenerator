@@ -21,6 +21,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, Union
 
+# Import the privilege manager - make it optional to avoid circular imports
+try:
+    from src.tui.utils.privilege_manager import PrivilegeManager
+
+    HAS_PRIVILEGE_MANAGER = True
+except ImportError:
+    PrivilegeManager = None
+    HAS_PRIVILEGE_MANAGER = False
+
 # Import VFIO diagnostics - make it optional to avoid circular imports
 try:
     from .vfio_diagnostics import Diagnostics
@@ -200,12 +209,22 @@ class VFIOBinderImpl:
         self._attach = attach
         self._path_manager = VFIOPathManager(bdf)
         self._device_info: Optional[DeviceInfo] = None
+        self._privilege_manager = None
+
+        # Initialize privilege manager if available
+        if HAS_PRIVILEGE_MANAGER and PrivilegeManager is not None:
+            self._privilege_manager = PrivilegeManager()
 
     @staticmethod
     def _validate_permissions() -> None:
         """Validate that we have root privileges."""
         if os.geteuid() != 0:
-            raise VFIOPermissionError("VFIO operations require root privileges")
+            # We'll handle permission elevation later, just log a warning for now
+            log_warning_safe(
+                logger,
+                "Not running as root. Some VFIO operations may require elevated privileges.",
+                prefix="PERM",
+            )
 
     def _validate_bdf(self, bdf: str) -> None:
         """Validate BDF format."""
@@ -330,6 +349,9 @@ class VFIOBinderImpl:
             prefix="BIND",
         )
 
+        # Check privileges and attempt to elevate if needed
+        self._ensure_privileges()
+
         # Get current device state
         device_info = self._get_device_info(refresh=True)
 
@@ -383,6 +405,49 @@ class VFIOBinderImpl:
         log_info_safe(
             logger, "Successfully bound {bdf} to vfio-pci", bdf=self.bdf, prefix="BIND"
         )
+
+    def _ensure_privileges(self) -> None:
+        """
+        Ensure we have the necessary privileges for VFIO operations.
+
+        This method will attempt to elevate privileges if needed and available.
+        If privilege elevation fails, it will raise an exception.
+        """
+        # If we're already root, no need to elevate
+        if os.geteuid() == 0:
+            return
+
+        # If privilege manager is available, try to elevate
+        if self._privilege_manager:
+            try:
+                # Create a synchronous version of the async call using asyncio
+                import asyncio
+
+                loop = asyncio.new_event_loop()
+                has_privileges = loop.run_until_complete(
+                    self._privilege_manager.request_privileges("load_kernel_modules")
+                )
+                loop.close()
+
+                if not has_privileges:
+                    raise VFIOPermissionError(
+                        "Failed to obtain required privileges for VFIO operations"
+                    )
+
+            except Exception as e:
+                log_error_safe(
+                    logger,
+                    "Failed to elevate privileges: {error}",
+                    error=str(e),
+                    prefix="PERM",
+                )
+                raise VFIOPermissionError(
+                    f"Failed to elevate privileges for VFIO operations: {e}"
+                )
+        else:
+            # No privilege manager available, fall back to standard check
+            if os.geteuid() != 0:
+                raise VFIOPermissionError("VFIO operations require root privileges")
 
     def _verify_vfio_binding(self) -> None:
         """Verify that VFIO binding is functional."""

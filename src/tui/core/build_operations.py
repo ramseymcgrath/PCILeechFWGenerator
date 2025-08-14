@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.tui.core.protocols import BuildOrchestrator, ConfigManager
 from src.tui.models.config import BuildConfiguration, BuildProgress
 from src.tui.utils.graceful_degradation import GracefulDegradation
+from src.tui.utils.input_validator import InputValidator
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ class BuildOperations:
 
     def _validate_config(self, config: BuildConfiguration) -> Tuple[bool, str]:
         """
-        Validate a build configuration.
+        Validate a build configuration using comprehensive validation.
 
         Args:
             config: The configuration to validate.
@@ -135,15 +136,42 @@ class BuildOperations:
             indicating if the configuration is valid, and error_message is a
             string describing any validation errors.
         """
-        # Check for required fields
+        # Check for required fields with improved validation
         if not config.device_id:
             return False, "No device selected"
 
-        if not config.board_type:
-            return False, "No board type selected"
+        # Validate BDF format if provided
+        if config.device_id:
+            is_valid, error = InputValidator.validate_bdf(config.device_id)
+            if not is_valid:
+                return is_valid, error
 
+        # Validate board type is selected
+        is_valid, error = InputValidator.validate_non_empty(
+            config.board_type, "Board type"
+        )
+        if not is_valid:
+            return is_valid, error
+
+        # Validate output directory exists and is writable
         if not config.output_directory:
             return False, "No output directory specified"
+
+        # Validate output directory path
+        is_valid, error = InputValidator.validate_directory_path(
+            config.output_directory
+        )
+        if not is_valid:
+            return is_valid, error
+
+        # Validate custom parameters if any
+        if config.custom_parameters:
+            for key, value in config.custom_parameters.items():
+                # Validate string parameters
+                if isinstance(value, str):
+                    is_valid, error = InputValidator.validate_non_empty(value, key)
+                    if not is_valid:
+                        return is_valid, error
 
         # Configuration is valid
         return True, ""

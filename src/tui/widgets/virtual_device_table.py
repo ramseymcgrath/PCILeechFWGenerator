@@ -39,6 +39,10 @@ class VirtualDeviceTable(DataTable):
         self.visible_start = 0  # Start index of visible rows
         self.visible_count = 50  # Only render 50 rows at a time
 
+        # Add DataTable columns if needed
+        if not self.columns:
+            self.add_columns("Status", "BDF", "Device", "Indicators", "Driver", "IOMMU")
+
     def set_data(self, devices: List[PCIDevice]) -> None:
         """
         Set the device data and render only the visible rows.
@@ -68,19 +72,50 @@ class VirtualDeviceTable(DataTable):
         Args:
             device: PCIDevice object to add as a row
         """
-        # Extract device information for the row
-        status_indicator = "✅" if device.is_suitable else "❌"
+        try:
+            # Extract device information for the row with safe fallbacks
+            status_indicator = getattr(device, "status_indicator", "❓")
+            if not status_indicator:
+                status_indicator = (
+                    "✅" if getattr(device, "is_suitable", False) else "❌"
+                )
 
-        # Add row with device information
-        self.add_row(
-            status_indicator,
-            device.bdf,
-            f"{device.vendor_name} {device.device_name}",
-            f"Score: {device.suitability_score:.2f}",
-            device.driver or "None",
-            device.iommu_group or "N/A",
-            key=device.bdf,
-        )
+            # Format score with two decimal places safely
+            try:
+                score = float(getattr(device, "suitability_score", 0.0))
+                score_text = f"Score: {score:.2f}"
+            except (TypeError, ValueError):
+                score_text = "Score: 0.00"
+
+            # Get other attributes with fallbacks
+            vendor_name = getattr(device, "vendor_name", "Unknown")
+            device_name = getattr(device, "device_name", "Unknown")
+            driver = getattr(device, "driver", None) or "None"
+            iommu_group = getattr(device, "iommu_group", None) or "N/A"
+            bdf = getattr(device, "bdf", "0000:00:00.0")
+
+            # Add row with device information
+            self.add_row(
+                status_indicator,
+                bdf,
+                f"{vendor_name} {device_name}",
+                score_text,
+                driver,
+                str(iommu_group),  # Ensure string conversion
+                key=bdf,
+            )
+        except Exception as e:
+            # Fallback for any unexpected errors
+            print(f"Error adding device row: {e}")
+            self.add_row(
+                "❌",
+                getattr(device, "bdf", "Unknown"),
+                "Error displaying device",
+                "N/A",
+                "N/A",
+                "N/A",
+                key=getattr(device, "bdf", f"error_{id(device)}"),
+            )
 
     def action_cursor_down(self) -> None:
         """Handle down arrow key to navigate down and load more rows if needed."""
@@ -116,22 +151,24 @@ class VirtualDeviceTable(DataTable):
 
     def _check_viewport_change(self) -> None:
         """Check if cursor is close to viewport edge and update if necessary."""
-        if self.cursor_row is None:
+        # Safely access cursor_row, which might not exist in some versions of Textual
+        cursor_row = getattr(self, "cursor_row", None)
+        if cursor_row is None:
             return
 
         # If cursor is close to the top or bottom edge of the visible rows,
         # update the viewport to show more rows in that direction
         buffer_zone = self.visible_count // 4
 
-        if self.cursor_row < self.visible_start + buffer_zone:
+        if cursor_row < self.visible_start + buffer_zone:
             # Cursor is close to top edge, move viewport up
-            new_start = max(0, self.cursor_row - buffer_zone)
+            new_start = max(0, cursor_row - buffer_zone)
             self._update_viewport(new_start)
-        elif self.cursor_row >= self.visible_start + self.visible_count - buffer_zone:
+        elif cursor_row >= self.visible_start + self.visible_count - buffer_zone:
             # Cursor is close to bottom edge, move viewport down
             new_start = min(
                 len(self.virtual_rows) - self.visible_count,
-                self.cursor_row - self.visible_count + buffer_zone,
+                cursor_row - self.visible_count + buffer_zone,
             )
             self._update_viewport(new_start)
 
@@ -143,23 +180,34 @@ class VirtualDeviceTable(DataTable):
             new_start: New starting index for visible rows
         """
         # Ensure new_start is within valid range
-        new_start = max(0, min(len(self.virtual_rows) - self.visible_count, new_start))
+        max_start = max(0, len(self.virtual_rows) - self.visible_count)
+        new_start = max(0, min(max_start, new_start))
 
         if new_start != self.visible_start:
             # Save current cursor position relative to visible rows
             current_key = None
-            if self.cursor_row is not None:
-                row_index = self.cursor_row
-                if 0 <= row_index < self.row_count:
-                    current_key = self.get_row_at(row_index)[0]
+            cursor_row = getattr(self, "cursor_row", None)
+
+            if cursor_row is not None:
+                row_index = cursor_row
+                row_count = getattr(self, "row_count", 0)
+                if 0 <= row_index < row_count:
+                    try:
+                        current_key = self.get_row_at(row_index)[0]
+                    except (IndexError, AttributeError):
+                        current_key = None
 
             # Update visible range and re-render
             self.visible_start = new_start
             self._render_visible_rows()
 
             # Restore cursor position if possible
-            if current_key is not None:
-                for i, row in enumerate(self.rows):
-                    if row[0] == current_key:
-                        self.cursor_row = i
-                        break
+            if current_key is not None and hasattr(self, "cursor_row"):
+                rows = getattr(self, "rows", [])
+                for i, row in enumerate(rows):
+                    try:
+                        if row and row[0] == current_key:
+                            self.cursor_row = i
+                            break
+                    except (IndexError, TypeError):
+                        continue

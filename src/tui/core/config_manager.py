@@ -5,14 +5,31 @@ Manages build configuration profiles and persistence.
 """
 
 import json
+import logging
 import os
 import stat
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, cast
 
-from ..models.config import BuildConfiguration
+try:
+    from pydantic import ValidationError
+except ImportError:
+    # Define a fallback ValidationError for environments without pydantic
+    class ValidationError(Exception):
+        """Fallback ValidationError when pydantic is not available."""
+
+        pass
+
+
+# Import both the legacy and new Pydantic configuration models
+from ..models.config import BuildConfiguration as LegacyBuildConfiguration
+from ..models.configuration import BuildConfiguration
 from ..models.error import ErrorSeverity, TUIError
+from ..plugins.plugin_manager import get_plugin_manager
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Default cache directory for PCILeech
 CACHE_DIR = Path(
@@ -44,6 +61,11 @@ class ConfigManager:
         """Get current configuration, creating default if none exists."""
         if self._current_config is None:
             self._current_config = BuildConfiguration()
+
+        # If the current config is the legacy type, convert it to the new Pydantic model
+        if isinstance(self._current_config, LegacyBuildConfiguration):
+            self._current_config = BuildConfiguration(**self._current_config.to_dict())
+
         return self._current_config
 
     def set_current_config(self, config: BuildConfiguration) -> None:
@@ -105,8 +127,15 @@ class ConfigManager:
                     with open(profile_path, "r") as f:
                         profile_data = json.load(f)
 
-                    # Create a BuildConfiguration from the data
-                    config = BuildConfiguration(**profile_data)
+                    # Create a BuildConfiguration from the data using the new Pydantic model
+                    try:
+                        config = BuildConfiguration(**profile_data)
+                    except ValidationError as e:
+                        logger.warning(
+                            f"Validation error in profile {profile_path.name}: {e}"
+                        )
+                        # Fall back to legacy model if validation fails
+                        config = LegacyBuildConfiguration(**profile_data)
 
                     # Save to new location
                     profile_name = profile_path.stem
@@ -128,8 +157,20 @@ class ConfigManager:
         """
         # Update metadata
         config.name = name
-        config.created_at = config.created_at or datetime.now().isoformat()
-        config.last_used = datetime.now().isoformat()
+
+        # Update timestamps with appropriate method based on config type
+        timestamp = datetime.now().isoformat()
+        if isinstance(config, BuildConfiguration):
+            # For Pydantic model, use the model's dict() method and update specific fields
+            config_dict = config.dict()
+            config_dict["created_at"] = config_dict.get("created_at") or timestamp
+            config_dict["last_used"] = timestamp
+            # Create a new instance with updated values
+            config = BuildConfiguration(**config_dict)
+        else:
+            # For legacy model, set attributes directly
+            config.created_at = config.created_at or timestamp
+            config.last_used = timestamp
 
         try:
             # Ensure directory exists before saving
@@ -182,10 +223,34 @@ class ConfigManager:
                 print(f"Profile not found: {error.message}")
                 return None
 
-            config = BuildConfiguration.load_from_file(profile_path)
+            # Load the profile data
+            with open(profile_path, "r") as f:
+                profile_data = json.load(f)
+
+            # Try to create a Pydantic BuildConfiguration
+            try:
+                config = BuildConfiguration(**profile_data)
+            except ValidationError as e:
+                print(f"Warning: Validation errors in profile '{name}': {e}")
+                # Fall back to legacy model if validation fails
+                config = LegacyBuildConfiguration(**profile_data)
+                # Attempt to convert to new model with default values for missing fields
+                try:
+                    config = BuildConfiguration(**config.to_dict())
+                except ValidationError:
+                    # If conversion fails, continue with legacy model
+                    pass
 
             # Update last used timestamp
-            config.last_used = datetime.now().isoformat()
+            timestamp = datetime.now().isoformat()
+            if isinstance(config, BuildConfiguration):
+                # For Pydantic model, create a new instance with updated timestamp
+                config_dict = config.dict()
+                config_dict["last_used"] = timestamp
+                config = BuildConfiguration(**config_dict)
+            else:
+                # For legacy model, set attribute directly
+                config.last_used = timestamp
             success = self.save_profile(name, config)  # Save updated timestamp
             if not success:
                 # If we couldn't save the updated timestamp, just log and

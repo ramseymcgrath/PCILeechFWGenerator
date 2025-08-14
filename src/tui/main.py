@@ -7,6 +7,7 @@ The main entry point for the PCILeech Firmware Generator TUI.
 import asyncio
 import json
 import subprocess
+import warnings
 import webbrowser
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,24 +17,12 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    ProgressBar,
-    RichLog,
-    Select,
-    Static,
-    Switch,
-    TabbedContent,
-    TabPane,
-    TextArea,
-    Tree,
-)
+from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
+                             ProgressBar, RichLog, Select, Static, Switch)
 
+from src.device_clone.board_config import list_supported_boards
+
+from .core.app_state import AppState
 from .core.background_monitor import BackgroundMonitor
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
@@ -41,954 +30,19 @@ from .core.device_manager import DeviceManager
 from .core.error_handler import ErrorHandler
 from .core.status_monitor import StatusMonitor
 from .core.ui_coordinator import UICoordinator
-from .core.app_state import AppState
-from .core.app_state import AppState
+from .dialogs.build_log import BuildLogDialog
+from .dialogs.configuration import ConfigurationDialog
+from .dialogs.confirmation import ConfirmationDialog
+from .dialogs.device_details import DeviceDetailsDialog
+from .dialogs.file_path_input import FilePathInputDialog
+from .dialogs.help_dialog import HelpDialog
+from .dialogs.profile_manager import ProfileManagerDialog
+from .dialogs.search_filter import SearchFilterDialog
 from .models.config import BuildConfiguration
 from .models.device import PCIDevice
 from .models.progress import BuildProgress
 from .utils.debounced_search import DebouncedSearch
 from .widgets.virtual_device_table import VirtualDeviceTable
-
-
-class DeviceDetailsDialog(ModalScreen[bool]):
-    """Modal dialog for displaying detailed device information"""
-
-    def __init__(self, device: PCIDevice) -> None:
-        """Initialize the device details dialog"""
-        super().__init__()
-        self.device = device
-
-    def compose(self) -> ComposeResult:
-        """Create the device details dialog layout"""
-        with Container(id="device-details-dialog"):
-            yield Static(f"📡 Device Details: {self.device.bdf}", id="dialog-title")
-
-            with TabbedContent():
-                with TabPane("Basic Info", id="basic-info"):
-                    with VerticalScroll():
-                        yield Static(f"BDF: {self.device.bdf}")
-                        yield Static(
-                            f"Vendor: {self.device.vendor_name} ({self.device.vendor_id})"
-                        )
-                        yield Static(
-                            f"Device: {self.device.device_name} ({self.device.device_id})"
-                        )
-                        yield Static(f"Class: {self.device.device_class}")
-                        yield Static(f"Driver: {self.device.driver or 'None'}")
-                        yield Static(f"IOMMU Group: {self.device.iommu_group}")
-                        yield Static(f"Power State: {self.device.power_state}")
-                        yield Static(f"Link Speed: {self.device.link_speed}")
-
-                with TabPane("Compatibility", id="compatibility"):
-                    with VerticalScroll():
-                        yield Static(
-                            f"Suitability Score: {self.device.suitability_score:.2f}"
-                        )
-                        yield Static(
-                            f"Overall Status: {'✅ Suitable' if self.device.is_suitable else '❌ Not Suitable'}"
-                        )
-
-                        if self.device.compatibility_issues:
-                            yield Static("Issues:", classes="text-bold")
-                            for issue in self.device.compatibility_issues:
-                                yield Static(f"• {issue}", classes="status-error")
-
-                        if self.device.compatibility_factors:
-                            yield Static("Compatibility Factors:", classes="text-bold")
-                            for factor in self.device.compatibility_factors:
-                                sign = "+" if factor["adjustment"] >= 0 else ""
-                                yield Static(
-                                    f"• {factor['name']}: {sign}{factor['adjustment']:.1f} - {factor['description']}"
-                                )
-
-                with TabPane("Hardware", id="hardware"):
-                    with VerticalScroll():
-                        yield Static(
-                            "Base Address Registers (BARs):", classes="text-bold"
-                        )
-                        if self.device.bars:
-                            for i, bar in enumerate(self.device.bars):
-                                yield Static(f"BAR{i}: {bar}")
-                        else:
-                            yield Static("No BAR information available")
-
-                        yield Static("Additional Hardware Info:", classes="text-bold")
-                        for key, value in self.device.detailed_status.items():
-                            yield Static(f"{key}: {value}")
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Export Details", id="export-details", variant="primary")
-                yield Button("Close", id="close-details", variant="default")
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "close-details":
-            self.dismiss(False)
-        elif button_id == "export-details":
-            await self._export_device_details()
-
-    async def _export_device_details(self) -> None:
-        """Export device details to a JSON file"""
-        try:
-            output_path = Path(
-                f"device_details_{self.device.bdf.replace(':', '_')}.json"
-            )
-            with open(output_path, "w") as f:
-                json.dump(self.device.to_dict(), f, indent=2)
-
-            self.app.notify(
-                f"Device details exported to {output_path}", severity="success"
-            )
-        except Exception as e:
-            self.app.notify(f"Failed to export device details: {e}", severity="error")
-
-
-class ProfileManagerDialog(ModalScreen[Optional[str]]):
-    """Modal dialog for managing configuration profiles"""
-
-    def __init__(self, config_manager) -> None:
-        """Initialize the profile manager dialog"""
-        super().__init__()
-        self.config_manager = config_manager
-        self.profiles: List[Dict[str, str]] = []
-
-    def compose(self) -> ComposeResult:
-        """Create the profile manager dialog layout"""
-        with Container(id="profile-manager-dialog"):
-            yield Static("📋 Configuration Profiles", id="dialog-title")
-
-            with Horizontal():
-                # Profile list
-                with Vertical(id="profile-list-panel"):
-                    yield Static("Available Profiles:", classes="text-bold")
-                    yield DataTable(id="profiles-table")
-
-                    with Horizontal(classes="button-row"):
-                        yield Button("Load", id="load-profile-btn", variant="primary")
-                        yield Button("Delete", id="delete-profile-btn", variant="error")
-                        yield Button("Export", id="export-profile-btn")
-
-                # Profile details
-                with Vertical(id="profile-details-panel"):
-                    yield Static("Profile Details:", classes="text-bold")
-                    yield Static(
-                        "Select a profile to view details", id="profile-details"
-                    )
-
-                    with Horizontal(classes="button-row"):
-                        yield Button(
-                            "Import", id="import-profile-btn", variant="success"
-                        )
-                        yield Button(
-                            "Create New", id="create-profile-btn", variant="primary"
-                        )
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Close", id="close-profiles", variant="default")
-
-    def on_mount(self) -> None:
-        """Initialize the profile manager"""
-        self._refresh_profiles()
-
-    def _refresh_profiles(self) -> None:
-        """Refresh the profiles list"""
-        try:
-            self.profiles = self.config_manager.list_profiles()
-
-            # Set up table
-            table = self.query_one("#profiles-table", DataTable)
-            table.clear()
-            if not table.columns:
-                table.add_columns("Name", "Description", "Last Used")
-
-            for profile in self.profiles:
-                table.add_row(
-                    profile["name"],
-                    (
-                        profile["description"][:50] + "..."
-                        if len(profile["description"]) > 50
-                        else profile["description"]
-                    ),
-                    profile.get("last_used", "Never")[:10],  # Show date only
-                    key=profile["name"],
-                )
-        except Exception as e:
-            self.app.notify(f"Failed to load profiles: {e}", severity="error")
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "close-profiles":
-            self.dismiss(None)
-        elif button_id == "load-profile-btn":
-            await self._load_selected_profile()
-        elif button_id == "delete-profile-btn":
-            await self._delete_selected_profile()
-        elif button_id == "export-profile-btn":
-            await self._export_selected_profile()
-        elif button_id == "import-profile-btn":
-            await self._import_profile()
-        elif button_id == "create-profile-btn":
-            await self._create_new_profile()
-
-    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle profile selection"""
-        profile_name = event.row_key
-        profile_details = self.config_manager.get_profile_summary(profile_name)
-
-        details_text = "\n".join([f"{k}: {v}" for k, v in profile_details.items()])
-        self.query_one("#profile-details", Static).update(details_text)
-
-    async def _load_selected_profile(self) -> None:
-        """Load the selected profile"""
-        table = self.query_one("#profiles-table", DataTable)
-        if table.cursor_row is not None:
-            profile_name = table.get_row_at(table.cursor_row)[0]
-            self.dismiss(profile_name)
-
-    async def _delete_selected_profile(self) -> None:
-        """Delete the selected profile"""
-        table = self.query_one("#profiles-table", DataTable)
-        if table.cursor_row is not None:
-            profile_name = table.get_row_at(table.cursor_row)[0]
-
-            # Confirm deletion
-            should_delete = await self.app.push_screen(
-                ConfirmationDialog(
-                    "Delete Profile",
-                    f"Are you sure you want to delete '{profile_name}'?",
-                )
-            )
-
-            if should_delete:
-                success = self.config_manager.delete_profile(profile_name)
-                if success:
-                    self.app.notify(
-                        f"Profile '{profile_name}' deleted", severity="success"
-                    )
-                    self._refresh_profiles()
-                else:
-                    self.app.notify(
-                        f"Failed to delete profile '{profile_name}'", severity="error"
-                    )
-
-    async def _export_selected_profile(self) -> None:
-        """Export the selected profile"""
-        table = self.query_one("#profiles-table", DataTable)
-        if table.cursor_row is not None:
-            profile_name = table.get_row_at(table.cursor_row)[0]
-            export_path = Path(f"{profile_name.replace(' ', '_')}_profile.json")
-
-            success = self.config_manager.export_profile(profile_name, export_path)
-            if success:
-                self.app.notify(
-                    f"Profile exported to {export_path}", severity="success"
-                )
-            else:
-                self.app.notify(f"Failed to export profile", severity="error")
-
-    async def _import_profile(self) -> None:
-        """Import a profile from file"""
-        # In a real implementation, this would open a file dialog
-        # For now, we'll assume a standard path
-        import_path = Path("imported_profile.json")
-        if import_path.exists():
-            profile_name = self.config_manager.import_profile(import_path)
-            if profile_name:
-                self.app.notify(
-                    f"Profile imported as '{profile_name}'", severity="success"
-                )
-                self._refresh_profiles()
-            else:
-                self.app.notify("Failed to import profile", severity="error")
-        else:
-            self.app.notify(
-                "Place profile file as 'imported_profile.json' to import",
-                severity="info",
-            )
-        # Prompt user for file path using a modal dialog
-        file_path = await self.app.push_screen(
-            FilePathInputDialog(
-                title="Import Profile",
-                prompt="Enter the path to the profile file to import:",
-            )
-        )
-        if file_path:
-            import_path = Path(file_path)
-            if import_path.exists():
-                profile_name = self.config_manager.import_profile(import_path)
-                if profile_name:
-                    self.app.notify(
-                        f"Profile imported as '{profile_name}'", severity="success"
-                    )
-                    self._refresh_profiles()
-                else:
-                    self.app.notify("Failed to import profile", severity="error")
-            else:
-                self.app.notify(
-                    f"File '{import_path}' does not exist", severity="error"
-                )
-        else:
-            self.app.notify("Import cancelled", severity="info")
-
-    async def _create_new_profile(self) -> None:
-        """Create a new profile from current configuration"""
-        # This would open the configuration dialog in "save new" mode
-        self.app.notify(
-            "Create new profile functionality - use main Configure button",
-            severity="info",
-        )
-
-
-class BuildLogDialog(ModalScreen[bool]):
-    """Modal dialog for displaying build logs and history"""
-
-    def __init__(self, build_orchestrator) -> None:
-        """Initialize the build log dialog"""
-        super().__init__()
-        self.build_orchestrator = build_orchestrator
-
-    def compose(self) -> ComposeResult:
-        """Create the build log dialog layout"""
-        with Container(id="build-log-dialog"):
-            yield Static("📋 Build Logs & History", id="dialog-title")
-
-            with TabbedContent():
-                with TabPane("Current Build", id="current-build"):
-                    yield RichLog(id="current-build-log", auto_scroll=True)
-
-                    with Horizontal(classes="button-row"):
-                        yield Button("Refresh", id="refresh-current", variant="primary")
-                        yield Button(
-                            "Export Log", id="export-current", variant="default"
-                        )
-
-                with TabPane("Build History", id="build-history"):
-                    yield DataTable(id="build-history-table")
-
-                    with Horizontal(classes="button-row"):
-                        yield Button(
-                            "View Details", id="view-build-details", variant="primary"
-                        )
-                        yield Button(
-                            "Export History", id="export-history", variant="default"
-                        )
-
-                with TabPane("System Info", id="system-info"):
-                    with VerticalScroll():
-                        yield Static("System Information:", classes="text-bold")
-                        yield Static(id="system-info-content")
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Close", id="close-logs", variant="default")
-
-    def on_mount(self) -> None:
-        """Initialize the log dialog"""
-        self._refresh_current_log()
-        self._refresh_build_history()
-        self._refresh_system_info()
-
-    def _refresh_current_log(self) -> None:
-        """Refresh current build log"""
-        try:
-            log_widget = self.query_one("#current-build-log", RichLog)
-            log_widget.clear()
-
-            # Get current build logs from build orchestrator
-            log_lines = self.build_orchestrator.get_current_build_log()
-
-            for line in log_lines:
-                log_widget.write(line)
-
-        except Exception as e:
-            self.app.notify(f"Failed to load current log: {e}", severity="error")
-
-    def _refresh_build_history(self) -> None:
-        """Refresh build history table"""
-        try:
-            table = self.query_one("#build-history-table", DataTable)
-            table.clear()
-
-            if not table.columns:
-                table.add_columns("Date", "Device", "Board", "Status", "Duration")
-
-            # Mock build history data
-            history_data = [
-                ("2024-01-01", "0000:01:00.0", "75t", "Success", "15m 30s"),
-                ("2024-01-02", "0000:02:00.0", "35t", "Failed", "8m 15s"),
-                ("2024-01-03", "0000:01:00.0", "100t", "Success", "22m 45s"),
-            ]
-
-            for row in history_data:
-                table.add_row(*row)
-
-        except Exception as e:
-            self.app.notify(f"Failed to load build history: {e}", severity="error")
-
-    def _refresh_system_info(self) -> None:
-        """Refresh system information"""
-        try:
-            import platform
-
-            import psutil
-
-            info_lines = [
-                f"OS: {platform.system()} {platform.release()}",
-                f"Architecture: {platform.machine()}",
-                f"CPU Cores: {psutil.cpu_count()}",
-                f"Memory: {psutil.virtual_memory().total // (1024**3)} GB",
-                f"Python: {platform.python_version()}",
-            ]
-
-            info_text = "\n".join(info_lines)
-            self.query_one("#system-info-content", Static).update(info_text)
-
-        except ImportError:
-            # Fallback if psutil not available
-            info_text = "System information requires psutil package"
-            self.query_one("#system-info-content", Static).update(info_text)
-        except Exception as e:
-            self.app.notify(f"Failed to load system info: {e}", severity="error")
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "close-logs":
-            self.dismiss(False)
-        elif button_id == "refresh-current":
-            self._refresh_current_log()
-        elif button_id == "export-current":
-            await self._export_current_log()
-        elif button_id == "export-history":
-            await self._export_build_history()
-
-    async def _export_current_log(self) -> None:
-        """Export current build log"""
-        try:
-            log_path = Path("current_build.log")
-            with open(log_path, "w") as f:
-                f.write("PCILeech Build Log\n")
-                f.write("================\n\n")
-                # In real implementation, get actual log content
-                f.write("Build log content would be here...")
-
-            self.app.notify(f"Log exported to {log_path}", severity="success")
-        except Exception as e:
-            self.app.notify(f"Failed to export log: {e}", severity="error")
-
-    async def _export_build_history(self) -> None:
-        """Export build history"""
-        try:
-            history_path = Path("build_history.json")
-            # In real implementation, get actual history data
-            history_data = {"builds": []}
-
-            with open(history_path, "w") as f:
-                json.dump(history_data, f, indent=2)
-
-            self.app.notify(f"History exported to {history_path}", severity="success")
-        except Exception as e:
-            self.app.notify(f"Failed to export history: {e}", severity="error")
-
-
-class SearchFilterDialog(ModalScreen[Dict[str, Any]]):
-    """Modal dialog for searching and filtering devices"""
-
-    def __init__(self) -> None:
-        """Initialize the search/filter dialog"""
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        """Create the search/filter dialog layout"""
-        with Container(id="search-filter-dialog"):
-            yield Static("🔍 Search & Filter Devices", id="dialog-title")
-
-            with Vertical(id="search-form"):
-                # Search criteria
-                yield Label("Search by Device Name:")
-                yield Input(
-                    placeholder="Enter device name or vendor", id="device-search"
-                )
-
-                yield Label("Filter by Class:")
-                yield Select(
-                    [
-                        ("all", "All Classes"),
-                        ("network", "Network"),
-                        ("storage", "Storage"),
-                        ("display", "Display"),
-                        ("multimedia", "Multimedia"),
-                        ("bridge", "Bridge"),
-                        ("other", "Other"),
-                    ],
-                    value="all",
-                    id="class-filter",
-                )
-
-                yield Label("Filter by Status:")
-                yield Select(
-                    [
-                        ("all", "All Devices"),
-                        ("suitable", "Suitable Only"),
-                        ("bound", "Driver Bound"),
-                        ("unbound", "No Driver"),
-                        ("vfio", "VFIO Compatible"),
-                    ],
-                    value="all",
-                    id="status-filter",
-                )
-
-                yield Label("Minimum Suitability Score:")
-                yield Input(placeholder="0.0 - 1.0", value="0.0", id="score-filter")
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Clear", id="clear-filters", variant="default")
-                yield Button("Apply", id="apply-filters", variant="primary")
-                yield Button("Cancel", id="cancel-search", variant="default")
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "cancel-search":
-            self.dismiss(None)
-        elif button_id == "clear-filters":
-            self._clear_all_filters()
-        elif button_id == "apply-filters":
-            filters = self._get_filter_criteria()
-            self.dismiss(filters)
-
-    def _clear_all_filters(self) -> None:
-        """Clear all filter inputs"""
-        self.query_one("#device-search", Input).value = ""
-        self.query_one("#class-filter", Select).value = "all"
-        self.query_one("#status-filter", Select).value = "all"
-        self.query_one("#score-filter", Input).value = "0.0"
-
-    def _get_filter_criteria(self) -> Dict[str, Any]:
-        """Get current filter criteria"""
-        try:
-            score_text = self.query_one("#score-filter", Input).value
-            min_score = float(score_text) if score_text else 0.0
-        except ValueError:
-            min_score = 0.0
-
-        return {
-            "device_search": self.query_one("#device-search", Input).value,
-            "class_filter": self.query_one("#class-filter", Select).value,
-            "status_filter": self.query_one("#status-filter", Select).value,
-            "min_score": min_score,
-        }
-
-
-class ConfirmationDialog(ModalScreen[bool]):
-    """Modal dialog for confirming actions with warnings"""
-
-    def __init__(self, title: str, message: str) -> None:
-        """Initialize the confirmation dialog with a title and message"""
-        super().__init__()
-        self.title = title
-        self.message = message
-
-    def compose(self) -> ComposeResult:
-        """Create the confirmation dialog layout"""
-        with Container(id="confirm-dialog"):
-            yield Static(self.title, id="dialog-title")
-
-            with Vertical(id="confirm-message"):
-                yield Static(self.message)
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Cancel", id="cancel-confirm", variant="default")
-                yield Button("Continue", id="confirm-action", variant="primary")
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "cancel-confirm":
-            self.dismiss(False)
-
-        elif button_id == "confirm-action":
-            self.dismiss(True)
-
-
-class FilePathInputDialog(ModalScreen[str]):
-    """Modal dialog for file path input"""
-
-    def __init__(
-        self, title: str = "File Path", prompt: str = "Enter file path:"
-    ) -> None:
-        """Initialize the file path input dialog"""
-        super().__init__()
-        self.title = title
-        self.prompt = prompt
-
-    def compose(self) -> ComposeResult:
-        """Create the file path input dialog layout"""
-        with Container(id="filepath-dialog"):
-            yield Static(f"📁 {self.title}", id="dialog-title")
-
-            with Vertical(id="filepath-form"):
-                yield Label(self.prompt)
-                yield Input(placeholder="Enter file path...", id="path-input")
-
-                with Horizontal(id="dialog-buttons"):
-                    yield Button("OK", variant="primary", id="ok-button")
-                    yield Button("Cancel", variant="default", id="cancel-button")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses"""
-        if event.button.id == "ok-button":
-            path_input = self.query_one("#path-input", Input)
-            self.dismiss(path_input.value)
-        elif event.button.id == "cancel-button":
-            self.dismiss("")
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle input submission (Enter key)"""
-        if event.input.id == "path-input":
-            self.dismiss(event.input.value)
-
-
-class ConfigurationDialog(ModalScreen[BuildConfiguration]):
-    """Modal dialog for configuring build settings"""
-
-    def compose(self) -> ComposeResult:
-        """Create the configuration dialog layout"""
-        with Container(id="config-dialog"):
-            yield Static("⚙️ Build Configuration", id="dialog-title")
-
-            with Vertical(id="config-form"):
-                # Board Type Selection
-                yield Label("Board Type:")
-                yield Select(
-                    [
-                        # CaptainDMA boards
-                        ("pcileech_75t484_x1", "CaptainDMA 75T"),
-                        ("pcileech_35t484_x1", "CaptainDMA 35T 4.1"),
-                        ("pcileech_35t325_x4", "CaptainDMA M2 x4"),
-                        ("pcileech_35t325_x1", "CaptainDMA M2 x1"),
-                        ("pcileech_100t484_x1", "CaptainDMA 100T"),
-                        # Other boards
-                        ("pcileech_enigma_x1", "Enigma x1"),
-                        ("pcileech_squirrel", "PCIe Squirrel"),
-                        ("pcileech_pciescreamer_xc7a35", "PCIeScreamer"),
-                    ],
-                    value="pcileech_35t325_x1",
-                    id="board-type-select",
-                )
-
-                # Configuration Name
-                yield Label("Configuration Name:")
-                yield Input(
-                    placeholder="Enter configuration name",
-                    value="Default Configuration",
-                    id="config-name-input",
-                )
-
-                # Description
-                yield Label("Description:")
-                yield Input(
-                    placeholder="Enter configuration description",
-                    value="Standard configuration for PCIe devices",
-                    id="config-description-input",
-                )
-
-                # Feature Toggles
-                yield Label("Advanced Features:")
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="advanced-sv-switch")
-                    yield Static("Advanced SystemVerilog")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="variance-switch")
-                    yield Static("Manufacturing Variance")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="profiling-switch")
-                    yield Static("Behavior Profiling")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="disable-ftrace-switch")
-                    yield Static("Disable Ftrace (for CI/non-root)")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="power-mgmt-switch")
-                    yield Static("Power Management")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="error-handling-switch")
-                    yield Static("Error Handling")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="perf-counters-switch")
-                    yield Static("Performance Counters")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="flash-after-switch")
-                    yield Static("Flash After Build")
-
-                # Donor dump configuration
-                yield Label("Donor Device Analysis:")
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=True, id="donor-dump-switch")
-                    yield Static("Extract Device Parameters (Default)")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="auto-headers-switch")
-                    yield Static("Auto-install Kernel Headers")
-
-                # Local build options
-                yield Label("Local Build Options (Opt-in):")
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="local-build-switch")
-                    yield Static("Enable Local Build (Skips Donor Dump)")
-
-                with Horizontal(classes="switch-row"):
-                    yield Switch(value=False, id="skip-board-check-switch")
-                    yield Static("Skip Board Check")
-
-                # Donor info file input
-                yield Label("Donor Info File (optional):")
-                yield Input(
-                    placeholder="Path to donor info JSON file",
-                    value="",
-                    id="donor-info-file-input",
-                )
-
-                # Profile Duration (only shown when profiling is enabled)
-                yield Label("Profile Duration (seconds):")
-                yield Input(
-                    placeholder="30.0", value="30.0", id="profile-duration-input"
-                )
-
-            # Dialog Buttons
-            with Horizontal(id="dialog-buttons"):
-                yield Button("Cancel", id="cancel-config", variant="default")
-                yield Button("Apply", id="apply-config", variant="primary")
-                yield Button("Save as Profile", id="save-config", variant="success")
-
-    def on_mount(self) -> None:
-        """Initialize dialog with current configuration"""
-        # Get current configuration from parent app
-        app = self.app
-
-        # Then populate with current configuration if available
-        if hasattr(app, "current_config"):
-            config = app.current_config
-            self._populate_form(config)
-
-    def _populate_form(self, config: BuildConfiguration) -> None:
-        """Populate form fields with configuration values"""
-        try:
-            # Get board type options first
-            board_type_select = self.query_one("#board-type-select", Select)
-            board_type_options = self._get_select_options(board_type_select)
-
-            # Only set the value if it's valid
-            board_type = config.board_type
-            if board_type in board_type_options:
-                board_type_select.value = board_type
-            elif board_type_options:
-                print(
-                    f"Board type '{board_type}' not found, using '{board_type_options[0]}'"
-                )
-                board_type_select.value = board_type_options[0]
-
-            self.query_one("#config-name-input", Input).value = config.name
-            self.query_one("#config-description-input", Input).value = (
-                config.description
-            )
-            self.query_one("#advanced-sv-switch", Switch).value = config.advanced_sv
-            self.query_one("#variance-switch", Switch).value = config.enable_variance
-            self.query_one("#profiling-switch", Switch).value = (
-                config.behavior_profiling
-            )
-            self.query_one("#disable-ftrace-switch", Switch).value = (
-                config.disable_ftrace
-            )
-            self.query_one("#power-mgmt-switch", Switch).value = config.power_management
-            self.query_one("#error-handling-switch", Switch).value = (
-                config.error_handling
-            )
-            self.query_one("#perf-counters-switch", Switch).value = (
-                config.performance_counters
-            )
-            self.query_one("#flash-after-switch", Switch).value = (
-                config.flash_after_build
-            )
-            self.query_one("#donor-dump-switch", Switch).value = config.donor_dump
-            self.query_one("#auto-headers-switch", Switch).value = (
-                config.auto_install_headers
-            )
-            self.query_one("#local-build-switch", Switch).value = config.local_build
-            self.query_one("#skip-board-check-switch", Switch).value = (
-                config.skip_board_check
-            )
-            self.query_one("#donor-info-file-input", Input).value = (
-                config.donor_info_file
-            )
-            self.query_one("#profile-duration-input", Input).value = str(
-                config.profile_duration
-            )
-        except Exception as e:
-            # If any field fails to populate, continue with defaults
-            print(f"Error populating form fields: {e}")
-
-    def _get_select_options(self, select_widget: Select) -> list:
-        """Safely get options from a Select widget
-
-        Works with different versions of Textual by trying different approaches
-        """
-        try:
-            # First try the standard way (newer Textual versions)
-            if hasattr(select_widget, "options"):
-                return [option.value for option in select_widget.options]
-            # Then try the private attribute (older versions)
-            elif hasattr(select_widget, "_options"):
-                # Handle both tuple of values and list of objects
-                if select_widget._options and hasattr(
-                    select_widget._options[0], "value"
-                ):
-                    return [option.value for option in select_widget._options]
-                else:
-                    return list(select_widget._options)
-            # Fallback to empty list if no options found
-            return []
-        except Exception as e:
-            print(f"Error getting select options: {e}")
-            return []
-
-    def _sanitize_select_value(self, select: Select, fallback: str = "") -> str:
-        """Ensure a select value is valid, with fallback options"""
-        try:
-            # Get current value (might be None or Select.BLANK)
-            current_value = select.value
-            if current_value == Select.BLANK:
-                current_value = ""
-
-            options = self._get_select_options(select)
-
-            # If current value is valid, use it
-            if current_value and current_value in options:
-                return current_value
-
-            # Try fallback value if provided
-            if fallback and fallback in options:
-                print(f"Using fallback value: {fallback}")
-                return fallback
-
-            # Otherwise use first available option
-            if options:
-                print(f"Using first available option: {options[0]}")
-                return options[0]
-
-            # Last resort
-            print(f"No valid options found, using fallback: {fallback}")
-            return fallback
-        except Exception as e:
-            print(f"Error sanitizing select value: {e}")
-            return fallback
-
-    def _create_config_from_form(self) -> BuildConfiguration:
-        """Create BuildConfiguration from form values"""
-        try:
-
-            # Get board type safely
-            board_type_select = self.query_one("#board-type-select", Select)
-            board_type_options = self._get_select_options(board_type_select)
-
-            # Use current value if valid, otherwise use default
-            board_type = board_type_select.value
-            if board_type == Select.BLANK and board_type_options:
-                board_type = board_type_options[0]
-
-            return BuildConfiguration(
-                board_type=board_type,
-                name=self.query_one("#config-name-input", Input).value,
-                description=self.query_one("#config-description-input", Input).value,
-                advanced_sv=self.query_one("#advanced-sv-switch", Switch).value,
-                enable_variance=self.query_one("#variance-switch", Switch).value,
-                behavior_profiling=self.query_one("#profiling-switch", Switch).value,
-                disable_ftrace=self.query_one("#disable-ftrace-switch", Switch).value,
-                power_management=self.query_one("#power-mgmt-switch", Switch).value,
-                error_handling=self.query_one("#error-handling-switch", Switch).value,
-                performance_counters=self.query_one(
-                    "#perf-counters-switch", Switch
-                ).value,
-                flash_after_build=self.query_one("#flash-after-switch", Switch).value,
-                donor_dump=self.query_one("#donor-dump-switch", Switch).value,
-                auto_install_headers=self.query_one(
-                    "#auto-headers-switch", Switch
-                ).value,
-                local_build=self.query_one("#local-build-switch", Switch).value,
-                skip_board_check=self.query_one(
-                    "#skip-board-check-switch", Switch
-                ).value,
-                donor_info_file=self.query_one("#donor-info-file-input", Input).value
-                or None,
-                profile_duration=self._parse_float_input(
-                    self.query_one("#profile-duration-input", Input), 30.0
-                ),
-            )
-        except (ValueError, TypeError) as e:
-            # Return current config if form has invalid values
-            print(f"Error creating configuration from form: {e}")
-            app = self.app
-            if hasattr(app, "current_config"):
-                print("Using existing configuration as fallback")
-                return app.current_config
-            print("Creating default configuration as fallback")
-            return BuildConfiguration()
-
-    def _parse_float_input(
-        self, input_widget: Input, default_value: float = 0.0
-    ) -> float:
-        """Safely parse a float value from an input widget"""
-        try:
-            value = input_widget.value
-            if not value:
-                return default_value
-            return float(value)
-        except (ValueError, TypeError) as e:
-            print(f"Error parsing float input: {e}, using default: {default_value}")
-            return default_value
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle dialog button presses"""
-        button_id = event.button.id
-
-        if button_id == "cancel-config":
-            self.dismiss(None)
-
-        elif button_id == "apply-config":
-            config = self._create_config_from_form()
-            self.dismiss(config)
-
-        elif button_id == "save-config":
-            config = self._create_config_from_form()
-            # Save as profile through config manager
-            app = self.app
-            if hasattr(app, "config_manager"):
-                try:
-                    app.config_manager.save_profile(config.name, config)
-                    app.notify(
-                        f"Configuration saved as '{config.name}'",
-                        severity="success",
-                    )
-                except Exception as e:
-                    app.notify(f"Failed to save profile: {e}", severity="error")
-            self.dismiss(config)
 
 
 class PCILeechTUI(App):
@@ -1054,6 +108,27 @@ class PCILeechTUI(App):
         initial_config = self.config_manager.get_current_config()
         self.app_state.set_config(initial_config)
         self.current_config = initial_config
+
+        # Create UI coordinator (needs to happen after other services are initialized)
+        self.error_handler = ErrorHandler(self)
+        self.ui_coordinator = UICoordinator(self)
+
+        # Ensure logging is redirected to a file so log messages don't print
+        # to stderr and corrupt the Textual UI. We'll tail that file into the
+        # persistent notification panel instead.
+        try:
+            self._setup_file_logging()
+        except Exception:
+            pass
+
+        # Install global exception handlers to avoid raw tracebacks printing
+        # and corrupting the TUI rendering. These handlers will log the full
+        # traceback via the ErrorHandler and show a compact notification.
+        try:
+            self._install_global_exception_handlers()
+        except Exception:
+            # Don't fail initialization if handlers can't be installed
+            pass
 
         # Set up state change handler
         self.app_state.subscribe(self._on_state_change)
@@ -1125,9 +200,10 @@ class PCILeechTUI(App):
                 # Configuration Panel
                 with Vertical(id="config-panel", classes="panel"):
                     yield Static("⚙️ Build Configuration", classes="panel-title")
-                    yield Static("Board Type: 75t", id="board-type")
-                    yield Static("Advanced Features: Enabled", id="advanced-features")
-                    yield Static("Build Mode: Standard", id="build-mode")
+                    # These are filled by the coordinator at runtime
+                    yield Static("Board: (not loaded)", id="board-type")
+                    yield Static("Advanced: (none)", id="advanced-features")
+                    yield Static("Mode: (idle)", id="build-mode")
                     with Horizontal(classes="button-row"):
                         yield Button("Configure", id="configure", variant="primary")
                         yield Button("Profiles", id="manage-profiles")
@@ -1141,7 +217,7 @@ class PCILeechTUI(App):
                         "Select a device to view compatibility factors",
                         id="compatibility-title",
                     )
-                    yield Static("", id="compatibility-score")
+                    yield Static("Score: N/A", id="compatibility-score")
                     yield DataTable(id="compatibility-table")
 
             with Horizontal(id="middle-section"):
@@ -1202,6 +278,12 @@ class PCILeechTUI(App):
                     yield Button("📖 Documentation", id="documentation")
                     yield Button("💾 Backup Config", id="backup-config")
 
+                # Notifications Panel (persistent)
+                with Vertical(id="notifications-panel", classes="panel"):
+                    yield Static("🔔 Notifications", classes="panel-title")
+                    # RichLog provides a persistent scrollable log area
+                    yield RichLog(id="notification-log")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1219,9 +301,83 @@ class PCILeechTUI(App):
 
             # Start background tasks
             self.call_after_refresh(self._initialize_app)
+
+            # Start tailing the notifications log and forward new entries into the UI
+            try:
+                # Create an asyncio background task to tail the file
+                asyncio.create_task(self._tail_notifications_log())
+            except Exception:
+                pass
         except Exception as e:
             # Handle initialization errors gracefully for tests
             print(f"Warning: Failed to initialize TUI: {e}")
+
+    def _setup_file_logging(self) -> None:
+        """Configure root logging to write to a notifications file and avoid stderr."""
+        import logging
+        import os
+
+        log_dir = os.path.join(os.getcwd(), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        notif_path = os.path.join(log_dir, "notifications.log")
+
+        # Configure basic logging to file and remove console handlers
+        try:
+            # Use basicConfig with force=True to replace handlers (Python 3.8+)
+            logging.basicConfig(
+                filename=notif_path,
+                level=logging.INFO,
+                format="%(asctime)s [%(levelname)s] %(message)s",
+                force=True,
+            )
+        except TypeError:
+            # Older basicConfig signature without force - manually replace handlers
+            root = logging.getLogger()
+            for h in list(root.handlers):
+                root.removeHandler(h)
+            fh = logging.FileHandler(notif_path)
+            fh.setLevel(logging.INFO)
+            fh.setFormatter(
+                logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+            )
+            root.addHandler(fh)
+
+    async def _tail_notifications_log(self) -> None:
+        """Tail the notifications.log file and forward appended lines into RichLog.
+
+        Runs as a background asyncio task started on mount.
+        """
+        import asyncio
+        import os
+
+        log_path = os.path.join(os.getcwd(), "logs", "notifications.log")
+
+        # Wait until file exists
+        while not os.path.exists(log_path):
+            await asyncio.sleep(0.2)
+
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                # Seek to the end to only show new entries
+                f.seek(0, os.SEEK_END)
+
+                while True:
+                    line = f.readline()
+                    if not line:
+                        await asyncio.sleep(0.25)
+                        continue
+
+                    # Write line to RichLog if available
+                    try:
+                        log_widget = self.query_one("#notification-log", RichLog)
+                        # strip trailing newline for RichLog.write
+                        log_widget.write(line.rstrip("\n"))
+                    except Exception:
+                        # If UI not ready, silently ignore
+                        pass
+        except Exception:
+            # Never raise from the tailer
+            return
 
     async def _initialize_app(self) -> None:
         """Initialize the application with data"""
@@ -1251,12 +407,6 @@ class PCILeechTUI(App):
             "Welcome! Press F1 or Ctrl+H for help, Ctrl+Q to quit", severity="info"
         )
 
-    # Method removed - functionality moved to UICoordinator
-
-    # Method removed - functionality moved to UICoordinator
-
-    # Method removed - functionality moved to UICoordinator
-
     # Input event handlers
     async def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input changes for real-time search using DebouncedSearch"""
@@ -1276,7 +426,12 @@ class PCILeechTUI(App):
         button_id = event.button.id
 
         if button_id == "refresh-devices" or button_id == "scan-devices":
-            await self._scan_devices()
+            # Delegate device scanning to the centralized UI coordinator
+            try:
+                await self.ui_coordinator.scan_devices()
+            except Exception as e:
+                # Fallback to notify on failure
+                self.notify(f"Failed to scan devices: {e}", severity="error")
 
         elif button_id == "start-build":
             await self.ui_coordinator.handle_build_start()
@@ -1331,15 +486,11 @@ class PCILeechTUI(App):
     async def _open_profile_manager(self) -> None:
         """Open the profile manager dialog"""
         try:
+            # Open local profile manager dialog and delegate loading to coordinator
             result = await self.push_screen(ProfileManagerDialog(self.config_manager))
             if result:
-                # Load the selected profile
-                config = self.config_manager.load_profile(result)
-                if config:
-                    self.current_config = config
-                    self.config_manager.set_current_config(config)
-                    self._update_config_display()
-                    self.notify(f"Loaded profile: {result}", severity="success")
+                # Delegate profile loading and state update to coordinator
+                await self.ui_coordinator.load_profile_by_name(result)
         except Exception as e:
             self.notify(f"Failed to open profile manager: {e}", severity="error")
 
@@ -1348,10 +499,8 @@ class PCILeechTUI(App):
         try:
             result = await self.push_screen(SearchFilterDialog())
             if result:
-                self.device_filters = result
-                self._apply_device_filters()
-                self._update_device_table()
-                self.notify("Filters applied", severity="success")
+                # Delegate applying filters to coordinator
+                await self.ui_coordinator.apply_filters(result)
         except Exception as e:
             self.notify(f"Failed to open search dialog: {e}", severity="error")
 
@@ -1365,48 +514,15 @@ class PCILeechTUI(App):
     async def _open_build_logs(self) -> None:
         """Open the build logs dialog"""
         try:
+            # Use coordinator helpers to get logs when populating the dialog
             await self.push_screen(BuildLogDialog(self.build_orchestrator))
         except Exception as e:
             self.notify(f"Failed to open build logs: {e}", severity="error")
 
     async def _show_help(self) -> None:
         """Show help information"""
-        help_text = """
-PCILeech Firmware Generator - Keyboard Shortcuts
-
-Navigation:
-  Ctrl+Q       - Quit application
-  Ctrl+R, F5   - Refresh device list
-  Ctrl+F       - Search/Filter devices
-  Ctrl+D       - Show device details
-
-Configuration:
-  Ctrl+C       - Open configuration dialog
-  Ctrl+P       - Manage profiles
-
-Build Operations:
-  Ctrl+S       - Start build
-  Ctrl+L       - View build logs
-
-Help:
-  F1, Ctrl+H   - Show this help
-
-Mouse Controls:
-  Click        - Select items
-  Double-click - Open details/configure
-  Right-click  - Context menu (where available)
-
-Tips:
-- Use the quick search bar to filter devices in real-time
-- Green indicators show suitable devices
-- Yellow indicators show devices with warnings
-- Red indicators show incompatible devices
-        """
-
-        self.notify("Help information displayed in notification", severity="info")
-        # In a real implementation, this would show a proper help dialog
-
-    # Method removed - functionality moved to UICoordinator
+        # Show the shared HelpDialog (externalized to src/tui/dialogs/help_dialog.py)
+        await self.push_screen(HelpDialog())
 
     async def _backup_configuration(self) -> None:
         """Backup current configuration"""
@@ -1492,14 +608,13 @@ Tips:
                 self.notify("Opening local documentation", severity="info")
             else:
                 # Fallback to online documentation
-                webbrowser.open("https://github.com/ramseymcgrath/PCILeechFWGenerator")
+                webbrowser.open("https://pcileechfwgenerator.ramseymcgrath.com")
                 self.notify("Opening online documentation", severity="info")
         except Exception as e:
             self.notify(f"Failed to open documentation: {e}", severity="error")
 
     async def _open_advanced_settings(self) -> None:
         """Open advanced settings"""
-        # This would open a more detailed configuration dialog
         self.notify(
             "Advanced settings - use Configure button for full options", severity="info"
         )
@@ -1510,75 +625,207 @@ Tips:
 
         return datetime.now().isoformat()
 
-    # Method removed - functionality moved to UICoordinator
+    def notify(self, message: str, severity: str = "info") -> None:
+        """
+        Display a persistent notification in the notification log and log it.
 
-    # System monitoring is now handled by the BackgroundMonitor class
+        This replaces ephemeral notifications that could be overwritten when
+        the terminal redraws or when the mouse moves. Important messages
+        (warnings/errors) will remain in the `#notification-log` area.
+        """
+        try:
+            from datetime import datetime
+
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sev = severity.upper()
+            line = f"[{ts}] [{sev}] {message}"
+
+            # Append to RichLog if present
+            try:
+                log_widget = self.query_one("#notification-log", RichLog)
+                log_widget.write(line)
+            except Exception:
+                # If UI not yet ready, or widget missing, fall back to logger
+                import logging
+
+                logging.getLogger(__name__).info(line)
+
+        except Exception:
+            # Never raise from notify - best effort only
+            pass
+
+    def _install_global_exception_handlers(self) -> None:
+        """Install handlers for uncaught exceptions in main thread, threads, and asyncio.
+
+        The goal is to prevent raw tracebacks from being printed to stdout/stderr
+        (which breaks Textual's terminal rendering) and instead surface a
+        concise notification while logging the full traceback to the app logger.
+        """
+        import asyncio
+        import sys
+        import threading
+        import traceback
+
+        def _handle_uncaught(exc_type, exc_value, exc_tb) -> None:
+            # Format a concise message for the user and capture the full traceback
+            try:
+                tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+                # Persist via ErrorHandler if available, but avoid invoking the
+                # logging subsystem here to prevent tracebacks from being
+                # emitted to stderr (which breaks the TUI). Write directly to
+                # the persistent error file and show a short notification.
+                if hasattr(self, "error_handler") and self.error_handler is not None:
+                    try:
+                        # Write traceback to file directly (internal helper)
+                        try:
+                            self.error_handler._write_traceback_to_file("Uncaught exception", tb)
+                        except Exception:
+                            # If that fails, silently ignore to avoid crashing
+                            pass
+                    except Exception:
+                        # Swallow any errors here to avoid printing to stderr
+                        pass
+
+                # Try to show a compact notification in the TUI
+                try:
+                    # Only show a short one-line notification to avoid UI corruption
+                    short = f"Unhandled {exc_type.__name__}: {str(exc_value)}"
+                    if hasattr(self, "notify"):
+                        self.notify(short, severity="error")
+                except Exception:
+                    # Ignore notification errors
+                    pass
+            except Exception:
+                # Be extremely defensive: never raise from the excepthook
+                try:
+                    sys.stderr.write("Unhandled exception (failed to format)\n")
+                except Exception:
+                    pass
+
+        # Main thread hook
+        sys.excepthook = _handle_uncaught
+
+        # Thread exceptions (Python 3.8+ supports threading.excepthook)
+        try:
+            def _thread_hook(args):
+                _handle_uncaught(args.exc_type, args.exc_value, args.exc_traceback)
+
+            threading.excepthook = _thread_hook
+        except Exception:
+            # Older Python versions don't have threading.excepthook
+            pass
+
+        # asyncio exceptions: set a loop exception handler that delegates to _handle_uncaught
+        try:
+            loop = asyncio.get_event_loop()
+
+            def _asyncio_handler(loop, context):
+                # context may contain 'exception' or only a message
+                exc = context.get("exception")
+                if exc is not None:
+                    _handle_uncaught(type(exc), exc, getattr(exc, "__traceback__", None))
+                else:
+                    # Create a synthetic exception to capture the message
+                    msg = context.get("message", str(context))
+                    _handle_uncaught(Exception, Exception(msg), None)
+
+            loop.set_exception_handler(_asyncio_handler)
+        except Exception:
+            pass
 
     def _update_status_display(self) -> None:
         """Update system status display"""
-        status = self._system_status
+        try:
+            # Make sure _system_status exists
+            status = getattr(self, "_system_status", {}) or {}
 
-        # Podman status
-        podman = status.get("podman", {})
-        podman_text = "🐳 Podman: " + (
-            "Ready" if podman.get("status") == "ready" else "Not Available"
+            # Only proceed if we have valid status and the UI is ready
+            if not status:
+                return
+
+            # Import here to avoid circular import
+            from src.tui.utils.ui_helpers import (format_status_messages,
+                                                  safely_update_static)
+                
+            try:
+                # Format all status messages at once
+                messages = format_status_messages(status)
+                
+                # Update all status widgets with formatted messages
+                safely_update_static(self, "#podman-status", messages.get("podman", "� Podman: Unknown"))
+                safely_update_static(self, "#vivado-status", messages.get("vivado", "⚡ Vivado: Unknown"))
+                safely_update_static(self, "#usb-status", messages.get("usb", "� USB Devices: Unknown"))
+                safely_update_static(self, "#disk-status", messages.get("disk", "� Disk Space: Unknown"))
+                safely_update_static(self, "#root-status", messages.get("root", "🔒 Root Access: Unknown"))
+                
+                # Update donor module status if available
+                if "donor_module" in messages:
+                    safely_update_static(self, "#donor-module-status", messages["donor_module"])
+            except Exception as e:
+                print(f"Error updating status widgets: {e}")
+        except Exception as e:
+            print(f"Error in _update_status_display: {e}")
+
+    def _safely_update_static(self, selector: str, text: str) -> None:
+        """
+        Safely update a Static widget, handling potential errors.
+        
+        This is a legacy method. Use src.tui.utils.ui_helpers.safely_update_static instead.
+
+        Args:
+            selector: CSS selector for the widget
+            text: Text to update the widget with
+        """
+        # Legacy wrapper: keep behavior but warn so callers migrate to the
+        # centralized helper in src.tui.utils.ui_helpers
+        warnings.warn(
+            "_safely_update_static is deprecated; use src.tui.utils.ui_helpers.safely_update_static",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        self.query_one("#podman-status", Static).update(podman_text)
 
-        # Vivado status
-        vivado = status.get("vivado", {})
-        if vivado.get("status") == "detected":
-            vivado_text = f"⚡ Vivado: {vivado['version']} Detected"
-        else:
-            vivado_text = "⚡ Vivado: Not Detected"
-        self.query_one("#vivado-status", Static).update(vivado_text)
+        # Import here to avoid circular import and preserve runtime behavior
+        from src.tui.utils.ui_helpers import safely_update_static
 
-        # USB devices
-        usb = status.get("usb_devices", {})
-        usb_count = usb.get("count", 0)
-        usb_text = f"🔌 USB Devices: {usb_count} Found"
-        self.query_one("#usb-status", Static).update(usb_text)
+        safely_update_static(self, selector, text)
 
-        # Disk space
-        disk = status.get("disk_space", {})
-        if "free_gb" in disk:
-            disk_text = f"💾 Disk Space: {disk['free_gb']} GB Free"
-        else:
-            disk_text = "💾 Disk Space: Unknown"
-        self.query_one("#disk-status", Static).update(disk_text)
+    def _update_config_display(self) -> None:
+        """Delegate configuration display updates to the UI coordinator.
 
-        # Root access
-        root = status.get("root_access", {})
-        root_text = "🔒 Root Access: " + (
-            "Available" if root.get("available") else "Required"
-        )
-        self.query_one("#root-status", Static).update(root_text)
+        Older code called this method on the App instance. The coordinator
+        now owns UI updates, so forward the call to keep backward
+        compatibility.
+        """
+        try:
+            if hasattr(self, "ui_coordinator") and self.ui_coordinator is not None:
+                # Use the public wrapper when possible
+                try:
+                    self.ui_coordinator.update_config_display()
+                except Exception:
+                    # Fallback to the internal implementation if present
+                    try:
+                        self.ui_coordinator._update_config_display()
+                    except Exception:
+                        pass
+        except Exception:
+            # Swallow errors during startup to avoid crashing the TUI
+            pass
 
-        # Donor module status (if available)
-        if "donor_module" in status:
-            donor_status = status.get("donor_module", {})
-            status_text = donor_status["status"]
+    def _update_donor_dump_button(self) -> None:
+        """Delegate donor-dump button updates to the UI coordinator.
 
-            # Format status with appropriate emoji
-            if status_text == "installed":
-                donor_text = "🧩 Donor Module: ✅ Installed"
-            elif status_text == "built_not_loaded":
-                donor_text = "🧩 Donor Module: ⚠️ Built but not loaded"
-            elif status_text == "not_built":
-                donor_text = "🧩 Donor Module: ❌ Not built"
-            elif status_text == "missing_source":
-                donor_text = "🧩 Donor Module: ❌ Source missing"
-            elif status_text == "loaded_but_error":
-                donor_text = "🧩 Donor Module: ⚠️ Loaded with errors"
-            else:
-                donor_text = "🧩 Donor Module: ❓ Unknown state"
-
-            self.query_one("#donor-module-status", Static).update(donor_text)
-
-    # Method removed - functionality moved to UICoordinator
-
-    # Event handlers (moved to enhanced version above)
-    # The on_button_pressed method has been enhanced and moved above
+        This keeps compatibility with older callers that expected the App to
+        expose this helper.
+        """
+        try:
+            if hasattr(self, "ui_coordinator") and self.ui_coordinator is not None:
+                # Call the coordinator's existing helper
+                try:
+                    self.ui_coordinator._update_donor_dump_button()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle device table row selection"""
@@ -1597,10 +844,6 @@ Tips:
             # Then delegate to UI coordinator
             await self.ui_coordinator.handle_device_selection(selected_device)
 
-    # Method removed - functionality moved to UICoordinator
-
-    # Method removed - functionality moved to UICoordinator
-
     def _on_build_progress(self, progress: BuildProgress) -> None:
         """Handle build progress updates"""
         # Delegate to UI coordinator
@@ -1610,11 +853,16 @@ Tips:
         """Open the configuration dialog"""
         try:
             # Log current configuration before opening dialog
-            print(
-                f"Current configuration device_type: {self.app_state.get_state('config').device_type}"
-            )
+            try:
+                print(
+                    f"Current configuration device_type: {self.app_state.get_state('config').device_type}"
+                )
+            except Exception:
+                pass
 
-            result = await self.push_screen(ConfigurationDialog())
+            result = await self.push_screen(
+                ConfigurationDialog("Build Configuration", self.current_config)
+            )
             if result is not None:
                 # Update app state first
                 self.app_state.set_config(result)
@@ -1649,23 +897,16 @@ Tips:
     async def _generate_donor_template(self) -> None:
         """Generate a donor info template file"""
         try:
-            from pathlib import Path
-
-            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
-
-            # Default output path
-            output_path = Path("donor_info_template.json")
-
-            # Generate the template
-            DonorInfoTemplateGenerator.save_template(output_path, pretty=True)
-
-            self.notify(
-                f"✓ Donor info template saved to: {output_path}", severity="success"
-            )
-            self.notify(
-                "Fill in the device-specific values and use it for advanced cloning",
-                severity="information",
-            )
+            # Delegate generation to the coordinator which centralizes logic
+            output_path = await self.ui_coordinator.generate_donor_template()
+            if output_path:
+                self.notify(
+                    f"✓ Donor info template saved to: {output_path}", severity="success"
+                )
+                self.notify(
+                    "Fill in the device-specific values and use it for advanced cloning",
+                    severity="information",
+                )
 
         except Exception as e:
             self.notify(f"Failed to generate donor template: {e}", severity="error")
@@ -1767,7 +1008,8 @@ Tips:
         """React to device selection changes"""
         if device:
             self.sub_title = f"Selected: {device.bdf} - {device.display_name}"
-            self.ui_coordinator._update_compatibility_display(device)
+            # Use public coordinator wrapper
+            self.ui_coordinator.update_compatibility_display(device)
         else:
             self.sub_title = "Interactive firmware generation for PCIe devices"
             self.ui_coordinator.clear_compatibility_display()
@@ -1783,7 +1025,7 @@ Tips:
     def watch_build_progress(self, progress: Optional[BuildProgress]) -> None:
         """React to build progress changes"""
         if progress:
-            self.ui_coordinator._update_build_progress_display()
+            self.ui_coordinator.update_build_progress_display()
 
     async def _check_donor_module_status(
         self, show_notification: bool = True
@@ -1798,58 +1040,10 @@ Tips:
             Module status information dictionary
         """
         try:
-            # Import donor_dump_manager
-            import sys
-            from pathlib import Path
-
-            sys.path.append(str(Path(__file__).parent.parent.parent))
-            from file_management.donor_dump_manager import DonorDumpManager
-
-            # Create manager and check status
-            manager = DonorDumpManager()
-            module_status = manager.check_module_installation()
-
-            # Update system status with module status
-            if self._system_status is not None:
-                self._system_status["donor_module"] = module_status
-                self._update_status_display()
-
-            # Show notification if requested
-            if show_notification:
-                status = module_status["status"]
-                details = module_status["details"]
-
-                if status == "installed":
-                    self.notify(f"Donor module status: {details}", severity="success")
-                elif status in ["built_not_loaded", "loaded_but_error"]:
-                    self.notify(f"Donor module status: {details}", severity="warning")
-
-                    # Show first issue and fix
-                    issues = module_status.get("issues", [])
-                    fixes = module_status.get("fixes", [])
-
-                    if issues:
-                        self.notify(f"Issue: {issues[0]}", severity="warning")
-                    if fixes:
-                        self.notify(
-                            f"Suggested fix: {fixes[0]}",
-                            severity="information",
-                        )
-                else:
-                    self.notify(f"Donor module status: {details}", severity="error")
-
-                    # Show first issue and fix
-                    issues = module_status.get("issues", [])
-                    fixes = module_status.get("fixes", [])
-
-                    if issues:
-                        self.notify(f"Issue: {issues[0]}", severity="error")
-                    if fixes:
-                        self.notify(
-                            f"Suggested fix: {fixes[0]}",
-                            severity="information",
-                        )
-
+            # Delegate the donor module check to the coordinator implementation
+            module_status = await self.ui_coordinator.check_donor_module_status(
+                show_notification=show_notification
+            )
             return module_status
 
         except Exception as e:
@@ -1905,79 +1099,31 @@ Tips:
                 severity="success",
             )
 
-    # Method removed - functionality moved to UICoordinator
-
-
-def check_sudo():
-    """Check if running as root/sudo and warn if not."""
-    import os
-
-    try:
-        # On Unix-like systems (Linux, macOS)
-        if hasattr(os, "geteuid"):
-            if os.geteuid() != 0:
-                print(
-                    "⚠️  Warning: PCILeech requires root privileges for hardware access."
-                )
-                print("⚠️  Warning: Please run with sudo or as root user.")
-                return False
-            return True
-        # On Windows, just return True (will handle UAC elsewhere)
-        return True
-    except Exception as e:
-        print(f"⚠️  Error checking sudo access: {e}")
-        return False
-
-
-def check_os_compatibility():
-    """Check if the current OS is compatible with PCILeech operations."""
-    import platform
-    import sys
-
-    system = platform.system()
-    if system == "Linux":
-        # Check if VFIO modules are loaded
-        try:
-            with open("/proc/modules", "r") as f:
-                modules = f.read()
-                if "vfio " not in modules or "vfio_pci " not in modules:
-                    print("⚠️  Warning: VFIO modules not loaded. Run:")
-                    print("⚠️  Warning:   sudo modprobe vfio vfio-pci")
-        except FileNotFoundError:
-            # /proc/modules not available, skip check
-            pass
-
-        return True, None
-    elif system == "Darwin":  # macOS
-        return (
-            False,
-            "PCILeech requires Linux. macOS is not supported for firmware generation.",
-        )
-    elif system == "Windows":
-        return False, "PCILeech requires Linux. Windows is not supported."
-    else:
-        return (
-            False,
-            f"Unsupported operating system: {system}. PCILeech requires Linux.",
-        )
-
 
 if __name__ == "__main__":
-    # Check OS compatibility
-    is_compatible, os_message = check_os_compatibility()
-    if not is_compatible:
-        print(f"❌ Error: {os_message}")
+    import asyncio
+
+    from src.utils.system_status import check_root_access, check_vfio_support
+
+    # Check OS compatibility and VFIO support
+    vfio_status = asyncio.run(check_vfio_support())
+    if not vfio_status.get("supported", False):
+        print(f"❌ Error: {vfio_status.get('message', 'Unsupported operating system')}")
         print("PCILeech requires Linux for full functionality.")
         import sys
-
         sys.exit(1)
-    elif os_message:
-        print(f"⚠️  Warning: {os_message}")
+    
+    # Check for warnings about VFIO modules
+    vfio_checks = vfio_status.get("checks", {})
+    if not vfio_checks.get("modules_loaded", True):
+        print("⚠️  Warning: VFIO modules not loaded. Run:")
+        print("⚠️  Warning:   sudo modprobe vfio vfio-pci")
 
     # Check sudo/root access
-    if not check_sudo():
+    root_status = asyncio.run(check_root_access())
+    if not root_status.get("available", False):
         print("⚠️  Warning: Continuing without root privileges - limited functionality.")
-
+    
     # Run the application
     app = PCILeechTUI()
     app.run()

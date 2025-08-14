@@ -1,22 +1,6 @@
 #!/usr/bin/env python3
 """
 VFIO‑Assist - smarter VFIO diagnostics & auto‑fixer
-
-Usage (examples)
-----------------
-```bash
-# Full diagnostic with coloured TTY output
-sudo ./vfio_assist.py diagnose --device 0000:01:00.0
-
-# Attempt automatic remediation non‑interactively
-sudo ./vfio_assist.py fix --device 0000:01:00.0 --yes
-
-# Generate a remediation script only
-./vfio_assist.py script > vfio_fix.sh && chmod +x vfio_fix.sh
-
-# Machine‑readable JSON for a GitHub Action step
-./vfio_assist.py json --device 0000:01:00.0
-```
 """
 from __future__ import annotations
 

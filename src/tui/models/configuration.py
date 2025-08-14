@@ -6,9 +6,9 @@ with robust validation.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, ClassVar
+from typing import Any, ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Define valid board types for validation
 VALID_BOARD_TYPES = [
@@ -85,6 +85,30 @@ class BuildConfiguration(BaseModel):
         default=False, description="Automatically flash FPGA after build completes"
     )
 
+    # Legacy / compatibility options (present in the older dataclass model)
+    donor_dump: bool = Field(
+        default=True, description="Use donor_dump kernel module for donor info"
+    )
+    auto_install_headers: bool = Field(
+        default=False, description="Auto-install kernel headers when needed"
+    )
+    local_build: bool = Field(
+        default=False, description="Force local build instead of donor-based build"
+    )
+    skip_board_check: bool = Field(
+        default=False, description="Skip hardware/board checks during generation"
+    )
+    donor_info_file: Optional[str] = Field(
+        default=None, description="Path to donor info JSON file"
+    )
+    disable_ftrace: bool = Field(
+        default=False, description="Disable ftrace instrumentation"
+    )
+    # Some callers expect a shorthand 'performance_counters' flag (legacy)
+    performance_counters: bool = Field(
+        default=False, description="Enable performance counters (legacy alias)"
+    )
+
     # Advanced custom parameters
     custom_parameters: Dict[str, Any] = Field(
         default_factory=dict, description="Custom build parameters"
@@ -105,7 +129,7 @@ class BuildConfiguration(BaseModel):
     )
 
     # Validators
-    @validator("board_type")
+    @field_validator("board_type")
     def validate_board_type(cls, v):
         """Validate that the board type is supported."""
         if v not in VALID_BOARD_TYPES:
@@ -114,14 +138,14 @@ class BuildConfiguration(BaseModel):
             )
         return v
 
-    @validator("name")
+    @field_validator("name")
     def validate_name(cls, v):
         """Validate that the name is not empty."""
         if not v or len(v.strip()) == 0:
             raise ValueError("Configuration name cannot be empty")
         return v.strip()
 
-    @validator("device_type")
+    @field_validator("device_type")
     def validate_device_type(cls, v):
         """Validate that the device type is supported."""
         if v not in VALID_DEVICE_TYPES:
@@ -130,7 +154,7 @@ class BuildConfiguration(BaseModel):
             )
         return v
 
-    @validator("optimization_level")
+    @field_validator("optimization_level")
     def validate_optimization_level(cls, v):
         """Validate that the optimization level is supported."""
         if v not in VALID_OPTIMIZATION_LEVELS:
@@ -139,7 +163,7 @@ class BuildConfiguration(BaseModel):
             )
         return v
 
-    @validator("profile_duration")
+    @field_validator("profile_duration")
     def validate_profile_duration(cls, v):
         """Validate that the profile duration is reasonable."""
         if v <= 0:
@@ -150,42 +174,74 @@ class BuildConfiguration(BaseModel):
             )
         return v
 
-    @root_validator
-    def validate_advanced_features(cls, values):
+    @model_validator(mode="after")
+    def validate_advanced_features(self):
         """Validate that advanced features configuration is consistent."""
-        if values.get("behavior_profiling") and not values.get("advanced_sv"):
+        if self.behavior_profiling and not self.advanced_sv:
             raise ValueError(
                 "Behavior profiling requires advanced SystemVerilog features to be enabled"
             )
 
-        if values.get("enable_performance_counters") and not values.get("advanced_sv"):
+        if self.enable_performance_counters and not self.advanced_sv:
             raise ValueError(
                 "Performance counters require advanced SystemVerilog features to be enabled"
             )
 
-        return values
+        return self
 
-    @root_validator
+    @model_validator(mode="before")
+    @classmethod
     def set_timestamps(cls, values):
         """Set timestamps if not provided."""
-        if values.get("created_at") is None:
-            values["created_at"] = datetime.now().isoformat()
+        if isinstance(values, dict):
+            if values.get("created_at") is None:
+                values["created_at"] = datetime.now().isoformat()
 
-        # Always update last_used when validated
-        values["last_used"] = datetime.now().isoformat()
+            # Always update last_used when validated
+            values["last_used"] = datetime.now().isoformat()
 
         return values
 
-    class Config:
-        """Pydantic model configuration."""
-
-        validate_assignment = True  # Validate when attributes are assigned
-        extra = "forbid"  # Forbid extra attributes not defined in the model
+    model_config = {
+        "validate_assignment": True,  # Validate when attributes are assigned
+        "extra": "forbid",  # Forbid extra attributes not defined in the model
+    }
 
     # Method for compatibility with the existing codebase
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to a dictionary for serialization."""
-        return self.dict()
+        # Use pydantic v2 model_dump when available, fall back to dict()
+        try:
+            return self.model_dump()
+        except Exception:
+            return self.dict()
+
+    # Compatibility helpers for legacy code expecting dataclass-like API
+    def copy(self) -> "BuildConfiguration":
+        """Return a deep copy of this configuration (compatibility with dataclass)."""
+        try:
+            return self.model_copy(deep=True)
+        except Exception:
+            # Fallback: create a new instance from dict
+            return self.__class__(**self.to_dict())
+
+    @property
+    def is_advanced(self) -> bool:
+        """Compatibility property to match legacy BuildConfiguration API."""
+        return bool(self.advanced_sv)
+
+    # Keep alias semantics so callers using either name work
+    @model_validator(mode="after")
+    def _sync_legacy_flags(self):
+        # Ensure legacy 'performance_counters' follows 'enable_performance_counters' if unset
+        try:
+            if not getattr(self, "performance_counters", False) and getattr(
+                self, "enable_performance_counters", False
+            ):
+                object.__setattr__(self, "performance_counters", True)
+        except Exception:
+            pass
+        return self
 
     # Class method for compatibility with the existing codebase
     @classmethod
@@ -230,7 +286,7 @@ class BuildProgress(BaseModel):
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
 
-    @validator("status")
+    @field_validator("status")
     def validate_status(cls, v):
         """Validate that the status is one of the allowed values."""
         valid_statuses = ["pending", "running", "completed", "failed", "cancelled"]

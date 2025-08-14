@@ -85,10 +85,27 @@ class BackgroundMonitor:
                 # Compare with previous status
                 if new_status != self._last_status.get("system"):
                     self._last_status["system"] = new_status
-                    self.app._system_status = new_status
 
-                    # Schedule UI update on the main thread
-                    self.app.call_after_refresh(self.app._update_status_display)
+                    # Safely set system status
+                    try:
+                        self.app._system_status = new_status
+                    except Exception as e:
+                        logger.error(f"Failed to set system status: {e}")
+
+                    # Schedule UI update on the main thread, safely
+                    try:
+                        if hasattr(self.app, "_update_status_display") and callable(
+                            self.app._update_status_display
+                        ):
+                            self.app.call_after_refresh(self.app._update_status_display)
+                            logger.debug("System status update scheduled")
+                        else:
+                            logger.warning(
+                                "App does not have _update_status_display method"
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to schedule status update: {e}")
+
                     logger.debug("System status updated")
             except Exception as e:
                 # Handle error without stopping the monitoring task

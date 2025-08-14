@@ -5,7 +5,9 @@ Provides centralized error handling for the PCILeech TUI application.
 """
 
 import logging
+import os
 import traceback
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 # Configure logging
@@ -48,6 +50,16 @@ class ErrorHandler:
         # Show user-friendly message
         user_msg = self._get_user_friendly_message(error, context)
         self.app.notify(user_msg, severity=severity)
+
+        # Persist full traceback to an error log for later inspection
+        try:
+            tb_str = "".join(
+                traceback.format_exception(type(error), error, error.__traceback__)
+            )
+            self._write_traceback_to_file(context, tb_str)
+        except Exception:
+            # If writing the traceback fails, ensure we don't raise from the handler
+            logger.exception("Failed to write traceback to error log")
 
         # Report critical errors
         if severity == "critical":
@@ -102,12 +114,20 @@ class ErrorHandler:
             context: Description of where/when the error occurred
         """
         # Get traceback information
-        tb_str = "".join(traceback.format_tb(error.__traceback__))
+        tb_str = "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
 
         # Log with full details
         logger.critical(
             f"CRITICAL ERROR in {context}: {str(error)}\n{tb_str}", exc_info=True
         )
+
+        # Also persist the traceback to disk for post-mortem analysis
+        try:
+            self._write_traceback_to_file(context, tb_str)
+        except Exception:
+            logger.exception("Failed to write critical traceback to error log")
 
         # In a production environment, this could:
         # 1. Send error reports to a monitoring service
@@ -119,3 +139,22 @@ class ErrorHandler:
             "A critical error occurred. Please save your work and restart the application.",
             severity="error",
         )
+
+    def _write_traceback_to_file(self, context: str, tb_str: str) -> None:
+        """Append a timestamped traceback to the persistent error log.
+
+        The log is stored under `logs/error.log` relative to the repository root.
+        """
+        try:
+            log_dir = os.path.join(os.getcwd(), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            log_path = os.path.join(log_dir, "error.log")
+
+            with open(log_path, "a") as f:
+                f.write("\n--- ERROR: " + datetime.utcnow().isoformat() + " UTC ---\n")
+                f.write(f"Context: {context}\n")
+                f.write(tb_str)
+                f.write("\n")
+        except Exception:
+            # Don't raise from the logger
+            logger.exception("Failed to persist traceback to file")

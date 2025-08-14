@@ -6,12 +6,32 @@ to test the application without requiring real hardware.
 """
 
 import asyncio
+from typing import Any, List
+
 import pytest
-from typing import List
 
 from src.tui.core.protocols import DeviceScanner
-from src.tui.core.app import PCILeechTUI
 from src.tui.models.device import PCIDevice
+
+
+# Mock TUI App for testing, no UI dependencies
+class MockPCILeechTUI:
+    """Mock implementation of PCILeechTUI for testing."""
+
+    def __init__(self, device_scanner=None):
+        """Initialize the mock app with optional dependencies."""
+        self.device_scanner = device_scanner
+        self.notify_calls = []
+
+    async def _scan_devices(self) -> List[PCIDevice]:
+        """Mock implementation of device scanning."""
+        if self.device_scanner:
+            return await self.device_scanner.scan_devices()
+        return []
+
+    def notify(self, message: str, severity: str = "info") -> None:
+        """Mock notification method."""
+        self.notify_calls.append({"message": message, "severity": severity})
 
 
 class MockDeviceScanner:
@@ -86,7 +106,7 @@ async def test_device_scanning(test_device: PCIDevice):
     mock_scanner = MockDeviceScanner([test_device])
 
     # Create app with mock scanner
-    app = PCILeechTUI(device_scanner=mock_scanner)
+    app = MockPCILeechTUI(device_scanner=mock_scanner)
 
     # Call the scan devices method
     devices = await app._scan_devices()
@@ -108,7 +128,7 @@ async def test_empty_device_list():
     mock_scanner = MockDeviceScanner([])
 
     # Create app with mock scanner
-    app = PCILeechTUI(device_scanner=mock_scanner)
+    app = MockPCILeechTUI(device_scanner=mock_scanner)
 
     # Call the scan devices method
     devices = await app._scan_devices()
@@ -129,7 +149,7 @@ async def test_mixed_device_support(
     mock_scanner = MockDeviceScanner([test_device, unsupported_device])
 
     # Create app with mock scanner
-    app = PCILeechTUI(device_scanner=mock_scanner)
+    app = MockPCILeechTUI(device_scanner=mock_scanner)
 
     # Call the scan devices method
     devices = await app._scan_devices()

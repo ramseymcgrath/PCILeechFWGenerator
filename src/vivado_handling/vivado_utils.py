@@ -1,20 +1,6 @@
-"""vivado_utils.py — Light‑weight helpers for locating and invoking Xilinx Vivado
+"""
+Light‑weight helpers for locating and invoking Xilinx Vivado
 
-✔ Linux & macOS only (Windows intentionally unsupported)
-✔ Single source‑of‑truth for search paths (DRY)
-✔ pathlib throughout, minimal branching
-✔ Uses `logging` instead of `print` for debug output
-
-Usage examples
---------------
-```python
-from vivado_handling import find_vivado_installation, run_vivado_command
-
-info = find_vivado_installation()
-print(info)
-
-run_vivado_command("-version")
-```
 """
 
 from __future__ import annotations
