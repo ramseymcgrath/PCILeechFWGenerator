@@ -16,31 +16,22 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    ProgressBar,
-    RichLog,
-    Select,
-    Static,
-    Switch,
-    TabbedContent,
-    TabPane,
-    TextArea,
-    Tree,
-)
+from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
+                             ProgressBar, RichLog, Select, Static, Switch,
+                             TabbedContent, TabPane, TextArea, Tree)
 
+from .core.background_monitor import BackgroundMonitor
 from .core.build_orchestrator import BuildOrchestrator
 from .core.config_manager import ConfigManager
 from .core.device_manager import DeviceManager
+from .core.error_handler import ErrorHandler
 from .core.status_monitor import StatusMonitor
+from .core.ui_coordinator import UICoordinator
 from .models.config import BuildConfiguration
 from .models.device import PCIDevice
 from .models.progress import BuildProgress
+from .utils.debounced_search import DebouncedSearch
+from .widgets.virtual_device_table import VirtualDeviceTable
 
 
 class DeviceDetailsDialog(ModalScreen[bool]):
@@ -1012,6 +1003,15 @@ class PCILeechTUI(App):
     build_progress: reactive[Optional[BuildProgress]] = reactive(None)
     device_filters: reactive[Dict[str, Any]] = reactive({})
 
+    # Type hints for dependency-injected services
+    device_manager: DeviceManager
+    config_manager: ConfigManager
+    build_orchestrator: BuildOrchestrator
+    status_monitor: StatusMonitor
+    error_handler: ErrorHandler
+    ui_coordinator: UICoordinator
+    background_monitor: BackgroundMonitor
+
     def __init__(self):
         # Initialize Textual app first to set up reactive system
         super().__init__()
@@ -1021,6 +1021,10 @@ class PCILeechTUI(App):
         self.config_manager = ConfigManager()
         self.build_orchestrator = BuildOrchestrator()
         self.status_monitor = StatusMonitor()
+        self.background_monitor = BackgroundMonitor(self)
+
+        # Performance optimizations
+        self.debounced_search = DebouncedSearch(delay=0.3)
 
         # State
         self._devices = []
@@ -1039,15 +1043,15 @@ class PCILeechTUI(App):
 
     async def action_refresh_devices(self) -> None:
         """Refresh device list"""
-        await self._scan_devices()
+        await self.ui_coordinator.scan_devices()
 
     async def action_configure(self) -> None:
         """Open configuration dialog"""
-        await self._open_configuration_dialog()
+        await self._open_configuration_dialog()  # Still need a dialog opener
 
     async def action_start_build(self) -> None:
         """Start build process"""
-        await self._start_build()
+        await self.ui_coordinator.handle_build_start()
 
     async def action_manage_profiles(self) -> None:
         """Open profile manager"""
@@ -1082,10 +1086,13 @@ class PCILeechTUI(App):
 
                     # Add search bar
                     with Horizontal(classes="search-bar"):
-                        yield Input(placeholder="Search devices...", id="quick-search")
+                        yield Input(
+                            placeholder="Search devices... (debounced)",
+                            id="quick-search",
+                        )
                         yield Button("🔍", id="advanced-search", variant="primary")
 
-                    yield DataTable(id="device-table")
+                    yield VirtualDeviceTable(id="device-table")
                     with Horizontal(classes="button-row"):
                         yield Button("Refresh", id="refresh-devices", variant="primary")
                         yield Button("Details", id="device-details", disabled=True)
@@ -1208,8 +1215,8 @@ class PCILeechTUI(App):
                 "Check configuration directory permissions", severity="information"
             )
 
-        # Start system status monitoring
-        asyncio.create_task(self._monitor_system_status())
+        # Start system status monitoring using the optimized background monitor
+        self.background_monitor.start_monitoring()
 
         # Initial device scan
         await self._scan_devices()
@@ -1222,107 +1229,24 @@ class PCILeechTUI(App):
             "Welcome! Press F1 or Ctrl+H for help, Ctrl+Q to quit", severity="info"
         )
 
-    async def _scan_devices(self) -> None:
-        """Scan for PCIe devices"""
-        try:
-            self._devices = await self.device_manager.scan_devices()
-            self._apply_device_filters()
-            self._update_device_table()
+    # Method removed - functionality moved to UICoordinator
 
-            # Update device count in title
-            device_count = len(self._filtered_devices)
-            total_count = len(self._devices)
-            device_panel = self.query_one("#device-panel .panel-title", Static)
+    # Method removed - functionality moved to UICoordinator
 
-            if device_count == total_count:
-                device_panel.update(f"📡 PCIe Devices Found: {device_count}")
-            else:
-                device_panel.update(
-                    f"📡 PCIe Devices: {device_count}/{total_count} (filtered)"
-                )
-
-        except Exception as e:
-            self.notify(f"Failed to scan devices: {e}", severity="error")
-
-    def _apply_device_filters(self) -> None:
-        """Apply current filters to device list"""
-        self._filtered_devices = self._devices.copy()
-
-        # Apply search filter from quick search
-        try:
-            search_text = self.query_one("#quick-search", Input).value.lower()
-            if search_text:
-                self._filtered_devices = [
-                    device
-                    for device in self._filtered_devices
-                    if search_text in device.display_name.lower()
-                    or search_text in device.bdf.lower()
-                    or search_text in device.vendor_name.lower()
-                ]
-        except Exception:
-            pass  # Ignore if search widget not ready
-
-        # Apply additional filters from device_filters reactive
-        filters = self.device_filters
-
-        if filters.get("class_filter") and filters["class_filter"] != "all":
-            self._filtered_devices = [
-                device
-                for device in self._filtered_devices
-                if filters["class_filter"] in device.device_class.lower()
-            ]
-
-        if filters.get("status_filter") and filters["status_filter"] != "all":
-            status_filter = filters["status_filter"]
-            if status_filter == "suitable":
-                self._filtered_devices = [
-                    d for d in self._filtered_devices if d.is_suitable
-                ]
-            elif status_filter == "bound":
-                self._filtered_devices = [
-                    d for d in self._filtered_devices if d.has_driver
-                ]
-            elif status_filter == "unbound":
-                self._filtered_devices = [
-                    d for d in self._filtered_devices if not d.has_driver
-                ]
-            elif status_filter == "vfio":
-                self._filtered_devices = [
-                    d for d in self._filtered_devices if d.vfio_compatible
-                ]
-
-        if filters.get("min_score", 0) > 0:
-            min_score = filters["min_score"]
-            self._filtered_devices = [
-                device
-                for device in self._filtered_devices
-                if device.suitability_score >= min_score
-            ]
-
-    def _update_device_table(self) -> None:
-        """Update the device table with current filtered devices"""
-        device_table = self.query_one("#device-table", DataTable)
-        device_table.clear()
-
-        for device in self._filtered_devices:
-            device_table.add_row(
-                device.status_indicator,
-                device.bdf,
-                f"{device.vendor_name} {device.device_name}"[:40],
-                device.compact_status,
-                device.driver or "None",
-                device.iommu_group,
-                key=device.bdf,
-            )
+    # Method removed - functionality moved to UICoordinator
 
     # Input event handlers
     async def on_input_changed(self, event: Input.Changed) -> None:
-        """Handle input changes for real-time search"""
+        """Handle input changes for real-time search using DebouncedSearch"""
         if event.input.id == "quick-search":
-            # Debounce the search to avoid too many updates
-            await asyncio.sleep(0.3)
-            self._apply_device_filters()
-            self._update_device_table()
+            # Use the debounced search implementation for improved performance
+            search_query = event.input.value
+            await self.debounced_search.search(search_query, self._perform_search)
+
+    async def _perform_search(self, query: str) -> None:
+        """Callback for debounced search to perform the actual search operation"""
+        self.ui_coordinator.apply_device_filters()
+        self.ui_coordinator.update_device_table()
 
     # Enhanced button handlers
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -1333,10 +1257,10 @@ class PCILeechTUI(App):
             await self._scan_devices()
 
         elif button_id == "start-build":
-            await self._start_build()
+            await self.ui_coordinator.handle_build_start()
 
         elif button_id == "stop-build":
-            await self._stop_build()
+            await self.ui_coordinator.handle_build_stop()
 
         elif button_id == "configure":
             await self._open_configuration_dialog()
@@ -1352,7 +1276,7 @@ class PCILeechTUI(App):
                 await self._show_device_details(self.selected_device)
 
         elif button_id == "export-devices":
-            await self._export_device_list()
+            await self.ui_coordinator.export_device_list()
 
         elif button_id == "view-logs":
             await self._open_build_logs()
@@ -1460,26 +1384,7 @@ Tips:
         self.notify("Help information displayed in notification", severity="info")
         # In a real implementation, this would show a proper help dialog
 
-    async def _export_device_list(self) -> None:
-        """Export current device list to JSON"""
-        try:
-            devices_data = [device.to_dict() for device in self._filtered_devices]
-            export_path = Path("pcie_devices.json")
-
-            with open(export_path, "w") as f:
-                json.dump(
-                    {
-                        "export_time": self._get_current_timestamp(),
-                        "device_count": len(devices_data),
-                        "devices": devices_data,
-                    },
-                    f,
-                    indent=2,
-                )
-
-            self.notify(f"Device list exported to {export_path}", severity="success")
-        except Exception as e:
-            self.notify(f"Failed to export device list: {e}", severity="error")
+    # Method removed - functionality moved to UICoordinator
 
     async def _backup_configuration(self) -> None:
         """Backup current configuration"""
@@ -1583,47 +1488,9 @@ Tips:
 
         return datetime.now().isoformat()
 
-    def _update_config_display(self) -> None:
-        """Update configuration display"""
-        config = self.current_config
+    # Method removed - functionality moved to UICoordinator
 
-        try:
-            self.query_one("#board-type", Static).update(
-                f"Board Type: {config.board_type}"
-            )
-
-            features = "Enabled" if config.is_advanced else "Basic"
-            self.query_one("#advanced-features", Static).update(
-                f"Advanced Features: {features}"
-            )
-
-            if config.local_build:
-                build_mode = "Local Build (No Donor Dump)"
-            else:
-                build_mode = "Standard (With Donor Dump)"
-            self.query_one("#build-mode", Static).update(f"Build Mode: {build_mode}")
-
-            # Update donor dump button
-            self._update_donor_dump_button()
-        except Exception as e:
-            # Handle any UI update errors gracefully
-            print(f"Error updating configuration display: {e}")
-            self.notify("Error displaying configuration", severity="error")
-
-    async def _monitor_system_status(self) -> None:
-        """Monitor system status continuously"""
-        while True:
-            try:
-                self._system_status = await self.status_monitor.get_system_status()
-                self._update_status_display()
-
-                # Check donor module status periodically
-                await self._check_donor_module_status(show_notification=False)
-
-                await asyncio.sleep(5)  # Update every 5 seconds
-            except Exception as e:
-                self.notify(f"Status monitoring error: {e}", severity="warning")
-                await asyncio.sleep(10)  # Retry after 10 seconds on error
+    # System monitoring is now handled by the BackgroundMonitor class
 
     def _update_status_display(self) -> None:
         """Update system status display"""
@@ -1686,41 +1553,13 @@ Tips:
 
             self.query_one("#donor-module-status", Static).update(donor_text)
 
-    def _update_build_progress(self) -> None:
-        """Update build progress display"""
-        if not self.build_progress:
-            return
-
-        progress = self.build_progress
-
-        # Update status
-        self.query_one("#build-status", Static).update(
-            f"Status: {progress.status_text}"
-        )
-
-        # Update progress bar
-        progress_bar = self.query_one("#build-progress", ProgressBar)
-        progress_bar.progress = progress.overall_progress
-
-        # Update progress text
-        self.query_one("#progress-text", Static).update(progress.progress_bar_text)
-
-        # Update resource usage
-        if progress.resource_usage:
-            cpu = progress.resource_usage.get("cpu", 0)
-            memory = progress.resource_usage.get("memory", 0)
-            disk = progress.resource_usage.get("disk_free", 0)
-            resource_text = f"Resources: CPU: {
-                cpu:.1f}% | Memory: {
-                memory:.1f}GB | Disk: {disk:.1f}GB free"
-            self.query_one("#resource-usage", Static).update(resource_text)
+    # Method removed - functionality moved to UICoordinator
 
     # Event handlers (moved to enhanced version above)
     # The on_button_pressed method has been enhanced and moved above
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle device table row selection"""
-        event.data_table
         row_key = event.row_key
 
         # Find selected device
@@ -1731,111 +1570,17 @@ Tips:
                 break
 
         if selected_device:
-            self.selected_device = selected_device
+            # Delegate to UI coordinator
+            await self.ui_coordinator.handle_device_selection(selected_device)
 
-            # Enable/disable buttons based on selection
-            try:
-                self.query_one("#device-details", Button).disabled = False
-                self.query_one("#start-build", Button).disabled = (
-                    not selected_device.is_suitable
-                )
-            except Exception:
-                # Ignore if buttons don't exist (e.g., in tests)
-                pass
+    # Method removed - functionality moved to UICoordinator
 
-            self.notify(
-                f"Selected device: {selected_device.bdf}",
-                severity="info",
-            )
-
-    async def _start_build(self) -> None:
-        """Start the build process"""
-        if not self.selected_device:
-            self.notify("Please select a device first", severity="error")
-            return
-
-        if self.build_orchestrator.is_building():
-            self.notify("Build already in progress", severity="warning")
-            return
-
-        # Check donor module status before starting build if donor_dump is
-        # enabled
-        if self.current_config.donor_dump and not self.current_config.local_build:
-            module_status = await self._check_donor_module_status(
-                show_notification=False
-            )
-            if module_status and module_status.get("status") != "installed":
-                # Show warning dialog with issues and fixes
-                self.notify(
-                    "⚠️ Donor module is not properly installed. This may affect the build.",
-                    severity="warning",
-                )
-
-                # Show detailed issues and fixes
-                issues = module_status.get("issues", [])
-                fixes = module_status.get("fixes", [])
-
-                if issues:
-                    self.notify(f"Issues: {issues[0]}", severity="warning")
-                if fixes:
-                    self.notify(
-                        f"Suggested fix: {fixes[0]}",
-                        severity="information",
-                    )
-
-                # Ask if user wants to continue anyway
-                should_continue = await self._confirm_with_warnings(
-                    "⚠️ Warning: Donor Module Issues",
-                    "The donor module is not properly installed. This may affect the build. Do you want to continue anyway?",
-                )
-
-                if not should_continue:
-                    self.notify("Build cancelled by user", severity="information")
-                    return
-
-        try:
-            # Update button states
-            self.query_one("#start-build", Button).disabled = True
-            self.query_one("#stop-build", Button).disabled = False
-
-            # Start build with progress callback
-            success = await self.build_orchestrator.start_build(
-                self.selected_device, self.current_config, self._on_build_progress
-            )
-
-            if success:
-                self.notify("Build completed successfully!", severity="success")
-            else:
-                self.notify("Build was cancelled", severity="warning")
-
-        except Exception as e:
-            error_msg = str(e)
-            # Check if this is a platform compatibility error to reduce redundant messaging
-            if (
-                "requires Linux" in error_msg
-                or "platform incompatibility" in error_msg
-                or "only available on Linux" in error_msg
-            ):
-                self.notify(
-                    "Build skipped: Platform compatibility issue (see logs)",
-                    severity="warning",
-                )
-            else:
-                self.notify(f"Build failed: {e}", severity="error")
-        finally:
-            # Reset button states
-            self.query_one("#start-build", Button).disabled = False
-            self.query_one("#stop-build", Button).disabled = True
-
-    async def _stop_build(self) -> None:
-        """Stop the build process"""
-        await self.build_orchestrator.cancel_build()
-        self.notify("Build cancelled", severity="info")
+    # Method removed - functionality moved to UICoordinator
 
     def _on_build_progress(self, progress: BuildProgress) -> None:
         """Handle build progress updates"""
-        self.build_progress = progress
-        self.call_after_refresh(self._update_build_progress)
+        # Delegate to UI coordinator
+        self.ui_coordinator.handle_build_progress(progress)
 
     async def _open_configuration_dialog(self) -> None:
         """Open the configuration dialog"""
@@ -1847,19 +1592,17 @@ Tips:
 
             result = await self.push_screen(ConfigurationDialog())
             if result is not None:
-                # Update current configuration
-                self.current_config = result
-                # Save the configuration to the config manager
-                self.config_manager.set_current_config(result)
-                print(
-                    f"New configuration device_type: {self.current_config.device_type}"
-                )
-                self._update_config_display()
-                self.notify("Configuration updated successfully", severity="success")
+                # Delegate configuration update to UI coordinator
+                await self.ui_coordinator.handle_configuration_update(result)
         except Exception as e:
-            error_msg = f"Failed to open configuration dialog: {e}"
-            print(f"ERROR: {error_msg}")
-            self.notify(error_msg, severity="error")
+            if hasattr(self, "error_handler"):
+                self.error_handler.handle_operation_error(
+                    "opening configuration dialog", e
+                )
+            else:
+                error_msg = f"Failed to open configuration dialog: {e}"
+                print(f"ERROR: {error_msg}")
+                self.notify(error_msg, severity="error")
 
     async def _confirm_with_warnings(self, title: str, message: str) -> bool:
         """Open a confirmation dialog with warnings and return user's choice"""
@@ -1867,7 +1610,14 @@ Tips:
             result = await self.push_screen(ConfirmationDialog(title, message))
             return result is True
         except Exception as e:
-            self.notify(f"Failed to open confirmation dialog: {e}", severity="error")
+            if hasattr(self, "error_handler"):
+                self.error_handler.handle_operation_error(
+                    "opening confirmation dialog", e
+                )
+            else:
+                self.notify(
+                    f"Failed to open confirmation dialog: {e}", severity="error"
+                )
             return False
 
     async def _generate_donor_template(self) -> None:
@@ -1875,7 +1625,8 @@ Tips:
         try:
             from pathlib import Path
 
-            from ..device_clone.donor_info_template import DonorInfoTemplateGenerator
+            from ..device_clone.donor_info_template import \
+                DonorInfoTemplateGenerator
 
             # Default output path
             output_path = Path("donor_info_template.json")
@@ -1899,158 +1650,21 @@ Tips:
         """React to device selection changes"""
         if device:
             self.sub_title = f"Selected: {device.bdf} - {device.display_name}"
-            self._update_compatibility_display(device)
-
-            # Enable build buttons for test compatibility
-            try:
-                start_button = self.query_one("#start-build", Button)
-                start_button.disabled = False
-
-                details_button = self.query_one("#device-details", Button)
-                details_button.disabled = False
-            except Exception:
-                # Ignore errors in tests
-                pass
+            self.ui_coordinator._update_compatibility_display(device)
         else:
             self.sub_title = "Interactive firmware generation for PCIe devices"
-            self._clear_compatibility_display()
+            self.ui_coordinator.clear_compatibility_display()
 
-    def _update_compatibility_display(self, device: PCIDevice) -> None:
-        """Update the compatibility factors display for the selected device"""
-        # Update title and score
-        compatibility_title = self.query_one("#compatibility-title", Static)
-        compatibility_title.update(f"Device: {device.display_name}")
+    # Method removed - functionality moved to UICoordinator
 
-        compatibility_score = self.query_one("#compatibility-score", Static)
-        score_text = f"Final Score: [bold]{device.suitability_score:.2f}[/bold]"
-        if device.is_suitable:
-            score_text = f"[green]{score_text}[/green]"
-        else:
-            score_text = f"[red]{score_text}[/red]"
+    # Method removed - functionality moved to UICoordinator
 
-        # Add detailed status indicators
-        status_indicators = []
-        status_indicators.append(f"Valid: {device.validity_indicator}")
-        status_indicators.append(f"Driver: {device.driver_indicator}")
-        status_indicators.append(f"VFIO: {device.vfio_indicator}")
-        status_indicators.append(f"IOMMU: {device.iommu_indicator}")
-        status_indicators.append(f"Ready: {device.ready_indicator}")
-
-        status_line = " | ".join(status_indicators)
-        score_text += f"\n{status_line}"
-        compatibility_score.update(score_text)
-
-        # Update factors table
-        factors_table = self.query_one("#compatibility-table", DataTable)
-        factors_table.clear()
-
-        # Set up columns if not already done
-        if not factors_table.columns:
-            factors_table.add_columns("Status Check", "Result", "Details")
-
-        # Add detailed status information
-        self._add_detailed_status_rows(factors_table, device)
-
-        # Add compatibility factors if available
-        for factor in device.compatibility_factors:
-            name = factor["name"]
-            adjustment = factor["adjustment"]
-            description = factor["description"]
-            factor["is_positive"]
-
-            # Format adjustment with sign and color
-            if adjustment > 0:
-                adj_text = f"[green]+{adjustment:.1f}[/green]"
-            elif adjustment < 0:
-                adj_text = f"[red]{adjustment:.1f}[/red]"
-            else:
-                adj_text = f"{adjustment:.1f}"
-
-            # Add row with appropriate styling
-            factors_table.add_row(name, adj_text, description)
-
-    def _add_detailed_status_rows(self, table, device: PCIDevice) -> None:
-        """Add detailed status information to the compatibility table."""
-        # Device validity
-        valid_status = (
-            "[green]✅ Valid[/green]" if device.is_valid else "[red]❌ Invalid[/red]"
-        )
-        table.add_row(
-            "Device Accessibility",
-            valid_status,
-            "Device is properly detected and accessible",
-        )
-
-        # Driver status
-        if device.has_driver:
-            if device.is_detached:
-                driver_status = "[green]🔓 Detached[/green]"
-                driver_details = f"Device detached from {device.driver} for VFIO use"
-            else:
-                driver_status = "[yellow]🔒 Bound[/yellow]"
-                driver_details = f"Device bound to {device.driver} driver"
-        else:
-            driver_status = "[blue]🔌 No Driver[/blue]"
-            driver_details = "No driver currently bound to device"
-        table.add_row("Driver Status", driver_status, driver_details)
-
-        # VFIO compatibility
-        vfio_status = (
-            "[green]🛡️ Compatible[/green]"
-            if device.vfio_compatible
-            else "[red]❌ Incompatible[/red]"
-        )
-        vfio_details = (
-            "Device supports VFIO passthrough"
-            if device.vfio_compatible
-            else "Device cannot use VFIO passthrough"
-        )
-        table.add_row("VFIO Support", vfio_status, vfio_details)
-
-        # IOMMU status
-        iommu_status = (
-            "[green]🔒 Enabled[/green]"
-            if device.iommu_enabled
-            else "[red]❌ Disabled[/red]"
-        )
-        iommu_details = (
-            f"IOMMU group: {device.iommu_group}"
-            if device.iommu_enabled
-            else "IOMMU not properly configured"
-        )
-        table.add_row("IOMMU Configuration", iommu_status, iommu_details)
-
-        # Overall readiness
-        if device.is_valid and device.vfio_compatible and device.iommu_enabled:
-            ready_status = "[green]⚡ Ready[/green]"
-            ready_details = "Device is ready for firmware generation"
-        elif device.is_suitable:
-            ready_status = "[yellow]⚠️ Caution[/yellow]"
-            ready_details = "Device may work but has some compatibility issues"
-        else:
-            ready_status = "[red]❌ Not Ready[/red]"
-            ready_details = "Device has significant compatibility issues"
-        table.add_row("Overall Status", ready_status, ready_details)
-
-    def _clear_compatibility_display(self) -> None:
-        """Clear the compatibility display when no device is selected"""
-        try:
-            compatibility_title = self.query_one("#compatibility-title", Static)
-            compatibility_title.update("Select a device to view compatibility factors")
-
-            compatibility_score = self.query_one("#compatibility-score", Static)
-            compatibility_score.update("")
-
-            factors_table = self.query_one("#compatibility-table", DataTable)
-            factors_table.clear()
-        except Exception:
-            # Ignore DOM errors in tests or during initialization
-            pass
+    # Method removed - functionality moved to UICoordinator
 
     def watch_build_progress(self, progress: Optional[BuildProgress]) -> None:
         """React to build progress changes"""
         if progress:
-            self._update_build_progress()
+            self.ui_coordinator._update_build_progress_display()
 
     async def _check_donor_module_status(
         self, show_notification: bool = True
@@ -2172,19 +1786,7 @@ Tips:
                 severity="success",
             )
 
-    def _update_donor_dump_button(self) -> None:
-        """Update the donor dump button text and style based on current state"""
-        try:
-            button = self.query_one("#enable-donor-dump", Button)
-            if self.current_config.donor_dump:
-                button.label = "🚫 Disable Donor Dump"
-                button.variant = "error"
-            else:
-                button.label = "🎯 Enable Donor Dump"
-                button.variant = "success"
-        except Exception:
-            # Button might not exist in tests
-            pass
+    # Method removed - functionality moved to UICoordinator
 
 
 def check_sudo():

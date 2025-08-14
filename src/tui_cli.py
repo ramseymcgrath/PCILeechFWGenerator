@@ -31,7 +31,7 @@ def main():
     try:
         # Check if Textual is available
         try:
-            pass
+            import textual
         except ImportError:
             print("Error: Textual framework not installed.")
             print(
@@ -43,20 +43,28 @@ def main():
         # Try different import strategies to handle various installation
         # scenarios
         try:
-            # First try the standard import (works when installed as package)
-            from src.tui.main import PCILeechTUI
+            # First try the new structure (preferred)
+            from src.ui.main import PCILeechTUI
         except ImportError:
-            # If that fails, try a direct import from the current directory
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             try:
-                from tui.main import PCILeechTUI
+                # Then try the standard import (works when installed as package)
+                from src.tui.main import PCILeechTUI
             except ImportError:
-                print("Error: Could not import TUI module.")
-                print(
-                    "This could be due to running with sudo without preserving the Python path."
-                )
-                print("Try using the pcileech-tui-sudo script instead.")
-                return 1
+                # If that fails, try a direct import from the current directory
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                try:
+                    # Try new structure first
+                    from ui.main import PCILeechTUI
+                except ImportError:
+                    try:
+                        from tui.main import PCILeechTUI
+                    except ImportError:
+                        print("Error: Could not import TUI module.")
+                        print(
+                            "This could be due to running with sudo without preserving the Python path."
+                        )
+                        print("Try using the pcileech-tui-sudo script instead.")
+                        return 1
 
         app = PCILeechTUI()
         app.run()
