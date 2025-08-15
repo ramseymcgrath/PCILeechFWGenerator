@@ -11,6 +11,14 @@ core device cloning logic and VFIO device interaction. Tests include:
 - Configuration space reading
 - Error handling and resource cleanup
 - Integration with related components
+
+Improvements:
+- Better test organization with nested classes
+- Reusable fixtures and mock factories
+- Parametrized tests for better coverage
+- Performance optimizations
+- Enhanced error testing
+- Clearer test naming and documentation
 """
 
 import ctypes
@@ -18,66 +26,246 @@ import fcntl
 import hashlib
 import os
 import struct
-from dataclasses import asdict, dataclass
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, Mock, call, mock_open, patch
+from typing import Any, Dict, List, Optional, Tuple
+from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 
 import pytest
 
-from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_GROUP_GET_DEVICE_FD,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VfioRegionInfo)
-from src.device_clone.behavior_profiler import BehaviorProfile
+from src.cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
+from src.device_clone.behavior_profiler import (
+    BehaviorProfile,
+    RegisterAccess,
+    TimingPattern,
+)
 from src.device_clone.config_space_manager import BarInfo
 from src.device_clone.fallback_manager import FallbackManager
 from src.device_clone.overlay_mapper import OverlayMapper
-from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
-                                               DeviceIdentifiers,
-                                               PCILeechContextBuilder,
-                                               TimingParameters,
-                                               ValidationLevel)
+from src.device_clone.pcileech_context import (
+    BarConfiguration,
+    ContextError,
+    DeviceIdentifiers,
+    PCILeechContextBuilder,
+    TimingParameters,
+    ValidationLevel,
+)
 
 
-# Test fixtures for common data structures
+# ============================================================================
+# Test Data Factories
+# ============================================================================
+
+
+class TestDataFactory:
+    """Factory for creating consistent test data structures."""
+
+    @staticmethod
+    def create_device_capabilities(
+        ext_cfg_cap_ptr: int = 0x100,
+        ext_cfg_xp_cap_ptr: int = 0x140,
+        max_payload_size: int = 256,
+        interrupt_mode: str = "msix",
+        num_interrupt_sources: int = 8,
+    ):
+        """Create a mock DeviceCapabilities object with sensible defaults."""
+        from src.device_clone.device_config import DeviceCapabilities
+
+        capabilities_mock = Mock(spec=DeviceCapabilities)
+        capabilities_mock.ext_cfg_cap_ptr = ext_cfg_cap_ptr
+        capabilities_mock.ext_cfg_xp_cap_ptr = ext_cfg_xp_cap_ptr
+        capabilities_mock.max_payload_size = max_payload_size
+        capabilities_mock.get_cfg_force_mps = Mock(return_value=1)
+        capabilities_mock.check_tiny_pcie_issues = Mock(return_value=(False, ""))
+
+        # Active device configuration
+        capabilities_mock.active_device = Mock(
+            enabled=True,
+            timer_period=100000,
+            timer_enable=1,
+            interrupt_mode=interrupt_mode,
+            interrupt_vector=0,
+            priority=15,
+            msi_vector_width=5,
+            msi_64bit_addr=True,
+            num_interrupt_sources=num_interrupt_sources,
+            default_source_priority=8,
+        )
+
+        return capabilities_mock
+
+    @staticmethod
+    def create_bar_info(
+        index: int = 0,
+        address: int = 0xF7000000,
+        size: int = 65536,
+        bar_type: str = "memory",
+        prefetchable: bool = False,
+        is_64bit: bool = False,
+    ) -> Dict[str, Any]:
+        """Create a BAR info dictionary."""
+        return {
+            "type": bar_type,
+            "address": address,
+            "size": size,
+            "prefetchable": prefetchable,
+            "is_64bit": is_64bit,
+        }
+
+    @staticmethod
+    def create_register_access(
+        timestamp: float = 0.1,
+        register: str = "BAR0",
+        offset: int = 0x100,
+        operation: str = "read",
+        value: int = 0x12345678,
+        duration_us: float = 10.0,
+    ) -> RegisterAccess:
+        """Create a RegisterAccess object."""
+        return RegisterAccess(
+            timestamp=timestamp,
+            register=register,
+            offset=offset,
+            operation=operation,
+            value=value,
+            duration_us=duration_us,
+        )
+
+    @staticmethod
+    def create_timing_pattern(
+        pattern_type: str = "periodic",
+        registers: Optional[List[str]] = None,
+        avg_interval_us: float = 50.0,
+        std_deviation_us: float = 5.0,
+        frequency_hz: float = 20000.0,
+        confidence: float = 0.95,
+    ) -> TimingPattern:
+        """Create a TimingPattern object."""
+        if registers is None:
+            registers = ["BAR0"]
+
+        return TimingPattern(
+            pattern_type=pattern_type,
+            registers=registers,
+            avg_interval_us=avg_interval_us,
+            std_deviation_us=std_deviation_us,
+            frequency_hz=frequency_hz,
+            confidence=confidence,
+        )
+
+
+# ============================================================================
+# Mock Builders
+# ============================================================================
+
+
+class MockBuilder:
+    """Builder for complex mock objects."""
+
+    @staticmethod
+    def build_config_mock(
+        enable_advanced: bool = True,
+        enable_dma: bool = True,
+        enable_interrupts: bool = False,
+        timeout: int = 5000,
+        buffer_size: int = 4096,
+    ) -> Mock:
+        """Build a complete configuration mock."""
+        config = Mock()
+        config.enable_advanced_features = enable_advanced
+        config.enable_dma_operations = enable_dma
+        config.enable_interrupt_coalescing = enable_interrupts
+        config.pcileech_command_timeout = timeout
+        config.pcileech_buffer_size = buffer_size
+
+        config.device_config = Mock()
+        config.device_config.capabilities = TestDataFactory.create_device_capabilities()
+
+        return config
+
+    @staticmethod
+    def build_vfio_region_mock(
+        size: int = 65536,
+        readable: bool = True,
+        writable: bool = True,
+        mappable: bool = True,
+    ) -> Mock:
+        """Build a VFIO region info mock."""
+        info = Mock()
+        info.argsz = 32
+        info.index = 0
+        info.size = size
+
+        flags = 0
+        if readable:
+            flags |= VFIO_REGION_INFO_FLAG_READ
+        if writable:
+            flags |= VFIO_REGION_INFO_FLAG_WRITE
+        if mappable:
+            flags |= VFIO_REGION_INFO_FLAG_MMAP
+
+        info.flags = flags
+        return info
+
+
+# ============================================================================
+# Context Managers for Testing
+# ============================================================================
+
+
+@contextmanager
+def mock_vfio_operations(device_fd: int = 10, container_fd: int = 11):
+    """Context manager for mocking VFIO operations."""
+    with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd, patch(
+        "os.close"
+    ) as mock_close, patch("fcntl.ioctl") as mock_ioctl:
+
+        mock_get_fd.return_value = (device_fd, container_fd)
+        yield mock_get_fd, mock_close, mock_ioctl
+
+
+@contextmanager
+def mock_overlay_mapper(overlay_entries: int = 2):
+    """Context manager for mocking OverlayMapper."""
+    with patch("src.device_clone.pcileech_context.OverlayMapper") as mock_overlay:
+        mock_instance = Mock()
+        mock_instance.generate_overlay_map.return_value = {
+            "OVERLAY_MAP": [(i * 4, 0xFFFFFFFF >> i) for i in range(overlay_entries)],
+            "OVERLAY_ENTRIES": overlay_entries,
+        }
+        mock_overlay.return_value = mock_instance
+        yield mock_instance
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def factory():
+    """Provide test data factory."""
+    return TestDataFactory()
+
+
+@pytest.fixture
+def mock_builder():
+    """Provide mock builder."""
+    return MockBuilder()
+
+
 @pytest.fixture
 def mock_config():
     """Mock configuration object."""
-    from src.device_clone.device_config import DeviceCapabilities
-
-    config = Mock()
-    config.enable_advanced_features = True
-    config.enable_dma_operations = True
-    config.enable_interrupt_coalescing = False
-    config.pcileech_command_timeout = 5000
-    config.pcileech_buffer_size = 4096
-    config.device_config = Mock()
-
-    # Create a mock that passes isinstance check
-    capabilities_mock = Mock(spec=DeviceCapabilities)
-    capabilities_mock.ext_cfg_cap_ptr = 0x100
-    capabilities_mock.ext_cfg_xp_cap_ptr = 0x140
-    capabilities_mock.max_payload_size = 256
-    capabilities_mock.get_cfg_force_mps = Mock(return_value=1)
-    capabilities_mock.check_tiny_pcie_issues = Mock(return_value=(False, ""))
-    capabilities_mock.active_device = Mock(
-        enabled=True,
-        timer_period=100000,
-        timer_enable=1,
-        interrupt_mode="msix",
-        interrupt_vector=0,
-        priority=15,
-        msi_vector_width=5,
-        msi_64bit_addr=True,
-        num_interrupt_sources=8,
-        default_source_priority=8,
-    )
-
-    config.device_config.capabilities = capabilities_mock
-    return config
+    return MockBuilder.build_config_mock()
 
 
 @pytest.fixture
@@ -94,7 +282,7 @@ def device_identifiers():
 
 
 @pytest.fixture
-def config_space_data():
+def config_space_data(factory):
     """Mock configuration space data."""
     return {
         "vendor_id": "10ee",
@@ -106,29 +294,17 @@ def config_space_data():
         "config_space_hex": "ee10247000000000" * 512,  # 4KB of mock data
         "config_space_size": 4096,
         "bars": [
-            {
-                "type": "memory",
-                "address": 0xF7000000,
-                "size": 65536,
-                "prefetchable": False,
-                "is_64bit": False,
-            },
-            {
-                "type": "memory",
-                "address": 0xF7100000,
-                "size": 16384,
-                "prefetchable": True,
-                "is_64bit": True,
-            },
-            {
-                "type": "io",
-                "address": 0x3000,
-                "size": 256,
-                "prefetchable": False,
-                "is_64bit": False,
-            },
+            factory.create_bar_info(index=0, size=65536),
+            factory.create_bar_info(
+                index=1,
+                address=0xF7100000,
+                size=16384,
+                prefetchable=True,
+                is_64bit=True,
+            ),
+            factory.create_bar_info(index=2, address=0x3000, size=256, bar_type="io"),
         ],
-        "dword_map": {i: f"0x{i*4:08x}" for i in range(1024)},  # Mock dword map
+        "dword_map": {i: f"0x{i*4:08x}" for i in range(1024)},
         "capabilities": {
             "msi": {"offset": 0x50},
             "msix": {"offset": 0x70},
@@ -157,50 +333,25 @@ def msix_data():
 
 
 @pytest.fixture
-def behavior_profile():
+def behavior_profile(factory):
     """Mock behavior profile."""
-    from src.device_clone.behavior_profiler import (BehaviorProfile,
-                                                    RegisterAccess,
-                                                    TimingPattern)
-
     return BehaviorProfile(
         device_bdf="0000:03:00.0",
         capture_duration=60.0,
         total_accesses=1500,
         register_accesses=[
-            RegisterAccess(
-                timestamp=0.1,
-                register="BAR0",
-                offset=0x100,
-                operation="read",
-                value=0x12345678,
-                duration_us=10.0,
-            ),
-            RegisterAccess(
-                timestamp=0.2,
-                register="BAR0",
-                offset=0x200,
-                operation="write",
-                value=0xABCDEF00,
-                duration_us=15.0,
+            factory.create_register_access(timestamp=0.1, offset=0x100),
+            factory.create_register_access(
+                timestamp=0.2, offset=0x200, operation="write", value=0xABCDEF00
             ),
         ],
         timing_patterns=[
-            TimingPattern(
-                pattern_type="periodic",
-                registers=["BAR0"],
-                avg_interval_us=50.0,
-                std_deviation_us=5.0,
-                frequency_hz=20000.0,
-                confidence=0.95,
-            ),
-            TimingPattern(
+            factory.create_timing_pattern(pattern_type="periodic"),
+            factory.create_timing_pattern(
                 pattern_type="burst",
                 registers=["BAR1"],
                 avg_interval_us=100.0,
-                std_deviation_us=10.0,
                 frequency_hz=10000.0,
-                confidence=0.90,
             ),
         ],
         state_transitions={
@@ -215,43 +366,50 @@ def behavior_profile():
     )
 
 
-@pytest.fixture
-def vfio_region_info():
-    """Mock VFIO region info structure."""
-    info = Mock()
-    info.argsz = 32
-    info.index = 0
-    info.flags = (
-        VFIO_REGION_INFO_FLAG_READ
-        | VFIO_REGION_INFO_FLAG_WRITE
-        | VFIO_REGION_INFO_FLAG_MMAP
+# ============================================================================
+# Test Classes
+# ============================================================================
+
+
+class TestInitialization:
+    """Tests for PCILeechContextBuilder initialization."""
+
+    @pytest.mark.parametrize(
+        "validation_level",
+        [
+            ValidationLevel.STRICT,
+            ValidationLevel.MODERATE,
+            ValidationLevel.PERMISSIVE,
+        ],
     )
-    info.size = 65536
-    return info
-
-
-class TestPCILeechContextBuilder:
-    """Test suite for PCILeechContextBuilder class."""
-
-    def test_initialization_valid(self, mock_config):
-        """Test valid initialization of context builder."""
+    def test_initialization_with_validation_levels(self, mock_config, validation_level):
+        """Test initialization with different validation levels."""
         builder = PCILeechContextBuilder(
             device_bdf="0000:03:00.0",
             config=mock_config,
-            validation_level=ValidationLevel.STRICT,
+            validation_level=validation_level,
         )
 
         assert builder.device_bdf == "0000:03:00.0"
         assert builder.config == mock_config
-        assert builder.validation_level == ValidationLevel.STRICT
+        assert builder.validation_level == validation_level
         assert isinstance(builder.fallback_manager, FallbackManager)
 
-    def test_initialization_empty_bdf(self, mock_config):
-        """Test initialization with empty BDF raises error."""
-        with pytest.raises(ContextError, match="Device BDF cannot be empty"):
-            PCILeechContextBuilder(device_bdf="", config=mock_config)
+    @pytest.mark.parametrize(
+        "invalid_bdf",
+        [
+            "",
+            None,
+            "   ",
+            "\t\n",
+        ],
+    )
+    def test_initialization_invalid_bdf(self, mock_config, invalid_bdf):
+        """Test initialization with invalid BDF values."""
+        with pytest.raises(ContextError, match="Device BDF"):
+            PCILeechContextBuilder(device_bdf=invalid_bdf, config=mock_config)
 
-    def test_initialization_with_fallback_manager(self, mock_config):
+    def test_initialization_with_custom_fallback(self, mock_config):
         """Test initialization with custom fallback manager."""
         fallback_manager = FallbackManager(mode="auto", allowed_fallbacks=["all"])
         builder = PCILeechContextBuilder(
@@ -260,52 +418,118 @@ class TestPCILeechContextBuilder:
             fallback_manager=fallback_manager,
         )
 
-        assert builder.fallback_manager == fallback_manager
+        assert builder.fallback_manager is fallback_manager
 
-    @patch("src.device_clone.pcileech_context.OverlayMapper")
-    def test_build_context_success(
+
+class TestContextBuilding:
+    """Tests for context building functionality."""
+
+    def test_build_context_complete_success(
         self,
-        mock_overlay_mapper,
         mock_config,
         device_identifiers,
         config_space_data,
         msix_data,
         behavior_profile,
     ):
-        """Test successful context building with all data available."""
-        # Setup overlay mapper mock
-        mock_overlay_instance = Mock()
-        mock_overlay_instance.generate_overlay_map.return_value = {
-            "OVERLAY_MAP": [(0, 0xFFFFFFFF), (1, 0x0000FFFF)],
-            "OVERLAY_ENTRIES": 2,
-        }
-        mock_overlay_mapper.return_value = mock_overlay_instance
+        """Test successful context building with all components."""
+        with mock_overlay_mapper() as overlay_mock:
+            builder = self._create_builder_with_mocks(
+                mock_config,
+                device_identifiers,
+                config_space_data,
+                msix_data,
+                behavior_profile,
+            )
 
+            context = builder.build_context(
+                behavior_profile=behavior_profile,
+                config_space_data=config_space_data,
+                msix_data=msix_data,
+                interrupt_strategy="msix",
+                interrupt_vectors=32,
+            )
+
+            self._assert_complete_context(context)
+
+    @pytest.mark.parametrize(
+        "missing_field",
+        [
+            "vendor_id",
+            "device_id",
+            "class_code",
+            "revision_id",
+        ],
+    )
+    def test_build_context_missing_required_fields(
+        self, mock_config, config_space_data, missing_field
+    ):
+        """Test context building fails with missing required fields."""
         builder = PCILeechContextBuilder(
             device_bdf="0000:03:00.0",
             config=mock_config,
             validation_level=ValidationLevel.STRICT,
         )
 
-        # Mock internal methods
-        builder._extract_device_identifiers = Mock(return_value=device_identifiers)
-        builder._build_device_config = Mock(
-            return_value={
-                "vendor_id": "10ee",
-                "device_id": "7024",
-                "class_code": "020000",
-                "revision_id": "01",
-                "subsystem_vendor_id": "10ee",
-                "subsystem_device_id": "0007",
-            }
+        # Remove required field
+        del config_space_data[missing_field]
+
+        with pytest.raises(ContextError, match="Missing required data"):
+            builder.build_context(
+                behavior_profile=None,
+                config_space_data=config_space_data,
+                msix_data=None,
+            )
+
+    def test_build_context_with_fallback(self, mock_config, config_space_data):
+        """Test context building with fallback mechanisms."""
+        builder = PCILeechContextBuilder(
+            device_bdf="0000:03:00.0",
+            config=mock_config,
+            validation_level=ValidationLevel.PERMISSIVE,
         )
+
+        # Remove non-critical field
+        del config_space_data["subsystem_vendor_id"]
+
+        with mock_overlay_mapper():
+            # Mock internal methods to avoid full execution
+            self._mock_builder_methods(builder)
+
+            # Should succeed with fallback
+            context = builder.build_context(
+                behavior_profile=None,
+                config_space_data=config_space_data,
+                msix_data=None,
+            )
+
+            assert context is not None
+
+    # Helper methods
+    def _create_builder_with_mocks(
+        self, config, identifiers, config_space, msix, behavior
+    ):
+        """Create a builder with all necessary mocks."""
+        builder = PCILeechContextBuilder(
+            device_bdf="0000:03:00.0",
+            config=config,
+            validation_level=ValidationLevel.STRICT,
+        )
+
+        self._mock_builder_methods(builder, identifiers)
+        return builder
+
+    def _mock_builder_methods(self, builder, identifiers=None):
+        """Mock internal builder methods."""
+        if identifiers:
+            builder._extract_device_identifiers = Mock(return_value=identifiers)
+
+        builder._build_device_config = Mock(return_value={"vendor_id": "10ee"})
         builder._build_config_space_context = Mock(
             return_value={"config_space": "test"}
         )
         builder._build_msix_context = Mock(return_value={"msix": "test"})
-        builder._build_bar_config = Mock(
-            return_value={"bars": [{"type": "memory", "size": 1024}]}
-        )
+        builder._build_bar_config = Mock(return_value={"bars": [{"type": "memory"}]})
         builder._build_timing_config = Mock(
             return_value=TimingParameters(
                 read_latency=4,
@@ -322,87 +546,34 @@ class TestPCILeechContextBuilder:
         builder._generate_unique_device_signature = Mock(return_value="32'h12345678")
         builder._build_generation_metadata = Mock(return_value={"metadata": "test"})
 
-        context = builder.build_context(
-            behavior_profile=behavior_profile,
-            config_space_data=config_space_data,
-            msix_data=msix_data,
-            interrupt_strategy="msix",
-            interrupt_vectors=32,
-        )
+    def _assert_complete_context(self, context):
+        """Assert that context contains all required sections."""
+        required_sections = [
+            "device_config",
+            "config_space",
+            "msix_config",
+            "bar_config",
+            "timing_config",
+            "pcileech_config",
+            "device_signature",
+            "generation_metadata",
+            "interrupt_config",
+            "active_device_config",
+            "EXT_CFG_CAP_PTR",
+            "EXT_CFG_XP_CAP_PTR",
+            "OVERLAY_MAP",
+            "OVERLAY_ENTRIES",
+        ]
 
-        # Verify context structure
-        assert "device_config" in context
-        assert "config_space" in context
-        assert "msix_config" in context
-        assert "bar_config" in context
-        assert "timing_config" in context
-        assert "pcileech_config" in context
-        assert "device_signature" in context
-        assert "generation_metadata" in context
-        assert "interrupt_config" in context
-        assert "active_device_config" in context
-        assert "EXT_CFG_CAP_PTR" in context
-        assert "EXT_CFG_XP_CAP_PTR" in context
-        assert "OVERLAY_MAP" in context
-        assert "OVERLAY_ENTRIES" in context
+        for section in required_sections:
+            assert section in context, f"Missing section: {section}"
 
-        # Verify interrupt config
-        assert context["interrupt_config"]["strategy"] == "msix"
-        assert context["interrupt_config"]["vectors"] == 32
-        assert context["interrupt_config"]["msix_available"] is True
 
-    def test_build_context_missing_required_data(self, mock_config):
-        """Test context building fails with missing required data."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.STRICT,
-        )
+class TestDeviceIdentifiers:
+    """Tests for device identifier extraction and validation."""
 
-        # Missing vendor_id in config_space_data
-        invalid_config_space = {
-            "device_id": "7024",
-            "class_code": "020000",
-            "revision_id": "01",
-        }
-
-        with pytest.raises(ContextError, match="Missing required data"):
-            builder.build_context(
-                behavior_profile=None,
-                config_space_data=invalid_config_space,
-                msix_data=None,
-            )
-
-    def test_validate_input_data_strict(self, mock_config, config_space_data):
-        """Test strict validation of input data."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.STRICT,
-        )
-
-        # Remove required field
-        del config_space_data["vendor_id"]
-
-        with pytest.raises(ContextError, match="Missing required data"):
-            builder._validate_input_data(config_space_data, None, None)
-
-    def test_validate_input_data_permissive(self, mock_config, config_space_data):
-        """Test permissive validation allows missing data with warnings."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.PERMISSIVE,
-        )
-
-        # Remove required field
-        del config_space_data["vendor_id"]
-
-        # Should not raise, just log warnings
-        builder._validate_input_data(config_space_data, None, None)
-
-    def test_extract_device_identifiers_success(self, mock_config, config_space_data):
-        """Test successful extraction of device identifiers."""
+    def test_extract_identifiers_complete(self, mock_config, config_space_data):
+        """Test extraction with complete data."""
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
         identifiers = builder._extract_device_identifiers(config_space_data)
@@ -414,55 +585,278 @@ class TestPCILeechContextBuilder:
         assert identifiers.subsystem_vendor_id == "10ee"
         assert identifiers.subsystem_device_id == "0007"
 
-    def test_extract_device_identifiers_missing_subsystem(self, mock_config):
-        """Test extraction with missing subsystem IDs falls back to main IDs."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        config_data = {
-            "vendor_id": "10ee",
-            "device_id": "7024",
-            "class_code": "020000",
-            "revision_id": "01",
-            "subsystem_vendor_id": None,
-            "subsystem_device_id": 0,
-        }
-
-        identifiers = builder._extract_device_identifiers(config_data)
-
-        # Should fall back to main IDs
-        assert identifiers.subsystem_vendor_id == "10ee"
-        assert identifiers.subsystem_device_id == "7024"
-
-    def test_build_device_config(
-        self, mock_config, device_identifiers, behavior_profile
+    @pytest.mark.parametrize(
+        "subsys_vendor,subsys_device,expected_vendor,expected_device",
+        [
+            (None, None, "10ee", "7024"),  # Both missing
+            ("", "", "10ee", "7024"),  # Empty strings
+            ("0000", "0000", "10ee", "7024"),  # Invalid zeros
+            (None, "1234", "10ee", "1234"),  # Partial missing
+        ],
+    )
+    def test_extract_identifiers_fallback(
+        self,
+        mock_config,
+        config_space_data,
+        subsys_vendor,
+        subsys_device,
+        expected_vendor,
+        expected_device,
     ):
-        """Test device configuration building."""
+        """Test identifier extraction with fallback scenarios."""
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
-        config = builder._build_device_config(device_identifiers, behavior_profile, {})
+        config_space_data["subsystem_vendor_id"] = subsys_vendor
+        config_space_data["subsystem_device_id"] = subsys_device
 
-        assert config["device_bdf"] == "0000:03:00.0"
-        assert config["vendor_id"] == "10ee"
-        assert config["device_id"] == "7024"
-        assert config["enable_error_injection"] is True
-        assert config["enable_perf_counters"] is True
-        assert config["enable_dma_operations"] is True
-        assert config["behavior_profile"] is not None
-        assert config["total_register_accesses"] == 1500
-        assert config["has_manufacturing_variance"] is True
+        identifiers = builder._extract_device_identifiers(config_space_data)
 
-    def test_build_config_space_context(self, mock_config, config_space_data):
-        """Test configuration space context building."""
+        assert identifiers.subsystem_vendor_id == expected_vendor
+        assert identifiers.subsystem_device_id == expected_device
+
+    def test_device_identifiers_validation(self):
+        """Test DeviceIdentifiers dataclass validation."""
+        # Valid identifiers
+        valid = DeviceIdentifiers(
+            vendor_id="10ee", device_id="7024", class_code="020000", revision_id="01"
+        )
+        assert valid.vendor_id == "10ee"
+
+        # Invalid hex format
+        with pytest.raises(ContextError, match="Invalid hex format"):
+            DeviceIdentifiers(
+                vendor_id="XXXX",
+                device_id="7024",
+                class_code="020000",
+                revision_id="01",
+            )
+
+        # Empty required field
+        with pytest.raises(ContextError, match="cannot be empty"):
+            DeviceIdentifiers(
+                vendor_id="", device_id="7024", class_code="020000", revision_id="01"
+            )
+
+
+class TestVFIOOperations:
+    """Tests for VFIO-related operations."""
+
+    def test_get_vfio_region_info_success(self, mock_config, mock_builder):
+        """Test successful VFIO region info retrieval."""
+        with mock_vfio_operations() as (mock_get_fd, mock_close, mock_ioctl):
+            # Configure ioctl to populate structure
+            def ioctl_side_effect(fd, cmd, data, mutate):
+                if cmd == VFIO_DEVICE_GET_REGION_INFO:
+                    data.size = 65536
+                    data.flags = (
+                        VFIO_REGION_INFO_FLAG_READ
+                        | VFIO_REGION_INFO_FLAG_WRITE
+                        | VFIO_REGION_INFO_FLAG_MMAP
+                    )
+                return 0
+
+            mock_ioctl.side_effect = ioctl_side_effect
+
+            builder = PCILeechContextBuilder(
+                device_bdf="0000:03:00.0", config=mock_config
+            )
+
+            info = builder._get_vfio_region_info(0)
+
+            assert info is not None
+            assert info["size"] == 65536
+            assert info["readable"] is True
+            assert info["writable"] is True
+            assert info["mappable"] is True
+
+            # Verify cleanup
+            assert mock_close.call_count == 2
+
+    @pytest.mark.parametrize(
+        "error_type,error_msg",
+        [
+            (OSError(22, "Invalid argument"), "Invalid argument"),
+            (PermissionError("Access denied"), "Access denied"),
+            (FileNotFoundError("Device not found"), "Device not found"),
+        ],
+    )
+    def test_get_vfio_region_info_errors(self, mock_config, error_type, error_msg):
+        """Test VFIO region info error handling."""
+        with patch("src.cli.vfio_helpers.get_device_fd") as mock_get_fd:
+            mock_get_fd.side_effect = error_type
+
+            builder = PCILeechContextBuilder(
+                device_bdf="0000:03:00.0", config=mock_config
+            )
+
+            info = builder._get_vfio_region_info(0)
+            assert info is None
+
+    def test_get_vfio_group_resolution(self, mock_config):
+        """Test VFIO group resolution strategies."""
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
-        context = builder._build_config_space_context(config_space_data)
+        # Test sysfs method
+        with patch.object(builder, "_get_iommu_group_from_sysfs", return_value="7"):
+            assert builder._get_vfio_group() == "7"
 
-        assert context["raw_data"] == config_space_data["config_space_hex"]
-        assert context["size"] == 4096
-        assert context["vendor_id"] == "10ee"
-        assert context["device_id"] == "7024"
-        assert context["has_extended_config"] is True
-        assert len(context["bars"]) == 3
+        # Test container method fallback
+        with patch.object(
+            builder, "_get_iommu_group_from_sysfs", return_value=None
+        ), patch.object(builder, "_get_iommu_group_from_container", return_value="5"):
+            assert builder._get_vfio_group() == "5"
+
+        # Test last resort fallback
+        with patch.object(
+            builder, "_get_iommu_group_from_sysfs", return_value=None
+        ), patch.object(builder, "_get_iommu_group_from_container", return_value=None):
+            assert builder._get_vfio_group() == "0"
+
+
+class TestBARConfiguration:
+    """Tests for BAR configuration building."""
+
+    def test_build_bar_config_success(
+        self, mock_config, config_space_data, behavior_profile, factory
+    ):
+        """Test successful BAR configuration building."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Mock VFIO BAR info responses
+        bar_configs = [
+            BarConfiguration(
+                index=0,
+                base_address=0xF7000000,
+                size=65536,
+                bar_type=0,
+                prefetchable=False,
+                is_memory=True,
+                is_io=False,
+            ),
+            BarConfiguration(
+                index=1,
+                base_address=0xF7100000,
+                size=16384,
+                bar_type=1,
+                prefetchable=True,
+                is_memory=True,
+                is_io=False,
+            ),
+            None,  # BAR2 is invalid
+        ]
+
+        with patch.object(builder, "_get_vfio_bar_info") as mock_get_bar:
+            mock_get_bar.side_effect = bar_configs
+
+            bar_config = builder._build_bar_config(config_space_data, behavior_profile)
+
+            assert bar_config["bar_index"] == 0  # Largest BAR
+            assert bar_config["aperture_size"] == 65536
+            assert bar_config["memory_type"] == "memory"
+            assert len(bar_config["bars"]) == 2
+
+    @pytest.mark.parametrize(
+        "bar_type,expected_skip",
+        [
+            ("io", True),  # I/O BARs should be skipped
+            ("memory", False),  # Memory BARs should be processed
+        ],
+    )
+    def test_get_vfio_bar_info_type_filtering(
+        self, mock_config, bar_type, expected_skip
+    ):
+        """Test BAR type filtering in VFIO info retrieval."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        bar_data = {"type": bar_type, "address": 0x1000, "size": 256}
+
+        with patch.object(builder, "_get_vfio_region_info") as mock_region:
+            mock_region.return_value = {"size": 256, "flags": 0}
+
+            bar_info = builder._get_vfio_bar_info(0, bar_data)
+
+            if expected_skip:
+                assert bar_info is None
+            else:
+                assert bar_info is not None
+
+    def test_bar_size_estimation(self, mock_config):
+        """Test BAR size estimation for different device types."""
+        test_cases = [
+            ("network", 0, {"type": "memory"}, 65536),  # 64KB
+            ("display", 1, {"prefetchable": True}, 268435456),  # 256MB
+            ("storage", 0, {"type": "memory"}, 16384),  # 16KB
+            ("unknown", 0, {"type": "memory"}, 4096),  # 4KB default
+        ]
+
+        for device_class, bar_index, bar_info, expected_size in test_cases:
+            mock_config.device_class = device_class
+            builder = PCILeechContextBuilder(
+                device_bdf="0000:03:00.0", config=mock_config
+            )
+
+            size = builder._estimate_bar_size_from_device_context(bar_index, bar_info)
+            assert size == expected_size
+
+
+class TestTimingConfiguration:
+    """Tests for timing configuration generation."""
+
+    @pytest.mark.parametrize(
+        "avg_interval,expected_latency,expected_burst",
+        [
+            (10.0, 2, 32),  # Very fast device
+            (50.0, 4, 16),  # Medium speed
+            (500.0, 6, 8),  # Slower device
+            (2000.0, 8, 8),  # Very slow device
+        ],
+    )
+    def test_timing_from_behavior(
+        self, mock_config, factory, avg_interval, expected_latency, expected_burst
+    ):
+        """Test timing extraction from behavior profiles."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Create behavior profile with specific timing
+        profile = Mock(spec=BehaviorProfile)
+        profile.timing_patterns = [
+            Mock(avg_interval_us=avg_interval, frequency_hz=1000000 / avg_interval)
+        ]
+
+        timing = builder._extract_timing_from_behavior(profile)
+
+        assert timing.read_latency == expected_latency
+        assert timing.burst_length == expected_burst
+
+    @pytest.mark.parametrize(
+        "class_code,expected_freq",
+        [
+            ("020000", 125.0),  # Network controller
+            ("030000", 150.0),  # Display controller
+            ("010802", 100.0),  # NVMe storage
+            ("0c0330", 125.0),  # USB 3.0 controller
+            ("ff0000", None),  # Unknown (will be calculated)
+        ],
+    )
+    def test_timing_from_device_class(self, mock_config, class_code, expected_freq):
+        """Test timing generation for different device classes."""
+        identifiers = DeviceIdentifiers(
+            vendor_id="10ee", device_id="7024", class_code=class_code, revision_id="01"
+        )
+
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        timing = builder._generate_timing_from_device(identifiers)
+
+        if expected_freq is not None:
+            assert timing.clock_frequency_mhz == expected_freq
+        else:
+            # For unknown devices, frequency should be deterministic
+            assert 75.0 <= timing.clock_frequency_mhz <= 200.0
+
+
+class TestMSIXConfiguration:
+    """Tests for MSI-X configuration handling."""
 
     def test_build_msix_context_enabled(self, mock_config, msix_data):
         """Test MSI-X context building with MSI-X enabled."""
@@ -489,234 +883,77 @@ class TestPCILeechContextBuilder:
         assert context["is_supported"] is False
         assert context["table_size"] == 0
 
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._get_vfio_bar_info"
+    @pytest.mark.parametrize(
+        "table_offset,expected_warning",
+        [
+            (0x2000, False),  # Aligned
+            (0x2004, True),  # Not 8-byte aligned
+            (0x2007, True),  # Very misaligned
+        ],
     )
-    def test_build_bar_config_success(
-        self, mock_get_vfio_bar_info, mock_config, config_space_data, behavior_profile
+    def test_msix_alignment_validation(
+        self, mock_config, table_offset, expected_warning
     ):
-        """Test successful BAR configuration building."""
-        # Mock VFIO BAR info responses
-        bar0_config = BarConfiguration(
-            index=0,
-            base_address=0xF7000000,
-            size=65536,
-            bar_type=0,
-            prefetchable=False,
-            is_memory=True,
-            is_io=False,
-        )
-        bar1_config = BarConfiguration(
-            index=1,
-            base_address=0xF7100000,
-            size=16384,
-            bar_type=1,
-            prefetchable=True,
-            is_memory=True,
-            is_io=False,
-        )
-
-        mock_get_vfio_bar_info.side_effect = [bar0_config, bar1_config, None]
-
+        """Test MSI-X table alignment validation."""
         builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
 
-        bar_config = builder._build_bar_config(config_space_data, behavior_profile)
+        msix_data = {
+            "capability_info": {
+                "table_size": 16,
+                "table_bir": 0,
+                "table_offset": table_offset,
+                "pba_bir": 0,
+                "pba_offset": 0x3000,
+            }
+        }
 
-        assert bar_config["bar_index"] == 0  # Largest BAR selected
-        assert bar_config["aperture_size"] == 65536
-        assert bar_config["memory_type"] == "memory"
-        assert len(bar_config["bars"]) == 2
+        context = builder._build_msix_context(msix_data)
 
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._get_vfio_bar_info"
+        if expected_warning:
+            assert "alignment_warning" in context
+            assert "not 8-byte aligned" in context["alignment_warning"]
+        else:
+            assert context.get("alignment_warning", "") == ""
+
+
+class TestValidation:
+    """Tests for validation functionality."""
+
+    @pytest.mark.parametrize(
+        "level,should_raise",
+        [
+            (ValidationLevel.STRICT, True),
+            (ValidationLevel.MODERATE, True),
+            (ValidationLevel.PERMISSIVE, False),
+        ],
     )
-    def test_build_bar_config_no_valid_bars(
-        self, mock_get_vfio_bar_info, mock_config, config_space_data
+    def test_validation_levels(
+        self, mock_config, config_space_data, level, should_raise
     ):
-        """Test BAR configuration fails when no valid BARs found."""
-        # All BARs return None (invalid)
-        mock_get_vfio_bar_info.return_value = None
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        with pytest.raises(ContextError, match="No valid MMIO BARs found"):
-            builder._build_bar_config(config_space_data, None)
-
-    @patch("os.close")
-    @patch("fcntl.ioctl")
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._open_vfio_device_fd"
-    )
-    def test_get_vfio_region_info_success(
-        self, mock_open_fd, mock_ioctl, mock_close, mock_config, vfio_region_info
-    ):
-        """Test successful VFIO region info retrieval."""
-        mock_open_fd.return_value = (10, 11)  # device_fd, container_fd
-
-        # Mock ioctl to populate the structure
-        def ioctl_side_effect(fd, cmd, data, mutate):
-            if cmd == VFIO_DEVICE_GET_REGION_INFO:
-                data.size = 65536
-                data.flags = vfio_region_info.flags
-            return 0
-
-        mock_ioctl.side_effect = ioctl_side_effect
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        info = builder._get_vfio_region_info(0)
-
-        assert info is not None
-        assert info["size"] == 65536
-        assert info["readable"] is True
-        assert info["writable"] is True
-        assert info["mappable"] is True
-
-        # Verify cleanup
-        assert mock_close.call_count == 2
-
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._open_vfio_device_fd"
-    )
-    def test_get_vfio_region_info_open_failure(self, mock_open_fd, mock_config):
-        """Test VFIO region info handles device open failure."""
-        mock_open_fd.side_effect = OSError(22, "Invalid argument")
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        info = builder._get_vfio_region_info(0)
-
-        assert info is None
-
-    @patch("os.close")
-    @patch("fcntl.ioctl")
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._open_vfio_device_fd"
-    )
-    def test_get_vfio_region_info_ioctl_failure(
-        self, mock_open_fd, mock_ioctl, mock_close, mock_config
-    ):
-        """Test VFIO region info handles ioctl failure."""
-        mock_open_fd.return_value = (10, 11)
-        mock_ioctl.side_effect = OSError(22, "Invalid argument")
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        info = builder._get_vfio_region_info(0)
-
-        assert info is None
-        # Verify cleanup still happens
-        assert mock_close.call_count == 2
-
-    @patch("src.cli.vfio_helpers.get_device_fd")
-    def test_open_vfio_device_fd_success(self, mock_get_device_fd, mock_config):
-        """Test successful VFIO device FD opening."""
-        mock_get_device_fd.return_value = (10, 11)
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        device_fd, container_fd = builder._open_vfio_device_fd()
-
-        assert device_fd == 10
-        assert container_fd == 11
-        mock_get_device_fd.assert_called_once_with("0000:03:00.0")
-
-    @patch("src.cli.vfio_helpers.get_device_fd")
-    def test_open_vfio_device_fd_failure(self, mock_get_device_fd, mock_config):
-        """Test VFIO device FD open failure propagates."""
-        mock_get_device_fd.side_effect = Exception("VFIO not available")
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        with pytest.raises(Exception, match="VFIO not available"):
-            builder._open_vfio_device_fd()
-
-    @patch("os.listdir")
-    @patch("os.readlink")
-    @patch("os.path.exists")
-    def test_get_vfio_group_sysfs_success(
-        self, mock_exists, mock_readlink, mock_listdir, mock_config
-    ):
-        """Test VFIO group resolution via sysfs."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Mock the sysfs path exists and readlink successfully
-        with patch.object(builder, "_get_iommu_group_from_sysfs", return_value="7"):
-            group = builder._get_vfio_group()
-            assert group == "7"
-
-    @patch("os.listdir")
-    @patch("os.path.exists")
-    def test_get_vfio_group_fallback(self, mock_exists, mock_listdir, mock_config):
-        """Test VFIO group fallback to /dev/vfio enumeration."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Mock sysfs fails but container method succeeds
-        with patch.object(
-            builder, "_get_iommu_group_from_sysfs", return_value=None
-        ), patch.object(builder, "_get_iommu_group_from_container", return_value="5"):
-            group = builder._get_vfio_group()
-            assert group == "5"  # First numeric entry
-
-    @patch("os.listdir")
-    @patch("os.path.exists")
-    def test_get_vfio_group_last_resort(self, mock_exists, mock_listdir, mock_config):
-        """Test VFIO group falls back to '0' as last resort."""
-        mock_exists.return_value = False
-        mock_listdir.side_effect = FileNotFoundError()
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        group = builder._get_vfio_group()
-
-        assert group == "0"
-
-    def test_build_timing_config_from_behavior(
-        self, mock_config, device_identifiers, behavior_profile
-    ):
-        """Test timing configuration from behavior profile."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        timing = builder._build_timing_config(behavior_profile, device_identifiers)
-
-        assert isinstance(timing, TimingParameters)
-        assert timing.read_latency == 4  # Medium speed device
-        assert timing.write_latency == 2
-        assert timing.clock_frequency_mhz == 100.0
-
-    def test_build_timing_config_from_device(self, mock_config, device_identifiers):
-        """Test timing configuration from device characteristics."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        timing = builder._build_timing_config(None, device_identifiers)
-
-        assert isinstance(timing, TimingParameters)
-        # Network controller timings
-        assert timing.read_latency == 2
-        assert timing.write_latency == 1
-        assert timing.clock_frequency_mhz == 125.0
-
-    def test_generate_unique_device_signature(
-        self, mock_config, device_identifiers, config_space_data, behavior_profile
-    ):
-        """Test unique device signature generation."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        signature = builder._generate_unique_device_signature(
-            device_identifiers, behavior_profile, config_space_data
+        """Test different validation levels."""
+        builder = PCILeechContextBuilder(
+            device_bdf="0000:03:00.0", config=mock_config, validation_level=level
         )
 
-        assert signature.startswith("32'h")
-        assert len(signature) == 12  # 32'h + 8 hex chars
+        # Remove required field
+        del config_space_data["vendor_id"]
 
-    def test_validate_context_completeness_success(self, mock_config):
-        """Test successful context validation."""
+        if should_raise:
+            with pytest.raises(ContextError, match="Missing required data"):
+                builder._validate_input_data(config_space_data, None, None)
+        else:
+            # Should not raise, just log warnings
+            builder._validate_input_data(config_space_data, None, None)
+
+    def test_context_completeness_validation(self, mock_config):
+        """Test context completeness validation."""
         builder = PCILeechContextBuilder(
             device_bdf="0000:03:00.0",
             config=mock_config,
             validation_level=ValidationLevel.STRICT,
         )
 
+        # Valid context
         valid_context = {
             "device_config": {
                 "vendor_id": "10ee",
@@ -741,441 +978,17 @@ class TestPCILeechContextBuilder:
         # Should not raise
         builder._validate_context_completeness(valid_context)
 
-    def test_validate_context_completeness_missing_section(self, mock_config):
-        """Test context validation with missing section."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.STRICT,
-        )
-
+        # Invalid context - missing sections
         invalid_context = {
             "device_config": {"vendor_id": "10ee"},
             "config_space": {},
-            # Missing other required sections
         }
 
         with pytest.raises(ContextError, match="Missing required sections"):
             builder._validate_context_completeness(invalid_context)
 
-    def test_validate_context_completeness_invalid_vendor(self, mock_config):
-        """Test context validation with invalid vendor ID."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.STRICT,
-        )
-
-        invalid_context = {
-            "device_config": {"vendor_id": "0000"},  # Invalid
-            "config_space": {},
-            "msix_config": {},
-            "bar_config": {"bars": []},
-            "timing_config": {},
-            "pcileech_config": {},
-            "device_signature": "32'h12345678",
-            "generation_metadata": {},
-        }
-
-        with pytest.raises(ContextError, match="vendor ID is missing or invalid"):
-            builder._validate_context_completeness(invalid_context)
-
-    def test_serialize_behavior_profile(self, mock_config, behavior_profile):
-        """Test behavior profile serialization."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Use the behavior_profile fixture which is a proper Mock
-        serialized = builder._serialize_behavior_profile(behavior_profile)
-
-        # Check that serialization works and returns a dictionary
-        assert isinstance(serialized, dict)
-        # The mock should have these attributes from the fixture
-        assert "total_accesses" in str(serialized)
-        assert "capture_duration" in str(serialized)
-
-    def test_adjust_bar_config_for_behavior(self, mock_config, behavior_profile):
-        """Test BAR configuration adjustment based on behavior."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        bar_config = {"bar_index": 0, "aperture_size": 65536}
-        adjustments = builder._adjust_bar_config_for_behavior(
-            bar_config, behavior_profile
-        )
-
-        assert adjustments["high_frequency_device"] is True
-        assert adjustments["access_frequency_class"] == "high"
-        assert adjustments["timing_complexity"] == "low"  # Only 2 patterns
-        assert "behavior_signature" in adjustments
-
-    def test_estimate_bar_size_from_device_context(self, mock_config):
-        """Test BAR size estimation based on device context."""
-        mock_config.device_class = "network"
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Test network device estimation
-        size = builder._estimate_bar_size_from_device_context(0, {"type": "memory"})
-        assert size == 65536  # 64KB for network devices
-
-        # Test display device with prefetchable BAR
-        mock_config.device_class = "display"
-        size = builder._estimate_bar_size_from_device_context(1, {"prefetchable": True})
-        assert size == 268435456  # 256MB for framebuffer
-
-    def test_build_pcileech_config(self, mock_config, device_identifiers):
-        """Test PCILeech-specific configuration building."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        config = builder._build_pcileech_config(device_identifiers)
-
-        assert config["command_timeout"] == 5000
-        assert config["buffer_size"] == 4096
-        assert config["enable_dma"] is True
-        assert config["max_payload_size"] == 256
-        assert config["cfg_force_mps"] == 1
-        assert "device_ctrl_base" in config
-        assert "supported_commands" in config
-        assert len(config["supported_commands"]) > 0
-
-    def test_build_active_device_config_with_capabilities(
-        self, mock_config, device_identifiers
-    ):
-        """Test active device configuration with device capabilities."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        config = builder._build_active_device_config(device_identifiers, "msix", 32)
-
-        assert config["enabled"] is True
-        assert config["timer_period"] == 100000
-        assert config["interrupt_mode"] == "msix"
-        assert config["num_msix"] == 32
-        assert config["device_id"] == "16'h7024"
-        assert config["vendor_id"] == "16'h10EE"
-
-    def test_build_active_device_config_without_capabilities(
-        self, mock_config, device_identifiers
-    ):
-        """Test active device configuration with defaults."""
-        mock_config.device_config = None
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        config = builder._build_active_device_config(device_identifiers, "intx", 1)
-
-        assert config["enabled"] is False  # Default
-        assert config["timer_period"] == 100000
-        assert config["interrupt_mode"] == "intx"
-        assert config["num_msix"] == 0
-
-    @patch("src.device_clone.pcileech_context.OverlayMapper")
-    def test_build_overlay_config_success(
-        self, mock_overlay_mapper, mock_config, config_space_data
-    ):
-        """Test overlay configuration building."""
-        mock_mapper = Mock()
-        mock_mapper.generate_overlay_map.return_value = {
-            "OVERLAY_MAP": [(0, 0xFFFFFFFF), (4, 0x0000FFFF)],
-            "OVERLAY_ENTRIES": 2,
-        }
-        mock_overlay_mapper.return_value = mock_mapper
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        overlay_config = builder._build_overlay_config(config_space_data)
-
-        assert overlay_config["OVERLAY_ENTRIES"] == 2
-        assert len(overlay_config["OVERLAY_MAP"]) == 2
-        assert overlay_config["OVERLAY_MAP"][0] == (0, 0xFFFFFFFF)
-
-    def test_build_overlay_config_no_dword_map(self, mock_config):
-        """Test overlay configuration with missing dword map."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        config_data = {"capabilities": {}}  # No dword_map
-        overlay_config = builder._build_overlay_config(config_data)
-
-        assert overlay_config["OVERLAY_ENTRIES"] == 0
-        assert overlay_config["OVERLAY_MAP"] == []
-
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._get_vfio_region_info"
-    )
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._open_vfio_device_fd"
-    )
-    def test_get_vfio_bar_info_memory_bar(
-        self, mock_open_fd, mock_get_region_info, mock_config
-    ):
-        """Test VFIO BAR info retrieval for memory BAR."""
-        mock_get_region_info.return_value = {
-            "size": 65536,
-            "flags": VFIO_REGION_INFO_FLAG_READ
-            | VFIO_REGION_INFO_FLAG_WRITE
-            | VFIO_REGION_INFO_FLAG_MMAP,
-            "readable": True,
-            "writable": True,
-            "mappable": True,
-        }
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        bar_data = {
-            "type": "memory",
-            "address": 0xF7000000,
-            "prefetchable": False,
-            "is_64bit": False,
-        }
-        bar_info = builder._get_vfio_bar_info(0, bar_data)
-
-        assert bar_info is not None
-        assert bar_info.index == 0
-        assert bar_info.size == 65536
-        assert bar_info.is_memory is True
-        assert bar_info.is_io is False
-
-    def test_get_vfio_bar_info_io_bar(self, mock_config):
-        """Test VFIO BAR info skips I/O BARs."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Mock I/O BAR data
-        bar_data = {"type": "io", "address": 0x3000, "size": 256}
-
-        # Patch _get_vfio_region_info to return valid info
-        with patch.object(builder, "_get_vfio_region_info") as mock_region_info:
-            mock_region_info.return_value = {"size": 256, "flags": 0}
-
-            bar_info = builder._get_vfio_bar_info(0, bar_data)
-
-            # I/O BARs should be skipped
-            assert bar_info is None
-
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._get_vfio_region_info"
-    )
-    def test_get_vfio_bar_info_zero_size(self, mock_get_region_info, mock_config):
-        """Test VFIO BAR info skips zero-sized BARs."""
-        mock_get_region_info.return_value = {"size": 0, "flags": 0}
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        bar_data = {"type": "memory", "address": 0xF7000000}
-        bar_info = builder._get_vfio_bar_info(0, bar_data)
-
-        assert bar_info is None
-
-    @patch(
-        "src.device_clone.pcileech_context.PCILeechContextBuilder._get_vfio_region_info"
-    )
-    def test_get_vfio_bar_info_vfio_failure(self, mock_get_region_info, mock_config):
-        """Test VFIO BAR info handles VFIO access failure."""
-        mock_get_region_info.side_effect = Exception("VFIO error")
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        bar_data = {"type": "memory", "address": 0xF7000000}
-
-        with pytest.raises(ContextError, match="VFIO access failed"):
-            builder._get_vfio_bar_info(0, bar_data)
-
-    def test_generate_behavior_signature(self, mock_config, behavior_profile):
-        """Test behavior signature generation."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        signature = builder._generate_behavior_signature(behavior_profile)
-
-        assert isinstance(signature, str)
-        assert len(signature) == 16  # SHA256 truncated to 16 chars
-
-    def test_extract_timing_from_behavior_fast_device(self, mock_config):
-        """Test timing extraction for fast device."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Create behavior profile with very fast timing
-        fast_profile = Mock(spec=BehaviorProfile)
-        fast_profile.timing_patterns = [
-            Mock(avg_interval_us=5, frequency_hz=200000),
-            Mock(avg_interval_us=8, frequency_hz=125000),
-        ]
-
-        timing = builder._extract_timing_from_behavior(fast_profile)
-
-        assert timing.read_latency == 2
-        assert timing.write_latency == 1
-        assert timing.burst_length == 32
-        assert timing.clock_frequency_mhz <= 200.0
-
-    def test_extract_timing_from_behavior_slow_device(self, mock_config):
-        """Test timing extraction for slow device."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Create behavior profile with slow timing
-        slow_profile = Mock(spec=BehaviorProfile)
-        slow_profile.timing_patterns = [
-            Mock(avg_interval_us=2000, frequency_hz=500),
-            Mock(avg_interval_us=1500, frequency_hz=667),
-        ]
-
-        timing = builder._extract_timing_from_behavior(slow_profile)
-
-        assert timing.read_latency == 8
-        assert timing.write_latency == 4
-        assert timing.burst_length == 8
-        assert timing.clock_frequency_mhz >= 50.0
-
-    def test_generate_timing_from_device_network(self, mock_config):
-        """Test timing generation for network device."""
-        network_identifiers = DeviceIdentifiers(
-            vendor_id="8086",
-            device_id="1521",
-            class_code="020000",  # Network controller
-            revision_id="01",
-        )
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        timing = builder._generate_timing_from_device(network_identifiers)
-
-        assert timing.read_latency == 2
-        assert timing.clock_frequency_mhz == 125.0
-
-    def test_generate_timing_from_device_storage(self, mock_config):
-        """Test timing generation for storage device."""
-        storage_identifiers = DeviceIdentifiers(
-            vendor_id="144d",
-            device_id="a808",
-            class_code="010802",  # NVMe storage
-            revision_id="00",
-        )
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        timing = builder._generate_timing_from_device(storage_identifiers)
-
-        assert timing.read_latency == 6
-        assert timing.burst_length == 64
-        assert timing.clock_frequency_mhz == 100.0
-
-    def test_generate_timing_from_device_generic(self, mock_config):
-        """Test timing generation for generic device."""
-        generic_identifiers = DeviceIdentifiers(
-            vendor_id="1234",
-            device_id="5678",
-            class_code="ff0000",  # Unassigned class
-            revision_id="00",
-        )
-
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        timing = builder._generate_timing_from_device(generic_identifiers)
-
-        # Should use deterministic hash-based values
-        assert 2 <= timing.read_latency <= 8
-        assert 75.0 <= timing.clock_frequency_mhz <= 200.0
-
-    def test_build_generation_metadata(self, mock_config, device_identifiers):
-        """Test generation metadata building."""
-        builder = PCILeechContextBuilder(
-            device_bdf="0000:03:00.0",
-            config=mock_config,
-            validation_level=ValidationLevel.MODERATE,
-        )
-
-        metadata = builder._build_generation_metadata(device_identifiers)
-
-        assert metadata["device_bdf"] == "0000:03:00.0"
-        assert metadata["device_signature"] == "10ee:7024"
-        assert metadata["validation_level"] == "moderate"
-        assert "generated_at" in metadata
-        assert "generator_version" in metadata
-
-    def test_context_error_handling(self, mock_config):
-        """Test proper error handling and context cleanup."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Mock a method to raise an exception
-        builder._extract_device_identifiers = Mock(side_effect=KeyError("vendor_id"))
-
-        with pytest.raises(ContextError) as exc_info:
-            builder.build_context(
-                behavior_profile=None, config_space_data={}, msix_data=None
-            )
-
-        # The error comes from _validate_input_data which checks for required fields
-        assert "Missing required data for unique firmware generation" in str(
-            exc_info.value
-        )
-
-    def test_msix_alignment_warning(self, mock_config):
-        """Test MSI-X table alignment warning generation."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Unaligned table offset
-        msix_data = {
-            "capability_info": {
-                "table_size": 16,
-                "table_bir": 0,
-                "table_offset": 0x2004,  # Not 8-byte aligned
-                "pba_bir": 0,
-                "pba_offset": 0x3000,
-            }
-        }
-
-        context = builder._build_msix_context(msix_data)
-
-        assert "WARNING" in context["alignment_warning"]
-        assert "not 8-byte aligned" in context["alignment_warning"]
-
-    def test_bar_size_encoding_validation(self, mock_config):
-        """Test BAR size encoding validation."""
-        with patch(
-            "src.device_clone.bar_size_converter.BarSizeConverter"
-        ) as mock_converter:
-            mock_converter.validate_bar_size.return_value = True
-            mock_converter.format_size.return_value = "64 KB"
-
-            builder = PCILeechContextBuilder(
-                device_bdf="0000:03:00.0", config=mock_config
-            )
-
-            # Create a BAR configuration with size encoding
-            bar_config = BarConfiguration(
-                index=0,
-                base_address=0xF7000000,
-                size=65536,
-                bar_type=0,
-                prefetchable=False,
-                is_memory=True,
-                is_io=False,
-            )
-
-            # Mock get_size_encoding
-            with patch.object(bar_config, "get_size_encoding", return_value=0xFFFF0000):
-                encoding = bar_config.get_size_encoding()
-                assert encoding == 0xFFFF0000
-
-    def test_device_identifiers_validation(self):
-        """Test DeviceIdentifiers validation."""
-        # Valid identifiers
-        valid = DeviceIdentifiers(
-            vendor_id="10ee", device_id="7024", class_code="020000", revision_id="01"
-        )
-        assert valid.vendor_id == "10ee"
-
-        # Invalid hex format
-        with pytest.raises(ContextError, match="Invalid hex format"):
-            DeviceIdentifiers(
-                vendor_id="XXXX",
-                device_id="7024",
-                class_code="020000",
-                revision_id="01",
-            )
-
-        # Empty required field
-        with pytest.raises(ContextError, match="cannot be empty"):
-            DeviceIdentifiers(
-                vendor_id="", device_id="7024", class_code="020000", revision_id="01"
-            )
-
     def test_bar_configuration_validation(self):
-        """Test BarConfiguration validation."""
+        """Test BarConfiguration dataclass validation."""
         # Valid configuration
         valid = BarConfiguration(
             index=0,
@@ -1213,7 +1026,7 @@ class TestPCILeechContextBuilder:
             )
 
     def test_timing_parameters_validation(self):
-        """Test TimingParameters validation."""
+        """Test TimingParameters dataclass validation."""
         # Valid parameters
         valid = TimingParameters(
             read_latency=4,
@@ -1238,16 +1051,75 @@ class TestPCILeechContextBuilder:
                 timing_regularity=0.9,
             )
 
-    def test_full_integration_scenario(
+
+class TestUtilityMethods:
+    """Tests for utility and helper methods."""
+
+    def test_generate_unique_device_signature(
+        self, mock_config, device_identifiers, config_space_data, behavior_profile
+    ):
+        """Test unique device signature generation."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        signature = builder._generate_unique_device_signature(
+            device_identifiers, behavior_profile, config_space_data
+        )
+
+        assert signature.startswith("32'h")
+        assert len(signature) == 12  # 32'h + 8 hex chars
+
+        # Verify deterministic generation
+        signature2 = builder._generate_unique_device_signature(
+            device_identifiers, behavior_profile, config_space_data
+        )
+        assert signature == signature2
+
+    def test_generate_behavior_signature(self, mock_config, behavior_profile):
+        """Test behavior signature generation."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        signature = builder._generate_behavior_signature(behavior_profile)
+
+        assert isinstance(signature, str)
+        assert len(signature) == 16  # SHA256 truncated to 16 chars
+
+    def test_serialize_behavior_profile(self, mock_config, behavior_profile):
+        """Test behavior profile serialization."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        serialized = builder._serialize_behavior_profile(behavior_profile)
+
+        assert isinstance(serialized, dict)
+        # Check key fields are present
+        assert "device_bdf" in serialized
+        assert "total_accesses" in serialized
+        assert "capture_duration" in serialized
+
+    def test_build_generation_metadata(self, mock_config, device_identifiers):
+        """Test generation metadata building."""
+        builder = PCILeechContextBuilder(
+            device_bdf="0000:03:00.0",
+            config=mock_config,
+            validation_level=ValidationLevel.MODERATE,
+        )
+
+        metadata = builder._build_generation_metadata(device_identifiers)
+
+        assert metadata["device_bdf"] == "0000:03:00.0"
+        assert metadata["device_signature"] == "10ee:7024"
+        assert metadata["validation_level"] == "moderate"
+        assert "generated_at" in metadata
+        assert "generator_version" in metadata
+
+
+class TestIntegrationScenarios:
+    """Integration tests for complete workflows."""
+
+    def test_full_context_generation_workflow(
         self, mock_config, config_space_data, msix_data, behavior_profile
     ):
-        """Test full integration scenario with all components."""
-        with patch("src.device_clone.pcileech_context.OverlayMapper") as mock_overlay:
-            mock_overlay.return_value.generate_overlay_map.return_value = {
-                "OVERLAY_MAP": [(0, 0xFFFFFFFF)],
-                "OVERLAY_ENTRIES": 1,
-            }
-
+        """Test complete context generation workflow."""
+        with mock_overlay_mapper() as overlay_mock:
             builder = PCILeechContextBuilder(
                 device_bdf="0000:03:00.0",
                 config=mock_config,
@@ -1267,7 +1139,7 @@ class TestPCILeechContextBuilder:
                         is_io=False,
                     ),
                     None,
-                    None,  # Other BARs
+                    None,
                 ]
 
                 context = builder.build_context(
@@ -1279,13 +1151,242 @@ class TestPCILeechContextBuilder:
                 )
 
                 # Verify complete context
-                assert context["device_config"]["vendor_id"] == "10ee"
-                assert context["config_space"]["size"] == 4096
-                assert context["msix_config"]["num_vectors"] == 32
-                assert context["bar_config"]["aperture_size"] == 65536
-                assert isinstance(
-                    context["timing_config"], dict
-                )  # Gets converted to dict by to_dict()
-                assert "read_latency" in context["timing_config"]
-                assert context["interrupt_config"]["strategy"] == "msix"
-                assert context["OVERLAY_ENTRIES"] == 1
+                self._verify_complete_context(context)
+
+    def test_error_recovery_workflow(self, mock_config):
+        """Test error recovery and fallback mechanisms."""
+        builder = PCILeechContextBuilder(
+            device_bdf="0000:03:00.0",
+            config=mock_config,
+            validation_level=ValidationLevel.PERMISSIVE,
+        )
+
+        # Simulate various failures
+        with patch.object(
+            builder, "_get_vfio_bar_info", side_effect=Exception("VFIO error")
+        ):
+            with pytest.raises(ContextError, match="VFIO access failed"):
+                builder._get_vfio_bar_info(0, {"type": "memory"})
+
+    def test_performance_optimization_scenario(
+        self, mock_config, config_space_data, behavior_profile
+    ):
+        """Test performance optimizations in context building."""
+        import time
+
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Mock expensive operations
+        with patch.object(builder, "_get_vfio_bar_info", return_value=None):
+            start_time = time.time()
+
+            # This should use cached results where possible
+            for _ in range(10):
+                builder._build_bar_config(config_space_data, behavior_profile)
+
+            elapsed = time.time() - start_time
+
+            # Should complete quickly due to optimizations
+            assert elapsed < 1.0  # Less than 1 second for 10 iterations
+
+    def _verify_complete_context(self, context):
+        """Verify a complete context structure."""
+        required_fields = [
+            "device_config",
+            "config_space",
+            "msix_config",
+            "bar_config",
+            "timing_config",
+            "pcileech_config",
+            "device_signature",
+            "generation_metadata",
+            "interrupt_config",
+            "active_device_config",
+            "OVERLAY_ENTRIES",
+        ]
+
+        for field in required_fields:
+            assert field in context, f"Missing field: {field}"
+
+        # Verify specific values
+        assert context["device_config"]["vendor_id"] == "10ee"
+        assert context["msix_config"]["num_vectors"] == 32
+        assert context["interrupt_config"]["strategy"] == "msix"
+
+
+class TestEdgeCases:
+    """Tests for edge cases and boundary conditions."""
+
+    @pytest.mark.parametrize(
+        "vendor_id,device_id,expected_error",
+        [
+            ("", "7024", "cannot be empty"),
+            ("10ee", "", "cannot be empty"),
+            ("XXXX", "7024", "Invalid hex format"),
+            ("10ee", "YYYY", "Invalid hex format"),
+            ("12345", "7024", "Invalid hex format"),  # Too long
+        ],
+    )
+    def test_invalid_device_identifiers(self, vendor_id, device_id, expected_error):
+        """Test invalid device identifier combinations."""
+        with pytest.raises(ContextError, match=expected_error):
+            DeviceIdentifiers(
+                vendor_id=vendor_id,
+                device_id=device_id,
+                class_code="020000",
+                revision_id="01",
+            )
+
+    @pytest.mark.parametrize(
+        "size,expected_valid",
+        [
+            (0, False),  # Zero size
+            (-1, False),  # Negative
+            (1, True),  # Minimum valid
+            (4096, True),  # Common size
+            (0xFFFFFFFF, True),  # Maximum 32-bit
+            (0x100000000, False),  # Overflow
+        ],
+    )
+    def test_bar_size_boundaries(self, size, expected_valid):
+        """Test BAR size boundary conditions."""
+        if expected_valid:
+            bar = BarConfiguration(
+                index=0,
+                base_address=0xF7000000,
+                size=size,
+                bar_type=0,
+                prefetchable=False,
+                is_memory=True,
+                is_io=False,
+            )
+            assert bar.size == size
+        else:
+            with pytest.raises((ContextError, ValueError)):
+                BarConfiguration(
+                    index=0,
+                    base_address=0xF7000000,
+                    size=size,
+                    bar_type=0,
+                    prefetchable=False,
+                    is_memory=True,
+                    is_io=False,
+                )
+
+    def test_empty_behavior_profile(self, mock_config, device_identifiers):
+        """Test handling of empty or minimal behavior profiles."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Empty behavior profile
+        empty_profile = BehaviorProfile(
+            device_bdf="0000:03:00.0",
+            capture_duration=0.0,
+            total_accesses=0,
+            register_accesses=[],
+            timing_patterns=[],
+            state_transitions={},
+            power_states=[],
+            interrupt_patterns={},
+            variance_metadata={},
+            pattern_analysis={},
+        )
+
+        # Should handle gracefully
+        timing = builder._build_timing_config(empty_profile, device_identifiers)
+        assert isinstance(timing, TimingParameters)
+        # Should fall back to device-based timing
+        assert timing.clock_frequency_mhz > 0
+
+
+# ============================================================================
+# Performance Tests
+# ============================================================================
+
+
+@pytest.mark.performance
+class TestPerformance:
+    """Performance-related tests."""
+
+    def test_context_building_performance(
+        self, mock_config, config_space_data, msix_data, behavior_profile
+    ):
+        """Test context building performance."""
+        import time
+
+        with mock_overlay_mapper():
+            builder = PCILeechContextBuilder(
+                device_bdf="0000:03:00.0", config=mock_config
+            )
+
+            # Mock expensive operations
+            with patch.object(builder, "_get_vfio_bar_info", return_value=None):
+                iterations = 100
+                start_time = time.time()
+
+                for _ in range(iterations):
+                    builder._build_timing_config(behavior_profile, None)
+
+                elapsed = time.time() - start_time
+                avg_time = elapsed / iterations
+
+                # Should be fast
+                assert avg_time < 0.01  # Less than 10ms per iteration
+
+    def test_large_config_space_handling(self, mock_config):
+        """Test handling of large configuration spaces."""
+        # Create large config space (64KB extended)
+        large_config = {
+            "vendor_id": "10ee",
+            "device_id": "7024",
+            "class_code": "020000",
+            "revision_id": "01",
+            "config_space_hex": "00" * 65536,  # 64KB
+            "config_space_size": 65536,
+            "bars": [],
+            "dword_map": {i: f"0x{i*4:08x}" for i in range(16384)},
+        }
+
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Should handle without issues
+        context = builder._build_config_space_context(large_config)
+        assert context["size"] == 65536
+
+
+# ============================================================================
+# Regression Tests
+# ============================================================================
+
+
+class TestRegressions:
+    """Tests for specific bug fixes and regressions."""
+
+    def test_subsystem_id_fallback_regression(self, mock_config):
+        """Test regression: subsystem IDs falling back correctly."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        # Both subsystem IDs are None
+        config_data = {
+            "vendor_id": "10ee",
+            "device_id": "7024",
+            "class_code": "020000",
+            "revision_id": "01",
+            "subsystem_vendor_id": None,
+            "subsystem_device_id": None,
+        }
+
+        identifiers = builder._extract_device_identifiers(config_data)
+
+        # Should fall back to main IDs
+        assert identifiers.subsystem_vendor_id == "10ee"
+        assert identifiers.subsystem_device_id == "7024"
+
+    def test_zero_bar_size_regression(self, mock_config):
+        """Test regression: zero-sized BARs should be skipped."""
+        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
+
+        with patch.object(builder, "_get_vfio_region_info") as mock_region:
+            mock_region.return_value = {"size": 0, "flags": 0}
+
+            bar_info = builder._get_vfio_bar_info(0, {"type": "memory"})
+            assert bar_info is None

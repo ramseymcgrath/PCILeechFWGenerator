@@ -108,7 +108,20 @@ def safe_log_format(
         level_str = level_map.get(log_level, "UNKNOWN")
 
         padded_message = format_padded_message(formatted_message, level_str)
-        logger.log(log_level, padded_message)
+        # Call the specific logger method so mocks like mock_logger.info are
+        # invoked during tests (instead of logger.log which doesn't call them).
+        if log_level == logging.INFO:
+            logger.info(padded_message)
+        elif log_level == logging.WARNING:
+            logger.warning(padded_message)
+        elif log_level == logging.DEBUG:
+            logger.debug(padded_message)
+        elif log_level == logging.ERROR:
+            logger.error(padded_message)
+        elif log_level == logging.CRITICAL:
+            logger.critical(padded_message)
+        else:
+            logger.log(log_level, padded_message)
     except Exception as e:
         # Fallback to basic logging if formatting fails
         error_msg = f"Failed to format log message: {e}"
@@ -119,7 +132,8 @@ def safe_log_format(
         if prefix:
             fallback_message = f"[{prefix}] {fallback_message}"
         padded_fallback = format_padded_message(fallback_message, "ERROR")
-        logger.log(log_level, padded_fallback)
+        # Use error to ensure visibility of the fallback
+        logger.error(padded_fallback)
 
 
 def safe_print_format(template: str, prefix: str, **kwargs: Any) -> None:
@@ -314,32 +328,30 @@ def log_info_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
     """Convenience function for safe INFO level logging."""
-    formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    logger.info(formatted_message)
+    # Use the centralized safe_log_format to ensure padding/timestamp and
+    # consistent behavior across log levels.
+    safe_log_format(logger, logging.INFO, template, prefix=prefix, **kwargs)
 
 
 def log_error_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
     """Convenience function for safe ERROR level logging."""
-    formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    logger.error(formatted_message)
+    safe_log_format(logger, logging.ERROR, template, prefix=prefix, **kwargs)
 
 
 def log_warning_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
     """Convenience function for safe WARNING level logging."""
-    formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    logger.warning(formatted_message)
+    safe_log_format(logger, logging.WARNING, template, prefix=prefix, **kwargs)
 
 
 def log_debug_safe(
     logger: logging.Logger, template: str, prefix: Optional[str] = None, **kwargs: Any
 ) -> None:
     """Convenience function for safe DEBUG level logging."""
-    formatted_message = safe_format(template, prefix=prefix, **kwargs)
-    logger.debug(formatted_message)
+    safe_log_format(logger, logging.DEBUG, template, prefix=prefix, **kwargs)
 
 
 def generate_sv_header_comment(

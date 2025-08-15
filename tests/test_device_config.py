@@ -8,14 +8,19 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.device_clone.device_config import (DeviceCapabilities, DeviceClass,
-                                            DeviceConfigManager,
-                                            DeviceConfiguration,
-                                            DeviceIdentification, DeviceType,
-                                            PCIeRegisters,
-                                            generate_device_state_machine,
-                                            get_config_manager,
-                                            get_device_config, validate_hex_id)
+from src.device_clone.device_config import (
+    DeviceCapabilities,
+    DeviceClass,
+    DeviceConfigManager,
+    DeviceConfiguration,
+    DeviceIdentification,
+    DeviceType,
+    PCIeRegisters,
+    generate_device_state_machine,
+    get_config_manager,
+    get_device_config,
+    validate_hex_id,
+)
 
 
 class TestDeviceType:
@@ -438,11 +443,34 @@ class TestHelperFunctions:
 
     def test_get_device_config_specific_profile(self):
         """Test get_device_config with specific profile."""
-        # Now that generic profile exists with correct format, it should work
-        config = get_device_config("generic")
-        assert config is not None
-        assert isinstance(config, DeviceConfiguration)
-        assert config.name == "Generic PCIe Device"
+        # Inject a controlled DeviceConfigManager with a valid 'generic'
+        # profile so the test is deterministic and does not depend on
+        # repository config files.
+        import src.device_clone.device_config as dc
+
+        orig_manager = getattr(dc, "_config_manager", None)
+        try:
+            manager = dc.DeviceConfigManager(config_dir=None)
+            config = DeviceConfiguration(
+                name="Generic PCIe Device",
+                device_type=DeviceType.GENERIC,
+                device_class=DeviceClass.CONSUMER,
+                identification=DeviceIdentification(
+                    vendor_id=0x1234,
+                    device_id=0x5678,
+                    class_code=0x010000,
+                ),
+            )
+            manager.profiles["generic"] = config
+            dc._config_manager = manager
+
+            got = get_device_config("generic")
+            assert got is not None
+            assert isinstance(got, DeviceConfiguration)
+            assert got.name == "Generic PCIe Device"
+        finally:
+            # Restore original global manager to avoid test pollution
+            dc._config_manager = orig_manager
 
     def test_validate_hex_id_valid(self):
         """Test validate_hex_id with valid values."""

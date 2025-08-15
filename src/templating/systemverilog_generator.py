@@ -104,7 +104,7 @@ ERROR_MESSAGES = {
     "missing_critical_field": "device_config is missing from template context. This is required for safe PCILeech firmware generation.",
     "device_config_not_dict": "device_config must be a dictionary, got {type_name}. Cannot proceed with firmware generation.",
     "missing_device_signature": "CRITICAL: device_signature is missing from template context. This field is required for firmware security and uniqueness.",
-    "empty_device_signature": "CRITICAL: device_signature is None or empty. A valid device signature is required to prevent generic firmware generation.",
+    "empty_device_signature": "CRITICAL: device_signature is None or empty. A valid device signature is required to prevent generic firmware generation. This is a security requirement; no fallback values are allowed.",
     "validation_failed": "Template context validation failed with {count} critical errors:\n{errors}\n\nCannot proceed with firmware generation due to invalid configuration.",
     "missing_behavior_profile": "Behavior profile is required for register extraction",
 }

@@ -8,11 +8,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.device_clone.msix_capability import (
-    BAR_IO_DEFAULT_SIZE, BAR_MEM_DEFAULT_SIZE, BAR_MEM_MIN_SIZE, find_cap,
-    generate_msix_capability_registers, generate_msix_table_sv, hex_to_bytes,
-    is_valid_offset, msix_size, parse_bar_info_from_config_space,
-    parse_msix_capability, read_u8, read_u16_le, read_u32_le,
-    validate_msix_configuration, validate_msix_configuration_enhanced)
+    BAR_IO_DEFAULT_SIZE,
+    BAR_MEM_DEFAULT_SIZE,
+    BAR_MEM_MIN_SIZE,
+    find_cap,
+    generate_msix_capability_registers,
+    generate_msix_table_sv,
+    hex_to_bytes,
+    is_valid_offset,
+    msix_size,
+    parse_bar_info_from_config_space,
+    parse_msix_capability,
+    read_u8,
+    read_u16_le,
+    read_u32_le,
+    validate_msix_configuration,
+    validate_msix_configuration_enhanced,
+)
 
 
 class TestUtilityFunctions:
@@ -829,10 +841,11 @@ class TestSystemVerilogGeneration:
             # Missing table_offset, pba_bir, pba_offset, enabled, function_mask
         }
 
-        result = generate_msix_table_sv(msix_info)
-
-        # Should generate fallback code without crashing
-        assert "Fallback code" in result
+        # generate_msix_table_sv now raises when required fields are missing
+        with pytest.raises(
+            ValueError, match=r"Cannot generate MSI-X module - missing critical fields"
+        ):
+            generate_msix_table_sv(msix_info)
 
     @patch("src.device_clone.msix_capability.TemplateRenderer")
     def test_generate_msix_table_sv_alignment_warning(self, mock_renderer_class):

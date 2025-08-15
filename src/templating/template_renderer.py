@@ -762,8 +762,16 @@ class TemplateRenderer:
         return validated_context
 
 
-class TemplateRenderError(Exception):
-    """Exception raised when template rendering fails."""
+from src.exceptions import TemplateRenderError as _TemplateRenderErrorBase
+
+
+class TemplateRenderError(_TemplateRenderErrorBase):
+    """Exception raised when template rendering fails.
+
+    This class subclasses the central TemplateRenderError from `src.exceptions`
+    so that exceptions raised by the template renderer are compatible with
+    code and tests that expect the project's canonical exception type.
+    """
 
     pass
 
