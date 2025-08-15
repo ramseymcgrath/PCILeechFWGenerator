@@ -20,6 +20,13 @@ sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
 
+def get_version():
+    """Get the current version from the version file."""
+    from src.__version__ import __version__, __title__
+
+    return f"{__title__} v{__version__}"
+
+
 class RequirementsError(Exception):
     """Raised when requirements cannot be satisfied."""
 
@@ -252,8 +259,12 @@ if __name__ == "__main__":
 try:
     from src.error_utils import format_concise_error, log_error_with_root_cause
     from src.log_config import get_logger, setup_logging
-    from src.string_utils import (log_error_safe, log_info_safe,
-                                  log_warning_safe, safe_format)
+    from src.string_utils import (
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+        safe_format,
+    )
 except ImportError as e:
     print(f"❌ Failed to import PCILeech modules: {e}")
     print("Make sure you're running from the PCILeech project directory")
@@ -405,9 +416,7 @@ Environment Variables:
     )
 
     # Add global options
-    parser.add_argument(
-        "--version", action="version", version="PCILeech Firmware Generator v0.7.4"
-    )
+    parser.add_argument("--version", action="version", version=get_version())
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
@@ -755,8 +764,12 @@ def handle_check(args):
         # Import the VFIO diagnostics functionality
         from pathlib import Path
 
-        from src.cli.vfio_diagnostics import (Diagnostics, Status,
-                                              remediation_script, render)
+        from src.cli.vfio_diagnostics import (
+            Diagnostics,
+            Status,
+            remediation_script,
+            render,
+        )
 
         log_info_safe(
             logger,
@@ -850,7 +863,7 @@ def handle_check(args):
 def handle_version(args):
     """Handle version information."""
     logger = get_logger(__name__)
-    log_info_safe(logger, "PCILeech Firmware Generator v0.7.4", prefix="VERSION")
+    log_info_safe(logger, get_version(), prefix="VERSION")
     log_info_safe(logger, "Copyright (c) 2024 PCILeech Project", prefix="VERSION")
     log_info_safe(logger, "Licensed under MIT License", prefix="VERSION")
 
@@ -872,8 +885,7 @@ def handle_donor_template(args):
     """Handle donor template generation."""
     logger = get_logger(__name__)
     try:
-        from src.device_clone.donor_info_template import \
-            DonorInfoTemplateGenerator
+        from src.device_clone.donor_info_template import DonorInfoTemplateGenerator
 
         # If validate flag is set, validate the file instead
         if args.validate:

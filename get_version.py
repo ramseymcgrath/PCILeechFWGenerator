@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""Simple script to get the current version for use in shell scripts."""
+
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from src.__version__ import __version__, __title__
+
+print(f"{__title__} v{__version__}")
