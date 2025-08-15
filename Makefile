@@ -136,7 +136,7 @@ set-version:
 
 bump-version:
 	@echo "Bump package version using automation (patch/minor/major)"
-	python3 scripts/update_version.py --bump-type ${TYPE:-patch} --force
+	python3 scripts/update_version.py --bump-type $${TYPE:-patch} --force
 
 # Convenience pattern target so maintainers can run:
 #   make set-version-1.2.3
