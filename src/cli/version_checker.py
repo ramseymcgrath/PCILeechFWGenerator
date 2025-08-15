@@ -13,8 +13,8 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
-from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
+from urllib.request import urlopen, Request
 
 try:
     from ..__version__ import __url__, __version__
@@ -36,6 +36,10 @@ GITHUB_API_URL = (
     "https://api.github.com/repos/ramseymcgrath/PCILeechFWGenerator/releases/latest"
 )
 PYPI_API_URL = "https://pypi.org/pypi/pcileech-fw-generator/json"
+# Env var to control version source behaviour. Defaults to 'github'.
+# Allowed: 'github' (only GitHub), 'pypi' (only PyPI), 'auto' (try GitHub then PyPI).
+VERSION_SOURCE_ENV = "PCILEECH_VERSION_SOURCE"
+USE_CACHE_ENV = "PCILEECH_USE_CACHE"
 
 
 # Enhanced version checking with build metadata awareness
@@ -58,16 +62,37 @@ def parse_version(version_str: str) -> Tuple[int, ...]:
     Returns:
         Tuple of integers (major, minor, patch)
     """
-    # Remove 'v' prefix if present
-    if version_str.startswith("v"):
-        version_str = version_str[1:]
-
-    # Split by dots and convert to integers
-    try:
-        return tuple(int(x) for x in version_str.split("."))
-    except (ValueError, AttributeError):
-        logger.debug(f"Failed to parse version: {version_str}")
+    # Robust integer tuple parsing: strip whitespace, remove leading 'v',
+    # ignore build metadata and pre-release suffixes.
+    if not version_str or not isinstance(version_str, str):
         return (0, 0, 0)
+
+    s = version_str.strip()
+    if s.startswith("v") or s.startswith("V"):
+        s = s[1:]
+
+    # Drop build metadata (+...) and prerelease (-...) if present
+    for sep in ("+", "-"):
+        if sep in s:
+            s = s.split(sep, 1)[0]
+
+    parts = s.split(".")
+    result: list[int] = []
+    for p in parts[:3]:
+        num = "".join(ch for ch in p if ch.isdigit())
+        if num:
+            try:
+                result.append(int(num))
+            except ValueError:
+                result.append(0)
+        else:
+            result.append(0)
+
+    # Pad to 3 parts
+    while len(result) < 3:
+        result.append(0)
+
+    return tuple(result)
 
 
 def is_newer_version(current: str, latest: str) -> bool:
@@ -80,6 +105,19 @@ def is_newer_version(current: str, latest: str) -> bool:
     Returns:
         True if latest is newer than current
     """
+    # Prefer packaging.version when available for robust SemVer-like comparisons
+    try:
+        from packaging.version import Version, InvalidVersion
+
+        try:
+            return Version(latest) > Version(current)
+        except InvalidVersion:
+            # Fall through to tuple-based comparison
+            pass
+    except Exception:
+        # packaging not available - fall back
+        pass
+
     current_tuple = parse_version(current)
     latest_tuple = parse_version(latest)
     return latest_tuple > current_tuple
@@ -140,11 +178,33 @@ def fetch_latest_version_github() -> Optional[str]:
         Latest version string or None if fetch fails
     """
     try:
-        with urlopen(GITHUB_API_URL, timeout=5) as response:
+        # Use a User-Agent and optional token to reduce rate-limit issues
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "pcileech-fw-generator-version-check/1",
+        }
+
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if token:
+            headers["Authorization"] = f"token {token}"
+
+        req = Request(GITHUB_API_URL, headers=headers)
+        with urlopen(req, timeout=5) as response:
+            # If rate limited, GitHub returns 403 and includes rate limit headers
             data = json.loads(response.read().decode())
-            return data.get("tag_name", "").lstrip("v")
+            tag = data.get("tag_name", "")
+            if tag:
+                return tag.lstrip("v")
     except Exception as e:
-        logger.debug(f"Failed to fetch from GitHub: {e}")
+        # Distinguish HTTP errors for better debug logging
+        if isinstance(e, HTTPError):
+            try:
+                reason = e.read().decode()
+            except Exception:
+                reason = str(e)
+            logger.debug(f"GitHub API HTTPError: {e.code} {reason}")
+        else:
+            logger.debug(f"Failed to fetch from GitHub: {e}")
         return None
 
 
@@ -170,13 +230,23 @@ def fetch_latest_version() -> Optional[str]:
         Latest version string or None if all fetches fail
     """
     try:
-        # Try GitHub first (more reliable for this project)
-        latest = fetch_latest_version_github()
-        if latest:
-            return latest
+        source = os.environ.get(VERSION_SOURCE_ENV, "github").lower()
 
-        # Fall back to PyPI
-        return fetch_latest_version_pypi()
+        if source == "github":
+            return fetch_latest_version_github()
+
+        if source == "pypi":
+            return fetch_latest_version_pypi()
+
+        # auto: try GitHub first, then PyPI
+        if source == "auto":
+            latest = fetch_latest_version_github()
+            if latest:
+                return latest
+            return fetch_latest_version_pypi()
+
+        # Unknown value: default to GitHub
+        return fetch_latest_version_github()
     except Exception as e:
         logger.debug(f"Failed to fetch latest version: {e}")
         return None
@@ -196,8 +266,10 @@ def check_for_updates(force: bool = False) -> Optional[Tuple[str, bool]]:
         if os.environ.get("CI") or os.environ.get("PCILEECH_DISABLE_UPDATE_CHECK"):
             return None
 
-        # Check cache first unless forced
-        if not force:
+        # By default, perform a live network check every run.
+        # To retain previous cache-first behavior set PCILEECH_USE_CACHE=1 in environment.
+        use_cache = os.environ.get(USE_CACHE_ENV, "0") == "1"
+        if use_cache and not force:
             cached = get_cached_check()
             if cached:
                 return cached["latest_version"], cached["update_available"]
