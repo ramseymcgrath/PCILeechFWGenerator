@@ -1,0 +1,222 @@
+name: Consolidated CI
+
+on:
+  push:
+    branches:
+    - main
+    - advanced-behavior-handling
+    - develop
+    - missing-template-context
+  pull_request:
+    branches:
+    - main
+  schedule:
+    - cron: '0 3 * * 0'  # Run at 3:00 AM UTC every Sunday
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  template-validation:
+    name: Template variable validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'  # Enable pip caching
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jinja2 pyyaml
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run template variable validation
+        id: template-validation
+        run: python scripts/validate_template_variables.py --verbose
+        continue-on-error: true  # Continue workflow even if this step fails
+
+      - name: Upload validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-validation-report
+          path: template_variables_report.json
+          if-no-files-found: warn
+
+  template-syntax:
+    name: Template syntax validation
+    runs-on: ubuntu-latest
+    needs: template-validation
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jinja2 pyyaml
+          pip install -e .
+
+      - name: Validate template syntax
+        run: python scripts/validate_template_syntax.py
+
+  codeql-analysis:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          fi
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, GPL-3.0
+
+  packaging:
+    name: Packaging
+    runs-on: ubuntu-latest
+    needs: codeql-analysis
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools setuptools_scm wheel twine
+
+      - name: Build packages
+        id: build-packages
+        run: python -m build
+        continue-on-error: false  # Fail the workflow if build fails
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    needs: codeql-analysis
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f site/requirements.txt ]; then
+            pip install -r site/requirements.txt
+          fi
+
+      - name: Build site
+        working-directory: site
+        id: build-site
+        run: mkdocs build --clean
+        continue-on-error: false  # Fail the workflow if build fails
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-site
+          path: site/site/
+
+  performance:
+    name: Performance benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: codeql-analysis
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install performance dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-benchmark memory-profiler psutil
+
+      - name: Run benchmarks
+        run: python scripts/run_performance.py
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: performance-results.json
