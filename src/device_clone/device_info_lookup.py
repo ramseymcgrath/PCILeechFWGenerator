@@ -11,11 +11,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.device_clone.config_space_manager import ConfigSpaceManager
-from src.device_clone.device_config import (DeviceConfiguration,
-                                            DeviceIdentification)
+from src.device_clone.device_config import DeviceConfiguration, DeviceIdentification
 from src.device_clone.fallback_manager import FallbackManager
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,24 +42,43 @@ class DeviceInfoLookup:
         Returns:
             Complete device information dictionary
         """
-        # Extract config space and device info using ConfigSpaceManager
-        manager = ConfigSpaceManager(self.bdf)
-        try:
-            config_space = manager.read_vfio_config_space()
-            device_info = manager.extract_device_info(config_space)
-        except Exception as e:
-            log_warning_safe(
-                logger,
-                "Failed to extract device info for {bdf}: {error}",
-                bdf=self.bdf,
-                error=str(e),
-                prefix="LOOKUP",
-            )
-            device_info = partial_info.copy() if partial_info else {}
+        # Start with provided partial info or empty dict
+        device_info = partial_info.copy() if partial_info else {}
 
-        # Merge with any provided partial info
-        if partial_info:
-            device_info.update({k: v for k, v in partial_info.items() if v is not None})
+        # Only extract from config space if we don't already have basic info
+        # This prevents infinite recursion when called from ConfigSpaceManager.extract_device_info
+        if not all(
+            key in device_info for key in ["vendor_id", "device_id", "class_code"]
+        ):
+            manager = ConfigSpaceManager(self.bdf)
+            try:
+                config_space = manager.read_vfio_config_space()
+                # Use internal methods to avoid recursion
+                extracted_info = manager._extract_basic_device_info(config_space)
+                subsystem_vendor, subsystem_device = manager._extract_subsystem_info(
+                    config_space
+                )
+                extracted_info["subsystem_vendor_id"] = subsystem_vendor
+                extracted_info["subsystem_device_id"] = subsystem_device
+                extracted_info["bars"] = manager._extract_bar_info(config_space)
+
+                # Merge extracted info with existing info
+                device_info.update(
+                    {
+                        k: v
+                        for k, v in extracted_info.items()
+                        if k not in device_info or device_info[k] is None
+                    }
+                )
+
+            except Exception as e:
+                log_warning_safe(
+                    logger,
+                    "Failed to extract device info for {bdf}: {error}",
+                    bdf=self.bdf,
+                    error=str(e),
+                    prefix="LOOKUP",
+                )
 
         # Apply fallbacks for missing fields using FallbackManager
         fallback_mgr = FallbackManager()

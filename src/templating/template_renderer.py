@@ -753,6 +753,12 @@ class TemplateRenderer:
 _cached_exception_class: Union[Type[Exception], None] = None
 
 
+def _clear_exception_cache():
+    """Clear the cached exception class. Useful for testing."""
+    global _cached_exception_class
+    _cached_exception_class = None
+
+
 def _get_template_render_error_base() -> Type[Exception]:
     """
     Lazily import and cache the base TemplateRenderError class.
@@ -771,12 +777,6 @@ def _get_template_render_error_base() -> Type[Exception]:
     # Return cached result if available
     if _cached_exception_class is not None:
         return _cached_exception_class
-
-    # Optional: Clear the cache if needed (useful for testing)
-    def _clear_exception_cache():
-        """Clear the cached exception class. Useful for testing."""
-        global _cached_exception_class
-        _cached_exception_class = None
 
     try:
         # Attempt to import from the main exceptions module

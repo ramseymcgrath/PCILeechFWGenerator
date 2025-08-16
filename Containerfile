@@ -53,7 +53,6 @@ RUN pip3 install --no-cache-dir -r requirements.txt -r requirements-tui.txt
 
 # Copy application files
 COPY src ./src
-COPY boards ./boards
 COPY configs ./configs
 COPY pcileech.py .
 
