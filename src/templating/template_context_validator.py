@@ -211,11 +211,61 @@ class TemplateContextValidator:
                 "FLASH_ADDR_OFFSET": "24'h000000",
             },
         },
+        # PCILeech-specific templates
+        "*pcileech*.j2": {
+            "required_vars": {
+                "device_signature",  # CRITICAL: Required for security
+                "device_config",
+                "board_config",  # Also required since PCILeech generates SystemVerilog
+                "config_space",
+                "msix_config",
+                "bar_config",
+                "timing_config",
+                "pcileech_config",
+            },
+            "optional_vars": {
+                "pcileech_modules",
+                "pcileech_command_timeout",
+                "pcileech_buffer_size",
+                "enable_dma_operations",
+                "enable_interrupt_coalescing",
+                "supports_msix",
+                "supports_msi",
+                "variance_model",
+                "power_config",
+                "error_config",
+                "perf_config",
+                "enable_clock_crossing",
+                "enable_custom_config",
+                "device_specific_config",
+                "enable_performance_counters",
+                "enable_error_detection",
+                "power_management",
+                "error_handling",
+                "performance_counters",
+                "behavior_profile",
+            },
+            "default_values": {
+                "pcileech_modules": [],
+                "pcileech_command_timeout": 1000,
+                "pcileech_buffer_size": 4096,
+                "enable_dma_operations": True,
+                "enable_interrupt_coalescing": False,
+                "supports_msix": False,
+                "supports_msi": False,
+                "enable_clock_crossing": False,
+                "enable_custom_config": False,
+                "device_specific_config": {},
+                "enable_performance_counters": False,
+                "enable_error_detection": False,
+            },
+        },
     }
 
     def __init__(self):
         """Initialize the template context validator."""
         self.template_cache: Dict[str, TemplateVariableRequirements] = {}
+        self._template_mtime_cache: Dict[str, float] = {}
 
     def get_template_requirements(
         self, template_name: str
@@ -229,7 +279,27 @@ class TemplateContextValidator:
         Returns:
             TemplateVariableRequirements object with required/optional vars and defaults
         """
-        if template_name in self.template_cache:
+        # Check if template file has been modified since last cache
+        template_path = Path(__file__).parent.parent / "templates" / template_name
+        cache_valid = True
+
+        if template_path.exists():
+            current_mtime = template_path.stat().st_mtime
+            cached_mtime = self._template_mtime_cache.get(template_name)
+
+            if cached_mtime is None or current_mtime > cached_mtime:
+                # Template has been modified, invalidate cache entry
+                if template_name in self.template_cache:
+                    log_debug_safe(
+                        logger,
+                        f"Template '{template_name}' modified, invalidating cache",
+                        prefix="TEMPLATE_CACHE",
+                    )
+                    del self.template_cache[template_name]
+                self._template_mtime_cache[template_name] = current_mtime
+                cache_valid = False
+
+        if template_name in self.template_cache and cache_valid:
             return self.template_cache[template_name]
 
         requirements = TemplateVariableRequirements(template_name)
@@ -296,7 +366,9 @@ class TemplateContextValidator:
             template_path = Path(__file__).parent.parent / "templates" / template_name
             if template_path.exists():
                 content = template_path.read_text()
-                for m in re.finditer(r"\{%-?\s*set\s+([A-Za-z_][A-Za-z0-9_]*)", content):
+                for m in re.finditer(
+                    r"\{%-?\s*set\s+([A-Za-z_][A-Za-z0-9_]*)", content
+                ):
                     assigned_in_template.add(m.group(1))
         except Exception:
             # If anything goes wrong reading the template, be conservative and
@@ -334,10 +406,6 @@ class TemplateContextValidator:
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
-
-        # SECURITY CHANGE: Never add defaults for required variables
-        # Instead, raise an error if they're missing
-
         # Only provide defaults for explicitly optional variables
         # and only if strict=False (not security critical)
         if not strict:
@@ -445,6 +513,28 @@ class TemplateContextValidator:
 
         return "\n".join(doc_lines)
 
+    def clear_cache(self) -> None:
+        """Clear all cached template requirements and modification times."""
+        self.template_cache.clear()
+        self._template_mtime_cache.clear()
+        log_debug_safe(
+            logger,
+            "Cleared template requirements cache",
+            prefix="TEMPLATE_CACHE",
+        )
+
+    def invalidate_template(self, template_name: str) -> None:
+        """Invalidate cache for a specific template."""
+        if template_name in self.template_cache:
+            del self.template_cache[template_name]
+        if template_name in self._template_mtime_cache:
+            del self._template_mtime_cache[template_name]
+        log_debug_safe(
+            logger,
+            f"Invalidated cache for template '{template_name}'",
+            prefix="TEMPLATE_CACHE",
+        )
+
 
 # Global instance for easy access
 _validator = TemplateContextValidator()
@@ -500,3 +590,13 @@ def analyze_template_variables(template_path: Path) -> Set[str]:
         Set of variable names referenced in the template
     """
     return _validator.analyze_template_for_variables(template_path)
+
+
+def clear_global_template_cache() -> None:
+    """Clear the global template requirements cache."""
+    _validator.clear_cache()
+
+
+def invalidate_global_template(template_name: str) -> None:
+    """Invalidate global cache for a specific template."""
+    _validator.invalidate_template(template_name)

@@ -24,22 +24,38 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Set, Tuple, TypedDict, Union,
-                    cast)
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Union, cast
 
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.error_utils import (ErrorCategory, extract_root_cause,
-                             format_concise_error, format_user_friendly_error,
-                             is_user_fixable_error)
-from src.string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe, log_warning_safe, safe_format)
-from src.utils.attribute_access import (get_attr_or_raise, has_attr,
-                                        require_attrs, safe_get_attr)
+from src.error_utils import (
+    ErrorCategory,
+    extract_root_cause,
+    format_concise_error,
+    format_user_friendly_error,
+    is_user_fixable_error,
+)
+from src.string_utils import (
+    generate_sv_header_comment,
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
+from src.utils.attribute_access import (
+    get_attr_or_raise,
+    has_attr,
+    require_attrs,
+    safe_get_attr,
+)
 
-from .advanced_sv_features import (AdvancedSVFeatureGenerator,
-                                   ErrorHandlingConfig, PerformanceConfig)
+from .advanced_sv_features import (
+    AdvancedSVFeatureGenerator,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+)
 from .advanced_sv_power import PowerManagementConfig
 from .template_renderer import TemplateRenderer, TemplateRenderError
 
@@ -814,9 +830,12 @@ class AdvancedSVGenerator:
             )
 
     @lru_cache(maxsize=32)
-    def generate_device_specific_ports(self) -> str:
+    def generate_device_specific_ports(self, context_hash: str = "") -> str:
         """
         Generate device-specific port declarations using template.
+
+        Args:
+            context_hash: Hash of the context to ensure cache invalidation when context changes
 
         Returns:
             SystemVerilog port declarations as string
@@ -826,6 +845,7 @@ class AdvancedSVGenerator:
 
         Note:
             This method is cached to avoid regenerating identical port declarations.
+            The context_hash parameter ensures cache invalidation when context changes.
         """
         # Create a hashable representation of device_config for caching
         device_config_key = (
@@ -839,6 +859,7 @@ class AdvancedSVGenerator:
             self.device_config.enable_interrupt_coalescing,
             self.device_config.enable_virtualization,
             self.device_config.enable_sr_iov,
+            context_hash,  # Include context hash to detect changes
         )
 
         return self._generate_device_specific_ports_impl(device_config_key)
@@ -879,6 +900,15 @@ class AdvancedSVGenerator:
 
             # Re-raise with better context
             raise TemplateRenderError(error_msg) from e
+
+    def clear_cache(self) -> None:
+        """Clear the LRU cache for device-specific ports generation."""
+        self.generate_device_specific_ports.cache_clear()
+        log_debug_safe(
+            self.logger,
+            "Cleared SystemVerilog generator cache",
+            prefix="SV_CACHE",
+        )
 
     def generate_systemverilog_modules(
         self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None

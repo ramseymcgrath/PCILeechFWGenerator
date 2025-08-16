@@ -16,8 +16,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from src.string_utils import (log_debug_safe, log_error_safe,
-                                  log_info_safe, log_warning_safe)
+    from src.string_utils import (
+        log_debug_safe,
+        log_error_safe,
+        log_info_safe,
+        log_warning_safe,
+    )
 except ImportError:
     # Fallback for when string_utils is not available
     def log_info_safe(logger, template, **kwargs):
@@ -35,8 +39,7 @@ except ImportError:
 
 # Import device configuration system
 try:
-    from src.device_clone.device_config import (DeviceConfiguration,
-                                                get_device_config)
+    from src.device_clone.device_config import DeviceConfiguration, get_device_config
 except ImportError:
     # Fallback if device config is not available
     DeviceConfiguration = None
@@ -759,7 +762,7 @@ class ConfigSpaceManager:
             )
 
     def extract_device_info(self, config_space: bytes) -> Dict[str, Any]:
-        """Extract device information from configuration space with improved structure."""
+        """Extract device information from configuration space with improved structure and resilient lookup."""
         self._validate_config_space_size(config_space)
 
         device_info = self._extract_basic_device_info(config_space)
@@ -767,6 +770,33 @@ class ConfigSpaceManager:
             self._extract_subsystem_info(config_space)
         )
         device_info["bars"] = self._extract_bar_info(config_space)
+
+        # Use resilient device lookup to fill in any missing information
+        try:
+            from src.device_clone.device_info_lookup import lookup_device_info
+
+            # Get complete device info with fallback mechanisms
+            device_info = lookup_device_info(self.bdf, device_info)
+
+            log_info_safe(
+                logger,
+                "Device info enhanced with resilient lookup for {bdf}",
+                bdf=self.bdf,
+                prefix="CNFG",
+            )
+        except ImportError:
+            log_warning_safe(
+                logger,
+                "Device info lookup module not available, using basic extraction only",
+                prefix="CNFG",
+            )
+        except Exception as e:
+            log_warning_safe(
+                logger,
+                "Failed to enhance device info with lookup: {error}",
+                error=str(e),
+                prefix="CNFG",
+            )
 
         self._log_extracted_device_info(device_info)
 
@@ -1105,8 +1135,7 @@ class ConfigSpaceManager:
                 )
                 bar_info.size = size_found
                 # Generate proper encoding for the size
-                from src.device_clone.bar_size_converter import \
-                    BarSizeConverter
+                from src.device_clone.bar_size_converter import BarSizeConverter
 
                 try:
                     bar_info.size_encoding = BarSizeConverter.size_to_encoding(
@@ -1131,42 +1160,64 @@ class ConfigSpaceManager:
         return bar_info
 
     def _log_extracted_device_info(self, device_info: Dict[str, Any]) -> None:
-        """Log extracted device information in a structured way."""
-        vendor_id = device_info["vendor_id"]
-        device_id = device_info["device_id"]
-        class_code = device_info["class_code"]
-        revision_id = device_info["revision_id"]
-        command = device_info["command"]
-        status = device_info["status"]
-        header_type = device_info["header_type"]
-        subsys_vendor_id = device_info["subsystem_vendor_id"]
-        subsys_device_id = device_info["subsystem_device_id"]
-        cache_line_size = device_info["cache_line_size"]
-        latency_timer = device_info["latency_timer"]
-        bist = device_info["bist"]
-        bars = device_info["bars"]
+        """Log extracted device information in a structured way with resilient handling."""
+        # Use .get() with defaults to handle missing fields gracefully
+        vendor_id = device_info.get("vendor_id", 0)
+        device_id = device_info.get("device_id", 0)
+        class_code = device_info.get("class_code", 0)
+        revision_id = device_info.get("revision_id", 0)
+        command = device_info.get("command", 0)
+        status = device_info.get("status", 0)
+        header_type = device_info.get("header_type", 0)
+        subsys_vendor_id = device_info.get("subsystem_vendor_id", 0)
+        subsys_device_id = device_info.get("subsystem_device_id", 0)
+        cache_line_size = device_info.get("cache_line_size", 0)
+        latency_timer = device_info.get("latency_timer", 0)
+        bist = device_info.get("bist", 0)
+        bars = device_info.get("bars", [])
 
-        log_info_safe(logger, "Successfully extracted device information:")
-        log_info_safe(logger, "  Vendor ID: 0x{vendor_id:04x}", vendor_id=vendor_id)
-        log_info_safe(logger, "  Device ID: 0x{device_id:04x}", device_id=device_id)
-        log_info_safe(logger, "  Class Code: 0x{class_code:06x}", class_code=class_code)
         log_info_safe(
-            logger, "  Revision ID: 0x{revision_id:02x}", revision_id=revision_id
+            logger, "Successfully extracted device information:", prefix="INFO"
         )
-        log_info_safe(logger, "  Command: 0x{command:04x}", command=command)
-        log_info_safe(logger, "  Status: 0x{status:04x}", status=status)
         log_info_safe(
-            logger, "  Header Type: 0x{header_type:02x}", header_type=header_type
+            logger, "  Vendor ID: 0x{vendor_id:04x}", vendor_id=vendor_id, prefix="INFO"
+        )
+        log_info_safe(
+            logger, "  Device ID: 0x{device_id:04x}", device_id=device_id, prefix="INFO"
+        )
+        log_info_safe(
+            logger,
+            "  Class Code: 0x{class_code:06x}",
+            class_code=class_code,
+            prefix="INFO",
+        )
+        log_info_safe(
+            logger,
+            "  Revision ID: 0x{revision_id:02x}",
+            revision_id=revision_id,
+            prefix="INFO",
+        )
+        log_info_safe(
+            logger, "  Command: 0x{command:04x}", command=command, prefix="INFO"
+        )
+        log_info_safe(logger, "  Status: 0x{status:04x}", status=status, prefix="INFO")
+        log_info_safe(
+            logger,
+            "  Header Type: 0x{header_type:02x}",
+            header_type=header_type,
+            prefix="INFO",
         )
         log_info_safe(
             logger,
             "  Subsystem Vendor: 0x{subsys_vendor_id:04x}",
             subsys_vendor_id=subsys_vendor_id,
+            prefix="INFO",
         )
         log_info_safe(
             logger,
             "  Subsystem Device: 0x{subsys_device_id:04x}",
             subsys_device_id=subsys_device_id,
+            prefix="INFO",
         )
         log_info_safe(
             logger,

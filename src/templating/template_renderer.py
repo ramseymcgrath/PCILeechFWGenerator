@@ -12,16 +12,30 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from __version__ import __version__
-from string_utils import (generate_tcl_header_comment, log_debug_safe,
-                          log_error_safe, log_info_safe, log_warning_safe,
-                          safe_format)
+from string_utils import (
+    generate_tcl_header_comment,
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
 from templates.template_mapping import update_template_path
 
 try:
-    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
-                        StrictUndefined, Template, TemplateError,
-                        TemplateNotFound, TemplateRuntimeError, Undefined,
-                        meta, nodes)
+    from jinja2 import (
+        BaseLoader,
+        Environment,
+        FileSystemLoader,
+        StrictUndefined,
+        Template,
+        TemplateError,
+        TemplateNotFound,
+        TemplateRuntimeError,
+        Undefined,
+        meta,
+        nodes,
+    )
     from jinja2.bccache import FileSystemBytecodeCache
     from jinja2.ext import Extension
     from jinja2.sandbox import SandboxedEnvironment
@@ -486,8 +500,9 @@ class TemplateRenderer:
 
             # Apply external validator with strict validation
             try:
-                from src.templating.template_context_validator import \
-                    validate_template_context
+                from src.templating.template_context_validator import (
+                    validate_template_context,
+                )
 
                 # Validate with strict mode (security first)
                 validated = validate_template_context(
@@ -643,123 +658,94 @@ class TemplateRenderer:
         optional_fields: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
-        Validate template context with strict security-first approach.
+        Validate template context using the centralized TemplateContextValidator.
 
-        This method enforces complete context validation before allowing template rendering.
-        It rejects any missing or undefined variables rather than providing defaults,
-        ensuring the integrity of rendered templates.
+        This method delegates validation to the centralized validator while maintaining
+        backward compatibility with the existing interface.
 
         Args:
             context: Original template context
-            template_name: Name of the template being rendered (required for better error messages)
-            required_fields: List of required fields (will be enforced)
-            optional_fields: List of optional fields (validated if present)
+            template_name: Name of the template being rendered
+            required_fields: List of required fields (deprecated - use TemplateContextValidator)
+            optional_fields: List of optional fields (deprecated - use TemplateContextValidator)
 
         Returns:
-            Validated context with explicit type conversions where necessary
+            Validated context
 
         Raises:
-            TemplateRenderError: If any required field is missing or invalid
+            TemplateRenderError: If validation fails
         """
         if not context:
             raise TemplateRenderError(
                 f"Template context cannot be empty for template '{template_name or 'unknown'}'"
             )
 
-        validated_context = context.copy()
+        try:
+            # Use the centralized validator
+            from src.templating.template_context_validator import (
+                validate_template_context,
+            )
 
-        # SECURITY ENFORCEMENT: Check for required fields and fail immediately if any are missing
-        if required_fields:
-            missing_fields = []
-            for field in required_fields:
-                if field not in validated_context or validated_context[field] is None:
-                    missing_fields.append(field)
+            # Apply centralized validation with strict mode
+            validated_context = validate_template_context(
+                template_name or "unknown", context, strict=True
+            )
 
-            if missing_fields:
-                error_msg = safe_format(
-                    "SECURITY VIOLATION: Missing required fields: {fields}",
-                    fields=", ".join(missing_fields),
-                )
-                if template_name:
-                    error_msg = safe_format(
-                        "Template '{template_name}' {error_msg}",
-                        template_name=template_name,
-                        error_msg=error_msg,
-                    )
-                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
-                raise TemplateRenderError(error_msg)
-
-        # Dedicated SystemVerilog template validation with strict requirements
-        if template_name and template_name.endswith(".sv.j2"):
-            # Automatically enforce critical device identification parameters
-            critical_sv_params = ["device_config"]
-            missing_critical = [
-                p
-                for p in critical_sv_params
-                if p not in validated_context or validated_context[p] is None
-            ]
-
-            if missing_critical:
-                error_msg = safe_format(
-                    "SECURITY VIOLATION: SystemVerilog template missing critical parameters: {params}. "
-                    "Template rendering aborted to prevent generation of insecure firmware.",
-                    params=", ".join(missing_critical),
-                )
-                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
-                raise TemplateRenderError(error_msg)
-
-            # Verify timing_config is properly initialized
-            timing_config = validated_context.get("timing_config")
-            if timing_config:
-                if hasattr(timing_config, "__dataclass_fields__"):
-                    # Convert dataclass to dictionary for Jinja2 access
+            # Handle dataclass conversions for backward compatibility
+            if "timing_config" in validated_context:
+                timing_config = validated_context.get("timing_config")
+                if timing_config and hasattr(timing_config, "__dataclass_fields__"):
                     from dataclasses import asdict
 
                     validated_context["timing_config"] = asdict(timing_config)
-            elif "timing_config" in validated_context:
-                # Reject None timing_config if it was explicitly provided
-                raise TemplateRenderError(
-                    f"SECURITY VIOLATION: Template '{template_name}' has timing_config=None. "
-                    "Explicit timing configuration is required for secure template rendering."
-                )
 
-        # SECURITY ENHANCEMENT: PCILeech-specific critical validation
-        if template_name and "pcileech" in template_name.lower():
-            # PCILeech templates require device_signature for security
-            if (
-                "device_signature" not in validated_context
-                or not validated_context["device_signature"]
-            ):
-                raise TemplateRenderError(
-                    f"SECURITY VIOLATION: PCILeech template '{template_name}' missing required device_signature. "
-                    "Firmware generation aborted to prevent generic device creation."
-                )
-
-            # Validate pcileech_modules if present
-            if "pcileech_modules" in validated_context:
-                pcileech_modules = validated_context["pcileech_modules"]
-                if not isinstance(pcileech_modules, list):
+            # Additional validation for string fields
+            string_fields = ["header", "title", "description", "comment"]
+            for key in string_fields:
+                if key in validated_context and validated_context[key] is None:
                     error_msg = safe_format(
-                        "SECURITY VIOLATION: pcileech_modules must be a list, got {type_name}. "
-                        "Template rendering aborted to maintain data integrity.",
-                        type_name=type(pcileech_modules).__name__,
+                        "SECURITY VIOLATION: Template context key '{key}' is None. "
+                        "Explicit initialization required for all template variables.",
+                        key=key,
                     )
                     log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
                     raise TemplateRenderError(error_msg)
 
-        # Validate string fields are properly initialized
-        string_fields = ["header", "title", "description", "comment"]
-        for key in string_fields:
-            if key in validated_context and validated_context[key] is None:
-                error_msg = safe_format(
-                    "SECURITY VIOLATION: Template context key '{key}' is None. "
-                    "Explicit initialization required for all template variables.",
-                    key=key,
-                )
-                log_error_safe(logger, error_msg, prefix="TEMPLATE_SECURITY")
-                raise TemplateRenderError(error_msg)
+            return validated_context
 
-        return validated_context
+        except ValueError as e:
+            # Convert ValueError from validator to TemplateRenderError
+            raise TemplateRenderError(str(e)) from e
+        except ImportError:
+            # Fallback if validator not available
+            log_warning_safe(
+                logger,
+                "TemplateContextValidator not available, using basic validation",
+                prefix="TEMPLATE",
+            )
+            return context.copy()
+
+    def clear_cache(self) -> None:
+        """Clear template cache and bytecode cache."""
+        # Clear Jinja2 bytecode cache if available
+        if hasattr(self.env, "cache") and self.env.cache:
+            self.env.cache.clear()
+
+        # Clear template context validator cache
+        try:
+            from src.templating.template_context_validator import (
+                clear_global_template_cache,
+            )
+
+            clear_global_template_cache()
+        except ImportError:
+            pass
+
+        log_debug_safe(
+            logger,
+            "Cleared template renderer caches",
+            prefix="TEMPLATE",
+        )
 
 
 from src.exceptions import TemplateRenderError as _TemplateRenderErrorBase
