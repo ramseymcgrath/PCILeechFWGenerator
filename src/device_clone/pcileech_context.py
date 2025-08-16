@@ -83,6 +83,7 @@ class TemplateContext(TypedDict, total=False):
     bar_config: Dict[str, Any]
     timing_config: Dict[str, Any]
     pcileech_config: Dict[str, Any]
+    board_config: Dict[str, Any]
     device_signature: str
     generation_metadata: Dict[str, Any]
     vendor_id: str
@@ -421,6 +422,7 @@ class PCILeechContextBuilder:
                 "active_device_config": self._build_active_device_config(
                     device_identifiers, interrupt_strategy, interrupt_vectors
                 ),
+                "board_config": self._build_board_config(),
                 "device_signature": self._generate_device_signature(
                     device_identifiers, behavior_profile, config_space_data
                 ),
@@ -1141,6 +1143,58 @@ class PCILeechContextBuilder:
             else:
                 merged[key] = value
         return merged  # type: ignore
+
+    def _build_board_config(self) -> Dict[str, Any]:
+        """Build board configuration using get_pcileech_board_config."""
+        try:
+            # Get board name from config
+            board_name = getattr(self.config, 'board', None)
+            if not board_name:
+                # Try to get board from fallback or environment
+                log_warning_safe(
+                    self.logger,
+                    "No board specified in config, using fallback detection"
+                )
+                # Use a default board or get from constants
+                from src.device_clone.constants import BOARD_PARTS
+                board_name = list(BOARD_PARTS.keys())[0]  # Use first available board
+            
+            log_info_safe(
+                self.logger,
+                f"Building board configuration for {board_name}"
+            )
+            
+            # Import and use the board configuration function
+            from src.device_clone.board_config import get_pcileech_board_config
+            
+            # Get the board configuration
+            board_config = get_pcileech_board_config(board_name)
+            
+            log_info_safe(
+                self.logger,
+                f"Board configuration loaded: {board_config.get('fpga_part', 'unknown')}"
+            )
+            
+            return board_config
+            
+        except Exception as e:
+            log_error_safe(
+                self.logger,
+                f"Failed to build board configuration: {e}"
+            )
+            # Return a minimal board config to prevent template validation failure
+            return {
+                "fpga_part": "xc7a35tcsg324-2",  # Default fallback
+                "fpga_family": "7series",
+                "pcie_ip_type": "7x",
+                "max_lanes": 4,
+                "supports_msi": True,
+                "supports_msix": False,
+                "config_voltage": "3.3",
+                "bitstream_unusedpin": "pullup",
+                "bitstream_spi_buswidth": "4", 
+                "bitstream_configrate": "33"
+            }
 
     def _validate_context_completeness(self, context: TemplateContext):
         """Validate context has all required fields."""

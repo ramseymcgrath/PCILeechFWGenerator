@@ -79,6 +79,40 @@ class DeviceIdentification:
     subsystem_vendor_id: int = 0x0000
     subsystem_device_id: int = 0x0000
 
+    def __post_init__(self):
+        """Convert string values to integers if needed."""
+        # Convert vendor_id
+        if isinstance(self.vendor_id, str):
+            self.vendor_id = self._convert_to_int(self.vendor_id)
+        
+        # Convert device_id  
+        if isinstance(self.device_id, str):
+            self.device_id = self._convert_to_int(self.device_id)
+            
+        # Convert class_code
+        if isinstance(self.class_code, str):
+            self.class_code = self._convert_to_int(self.class_code)
+            
+        # Convert subsystem IDs
+        if isinstance(self.subsystem_vendor_id, str):
+            self.subsystem_vendor_id = self._convert_to_int(self.subsystem_vendor_id)
+            
+        if isinstance(self.subsystem_device_id, str):
+            self.subsystem_device_id = self._convert_to_int(self.subsystem_device_id)
+
+    @staticmethod
+    def _convert_to_int(value) -> int:
+        """Convert hex string or other value to int."""
+        if isinstance(value, int):
+            return value
+        elif isinstance(value, str):
+            if value.startswith(("0x", "0X")):
+                return int(value, 16)
+            else:
+                return int(value, 0)  # Auto-detect base
+        else:
+            return int(value)
+
     def validate(self) -> None:
         """Validate device identification values."""
         if not (0x0001 <= self.vendor_id <= 0xFFFE):
@@ -379,16 +413,29 @@ class DeviceConfigManager:
                 "class_code must be explicitly specified in device identification"
             )
 
+        # Convert hex string values to integers if needed
+        def convert_to_int(value: Any) -> int:
+            """Convert hex string or int to int."""
+            if isinstance(value, int):
+                return value
+            elif isinstance(value, str):
+                if value.startswith(("0x", "0X")):
+                    return int(value, 16)
+                else:
+                    return int(value, 0)  # Auto-detect base
+            else:
+                return int(value)
+
         identification = DeviceIdentification(
-            vendor_id=data["identification"]["vendor_id"],
-            device_id=data["identification"]["device_id"],
-            class_code=data["identification"]["class_code"],
-            subsystem_vendor_id=data["identification"].get(
+            vendor_id=convert_to_int(data["identification"]["vendor_id"]),
+            device_id=convert_to_int(data["identification"]["device_id"]),
+            class_code=convert_to_int(data["identification"]["class_code"]),
+            subsystem_vendor_id=convert_to_int(data["identification"].get(
                 "subsystem_vendor_id", 0x0000
-            ),
-            subsystem_device_id=data["identification"].get(
+            )),
+            subsystem_device_id=convert_to_int(data["identification"].get(
                 "subsystem_device_id", 0x0000
-            ),
+            )),
         )
 
         registers = PCIeRegisters(

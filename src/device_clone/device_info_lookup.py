@@ -86,12 +86,20 @@ class DeviceInfoLookup:
 
         # Optionally validate using DeviceIdentification
         try:
+            # Convert values to integers in case they're strings
+            def to_int(value):
+                if isinstance(value, str):
+                    if value.startswith(("0x", "0X")):
+                        return int(value, 16)
+                    return int(value, 0)
+                return int(value) if value else 0
+            
             ident = DeviceIdentification(
-                vendor_id=device_info.get("vendor_id", 0),
-                device_id=device_info.get("device_id", 0),
-                class_code=device_info.get("class_code", 0),
-                subsystem_vendor_id=device_info.get("subsystem_vendor_id", 0),
-                subsystem_device_id=device_info.get("subsystem_device_id", 0),
+                vendor_id=to_int(device_info.get("vendor_id", 0)),
+                device_id=to_int(device_info.get("device_id", 0)),
+                class_code=to_int(device_info.get("class_code", 0)),
+                subsystem_vendor_id=to_int(device_info.get("subsystem_vendor_id", 0)),
+                subsystem_device_id=to_int(device_info.get("subsystem_device_id", 0)),
             )
             ident.validate()
         except Exception as e:
