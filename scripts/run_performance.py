@@ -4,8 +4,8 @@ Small performance probe for CI: measure import time and system info.
 Writes JSON to performance-results.json
 """
 import json
-import time
 import sys
+import time
 
 try:
     import psutil

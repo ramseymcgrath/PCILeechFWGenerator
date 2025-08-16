@@ -6,11 +6,6 @@ This module provides a centralized fallback management system for
 template variables, ensuring that all templates have access to required variables
 without needing to define defaults in the templates themselves.
 
-Example:
-    >>> manager = FallbackManager()
-    >>> manager.register_fallback("board.name", "default_board")
-    >>> context = manager.apply_fallbacks({"device": {"id": "0x1234"}})
-    >>> print(context["board"]["name"])  # "default_board"
 """
 
 import copy
@@ -19,8 +14,19 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Callable, Dict, Final, List, Optional, Protocol, Set,
-                    Tuple, TypeVar, Union)
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Final,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
 

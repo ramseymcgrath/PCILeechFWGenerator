@@ -13,8 +13,8 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
-from urllib.error import URLError, HTTPError
-from urllib.request import urlopen, Request
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 try:
     from ..__version__ import __url__, __version__
@@ -107,7 +107,7 @@ def is_newer_version(current: str, latest: str) -> bool:
     """
     # Prefer packaging.version when available for robust SemVer-like comparisons
     try:
-        from packaging.version import Version, InvalidVersion
+        from packaging.version import InvalidVersion, Version
 
         try:
             return Version(latest) > Version(current)

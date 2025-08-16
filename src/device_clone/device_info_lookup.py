@@ -7,18 +7,15 @@ including lspci, sysfs, and configuration space scraping.
 """
 
 import logging
-from typing import Any, Dict, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from src.device_clone.config_space_manager import ConfigSpaceManager
+from src.device_clone.device_config import (DeviceConfiguration,
+                                            DeviceIdentification)
 from src.device_clone.fallback_manager import FallbackManager
-from src.device_clone.device_config import DeviceConfiguration, DeviceIdentification
-from src.string_utils import (
-    log_info_safe,
-    log_warning_safe,
-    log_error_safe,
-    log_debug_safe,
-)
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe)
 
 logger = logging.getLogger(__name__)
 

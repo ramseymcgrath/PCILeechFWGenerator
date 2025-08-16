@@ -3,12 +3,13 @@
 Test suite for the resilient device information lookup module.
 """
 
-import unittest
-from unittest.mock import MagicMock, Mock, patch, mock_open
-from pathlib import Path
 import subprocess
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
-from src.device_clone.device_info_lookup import DeviceInfoLookup, lookup_device_info
+from src.device_clone.device_info_lookup import (DeviceInfoLookup,
+                                                 lookup_device_info)
 
 
 class TestDeviceInfoLookup(unittest.TestCase):

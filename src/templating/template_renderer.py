@@ -8,8 +8,9 @@ the string formatting and concatenation currently used in build.py.
 
 import logging
 import math
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from __version__ import __version__
 from string_utils import (
@@ -748,16 +749,161 @@ class TemplateRenderer:
         )
 
 
-from src.exceptions import TemplateRenderError as _TemplateRenderErrorBase
+# Performance optimization: Cache the import result
+_cached_exception_class: Union[Type[Exception], None] = None
 
 
-class TemplateRenderError(_TemplateRenderErrorBase):
-    """Exception raised when template rendering fails.
-
-    This class subclasses the central TemplateRenderError from `src.exceptions`
-    so that exceptions raised by the template renderer are compatible with
-    code and tests that expect the project's canonical exception type.
+def _get_template_render_error_base() -> Type[Exception]:
     """
+    Lazily import and cache the base TemplateRenderError class.
+
+    This function implements a singleton pattern to avoid repeated import
+    attempts and provides better error messages when imports fail.
+
+    Returns:
+        The base exception class to use for TemplateRenderError
+
+    Raises:
+        Never - always returns a valid exception class
+    """
+    global _cached_exception_class
+
+    # Return cached result if available
+    if _cached_exception_class is not None:
+        return _cached_exception_class
+
+    # Optional: Clear the cache if needed (useful for testing)
+    def _clear_exception_cache():
+        """Clear the cached exception class. Useful for testing."""
+        global _cached_exception_class
+        _cached_exception_class = None
+
+    try:
+        # Attempt to import from the main exceptions module
+        from src.exceptions import TemplateRenderError as ImportedError
+
+        _cached_exception_class = ImportedError
+
+    except ImportError as e:
+        # Create a more informative fallback exception class
+        class FallbackTemplateRenderError(Exception):
+            """
+            Fallback exception for template rendering errors.
+
+            This exception is used when the main src.exceptions module
+            is not available (e.g., during testing or in isolated environments).
+            It maintains API compatibility with the main TemplateRenderError.
+            """
+
+            def __init__(
+                self,
+                message: str,
+                template_name: Optional[str] = None,
+                line_number: Optional[int] = None,
+                original_error: Optional[Exception] = None,
+            ):
+                """
+                Initialize the fallback exception with enhanced error context.
+
+                Args:
+                    message: The error message
+                    template_name: Name of the template that failed (optional)
+                    line_number: Line number where error occurred (optional)
+                    original_error: The original exception that caused this error (optional)
+                """
+                super().__init__(message)
+                self.template_name = template_name
+                self.line_number = line_number
+                self.original_error = original_error
+
+            def __str__(self) -> str:
+                """Provide a detailed string representation of the error."""
+                parts = [str(self.args[0]) if self.args else "Template render error"]
+
+                if self.template_name:
+                    parts.append(f"Template: {self.template_name}")
+
+                if self.line_number is not None:
+                    parts.append(f"Line: {self.line_number}")
+
+                if self.original_error:
+                    parts.append(
+                        f"Caused by: {type(self.original_error).__name__}: {self.original_error}"
+                    )
+
+                return " | ".join(parts)
+
+        _cached_exception_class = FallbackTemplateRenderError
+
+        # Log the import failure if in development/debug mode
+        if hasattr(sys, "gettrace") and sys.gettrace() is not None:
+            import warnings
+
+            warnings.warn(
+                f"Failed to import TemplateRenderError from src.exceptions: {e}. "
+                "Using fallback implementation. This may indicate a packaging or path issue.",
+                ImportWarning,
+                stacklevel=2,
+            )
+
+    return _cached_exception_class
+
+
+# Create the actual exception class using the base
+class TemplateRenderError(_get_template_render_error_base()):
+    """
+    Exception raised when template rendering fails.
+
+    This class dynamically inherits from either the project's canonical
+    TemplateRenderError (when available) or a compatible fallback implementation.
+    This ensures that exceptions raised by the template renderer are always
+    compatible with code and tests that expect the project's exception type,
+    while gracefully handling import failures in isolated environments.
+
+    Attributes:
+        template_name: The name of the template that failed to render
+        line_number: The line number where the error occurred (if applicable)
+        original_error: The original exception that caused the rendering failure
+
+    Example:
+        >>> try:
+        ...     render_template("broken.j2", context)
+        ... except TemplateRenderError as e:
+        ...     print(f"Failed to render {e.template_name}: {e}")
+    """
+
+    # Ensure we maintain the same interface regardless of which base we're using
+    def __init__(
+        self,
+        message: str,
+        template_name: Optional[str] = None,
+        line_number: Optional[int] = None,
+        original_error: Optional[Exception] = None,
+    ):
+        """
+        Initialize the TemplateRenderError with detailed context.
+
+        Args:
+            message: The error message describing what went wrong
+            template_name: Name of the template file that failed (optional)
+            line_number: Line number in the template where error occurred (optional)
+            original_error: The underlying exception that caused this error (optional)
+        """
+        # Call parent constructor with just the message for compatibility
+        super().__init__(message)
+
+        # Store additional context
+        self.template_name = template_name
+        self.line_number = line_number
+        self.original_error = original_error
+
+        # If the base class doesn't have these attributes, add them
+        if not hasattr(super(), "template_name"):
+            self.template_name = template_name
+        if not hasattr(super(), "line_number"):
+            self.line_number = line_number
+        if not hasattr(super(), "original_error"):
+            self.original_error = original_error
 
     pass
 

@@ -24,38 +24,23 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Union, cast
+from typing import (Any, Dict, List, Optional, Set, Tuple, TypedDict, Union,
+                    cast)
 
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.error_utils import (
-    ErrorCategory,
-    extract_root_cause,
-    format_concise_error,
-    format_user_friendly_error,
-    is_user_fixable_error,
-)
-from src.string_utils import (
-    generate_sv_header_comment,
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-)
-from src.utils.attribute_access import (
-    get_attr_or_raise,
-    has_attr,
-    require_attrs,
-    safe_get_attr,
-)
+from src.error_utils import (ErrorCategory, extract_root_cause,
+                             format_concise_error, format_user_friendly_error,
+                             is_user_fixable_error)
+from src.string_utils import (generate_sv_header_comment, log_debug_safe,
+                              log_error_safe, log_info_safe, log_warning_safe,
+                              safe_format)
+from src.utils.attribute_access import (get_attr_or_raise, has_attr,
+                                        require_attrs, safe_get_attr)
 
-from .advanced_sv_features import (
-    AdvancedSVFeatureGenerator,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-)
+from .advanced_sv_features import (AdvancedSVFeatureGenerator,
+                                   ErrorHandlingConfig, PerformanceConfig)
 from .advanced_sv_power import PowerManagementConfig
 from .template_renderer import TemplateRenderer, TemplateRenderError
 

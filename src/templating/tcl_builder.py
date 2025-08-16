@@ -8,25 +8,50 @@ using the template system, integrating with constants and build helpers.
 
 import logging
 import shutil
-
 # Use absolute imports for better compatibility
 import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
+from typing import (Any, Dict, List, Optional, Protocol, Union,
+                    runtime_checkable)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.device_clone.fallback_manager import FallbackManager
-from src.exceptions import (
-    DeviceConfigError,
-    TCLBuilderError,
-    TemplateNotFoundError,
-    XDCConstraintError,
-)
+from src.exceptions import (DeviceConfigError, TCLBuilderError,
+                            TemplateNotFoundError, XDCConstraintError)
 from src.import_utils import safe_import, safe_import_class
+from src.string_utils import generate_tcl_header_comment, safe_format
+
+
+def format_hex_id(val: Union[int, str, None], width: int = 4) -> str:
+    """
+    Format device ID values as hex strings with proper defaults for None values.
+
+    This function provides safe defaults for device identification values
+    to prevent template validation errors while maintaining backwards compatibility.
+
+    Args:
+        val: Value to format (int, str, or None)
+        width: Width of hex string (2, 4, or 6)
+
+    Returns:
+        Formatted hex string without 0x prefix
+    """
+    if val is None:
+        # Return safe defaults instead of None to prevent template validation errors
+        if width == 2:
+            return "15"  # Default revision
+        elif width == 6:
+            return "020000"  # Default Ethernet class code
+        else:
+            return "10EC"  # Default Realtek vendor ID
+    if isinstance(val, str):
+        # Remove 0x prefix if present and return just the hex digits
+        return val.replace("0x", "").replace("0X", "").upper()
+    return f"{val:0{width}X}"
 
 
 # Enums for better type safety
@@ -102,25 +127,25 @@ class BuildContext:
         class_code = self.class_code or 0x020000  # Default to Ethernet controller
 
         # Generate device signature for security compliance
-        device_signature = f"{format_hex(vendor_id, 4)}:{format_hex(device_id, 4)}:{format_hex(revision_id, 2)}"
+        device_signature = f"{format_hex_id(vendor_id, 4)}:{format_hex_id(device_id, 4)}:{format_hex_id(revision_id, 2)}"
 
         # Create comprehensive config objects required by templates
         device_config = {
-            "vendor_id": format_hex(vendor_id, 4),
-            "device_id": format_hex(device_id, 4),
-            "class_code": format_hex(class_code, 6),
-            "revision_id": format_hex(revision_id, 2),
-            "subsys_vendor_id": format_hex(subsys_vendor_id, 4),
-            "subsys_device_id": format_hex(subsys_device_id, 4),
+            "vendor_id": format_hex_id(vendor_id, 4),
+            "device_id": format_hex_id(device_id, 4),
+            "class_code": format_hex_id(class_code, 6),
+            "revision_id": format_hex_id(revision_id, 2),
+            "subsys_vendor_id": format_hex_id(subsys_vendor_id, 4),
+            "subsys_device_id": format_hex_id(subsys_device_id, 4),
             "identification": {
-                "vendor_id": format_hex(vendor_id, 4),
-                "device_id": format_hex(device_id, 4),
-                "class_code": format_hex(class_code, 6),
-                "subsystem_vendor_id": format_hex(subsys_vendor_id, 4),
-                "subsystem_device_id": format_hex(subsys_device_id, 4),
+                "vendor_id": format_hex_id(vendor_id, 4),
+                "device_id": format_hex_id(device_id, 4),
+                "class_code": format_hex_id(class_code, 6),
+                "subsystem_vendor_id": format_hex_id(subsys_vendor_id, 4),
+                "subsystem_device_id": format_hex_id(subsys_device_id, 4),
             },
             "registers": {
-                "revision_id": format_hex(revision_id, 2),
+                "revision_id": format_hex_id(revision_id, 2),
             },
         }
 
@@ -135,12 +160,12 @@ class BuildContext:
         }
 
         config_space = {
-            "vendor_id": format_hex(vendor_id, 4),
-            "device_id": format_hex(device_id, 4),
-            "class_code": format_hex(class_code, 6),
-            "revision_id": format_hex(revision_id, 2),
-            "subsystem_vendor_id": format_hex(subsys_vendor_id, 4),
-            "subsystem_device_id": format_hex(subsys_device_id, 4),
+            "vendor_id": format_hex_id(vendor_id, 4),
+            "device_id": format_hex_id(device_id, 4),
+            "class_code": format_hex_id(class_code, 6),
+            "revision_id": format_hex_id(revision_id, 2),
+            "subsystem_vendor_id": format_hex_id(subsys_vendor_id, 4),
+            "subsystem_device_id": format_hex_id(subsys_device_id, 4),
         }
 
         msix_config = {
@@ -187,12 +212,12 @@ class BuildContext:
             "pcileech_config": pcileech_config,
             # Nested device information (backward compatibility)
             "device": {
-                "vendor_id": format_hex(vendor_id, 4),
-                "device_id": format_hex(device_id, 4),
-                "class_code": format_hex(class_code, 6),
-                "revision_id": format_hex(revision_id, 2),
-                "subsys_vendor_id": format_hex(subsys_vendor_id, 4),
-                "subsys_device_id": format_hex(subsys_device_id, 4),
+                "vendor_id": format_hex_id(vendor_id, 4),
+                "device_id": format_hex_id(device_id, 4),
+                "class_code": format_hex_id(class_code, 6),
+                "revision_id": format_hex_id(revision_id, 2),
+                "subsys_vendor_id": format_hex_id(subsys_vendor_id, 4),
+                "subsys_device_id": format_hex_id(subsys_device_id, 4),
             },
             # Nested board information (backward compatibility)
             "board": {
@@ -241,8 +266,18 @@ class BuildContext:
             "project_name": self.project_name,
             "project_dir": self.project_dir,
             "output_dir": self.output_dir,
-            "header_comment": f"# PCILeech Firmware Build - {self.board_name}",
-            "header": f"# PCILeech Firmware Build - {self.board_name}",
+            "project_name": self.project_name,
+            "project_dir": self.project_dir,
+            "output_dir": self.output_dir,
+            "header_comment": generate_tcl_header_comment(
+                "PCILeech Firmware Build",
+                vendor_id=format_hex_id(vendor_id, 4),
+                device_id=format_hex_id(device_id, 4),
+                board=self.board_name,
+            ),
+            "header": generate_tcl_header_comment(
+                "PCILeech Firmware Build", board=self.board_name
+            ),
             # PCILeech flat variables
             "pcileech_src_dir": self.pcileech_src_dir,
             "pcileech_ip_dir": self.pcileech_ip_dir,
@@ -258,22 +293,6 @@ class DeviceConfigProvider(Protocol):
     def get_device_config(self, profile_name: str) -> Any:
         """Get device configuration for the specified profile."""
         ...
-
-
-def format_hex(val: Union[int, str, None], width: int = 4) -> str:
-    """Format value as hex string with proper defaults for None values."""
-    if val is None:
-        # Return safe defaults instead of None to prevent template validation errors
-        if width == 2:
-            return "15"  # Default revision
-        elif width == 6:
-            return "020000"  # Default Ethernet class code
-        else:
-            return "10EC"  # Default Realtek vendor ID
-    if isinstance(val, str):
-        # Remove 0x prefix if present and return just the hex digits
-        return val.replace("0x", "").replace("0X", "").upper()
-    return f"{val:0{width}X}"
 
 
 class ConstraintManager:
@@ -298,10 +317,8 @@ class ConstraintManager:
         """
         try:
             # Import repo_manager functions directly
-            from file_management.repo_manager import (
-                get_xdc_files,
-                is_repository_accessible,
-            )
+            from file_management.repo_manager import (get_xdc_files,
+                                                      is_repository_accessible)
 
             if not is_repository_accessible(board_name):
                 raise XDCConstraintError("Repository is not accessible")
@@ -477,11 +494,9 @@ class TCLBuilder:
     def _init_build_helpers(self):
         """Initialize build helpers with fallback handling."""
         try:
-            from build_helpers import (
-                batch_write_tcl_files,
-                create_fpga_strategy_selector,
-                validate_fpga_part,
-            )
+            from build_helpers import (batch_write_tcl_files,
+                                       create_fpga_strategy_selector,
+                                       validate_fpga_part)
 
             self.batch_write_tcl_files = batch_write_tcl_files
             self.fpga_strategy_selector = create_fpga_strategy_selector()
@@ -731,7 +746,8 @@ class TCLBuilder:
 
         # Ensure header is defined
         template_context.setdefault(
-            "header", f"# TCL constraints for {context.board_name}"
+            "header",
+            generate_tcl_header_comment("TCL Constraints", board=context.board_name),
         )
 
         # COMPREHENSIVE TEMPLATE CONTEXT HANDLING
@@ -743,21 +759,27 @@ class TCLBuilder:
 
         # Extract all device properties directly from context
         if hasattr(context, "vendor_id") and context.vendor_id:
-            template_context["device"]["vendor_id"] = format_hex(context.vendor_id, 4)
+            template_context["device"]["vendor_id"] = format_hex_id(
+                context.vendor_id, 4
+            )
         if hasattr(context, "device_id") and context.device_id:
-            template_context["device"]["device_id"] = format_hex(context.device_id, 4)
+            template_context["device"]["device_id"] = format_hex_id(
+                context.device_id, 4
+            )
         if hasattr(context, "revision_id") and context.revision_id:
-            template_context["device"]["revision_id"] = format_hex(
+            template_context["device"]["revision_id"] = format_hex_id(
                 context.revision_id, 2
             )
         if hasattr(context, "class_code") and context.class_code:
-            template_context["device"]["class_code"] = format_hex(context.class_code, 6)
+            template_context["device"]["class_code"] = format_hex_id(
+                context.class_code, 6
+            )
         if hasattr(context, "subsys_vendor_id") and context.subsys_vendor_id:
-            template_context["device"]["subsys_vendor_id"] = format_hex(
+            template_context["device"]["subsys_vendor_id"] = format_hex_id(
                 context.subsys_vendor_id, 4
             )
         if hasattr(context, "subsys_device_id") and context.subsys_device_id:
-            template_context["device"]["subsys_device_id"] = format_hex(
+            template_context["device"]["subsys_device_id"] = format_hex_id(
                 context.subsys_device_id, 4
             )
 
@@ -798,9 +820,10 @@ class TCLBuilder:
         # 4. Ensure header is defined
         template_context.setdefault(
             "header",
-            (
-                f"# TCL constraints for {template_context['device'].get('vendor_id', 'Unknown')}:"
-                f"{template_context['device'].get('device_id', 'Unknown')}"
+            generate_tcl_header_comment(
+                "TCL Constraints",
+                vendor_id=template_context["device"].get("vendor_id", "Unknown"),
+                device_id=template_context["device"].get("device_id", "Unknown"),
             ),
         )
 
