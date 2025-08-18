@@ -25,19 +25,25 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import existing infrastructure components
-from src.device_clone.behavior_profiler import (BehaviorProfile,
-                                                BehaviorProfiler)
+from src.device_clone.behavior_profiler import BehaviorProfile, BehaviorProfiler
 from src.device_clone.config_space_manager import ConfigSpaceManager
-from src.device_clone.msix_capability import (parse_msix_capability,
-                                              validate_msix_configuration)
+from src.device_clone.msix_capability import (
+    parse_msix_capability,
+    validate_msix_configuration,
+)
 from src.device_clone.pcileech_context import PCILeechContextBuilder
 from src.device_clone.writemask_generator import WritemaskGenerator
 from src.error_utils import extract_root_cause
 from src.exceptions import PCILeechGenerationError, PlatformCompatibilityError
+
 # Import from centralized locations
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
-from src.templating import (AdvancedSVGenerator, BuildContext,
-                            TemplateRenderer, TemplateRenderError)
+from src.templating import (
+    AdvancedSVGenerator,
+    BuildContext,
+    TemplateRenderer,
+    TemplateRenderError,
+)
 from src.utils.attribute_access import has_attr, safe_get_attr
 
 logger = logging.getLogger(__name__)
@@ -113,8 +119,7 @@ class PCILeechGenerator:
         self.logger = logging.getLogger(__name__)
 
         # Initialize shared/global fallback manager
-        from src.device_clone.fallback_manager import \
-            get_global_fallback_manager
+        from src.device_clone.fallback_manager import get_global_fallback_manager
 
         self.fallback_manager = get_global_fallback_manager(
             mode=config.fallback_mode, allowed_fallbacks=config.allowed_fallbacks
@@ -677,8 +682,9 @@ class PCILeechGenerator:
         """
         try:
             # Import the centralized validator
-            from src.templating.template_context_validator import \
-                validate_template_context
+            from src.templating.template_context_validator import (
+                validate_template_context,
+            )
 
             # Since we're generating PCILeech firmware, we need to validate
             # against PCILeech-specific template requirements
@@ -922,8 +928,11 @@ class PCILeechGenerator:
         """Generate constraint files."""
         try:
             # Import TCL builder components
-            from src.templating.tcl_builder import (BuildContext, TCLBuilder,
-                                                    TCLScriptType)
+            from src.templating.tcl_builder import (
+                BuildContext,
+                TCLBuilder,
+                TCLScriptType,
+            )
             from src.templating.template_renderer import TemplateRenderer
 
             # Create template renderer
@@ -1236,8 +1245,9 @@ puts "Synthesis complete!"
                         )
                     else:
                         # Generate new content as last resort
-                        from src.templating.systemverilog_generator import \
-                            AdvancedSVGenerator
+                        from src.templating.systemverilog_generator import (
+                            AdvancedSVGenerator,
+                        )
 
                         sv_gen = AdvancedSVGenerator(
                             template_dir=self.config.template_dir
@@ -1310,52 +1320,93 @@ puts "Synthesis complete!"
             # Import hex formatter
             from src.device_clone.hex_formatter import ConfigSpaceHexFormatter
 
-            # Try multiple possible locations for config space data
-            config_space_data = None
-            raw_config_space = None
+            # Helper to coerce various representations into bytes
+            def _coerce_to_bytes(value: Any) -> Optional[bytes]:
+                if not value:
+                    return None
+                # Already bytes
+                if isinstance(value, (bytes, bytearray)):
+                    return bytes(value)
+                # Hex string
+                if isinstance(value, str):
+                    # Remove whitespace/newlines
+                    s = value.replace(" ", "").replace("\n", "")
+                    try:
+                        return bytes.fromhex(s)
+                    except ValueError:
+                        return None
+                # Lists of ints
+                if isinstance(value, list) and all(isinstance(x, int) for x in value):
+                    try:
+                        return bytes(value)
+                    except Exception:
+                        return None
+                return None
 
-            # First try the direct key
-            if "config_space_data" in template_context:
-                config_space_data = template_context["config_space_data"]
-                raw_config_space = config_space_data.get("raw_config_space", b"")
+            raw_config_space: Optional[bytes] = None
 
-            # If not found, try alternative locations
-            if not raw_config_space:
-                # Try the config_space key directly
-                config_space = template_context.get("config_space", {})
-                if isinstance(config_space, dict):
-                    # Try raw_data key (this is what we found in the logs)
-                    raw_config_space = config_space.get("raw_data", b"")
-                    # If raw_data is a string (hex), convert it to bytes
-                    if isinstance(raw_config_space, str):
-                        try:
-                            raw_config_space = bytes.fromhex(raw_config_space)
-                        except ValueError:
-                            raw_config_space = b""
-                    if not raw_config_space:
-                        # Try raw_config_space key
-                        raw_config_space = config_space.get("raw_config_space", b"")
-                        # If raw_config_space is a string (hex), convert it to bytes
-                        if isinstance(raw_config_space, str):
-                            try:
-                                raw_config_space = bytes.fromhex(raw_config_space)
-                            except ValueError:
-                                raw_config_space = b""
-                    if not raw_config_space:
-                        # Try hex format
-                        config_space_hex = config_space.get("config_space_hex", "")
-                        if config_space_hex:
-                            try:
-                                raw_config_space = bytes.fromhex(config_space_hex)
-                            except ValueError:
-                                pass
+            # 1) Top-level config_space_data (preferred)
+            csd = template_context.get("config_space_data")
+            if isinstance(csd, dict):
+                raw_config_space = (
+                    _coerce_to_bytes(csd.get("raw_config_space"))
+                    or _coerce_to_bytes(csd.get("raw_data"))
+                    or _coerce_to_bytes(csd.get("config_space_hex"))
+                )
 
-            # If still not found, try device_config or other locations
-            if not raw_config_space:
-                device_config = template_context.get("device_config", {})
-                if "config_space_data" in device_config:
-                    config_space_data = device_config["config_space_data"]
-                    raw_config_space = config_space_data.get("raw_config_space", b"")
+            # 2) Top-level raw keys
+            if raw_config_space is None:
+                raw_config_space = _coerce_to_bytes(
+                    template_context.get("raw_config_space")
+                ) or _coerce_to_bytes(template_context.get("config_space_hex"))
+
+            # 3) config_space dict (common from context builder)
+            if raw_config_space is None:
+                cfg = template_context.get("config_space")
+                if isinstance(cfg, dict):
+                    raw_config_space = (
+                        _coerce_to_bytes(cfg.get("raw_data"))
+                        or _coerce_to_bytes(cfg.get("raw_config_space"))
+                        or _coerce_to_bytes(cfg.get("config_space_hex"))
+                    )
+
+            # 4) device_config -> config_space_data (legacy)
+            if raw_config_space is None:
+                device_cfg = template_context.get("device_config")
+                if isinstance(device_cfg, dict) and "config_space_data" in device_cfg:
+                    nested = device_cfg.get("config_space_data")
+                    if isinstance(nested, dict):
+                        raw_config_space = (
+                            _coerce_to_bytes(nested.get("raw_config_space"))
+                            or _coerce_to_bytes(nested.get("raw_data"))
+                            or _coerce_to_bytes(nested.get("config_space_hex"))
+                        )
+
+            # 5) Best-effort: probe any dict-like entry that looks like config space
+            if raw_config_space is None:
+                for key, value in template_context.items():
+                    if not isinstance(value, dict):
+                        continue
+                    k = str(key).lower()
+                    if "config" in k or "raw" in k:
+                        raw_config_space = (
+                            _coerce_to_bytes(value.get("raw_config_space"))
+                            or _coerce_to_bytes(value.get("raw_data"))
+                            or _coerce_to_bytes(value.get("config_space_hex"))
+                        )
+                        if raw_config_space:
+                            log_info_safe(
+                                self.logger,
+                                "Found potential config space key '{key}' with subkeys: {subkeys}",
+                                key=key,
+                                subkeys=(
+                                    list(value.keys())
+                                    if isinstance(value, dict)
+                                    else type(value)
+                                ),
+                                prefix="HEX",
+                            )
+                            break
 
             if not raw_config_space:
                 # Log all available keys for debugging
@@ -1365,24 +1416,6 @@ puts "Synthesis complete!"
                     keys=list(template_context.keys()),
                     prefix="HEX",
                 )
-
-                # Try to examine nested structure
-                for key, value in template_context.items():
-                    if isinstance(value, dict) and (
-                        "config_space" in str(key).lower() or "raw" in str(key).lower()
-                    ):
-                        log_info_safe(
-                            self.logger,
-                            "Found potential config space key '{key}' with subkeys: {subkeys}",
-                            key=key,
-                            subkeys=(
-                                list(value.keys())
-                                if isinstance(value, dict)
-                                else type(value)
-                            ),
-                            prefix="HEX",
-                        )
-
                 raise ValueError(
                     "No configuration space data available in template context"
                 )

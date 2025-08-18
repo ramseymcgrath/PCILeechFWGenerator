@@ -767,7 +767,7 @@ class TemplateRenderer:
 
 
 # Performance optimization: Cache the import result
-_cached_exception_class: Union[Type[Exception], None] = None
+_cached_exception_class: Optional[Type[Exception]] = None
 
 
 def _clear_exception_cache():
@@ -866,6 +866,8 @@ def _get_template_render_error_base() -> Type[Exception]:
                 stacklevel=2,
             )
 
+    # _cached_exception_class is always set above before returning; assert for typing
+    assert _cached_exception_class is not None
     return _cached_exception_class
 
 
@@ -926,6 +928,59 @@ class TemplateRenderError(_get_template_render_error_base()):
             self.original_error = original_error
 
     pass
+
+    def __str__(self) -> str:
+        """Provide a detailed string representation including context when available.
+
+        This ensures consistent, enhanced error messages whether the class
+        inherits from the project's canonical exception or the fallback.
+        """
+        # Prefer parent's string representation as the base message
+        try:
+            base_msg = super().__str__()
+        except Exception:
+            base_msg = str(self.args[0]) if self.args else "Template render error"
+        # Determine whether the immediate base class is the fallback defined
+        # in this module. Also check the currently-resolved base via
+        # _get_template_render_error_base() because tests may patch imports
+        # and expect fallback formatting even when the instance's static
+        # base class differs (created earlier).
+        base_cls = type(self).__mro__[1]
+        is_fallback_static = base_cls.__name__ == "FallbackTemplateRenderError" or (
+            base_cls.__module__ == __name__
+        )
+
+        try:
+            current_base = _get_template_render_error_base()
+            is_fallback_runtime = current_base.__name__ == "FallbackTemplateRenderError"
+        except Exception:
+            is_fallback_runtime = False
+
+        if not (is_fallback_static or is_fallback_runtime):
+            # Use the base class string representation unchanged
+            return base_msg
+
+        # When using the fallback, include contextual information.
+        parts = [base_msg]
+
+        tname = getattr(self, "template_name", None)
+        if tname:
+            parts.append(f"Template: {tname}")
+
+        lnum = getattr(self, "line_number", None)
+        if lnum is not None:
+            parts.append(f"Line: {lnum}")
+
+        orig = getattr(self, "original_error", None)
+        if orig:
+            # Avoid calling str(orig) to prevent recursion on circular references
+            try:
+                orig_msg = orig.args[0] if getattr(orig, "args", None) else repr(orig)
+            except Exception:
+                orig_msg = repr(orig)
+            parts.append(f"Caused by: {type(orig).__name__}: {orig_msg}")
+
+        return " | ".join(parts)
 
 
 # Convenience function for quick template rendering
