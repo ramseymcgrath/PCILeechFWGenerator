@@ -8,15 +8,19 @@ including lspci, sysfs, and configuration space scraping.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.device_clone.config_space_manager import ConfigSpaceManager
-from src.device_clone.device_config import (DeviceConfiguration,
-                                            DeviceIdentification)
+from src.device_clone.device_config import DeviceConfiguration, DeviceIdentification
 from src.device_clone.fallback_manager import get_global_fallback_manager
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +152,26 @@ class DeviceInfoLookup:
         try:
             # Convert values to integers in case they're strings
             def to_int(value):
+                """Convert a value to int, accepting hex strings with or without 0x.
+
+                Accept formats like '0x10ec', '10ec', or decimal '1234'.
+                """
                 if isinstance(value, str):
-                    if value.startswith(("0x", "0X")):
-                        return int(value, 16)
-                    return int(value, 0)
+                    s = value.strip()
+                    if s.startswith(("0x", "0X")):
+                        return int(s, 16)
+                    # Plain decimal
+                    if re.match(r"^\d+$", s):
+                        return int(s, 10)
+                    # Hex digits without 0x prefix (e.g. '10ec')
+                    if re.match(r"^[0-9A-Fa-f]+$", s):
+                        return int(s, 16)
+                    # Fallback to python auto-detect; if that fails try hex
+                    try:
+                        return int(s, 0)
+                    except ValueError:
+                        return int(s, 16)
+
                 return int(value) if value else 0
 
             ident = DeviceIdentification(

@@ -25,8 +25,12 @@ except ImportError:
     yaml = None
     YAML_AVAILABLE = False
 
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -230,8 +234,10 @@ class DeviceCapabilities:
     def validate(self) -> None:
         """Validate capability values."""
         # Import here to avoid circular dependency
-        from src.device_clone.payload_size_config import (PayloadSizeConfig,
-                                                          PayloadSizeError)
+        from src.device_clone.payload_size_config import (
+            PayloadSizeConfig,
+            PayloadSizeError,
+        )
 
         # Validate payload size using the new payload size configuration
         try:
@@ -368,6 +374,31 @@ class DeviceConfiguration:
         }
 
 
+def validate_hex_id(value: str, bit_width: int = 16) -> int:
+    """Validate and convert hex ID string to integer.
+
+    Accepts strings like '0x10ec' or '10ec' and enforces bit-width limits.
+    """
+    if isinstance(value, int):
+        return value
+
+    s = value.strip()
+    if s.startswith(("0x", "0X")):
+        s = s[2:]
+
+    if not re.match(r"^[0-9A-Fa-f]+$", s):
+        raise ValueError(f"Invalid hex format: {value}")
+
+    int_value = int(s, 16)
+    max_value = (1 << bit_width) - 1
+    if not (0 <= int_value <= max_value):
+        raise ValueError(
+            f"Value 0x{int_value:X} out of range for {bit_width}-bit field"
+        )
+
+    return int_value
+
+
 class DeviceConfigManager:
     """Manages device configurations with file loading and validation."""
 
@@ -444,16 +475,25 @@ class DeviceConfigManager:
 
         # Convert hex string values to integers if needed
         def convert_to_int(value: Any) -> int:
-            """Convert hex string or int to int."""
+            """Convert hex string or int to int.
+
+            Accepts '0x' prefixed hex, plain hex like '10ec', or decimal strings.
+            """
             if isinstance(value, int):
                 return value
-            elif isinstance(value, str):
-                if value.startswith(("0x", "0X")):
-                    return int(value, 16)
-                else:
-                    return int(value, 0)  # Auto-detect base
-            else:
-                return int(value)
+            if isinstance(value, str):
+                s = value.strip()
+                if s.startswith(("0x", "0X")):
+                    return int(s, 16)
+                if re.match(r"^\d+$", s):
+                    return int(s, 10)
+                if re.match(r"^[0-9A-Fa-f]+$", s):
+                    return int(s, 16)
+                try:
+                    return int(s, 0)
+                except ValueError:
+                    return int(s, 16)
+            return int(value)
 
         identification = DeviceIdentification(
             vendor_id=convert_to_int(data["identification"]["vendor_id"]),
@@ -612,9 +652,11 @@ class DeviceConfigManager:
                 f"PCIE_{name.upper()}_CLASS_CODE environment variable is required"
             )
 
-        vendor_id = int(vendor_id_env, 0)
-        device_id = int(device_id_env, 0)
-        class_code = int(class_code_env, 0)
+        # Use robust validation/conversion for environment-provided hex IDs
+        vendor_id = validate_hex_id(vendor_id_env, bit_width=16)
+        device_id = validate_hex_id(device_id_env, bit_width=16)
+        # class_code is 24-bit
+        class_code = validate_hex_id(class_code_env, bit_width=24)
 
         identification = DeviceIdentification(
             vendor_id=vendor_id,
@@ -733,32 +775,6 @@ def get_device_config(profile_name: str) -> Optional[DeviceConfiguration]:
             profile_name=profile_name,
         )
         return None
-
-
-def validate_hex_id(value: str, bit_width: int = 16) -> int:
-    """Validate and convert hex ID string to integer."""
-    if isinstance(value, int):
-        return value
-
-    # Remove 0x prefix if present
-    if value.startswith(("0x", "0X")):
-        value = value[2:]
-
-    # Validate hex format
-    if not re.match(r"^[0-9A-Fa-f]+$", value):
-        raise ValueError(f"Invalid hex format: {value}")
-
-    # Convert to integer
-    int_value = int(value, 16)
-
-    # Validate range
-    max_value = (1 << bit_width) - 1
-    if not (0 <= int_value <= max_value):
-        raise ValueError(
-            f"Value 0x{int_value:X} out of range for {bit_width}-bit field"
-        )
-
-    return int_value
 
 
 def generate_device_state_machine(registers: List[Dict[str, Any]]) -> Dict[str, Any]:
