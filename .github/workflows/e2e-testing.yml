@@ -62,10 +62,6 @@ jobs:
         python-version: ['3.9', '3.10', '3.11', '3.12']
         container-engine: ['docker', 'podman']
         include:
-          # Test with minimal dependencies
-          - python-version: '3.9'
-            container-engine: 'docker'
-            test-mode: 'minimal'
           # Test with full dependencies
           - python-version: '3.11'
             container-engine: 'podman'
@@ -164,7 +160,6 @@ jobs:
         run: |
           source venv/bin/activate
           python scripts/e2e_test_github_actions.py \
-            --verbose=${{ github.event.inputs.verbose || 'false' }} \
             ${{ github.event.inputs.no_cleanup == 'true' && '--no-cleanup' || '' }}
 
       - name: Run E2E tests (specific)
@@ -173,7 +168,6 @@ jobs:
           source venv/bin/activate
           python scripts/e2e_test_github_actions.py \
             --test ${{ github.event.inputs.test_type }} \
-            --verbose=${{ github.event.inputs.verbose || 'false' }} \
             ${{ github.event.inputs.no_cleanup == 'true' && '--no-cleanup' || '' }}
 
       - name: Collect system information

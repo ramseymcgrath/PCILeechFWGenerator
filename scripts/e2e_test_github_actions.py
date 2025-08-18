@@ -34,14 +34,13 @@ from unittest.mock import patch
 class E2ETestRunner:
     """Main test runner for end-to-end testing."""
 
-    def __init__(self, verbose: bool = False, cleanup: bool = True):
-        self.verbose = verbose
+    def __init__(self, cleanup: bool = True):
         self.cleanup = cleanup
         self.test_results: List[Dict[str, Any]] = []
         self.start_time = time.time()
 
         # Setup logging
-        log_level = logging.DEBUG if verbose else logging.INFO
+        log_level = logging.DEBUG
         logging.basicConfig(
             level=log_level, format="%(asctime)s - %(levelname)s - %(message)s"
         )
@@ -683,8 +682,7 @@ class E2ETestRunner:
 
         try:
             from src.template_context_validator import TemplateContextValidator
-            from src.template_security_validation import \
-                TemplateSecurityValidator
+            from src.template_security_validation import TemplateSecurityValidator
 
             # Find all template files
             template_dir = self.project_root / "src" / "templates"
@@ -1149,7 +1147,6 @@ async def main():
     parser = argparse.ArgumentParser(
         description="PCILeech E2E Test Suite for GitHub Actions"
     )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument(
         "--no-cleanup", action="store_true", help="Don't clean up test artifacts"
     )
@@ -1174,7 +1171,7 @@ async def main():
     args = parser.parse_args()
 
     # Create test runner
-    runner = E2ETestRunner(verbose=args.verbose, cleanup=not args.no_cleanup)
+    runner = E2ETestRunner(cleanup=not args.no_cleanup)
 
     # Run specific test or all tests
     if args.test == "all":
