@@ -9,11 +9,16 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.cli.version_checker import (CACHE_FILE, check_for_updates,
-                                     fetch_latest_version_github,
-                                     fetch_latest_version_pypi,
-                                     get_cached_check, is_newer_version,
-                                     parse_version, save_cache)
+from src.cli.version_checker import (
+    CACHE_FILE,
+    check_for_updates,
+    fetch_latest_version_github,
+    fetch_latest_version_pypi,
+    get_cached_check,
+    is_newer_version,
+    parse_version,
+    save_cache,
+)
 
 
 class TestVersionParsing:
@@ -166,8 +171,10 @@ class TestUpdateChecking:
         """Test getting update info from cache."""
         mock_cache.return_value = {"latest_version": "0.6.0", "update_available": True}
 
-        result = check_for_updates(force=False)
-        assert result == ("0.6.0", True)
+        # Set environment to use cache
+        with patch.dict(os.environ, {"PCILEECH_USE_CACHE": "1"}):
+            result = check_for_updates(force=False)
+            assert result == ("0.6.0", True)
 
     @patch("src.cli.version_checker.fetch_latest_version")
     @patch("src.cli.version_checker.save_cache")

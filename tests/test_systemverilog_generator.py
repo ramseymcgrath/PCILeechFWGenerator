@@ -10,18 +10,25 @@ from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, Mock, patch
 
+from src.__version__ import __version__
+
 import pytest
 
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
-from src.templating.systemverilog_generator import (TEMPLATE_PATHS,
-                                                    AdvancedSVGenerator,
-                                                    DeviceSpecificLogic,
-                                                    MSIXHelper, PCILeechOutput,
-                                                    RegisterAccessType)
+from src.templating.advanced_sv_features import (
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    PowerManagementConfig,
+)
+from src.templating.systemverilog_generator import (
+    TEMPLATE_PATHS,
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    MSIXHelper,
+    PCILeechOutput,
+    RegisterAccessType,
+)
 from src.templating.template_renderer import TemplateRenderError
 
 
@@ -307,7 +314,7 @@ class TestAdvancedSVGenerator:
 
         assert result == expected_code
         mock_template_renderer.render_template.assert_called_once_with(
-            TEMPLATE_PATHS["build_integration"], {"generator_version": "__version__"}
+            TEMPLATE_PATHS["build_integration"], {"generator_version": __version__}
         )
 
     def test_generate_enhanced_build_integration_template_error(
@@ -354,8 +361,11 @@ class TestAdvancedSVGenerator:
                     "device_id": "8168",
                     "class_code": "020000",
                     "revision_id": "01",
+                    "subsystem_vendor_id": "10EC",
+                    "subsystem_device_id": "8168",
                 },
                 "device_signature": "0xDEADBEEF",  # Required security field
+                "active_device_config": {},  # Required by SystemVerilog generator
             }
 
             result = generator.generate_pcileech_modules(template_context)
@@ -381,12 +391,12 @@ class TestAdvancedSVGenerator:
             generator = AdvancedSVGenerator()
 
             # Mock MSI-X initialization methods
-            with patch.object(
-                generator, "_generate_msix_pba_init", return_value="PBA_INIT_DATA"
+            with patch(
+                "src.templating.systemverilog_generator.MSIXHelper.generate_msix_pba_init",
+                return_value="PBA_INIT_DATA",
             ):
-                with patch.object(
-                    generator,
-                    "_generate_msix_table_init",
+                with patch(
+                    "src.templating.systemverilog_generator.MSIXHelper.generate_msix_table_init",
                     return_value="TABLE_INIT_DATA",
                 ):
                     # Provide valid device_config with required fields
@@ -396,9 +406,12 @@ class TestAdvancedSVGenerator:
                             "device_id": "8168",
                             "class_code": "020000",
                             "revision_id": "01",
+                            "subsystem_vendor_id": "10EC",
+                            "subsystem_device_id": "8168",
                         },
                         "msix_config": {"is_supported": True, "num_vectors": 4},
                         "device_signature": "0xCAFEBABE",
+                        "active_device_config": {},  # Required by SystemVerilog generator
                     }
 
                     result = generator.generate_pcileech_modules(template_context)
@@ -438,8 +451,11 @@ class TestAdvancedSVGenerator:
                     "device_id": "8168",
                     "class_code": "020000",
                     "revision_id": "01",
+                    "subsystem_vendor_id": "10EC",
+                    "subsystem_device_id": "8168",
                 },
                 "device_signature": "0xCAFEBABE",
+                "active_device_config": {},  # Required by SystemVerilog generator
             }
 
             with pytest.raises(TemplateRenderError, match="PCILeech template error"):

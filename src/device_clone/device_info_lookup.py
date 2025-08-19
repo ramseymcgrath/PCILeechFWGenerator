@@ -9,6 +9,7 @@ including lspci, sysfs, and configuration space scraping.
 import json
 import logging
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -32,6 +33,7 @@ class DeviceInfoLookup:
 
     def __init__(self, bdf: str):
         self.bdf = bdf
+        self.sysfs_path = Path(f"/sys/bus/pci/devices/{bdf}")
         self._cached_info: Optional[Dict[str, Any]] = None
 
     def get_complete_device_info(
@@ -193,6 +195,179 @@ class DeviceInfoLookup:
 
         self._cached_info = device_info
         return device_info
+
+    # Legacy compatibility methods for tests
+    def _has_required_fields(self, info: Dict[str, Any]) -> bool:
+        """Check if device info has all required fields."""
+        required_fields = ["vendor_id", "device_id", "class_code", "revision_id"]
+        return all(
+            field in info and info[field] is not None for field in required_fields
+        )
+
+    def _get_info_from_sysfs(self) -> Dict[str, Any]:
+        """Get device info from sysfs files."""
+        info = {}
+        sysfs_files = {
+            "vendor_id": "vendor",
+            "device_id": "device",
+            "class_code": "class",
+            "revision_id": "revision",
+            "subsystem_vendor_id": "subsystem_vendor",
+            "subsystem_device_id": "subsystem_device",
+        }
+
+        for key, filename in sysfs_files.items():
+            file_path = self.sysfs_path / filename
+            if file_path.exists():
+                try:
+                    content = file_path.read_text().strip()
+                    # Convert hex string to int
+                    if content.startswith("0x"):
+                        info[key] = int(content, 16)
+                    else:
+                        info[key] = int(content, 16)
+                except (ValueError, OSError) as e:
+                    log_warning_safe(
+                        logger,
+                        "Failed to read {file}: {error}",
+                        file=str(file_path),
+                        error=str(e),
+                        prefix="SYSFS",
+                    )
+
+        return info
+
+    def _get_info_from_lspci(self) -> Dict[str, Any]:
+        """Get device info from lspci command."""
+        try:
+            result = subprocess.run(
+                ["lspci", "-D", "-s", self.bdf, "-v"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                return {}
+
+            info = {}
+            lines = result.stdout.split("\n")
+
+            # Get the short BDF format for matching (e.g., "03:00.0" from "0000:03:00.0")
+            short_bdf = self.bdf.split(":")[-2] + ":" + self.bdf.split(":")[-1]
+
+            for line in lines:
+                if line.startswith(self.bdf) or line.startswith(short_bdf):
+                    # Parse main line: "03:00.0 Network controller [0280]: Intel Corporation [8086] Device [10d3] (rev 00)"
+                    # Extract class code first
+                    class_match = re.search(r"\[([0-9a-fA-F]+)\]:", line)
+                    if class_match:
+                        info["class_code"] = (
+                            int(class_match.group(1), 16) << 8
+                        )  # Shift for full class code
+
+                    # Extract vendor and device IDs - look for pattern like "[8086] Device [10d3]"
+                    vendor_device_match = re.search(
+                        r"\[([0-9a-fA-F]{4})\] Device \[([0-9a-fA-F]+)\]", line
+                    )
+                    if vendor_device_match:
+                        info["vendor_id"] = int(vendor_device_match.group(1), 16)
+                        info["device_id"] = int(vendor_device_match.group(2), 16)
+
+                    # Extract revision
+                    rev_match = re.search(r"\(rev ([0-9a-fA-F]+)\)", line)
+                    if rev_match:
+                        info["revision_id"] = int(rev_match.group(1), 16)
+
+                elif line.strip().startswith("Subsystem:"):
+                    # Parse subsystem line: "\tSubsystem: Intel Corporation [8086] Device [a01f]"
+                    subsys_match = re.search(
+                        r"\[([0-9a-fA-F]{4})\] Device \[([0-9a-fA-F]+)\]", line
+                    )
+                    if subsys_match:
+                        info["subsystem_vendor_id"] = int(subsys_match.group(1), 16)
+                        info["subsystem_device_id"] = int(subsys_match.group(2), 16)
+
+            return info
+
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError):
+            return {}
+
+    def _get_info_from_config_space(self) -> Dict[str, Any]:
+        """Get device info from config space file."""
+        config_path = self.sysfs_path / "config"
+        if not config_path.exists():
+            return {}
+
+        try:
+            with open(config_path, "rb") as f:
+                config_data = f.read(256)  # Read PCI config space header
+
+            if len(config_data) < 4:
+                return {}
+
+            # Extract vendor and device ID from first 4 bytes
+            vendor_id = int.from_bytes(config_data[0:2], byteorder="little")
+            device_id = int.from_bytes(config_data[2:4], byteorder="little")
+
+            info = {
+                "vendor_id": vendor_id,
+                "device_id": device_id,
+            }
+
+            # Extract additional fields if available
+            if len(config_data) >= 12:
+                class_code = int.from_bytes(config_data[9:12], byteorder="little")
+                info["class_code"] = class_code
+
+            if len(config_data) >= 8:
+                revision_id = config_data[8]
+                info["revision_id"] = revision_id
+
+            return info
+
+        except (OSError, IOError):
+            return {}
+
+    def _merge_device_info(
+        self, base: Dict[str, Any], new: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Merge device information, preferring valid values."""
+        merged = base.copy()
+
+        for key, value in new.items():
+            # Only update if base doesn't have the key, has None, or has invalid value
+            if (
+                key not in merged
+                or merged[key] is None
+                or (
+                    key in ["vendor_id", "device_id"]
+                    and merged[key] in [0x0000, 0xFFFF]
+                )
+            ):
+                merged[key] = value
+
+        return merged
+
+    def _apply_intelligent_defaults(self, info: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply intelligent defaults for missing device information."""
+        result = info.copy()
+
+        # Default subsystem IDs to main IDs if missing
+        if "subsystem_vendor_id" not in result or result["subsystem_vendor_id"] is None:
+            result["subsystem_vendor_id"] = result.get("vendor_id", 0)
+        if "subsystem_device_id" not in result or result["subsystem_device_id"] is None:
+            result["subsystem_device_id"] = result.get("device_id", 0)
+
+        # Default revision to 0x00 if missing
+        if "revision_id" not in result or result["revision_id"] is None:
+            result["revision_id"] = 0x00
+
+        # Default class code to generic if missing
+        if "class_code" not in result or result["class_code"] is None:
+            result["class_code"] = 0x088000  # Generic system peripheral
+
+        return result
 
 
 def lookup_device_info(

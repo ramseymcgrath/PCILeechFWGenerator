@@ -10,36 +10,46 @@ Tests cover:
 
 import logging
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.utils.unified_context import (TemplateObject, UnifiedContextBuilder,
-                                       UnifiedDeviceConfig,
-                                       convert_to_template_object,
-                                       ensure_template_compatibility,
-                                       get_package_version)
+from src.utils.unified_context import (
+    TemplateObject,
+    UnifiedContextBuilder,
+    UnifiedDeviceConfig,
+    convert_to_template_object,
+    ensure_template_compatibility,
+    get_package_version,
+)
 
 
 class TestGetPackageVersion:
     """Test the get_package_version function."""
 
-    def test_get_version_from_version_file(self, tmp_path):
-        """Test getting version from __version__.py file."""
-        # Create a mock version file
-        version_file = tmp_path / "__version__.py"
-        version_file.write_text('__version__ = "2.5.0"')
+    def test_get_version_from_version_file(self):
+        """Test extracting version from __version__.py file."""
+        with TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
 
-        with patch("src.utils.unified_context.Path") as mock_path:
-            # Mock the path resolution
-            mock_path.return_value.parent.parent = tmp_path
-            mock_file = tmp_path / "__version__.py"
-            mock_path.return_value.parent.parent.__truediv__.return_value = mock_file
+            # Create a mock version file
+            version_file = tmp_path / "__version__.py"
+            version_file.write_text('__version__ = "2.5.0"')
 
-            with patch("builtins.open", mock_open(read_data='__version__ = "2.5.0"')):
-                with patch.object(mock_file, "exists", return_value=True):
-                    version = get_package_version()
-                    assert version == "2.5.0"
+            with patch("src.utils.unified_context.Path") as mock_path:
+                # Mock the path resolution
+                mock_parent_parent = MagicMock()
+                mock_parent_parent.__truediv__ = MagicMock(return_value=version_file)
+                mock_path.return_value.parent.parent = mock_parent_parent
+
+                with patch(
+                    "builtins.open", mock_open(read_data='__version__ = "2.5.0"')
+                ):
+                    with patch.object(version_file, "exists", return_value=True):
+                        version = get_package_version()
+                        assert version == "2.5.0"
 
     def test_get_version_setuptools_scm_fallback(self):
         """Test fallback to setuptools_scm."""

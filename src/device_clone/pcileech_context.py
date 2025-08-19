@@ -25,14 +25,15 @@ from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import (TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict,
-                    Union)
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict, Union
 
-from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VfioRegionInfo)
+from src.cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
 from src.device_clone.fallback_manager import get_global_fallback_manager
@@ -43,9 +44,14 @@ if TYPE_CHECKING:
 from src.device_clone.overlay_mapper import OverlayMapper
 from src.error_utils import extract_root_cause
 from src.exceptions import ContextError
-from src.string_utils import (format_bar_summary_table, format_bar_table,
-                              format_raw_bar_table, log_error_safe,
-                              log_info_safe, log_warning_safe)
+from src.string_utils import (
+    format_bar_summary_table,
+    format_bar_table,
+    format_raw_bar_table,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 from src.utils.attribute_access import safe_get_attr
 
 from ..utils.validation_constants import REQUIRED_CONTEXT_SECTIONS
@@ -638,7 +644,10 @@ class PCILeechContextBuilder:
             if not getattr(behavior_profile, "capture_duration", 0) > 0:
                 missing.append("behavior_profile.capture_duration")
 
-        if missing and self.validation_level == ValidationLevel.STRICT:
+        if missing and self.validation_level in (
+            ValidationLevel.STRICT,
+            ValidationLevel.MODERATE,
+        ):
             raise ContextError(f"Missing required data: {missing}")
 
     def _extract_device_identifiers(
@@ -650,8 +659,7 @@ class PCILeechContextBuilder:
             k in config_space_data
             for k in ["vendor_id", "device_id", "class_code", "revision_id"]
         ):
-            from src.device_clone.config_space_manager import \
-                ConfigSpaceManager
+            from src.device_clone.config_space_manager import ConfigSpaceManager
 
             manager = ConfigSpaceManager(self.device_bdf)
             # Read config space and extract device info
@@ -784,8 +792,7 @@ class PCILeechContextBuilder:
         if not all(
             k in data for k in ["config_space_hex", "config_space_size", "bars"]
         ):
-            from src.device_clone.config_space_manager import \
-                ConfigSpaceManager
+            from src.device_clone.config_space_manager import ConfigSpaceManager
 
             manager = ConfigSpaceManager(self.device_bdf)
             config_space = manager.read_vfio_config_space()
@@ -1445,15 +1452,26 @@ class PCILeechContextBuilder:
     def _validate_context_completeness(self, context: TemplateContext):
         """Validate context has all required fields."""
         for section in REQUIRED_CONTEXT_SECTIONS:
-            if section not in context or not context[section]:  # type: ignore
+            if section not in context:  # type: ignore
                 raise ContextError(f"Missing required section: {section}")
 
         # Validate device signature
         if "device_signature" not in context or not context["device_signature"]:
             raise ContextError("Missing device signature")
 
-        # Validate identifiers
-        if "vendor_id" not in context or "device_id" not in context:
+        # Validate identifiers - check top level first, then device_config
+        vendor_id = context.get("vendor_id") or (
+            context.get("device_config", {}).get("vendor_id")
+            if context.get("device_config")
+            else None
+        )
+        device_id = context.get("device_id") or (
+            context.get("device_config", {}).get("device_id")
+            if context.get("device_config")
+            else None
+        )
+
+        if not vendor_id or not device_id:
             raise ContextError("Missing device identifiers")  ## need these
 
     def _build_performance_config(self, device_type: str = "generic") -> Any:

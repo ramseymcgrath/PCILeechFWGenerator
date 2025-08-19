@@ -1329,11 +1329,22 @@ puts "Synthesis complete!"
                     return bytes(value)
                 # Hex string
                 if isinstance(value, str):
-                    # Remove whitespace/newlines
-                    s = value.replace(" ", "").replace("\n", "")
+                    # Remove common whitespace and separators
+                    s = value.replace(" ", "").replace("\n", "").replace("\t", "")
+                    # Accept strings with 0x prefixes or separators like ':' or '-' by
+                    # stripping non-hex characters and any 0x/0X prefixes.
                     try:
+                        import re
+
+                        # Remove 0x prefixes (case-insensitive)
+                        s = re.sub(r"0x", "", s, flags=re.IGNORECASE)
+                        # Keep only hex digits
+                        s = "".join(ch for ch in s if ch in "0123456789abcdefABCDEF")
+                        # Ensure even length for fromhex
+                        if len(s) % 2 != 0:
+                            s = "0" + s
                         return bytes.fromhex(s)
-                    except ValueError:
+                    except Exception:
                         return None
                 # Lists of ints
                 if isinstance(value, list) and all(isinstance(x, int) for x in value):
@@ -1540,7 +1551,6 @@ puts "Synthesis complete!"
 
             for module_name, module_code in sv_modules.items():
                 # COE files should also go in src directory for Vivado to find them
-                # Avoid double .sv extension
                 if module_name.endswith(".sv") or module_name.endswith(".coe"):
                     module_file = sv_dir / module_name
                 else:
