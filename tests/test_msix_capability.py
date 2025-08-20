@@ -8,11 +8,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.device_clone.msix_capability import (
-    BAR_IO_DEFAULT_SIZE, BAR_MEM_DEFAULT_SIZE, BAR_MEM_MIN_SIZE, find_cap,
-    generate_msix_capability_registers, generate_msix_table_sv, hex_to_bytes,
-    is_valid_offset, msix_size, parse_bar_info_from_config_space,
-    parse_msix_capability, read_u8, read_u16_le, read_u32_le,
-    validate_msix_configuration, validate_msix_configuration_enhanced)
+    BAR_IO_DEFAULT_SIZE,
+    BAR_MEM_DEFAULT_SIZE,
+    BAR_MEM_MIN_SIZE,
+    find_cap,
+    generate_msix_capability_registers,
+    generate_msix_table_sv,
+    hex_to_bytes,
+    is_valid_offset,
+    msix_size,
+    parse_bar_info_from_config_space,
+    parse_msix_capability,
+    read_u8,
+    read_u16_le,
+    read_u32_le,
+    validate_msix_configuration,
+    validate_msix_configuration_enhanced,
+)
 
 
 class TestUtilityFunctions:
@@ -1201,6 +1213,173 @@ class TestEdgeCasesAndStressTests:
         # Test BAR parsing with large space
         result = parse_bar_info_from_config_space(large_config)
         assert isinstance(result, list)
+
+
+class TestMSIXAlignmentRegression:
+    """Regression tests for MSI-X alignment bug fixes."""
+
+    @patch("src.device_clone.msix_capability.log_warning_safe")
+    def test_alignment_check_uses_offset_not_raw_register(self, mock_log):
+        """
+        Regression test for MSI-X alignment bug.
+
+        Ensures alignment check is performed on table_offset (extracted offset)
+        rather than table_offset_bir (raw register value including BIR bits).
+
+        This test specifically covers the bug reported in user issue where:
+        - Device has MSI-X table at BIR=4, offset=0
+        - Raw register value table_offset_bir = 4 (BIR=4, offset=0)
+        - Previous code incorrectly checked alignment on 4 (raw value)
+        - Fixed code correctly checks alignment on 0 (extracted offset)
+        """
+        # Create a configuration space with MSI-X capability
+        # that has BIR=4 and offset=0 (8-byte aligned)
+        cfg_bytes = bytearray([0x00] * 256)
+
+        # Set up PCI header to indicate capabilities
+        cfg_bytes[0x06] = 0x10  # Status register - capabilities list bit
+        cfg_bytes[0x34] = 0x40  # Capabilities pointer
+
+        # MSI-X capability at offset 0x40
+        cfg_bytes[0x40] = 0x11  # MSI-X capability ID
+        cfg_bytes[0x41] = 0x00  # Next capability (end of list)
+        cfg_bytes[0x42] = 0x03  # Message Control: Table Size = 4-1 = 3
+        cfg_bytes[0x43] = 0x00  # Message Control upper byte
+
+        # Table Offset/BIR register (offset 0x44)
+        # BIR = 4 (lower 3 bits), Offset = 0 (upper bits)
+        # Raw value = 4 (0x00000004)
+        cfg_bytes[0x44] = 0x04  # BIR = 4, offset = 0
+        cfg_bytes[0x45] = 0x00
+        cfg_bytes[0x46] = 0x00
+        cfg_bytes[0x47] = 0x00
+
+        # PBA Offset/BIR register (offset 0x48)
+        # BIR = 4, Offset = 0x800 (8-byte aligned)
+        cfg_bytes[0x48] = 0x04  # BIR = 4
+        cfg_bytes[0x49] = 0x08  # Offset = 0x800
+        cfg_bytes[0x4A] = 0x00
+        cfg_bytes[0x4B] = 0x00
+
+        config_space = cfg_bytes.hex()
+
+        # Parse the MSI-X capability
+        result = parse_msix_capability(config_space)
+
+        # Verify the parsing worked correctly
+        assert result["table_size"] == 4
+        assert result["table_bir"] == 4
+        assert result["table_offset"] == 0  # Should be 0 (8-byte aligned)
+        assert result["pba_bir"] == 4
+        assert result["pba_offset"] == 0x800  # Should be 0x800 (8-byte aligned)
+
+        # Most importantly: no alignment warning should be logged
+        # because table_offset=0 is 8-byte aligned
+        mock_log.assert_not_called()
+
+    @patch("src.device_clone.msix_capability.log_warning_safe")
+    def test_no_false_positive_alignment_warning_with_bir_bits(self, mock_log):
+        """
+        Test that BIR bits in the table offset register don't cause false
+        positive alignment warnings. This tests the specific bug fix where
+        the old code incorrectly checked alignment on the raw register value
+        instead of the extracted offset value.
+        """
+        # Create configuration space with MSI-X table at misaligned offset
+        cfg_bytes = bytearray([0x00] * 256)
+
+        # Set up PCI header
+        cfg_bytes[0x06] = 0x10
+        cfg_bytes[0x34] = 0x40
+
+        # MSI-X capability
+        cfg_bytes[0x40] = 0x11
+        cfg_bytes[0x41] = 0x00
+        cfg_bytes[0x42] = 0x03
+        cfg_bytes[0x43] = 0x00
+
+        # This test verifies that we DON'T generate a false positive warning
+        # when the register value has BIR bits set but the actual offset is aligned.
+        # Register = 0x0004 gives: BIR = 4, offset = 0x0000 (perfectly aligned)
+        # The old buggy code would check (0x0004 & 0x7) = 4 != 0 and warn incorrectly
+        # The new code checks (0x0000 & 0x7) = 0 and correctly doesn't warn
+        cfg_bytes[0x44] = 0x04  # 0x0004 & 0xFF = 0x04
+        cfg_bytes[0x45] = 0x00  # (0x0004 >> 8) & 0xFF = 0x00
+        cfg_bytes[0x46] = 0x00
+        cfg_bytes[0x47] = 0x00
+
+        # PBA Offset/BIR: BIR=0, Offset=0x2000 (8-byte aligned)
+        cfg_bytes[0x48] = 0x00
+        cfg_bytes[0x49] = 0x20
+        cfg_bytes[0x4A] = 0x00
+        cfg_bytes[0x4B] = 0x00
+
+        config_space = cfg_bytes.hex()
+
+        # Parse the capability
+        result = parse_msix_capability(config_space)
+
+        # Verify parsing - register 0x0004 gives:
+        # BIR = 0x0004 & 0x7 = 4
+        # offset = 0x0004 & 0xFFFFFFF8 = 0x0000 (perfectly aligned)
+        assert result["table_bir"] == 4
+        assert result["table_offset"] == 0x0000  # Aligned
+
+        # Should NOT generate alignment warning since offset is 0 (aligned)
+        mock_log.assert_not_called()
+
+    @patch("src.device_clone.msix_capability.log_warning_safe")
+    def test_realtek_rtl8168_specific_case(self, mock_log):
+        """
+        Test the specific case from the user bug report:
+        Realtek RTL8168 with MSI-X table at BIR=4, offset=0.
+        """
+        # Simulate Realtek RTL8168 MSI-X configuration
+        cfg_bytes = bytearray([0x00] * 256)
+
+        # PCI header
+        cfg_bytes[0x00] = 0xEC  # Vendor ID: 0x10EC (Realtek)
+        cfg_bytes[0x01] = 0x10
+        cfg_bytes[0x02] = 0x68  # Device ID: 0x8168 (RTL8168)
+        cfg_bytes[0x03] = 0x81
+        cfg_bytes[0x06] = 0x10  # Capabilities present
+        cfg_bytes[0x34] = 0x40  # Capabilities pointer
+
+        # MSI-X capability (typically at 0x40 for this device)
+        cfg_bytes[0x40] = 0x11  # MSI-X Cap ID
+        cfg_bytes[0x41] = 0x00  # Next cap
+        cfg_bytes[0x42] = 0x03  # Table Size: 4 entries (encoded as 3)
+        cfg_bytes[0x43] = 0x00
+
+        # Table Offset/BIR: BIR=4, Offset=0
+        # This creates table_offset_bir = 4, which was incorrectly flagged
+        cfg_bytes[0x44] = 0x04  # Raw value = 4 (BIR=4, offset=0)
+        cfg_bytes[0x45] = 0x00
+        cfg_bytes[0x46] = 0x00
+        cfg_bytes[0x47] = 0x00
+
+        # PBA Offset/BIR: BIR=4, Offset=0x800
+        cfg_bytes[0x48] = 0x04  # BIR=4
+        cfg_bytes[0x49] = 0x08  # Offset=0x800
+        cfg_bytes[0x4A] = 0x00
+        cfg_bytes[0x4B] = 0x00
+
+        config_space = cfg_bytes.hex()
+
+        # Parse MSI-X capability
+        result = parse_msix_capability(config_space)
+
+        # Verify correct parsing
+        assert result["table_size"] == 4
+        assert result["table_bir"] == 4
+        assert result["table_offset"] == 0  # This is properly 8-byte aligned
+        assert result["pba_bir"] == 4
+        assert result["pba_offset"] == 0x800
+
+        # Critical: No false alignment warning should be generated
+        # The bug was that table_offset_bir=4 was checked for alignment
+        # instead of table_offset=0
+        mock_log.assert_not_called()
 
 
 if __name__ == "__main__":
