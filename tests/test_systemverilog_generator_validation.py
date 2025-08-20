@@ -52,10 +52,21 @@ class TestSystemVerilogGeneratorValidation:
                 "device_id": "8168",
                 "class_code": "020000",
                 "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
             },
             "msix_config": {},
             "bar_config": {},
             "interrupt_config": {},
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
             # device_signature is intentionally missing
         }
 
@@ -75,11 +86,22 @@ class TestSystemVerilogGeneratorValidation:
                 "device_id": "8168",
                 "class_code": "020000",
                 "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
             },
             "device_signature": None,  # Explicitly set to None
             "msix_config": {},
             "bar_config": {},
             "interrupt_config": {},
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
         }
 
         # Should raise TemplateRenderError due to None device_signature
@@ -98,11 +120,22 @@ class TestSystemVerilogGeneratorValidation:
                 "device_id": "8168",
                 "class_code": "020000",
                 "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
             },
             "device_signature": "",  # Empty string
             "msix_config": {},
             "bar_config": {},
             "interrupt_config": {},
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
         }
 
         # Should raise TemplateRenderError due to empty device_signature
@@ -121,6 +154,8 @@ class TestSystemVerilogGeneratorValidation:
                 "device_id": "8168",
                 "class_code": "020000",
                 "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
             },
             "device_signature": "0xDEADBEEF",  # Valid signature
             "msix_config": {},
@@ -130,6 +165,15 @@ class TestSystemVerilogGeneratorValidation:
             "timing_config": {},
             "pcileech_config": {},
             "generation_metadata": {},
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
         }
 
         # Should succeed without raising an error
@@ -160,6 +204,15 @@ class TestSystemVerilogGeneratorValidation:
                 "revision_id": "01",
             },
             "device_signature": "0x12345678",
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
         }
 
         device_config = {
@@ -187,11 +240,34 @@ class TestSystemVerilogGeneratorValidation:
     def test_context_builder_fails_without_device_signature(self):
         """Test that context creation fails when device_signature is missing."""
         template_context = {
-            "device_config": {"vendor_id": "10EC", "device_id": "8168"}
+            "device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+            },
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
             # device_signature is missing
         }
 
-        device_config = {"vendor_id": "10EC", "device_id": "8168"}
+        device_config = {
+            "vendor_id": "10EC",
+            "device_id": "8168",
+            "subsystem_vendor_id": "10EC",
+            "subsystem_device_id": "8168",
+            "class_code": "020000",
+            "revision_id": "01",
+        }
 
         # Should raise KeyError due to direct dictionary access
         with pytest.raises(KeyError) as exc_info:
@@ -212,13 +288,36 @@ class TestSystemVerilogGeneratorValidation:
         # by using direct dictionary access instead of .get() with defaults
 
         template_context = {
-            "device_config": {"vendor_id": "10EC", "device_id": "8168"},
+            "device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+            },
             "device_signature": "0xCAFEBABE",
             "msix_config": {},
             "bar_config": {},
+            "board_config": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+            },
         }
 
-        device_config = {"vendor_id": "10EC", "device_id": "8168"}
+        device_config = {
+            "vendor_id": "10EC",
+            "device_id": "8168",
+            "subsystem_vendor_id": "10EC",
+            "subsystem_device_id": "8168",
+            "class_code": "020000",
+            "revision_id": "01",
+        }
 
         # Create context
         enhanced_context = ContextBuilder.create_enhanced_context(
@@ -231,8 +330,17 @@ class TestSystemVerilogGeneratorValidation:
         )
 
         # Verify that optional fields use .get() with defaults
-        assert enhanced_context["msix_config"] == {}
-        assert enhanced_context["bar_config"] == {}
+        # Accept either empty dict or empty TemplateObject
+        def is_empty(obj):
+            # Accept both dict and TemplateObject
+            if hasattr(obj, "__dict__"):
+                return not bool(vars(obj))
+            if isinstance(obj, dict):
+                return not bool(obj)
+            return False
+
+        assert is_empty(enhanced_context["msix_config"])
+        assert is_empty(enhanced_context["bar_config"])
 
         # Verify that critical field (device_signature) uses direct access
         assert enhanced_context["device_signature"] == "0xCAFEBABE"

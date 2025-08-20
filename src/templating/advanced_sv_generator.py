@@ -187,10 +187,10 @@ class SystemVerilogGenerator:
         self, regs: List[Dict], variance_model: Optional[VarianceModel] = None
     ) -> str:
         """Generate advanced SystemVerilog module using templates."""
-        # Build template context
+        # Build template context with all required fields
         context = {
             "header": self._generate_header(),
-            "device_config": self.device_config,
+            "device_config": self._build_device_config_context(),
             "power_management": self._build_power_context(),
             "performance_counters": self._build_perf_context(),
             "error_handling": self._build_error_context(),
@@ -198,10 +198,50 @@ class SystemVerilogGenerator:
             "variance_model": variance_model,
         }
 
+        # Add required template fields with safe defaults or disable if missing
+        required_fields = ["timer_period", "default_priority", "active_device_config"]
+        # timer_period: try to get from device_config, else disable feature
+        timer_period = getattr(self.device_config, "timer_period", None)
+        if timer_period is not None:
+            context["timer_period"] = timer_period
+        else:
+            context["timer_period"] = 0  # Disable feature if missing
+
+        # default_priority: try to get from device_config, else disable feature
+        default_priority = getattr(self.device_config, "default_priority", None)
+        if default_priority is not None:
+            context["default_priority"] = default_priority
+        else:
+            context["default_priority"] = 0  # Disable feature if missing
+
+        # active_device_config: always provide as TemplateObject
+        context["active_device_config"] = TemplateObject(vars(self.device_config))
+
+        # Wrap all context dicts in TemplateObject for safe template access
+        for k, v in context.items():
+            if isinstance(v, dict) and not isinstance(v, TemplateObject):
+                context[k] = TemplateObject(v)
+
+        # Fast-fail validation for missing required fields
+        missing = [f for f in required_fields if f not in context or context[f] is None]
+        if missing:
+            raise TemplateRenderError(f"Missing required template fields: {missing}")
+
         # Render main module template
         return self.renderer.render_template(
             "systemverilog/advanced/main_module.sv.j2", context
         )
+
+    def _build_device_config_context(self) -> TemplateObject:
+        """Build device config context for templates, with all required fields."""
+        # Use vars to get all fields, add safe defaults for missing ones
+        dc = vars(self.device_config)
+        # timer_period and default_priority are required by templates
+        if "timer_period" not in dc:
+            dc["timer_period"] = 0
+        if "default_priority" not in dc:
+            dc["default_priority"] = 0
+        return TemplateObject(dc)
 
     def _generate_header(self) -> str:
         """Generate SystemVerilog header comment."""

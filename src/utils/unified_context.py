@@ -7,14 +7,68 @@ that work seamlessly with Jinja2 templates, avoiding the dict vs attribute acces
 """
 
 import logging
-import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from enum import Enum
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generic, List, Optional, Set, TypeVar, Union
 
 from .validation_constants import (CRITICAL_TEMPLATE_CONTEXT_KEYS,
                                    KNOWN_DEVICE_TYPES)
+
+# Type aliases for clarity
+HexString = str
+ConfigDict = Dict[str, Any]
+
+# Constants
+DEFAULT_VERSION = "2.0.0"
+DEFAULT_VENDOR_ID = "8086"
+DEFAULT_DEVICE_ID = "1234"
+DEFAULT_CLASS_CODE = "000000"
+DEFAULT_REVISION_ID = "00"
+
+# Device class mappings
+DEVICE_CLASS_MAPPINGS = {
+    "01": "storage",
+    "02": "network",
+    "03": "display",
+    "04": "multimedia",
+    "0c": "serial_bus",
+}
+
+# Default configurations
+DEFAULT_TIMING_CONFIG = {
+    "clock_frequency_mhz": 100,
+    "read_latency": 2,
+    "write_latency": 1,
+    "setup_time": 1,
+    "hold_time": 1,
+    "burst_length": 4,
+    "enable_clock_gating": False,
+}
+
+DEFAULT_VARIANCE_MODEL = {
+    "enabled": True,
+    "variance_type": "normal",
+    "process_variation": 0.1,
+    "temperature_coefficient": 0.05,
+    "voltage_variation": 0.03,
+    "parameters": {
+        "mean": 0.0,
+        "std_dev": 0.1,
+        "min_value": -1.0,
+        "max_value": 1.0,
+    },
+}
+
+
+class InterruptStrategy(Enum):
+    """Supported interrupt strategies."""
+
+    INTX = "intx"
+    MSI = "msi"
+    MSIX = "msix"
 
 
 def get_package_version() -> str:
@@ -24,188 +78,232 @@ def get_package_version() -> str:
     Tries multiple methods to get the version:
     1. From __version__.py in the src directory
     2. From setuptools_scm if available
-    3. Falls back to a default version
+    3. From importlib.metadata
+    4. Falls back to a default version
 
     Returns:
         str: The package version
     """
+    # Try __version__.py first
     try:
-        # First try to get from __version__.py
         src_dir = Path(__file__).parent.parent
         version_file = src_dir / "__version__.py"
 
         if version_file.exists():
-            # Read the version file
-            version_dict = {}
+            version_dict: Dict[str, str] = {}
             with open(version_file, "r") as f:
                 exec(f.read(), version_dict)
-            return version_dict.get("__version__", "2.0.0")
+            if "__version__" in version_dict:
+                return version_dict["__version__"]
+    except Exception as e:
+        logging.debug(f"Error reading __version__.py: {e}")
 
-        # Fallback: try setuptools_scm
-        try:
-            from setuptools_scm import get_version
+    # Try setuptools_scm
+    try:
+        from setuptools_scm import get_version  # type: ignore
 
-            return get_version(root="../..")
-        except Exception as e:
-            logging.debug(f"Error getting version from setuptools_scm: {e}")
-            pass
+        return get_version(root="../..")
+    except Exception as e:
+        logging.debug(f"Error getting version from setuptools_scm: {e}")
 
-        # Fallback: try importlib.metadata (Python 3.8+)
-        try:
-            from importlib.metadata import version
+    # Try importlib.metadata (Python 3.8+)
+    try:
+        from importlib.metadata import version
 
-            return version("PCILeechFWGenerator")
-        except ImportError:
-            pass
+        return version("PCILeechFWGenerator")
+    except Exception as e:
+        logging.debug(f"Error getting version from importlib.metadata: {e}")
 
-        # Final fallback
-        return "2.0.0"
-
-    except Exception:
-        # If all else fails, return default
-        return "2.0.0"
+    return DEFAULT_VERSION
 
 
 class TemplateObject:
     """
-    A simple object that allows both dictionary and attribute access.
+    A hybrid object that allows both dictionary and attribute access.
 
     This solves the Jinja2 template compatibility issue where templates
     expect object.attribute syntax but we're passing dictionaries.
+
+    Optimized for performance with __slots__ and reduced recursion.
     """
+
+    __slots__ = ("_data", "_converted_attrs")
 
     def __init__(self, data: Dict[str, Any]):
         """Initialize with dictionary data."""
-        # Store the original dict for key access
-        self._data = data
+        object.__setattr__(self, "_data", data)
+        object.__setattr__(self, "_converted_attrs", set())
+        self._convert_data()
 
-        # Set attributes for dot notation access
+    def _convert_data(self) -> None:
+        """Convert data to attributes efficiently."""
+        converted_attrs = object.__getattribute__(self, "_converted_attrs")
+        data = object.__getattribute__(self, "_data")
+
         for key, value in data.items():
-            # Ensure key is a string
-            if isinstance(key, str):
-                clean_key = key
-            elif hasattr(key, "name"):
-                clean_key = key.name
-            elif hasattr(key, "value"):
-                clean_key = str(key.value)
-            else:
-                clean_key = str(key)
+            # Ensure key is a valid attribute name
+            clean_key = self._clean_key(key)
 
-            # Process value
-            if isinstance(value, dict):
-                # Recursively convert nested dicts to TemplateObjects
-                setattr(self, clean_key, TemplateObject(value))
-            elif isinstance(value, list):
-                # Handle lists that might contain dicts
-                processed_list = []
-                for item in value:
-                    if isinstance(item, dict):
-                        processed_list.append(TemplateObject(item))
-                    else:
-                        processed_list.append(item)
-                setattr(self, clean_key, processed_list)
-            else:
-                # Convert enum values to their string representation
-                if hasattr(value, "value"):
-                    clean_value = value.value
-                elif hasattr(value, "name"):
-                    clean_value = value.name
-                else:
-                    clean_value = value
-                setattr(self, clean_key, clean_value)
+            # Convert value if needed
+            if isinstance(value, dict) and clean_key not in converted_attrs:
+                value = TemplateObject(value)
+                data[clean_key] = value
+            elif isinstance(value, list) and clean_key not in converted_attrs:
+                value = self._convert_list(value)
+                data[clean_key] = value
+            elif not isinstance(value, (dict, list)) and hasattr(
+                value, "value"
+            ):  # Enum-like objects
+                value = value.value  # type: ignore
+                data[clean_key] = value
 
-    def __getitem__(self, key):
-        """Allow dictionary-style access."""
-        return self._data[key]
+            converted_attrs.add(clean_key)
 
-    def __setitem__(self, key, value):
-        """Allow dictionary-style assignment."""
-        self._data[key] = value
-        setattr(self, key, value)
+    @staticmethod
+    def _clean_key(key: Any) -> str:
+        """Convert any key to a valid attribute name."""
+        if isinstance(key, str):
+            return key
+        elif hasattr(key, "name"):
+            return str(key.name)
+        elif hasattr(key, "value"):
+            return str(key.value)
+        return str(key)
 
-    def __contains__(self, key):
-        """Allow 'in' operator."""
-        return key in self._data
+    @staticmethod
+    def _convert_list(items: List[Any]) -> List[Any]:
+        """Convert list items that might contain dicts."""
+        return [
+            TemplateObject(item) if isinstance(item, dict) else item for item in items
+        ]
 
-    def get(self, key, default=None):
-        """Allow dict.get() style access."""
-        return self._data.get(key, default)
+    def __getattr__(self, name: str) -> Any:
+        """Get attribute from data or provide safe defaults."""
+        data = object.__getattribute__(self, "_data")
 
-    def __getattr__(self, name):
-        """Fallback for attribute access - check the internal dictionary."""
-        if name in self._data:
-            return self._data[name]
+        if name in data:
+            return data[name]
+
         # Provide safe defaults for commonly accessed template variables
-        if name in [
+        if name in (
             "counter_width",
             "process_variation",
             "temperature_coefficient",
             "voltage_variation",
-        ]:
-            return getattr(self._get_safe_defaults(), name, None)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{name}'"
-        )
+        ):
+            return getattr(SafeDefaults, name, None)
 
-    def _get_safe_defaults(self):
-        """Return object with safe defaults for common template variables."""
+        # Additional safe defaults for template compatibility
+        safe_defaults = {
+            "command_timeout": 1000,
+            "num_vectors": 1,
+            "timeout_cycles": 1024,
+            "is_64bit": False,
+            "enable_error_rate_tracking": False,
+            "enable_error_logging": False,
+            "error_recovery_cycles": 100,
+            "enable_perf_counters": True,
+        }
 
-        class SafeDefaults:
-            counter_width = 32
-            process_variation = 0.1
-            temperature_coefficient = 0.05
-            voltage_variation = 0.03
+        if name in safe_defaults:
+            return safe_defaults[name]
 
-        return SafeDefaults()
+        raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set attribute in data."""
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        else:
+            data = object.__getattribute__(self, "_data")
+            data[name] = value
+
+    def __getitem__(self, key: str) -> Any:
+        """Dictionary-style access."""
+        return object.__getattribute__(self, "_data")[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Dictionary-style assignment."""
+        data = object.__getattribute__(self, "_data")
+        data[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator."""
+        return key in object.__getattribute__(self, "_data")
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dict.get() style access."""
+        return object.__getattribute__(self, "_data").get(key, default)
 
     def keys(self):
-        """Allow iteration over keys."""
-        return self._data.keys()
+        """Return keys."""
+        return object.__getattribute__(self, "_data").keys()
 
     def values(self):
-        """Allow iteration over values."""
-        return self._data.values()
+        """Return values."""
+        return object.__getattribute__(self, "_data").values()
 
     def items(self):
-        """Allow iteration over items."""
-        return self._data.items()
+        """Return items."""
+        return object.__getattribute__(self, "_data").items()
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert back to a regular dictionary, including all attributes."""
-        result = self._data.copy()
-        # Also include attributes that were set directly on the object
-        for key in dir(self):
-            if not key.startswith("_") and key not in [
-                "get",
-                "keys",
-                "values",
-                "items",
-                "to_dict",
-            ]:
-                value = getattr(self, key)
-                if not callable(value):
-                    result[key] = value
+        """Convert to regular dictionary recursively."""
+        result = {}
+        data = object.__getattribute__(self, "_data")
 
-        # Convert nested TemplateObjects to regular dicts to avoid namespace confusion
-        for key, value in result.items():
+        for key, value in data.items():
             if isinstance(value, TemplateObject):
-                # Convert nested TemplateObjects to regular dicts
                 result[key] = value.to_dict()
+            elif isinstance(value, list):
+                result[key] = [
+                    item.to_dict() if isinstance(item, TemplateObject) else item
+                    for item in value
+                ]
+            else:
+                result[key] = value
 
         return result
+
+    def update(self, other: Dict[str, Any]) -> None:
+        """Update the internal dictionary."""
+        data = object.__getattribute__(self, "_data")
+        data.update(other)
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        """Set default value if key doesn't exist."""
+        data = object.__getattribute__(self, "_data")
+        return data.setdefault(key, default)
+
+    def __len__(self) -> int:
+        """Return the number of items."""
+        return len(object.__getattribute__(self, "_data"))
+
+    def __iter__(self):
+        """Iterate over keys."""
+        return iter(object.__getattribute__(self, "_data"))
+
+
+class SafeDefaults:
+    """Safe default values for template variables."""
+
+    counter_width = 32
+    process_variation = 0.1
+    temperature_coefficient = 0.05
+    voltage_variation = 0.03
 
 
 @dataclass
 class UnifiedDeviceConfig:
-    """Unified device configuration that contains all fields needed by templates."""
+    """Unified device configuration with all fields needed by templates."""
 
     # Device identifiers
-    vendor_id: str
-    device_id: str
-    subsystem_vendor_id: str
-    subsystem_device_id: str
-    class_code: str
-    revision_id: str
+    vendor_id: HexString
+    device_id: HexString
+    subsystem_vendor_id: HexString
+    subsystem_device_id: HexString
+    class_code: HexString
+    revision_id: HexString
 
     # Active device config
     enabled: bool = True
@@ -236,32 +334,177 @@ class UnifiedDeviceConfig:
     is_storage: bool = False
     is_display: bool = False
 
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        self._validate_hex_fields()
+
+    def _validate_hex_fields(self) -> None:
+        """Validate all hex string fields."""
+        hex_fields = {
+            "vendor_id": self.vendor_id,
+            "device_id": self.device_id,
+            "subsystem_vendor_id": self.subsystem_vendor_id,
+            "subsystem_device_id": self.subsystem_device_id,
+            "class_code": self.class_code,
+            "revision_id": self.revision_id,
+        }
+
+        for field_name, value in hex_fields.items():
+            try:
+                int(value, 16)
+            except ValueError:
+                raise ValueError(f"Invalid hex value for {field_name}: {value}")
+
+
+class ConfigurationError(Exception):
+    """Raised when configuration validation fails."""
+
+    pass
+
+
+class ContextBuilderConfig:
+    """Configuration for context builder with all defaults centralized."""
+
+    def __init__(self):
+        self.device_specific_signals = {
+            "audio": {
+                "audio_enable": True,
+                "volume_left": 0x8000,
+                "volume_right": 0x8000,
+                "sample_rate": 44100,
+                "audio_format": 0,
+            },
+            "network": {
+                "link_up": True,
+                "link_speed": 1,
+                "packet_size": 1500,
+                "network_enable": True,
+            },
+            "storage": {
+                "storage_ready": True,
+                "sector_size": 512,
+                "storage_enable": True,
+            },
+            "graphics": {
+                "display_enable": True,
+                "resolution_mode": 0,
+                "pixel_clock": 25_000_000,
+            },
+            "media": {
+                "media_enable": True,
+                "codec_type": 0,
+                "stream_count": 1,
+            },
+            "processor": {
+                "processor_enable": True,
+                "core_count": 1,
+                "freq_mhz": 1000,
+            },
+            "usb": {
+                "usb_enable": True,
+                "usb_version": 3,
+                "port_count": 4,
+            },
+        }
+
+        self.performance_defaults = {
+            "counter_width": 32,
+            "bandwidth_sample_period": 100000,
+            "transfer_width": 4,
+            "bandwidth_shift": 10,
+            "min_operations_for_error_rate": 100,
+            "avg_packet_size": 1500,
+            "high_performance_threshold": 1000,
+            "medium_performance_threshold": 100,
+            "high_bandwidth_threshold": 100,
+            "medium_bandwidth_threshold": 50,
+            "low_latency_threshold": 10,
+            "medium_latency_threshold": 50,
+            "low_error_threshold": 1,
+            "medium_error_threshold": 5,
+        }
+
+        self.power_defaults = {
+            "clk_hz": 100_000_000,
+            "transition_timeout_ns": 10_000_000,
+            "enable_pme": True,
+            "enable_wake_events": False,
+            "transition_cycles": {
+                "d0_to_d1": 100,
+                "d1_to_d0": 200,
+                "d0_to_d3": 500,
+                "d3_to_d0": 1000,
+            },
+        }
+
+        self.error_defaults = {
+            "enable_error_detection": True,
+            "enable_error_logging": True,
+            "enable_auto_retry": True,
+            "max_retry_count": 3,
+            "error_recovery_cycles": 100,
+            "error_log_depth": 256,
+        }
+
 
 class UnifiedContextBuilder:
     """
     Unified context builder that creates template-compatible contexts.
 
     This replaces the multiple context builders with a single, consistent approach.
+    Optimized for performance and maintainability.
     """
 
     def __init__(self, logger: Optional[logging.Logger] = None):
         """Initialize the unified context builder."""
         self.logger = logger or logging.getLogger(__name__)
+        self.config = ContextBuilderConfig()
+        self._version_cache: Optional[str] = None
+
+    def validate_hex_value(self, value: str, field_name: str) -> None:
+        """Validate a hex string value."""
+        try:
+            int(str(value), 16)
+        except ValueError:
+            raise ConfigurationError(f"Invalid hex value for {field_name}: {value}")
+
+    def validate_required_fields(
+        self, fields: Dict[str, Any], required: List[str]
+    ) -> None:
+        """Validate that all required fields are present and non-empty."""
+        missing = [name for name in required if not fields.get(name)]
+        if missing:
+            raise ConfigurationError(f"Missing required fields: {missing}")
+
+    def get_device_class(self, class_code: HexString) -> str:
+        """Get device class from PCI class code."""
+        prefix = class_code[:2]
+        return DEVICE_CLASS_MAPPINGS.get(prefix, "generic")
+
+    def parse_hex_to_int(self, value: str, default: int = 0) -> int:
+        """Safely parse hex string to integer."""
+        try:
+            return int(str(value), 16)
+        except (ValueError, TypeError):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return default
 
     def create_active_device_config(
         self,
-        vendor_id: str,
-        device_id: str,
-        subsystem_vendor_id: Optional[str] = None,
-        subsystem_device_id: Optional[str] = None,
-        class_code: str = "000000",
-        revision_id: str = "00",
+        vendor_id: HexString,
+        device_id: HexString,
+        subsystem_vendor_id: Optional[HexString] = None,
+        subsystem_device_id: Optional[HexString] = None,
+        class_code: HexString = DEFAULT_CLASS_CODE,
+        revision_id: HexString = DEFAULT_REVISION_ID,
         interrupt_strategy: str = "intx",
         interrupt_vectors: int = 1,
         **kwargs,
     ) -> TemplateObject:
         """
-        Create a unified active device configuration that works with all templates.
+        Create a unified active device configuration.
 
         Args:
             vendor_id: PCI vendor ID
@@ -276,25 +519,23 @@ class UnifiedContextBuilder:
 
         Returns:
             TemplateObject with all required fields for templates
+
+        Raises:
+            ConfigurationError: If validation fails
         """
+        # Validate required fields
+        self.validate_required_fields(
+            {"vendor_id": vendor_id, "device_id": device_id}, ["vendor_id", "device_id"]
+        )
 
-        # Set defaults for subsystem IDs with proper validation
-        if not subsystem_vendor_id:
-            subsystem_vendor_id = vendor_id
-        if not subsystem_device_id:
-            subsystem_device_id = device_id
+        # Set defaults for optional fields
+        subsystem_vendor_id = subsystem_vendor_id or vendor_id
+        subsystem_device_id = subsystem_device_id or device_id
 
-        # Validate required parameters
-        if not vendor_id or not device_id:
-            raise ValueError("vendor_id and device_id are required")
+        # Determine device classification
+        device_class = self.get_device_class(class_code)
 
-        # Determine device class from class code
-        device_class = self._get_device_class(class_code)
-        is_network = class_code.startswith("02")
-        is_storage = class_code.startswith("01")
-        is_display = class_code.startswith("03")
-
-        # Create unified config
+        # Create configuration
         config = UnifiedDeviceConfig(
             vendor_id=vendor_id,
             device_id=device_id,
@@ -305,61 +546,47 @@ class UnifiedContextBuilder:
             interrupt_mode=interrupt_strategy,
             interrupt_vectors=interrupt_vectors,
             device_class=device_class,
-            is_network=is_network,
-            is_storage=is_storage,
-            is_display=is_display,
+            is_network=(class_code.startswith("02")),
+            is_storage=(class_code.startswith("01")),
+            is_display=(class_code.startswith("03")),
             num_sources=max(1, interrupt_vectors),
             num_msix=max(1, interrupt_vectors) if interrupt_strategy == "msix" else 4,
-            **kwargs,  # Allow overrides
+            **kwargs,
         )
 
-        # Convert to TemplateObject for template compatibility
         return TemplateObject(asdict(config))
 
     def create_generation_metadata(
         self, device_signature: Optional[str] = None, **kwargs
     ) -> TemplateObject:
-        """
-        Create generation metadata for templates.
-
-        Args:
-            device_signature: Unique device signature
-            **kwargs: Additional metadata
-
-        Returns:
-            TemplateObject with generation metadata
-        """
+        """Create generation metadata for templates."""
         from .metadata import build_generation_metadata
 
-        # Extract device_bdf from kwargs to avoid conflicts
         device_bdf = kwargs.pop("device_bdf", "unknown")
 
-        # Use the centralized metadata utility
         metadata = build_generation_metadata(
             device_bdf=device_bdf, device_signature=device_signature, **kwargs
         )
 
-        # Add timestamp and friendly names for compatibility with existing templates
-        # Keep both `generated_at` (canonical) and `generated_time` for older templates.
-        metadata["timestamp"] = metadata.get("generated_at")
-        metadata["generated_time"] = metadata.get("generated_at")
-        # Provide a pretty-printed time string if available, else fallback to str()
-        try:
-            generated_at = metadata.get("generated_at")
-            if generated_at is not None and hasattr(generated_at, "isoformat"):
-                pretty = generated_at.isoformat()
-            else:
-                pretty = str(generated_at if generated_at is not None else "")
-        except Exception:
-            pretty = str(metadata.get("generated_at", ""))
-        metadata["generated_time_pretty"] = pretty
+        # Ensure timestamp compatibility
+        generated_at = metadata.get("generated_at")
+        if generated_at and hasattr(generated_at, "isoformat"):
+            pretty_time = generated_at.isoformat()
+        else:
+            pretty_time = str(generated_at or "")
 
-        # Add generator/version fields for older templates
-        metadata["generator"] = "PCILeechFWGenerator"
-        metadata["generator_version"] = metadata.get(
-            "generator_version", get_package_version()
+        metadata.update(
+            {
+                "timestamp": generated_at,
+                "generated_time": generated_at,
+                "generated_time_pretty": pretty_time,
+                "generator": "PCILeechFWGenerator",
+                "generator_version": metadata.get(
+                    "generator_version", get_package_version()
+                ),
+                "version": metadata.get("generator_version", get_package_version()),
+            }
         )
-        metadata["version"] = metadata["generator_version"]
 
         return TemplateObject(metadata)
 
@@ -370,229 +597,109 @@ class UnifiedContextBuilder:
         fpga_family: str = "artix7",
         **kwargs,
     ) -> TemplateObject:
-        """
-        Create board configuration for templates.
-
-        Args:
-            board_name: Board name
-            fpga_part: FPGA part number
-            fpga_family: FPGA family
-            **kwargs: Additional board configuration
-
-        Returns:
-            TemplateObject with board configuration
-        """
+        """Create board configuration for templates."""
         config = {
             "name": board_name,
             "fpga_part": fpga_part,
             "fpga_family": fpga_family,
-            "pcie_ip_type": "xdma",
-            "sys_clk_freq_mhz": 100,
-            "max_lanes": 4,
-            "supports_msi": True,
-            "supports_msix": True,
-            **kwargs,
+            "pcie_ip_type": kwargs.get("pcie_ip_type", "xdma"),
+            "sys_clk_freq_mhz": kwargs.get("sys_clk_freq_mhz", 100),
+            "max_lanes": kwargs.get("max_lanes", 4),
+            "supports_msi": kwargs.get("supports_msi", True),
+            "supports_msix": kwargs.get("supports_msix", True),
+            "constraints": TemplateObject(
+                kwargs.get("constraints", {"xdc_file": None})
+            ),
+            "features": kwargs.get("features", {}),
         }
+        config.update(kwargs)
 
         return TemplateObject(config)
 
-    def create_template_logic_flags(
-        self,
-        enable_clock_domain_logic: bool = False,
-        enable_device_specific_ports: bool = False,
-        enable_interrupt_logic: bool = True,
-        enable_read_logic: bool = True,
-        enable_register_logic: bool = True,
-        **kwargs,
-    ) -> TemplateObject:
-        """
-        Create template logic flags for advanced templates.
+    def create_performance_config(self, **kwargs) -> TemplateObject:
+        """Create performance configuration for templates."""
+        config = dict(self.config.performance_defaults)
 
-        Args:
-            enable_clock_domain_logic: Enable clock domain logic
-            enable_device_specific_ports: Enable device-specific ports
-            enable_interrupt_logic: Enable interrupt logic
-            enable_read_logic: Enable read logic
-            enable_register_logic: Enable register logic
-            **kwargs: Additional logic flags
-
-        Returns:
-            TemplateObject with logic flags
-        """
-        flags = {
-            "clock_domain_logic": enable_clock_domain_logic,
-            "device_specific_ports": enable_device_specific_ports,
-            "interrupt_logic": enable_interrupt_logic,
-            "read_logic": enable_read_logic,
-            "register_logic": enable_register_logic,
-            **kwargs,
-        }
-
-        return TemplateObject(flags)
-
-    def create_performance_config(
-        self,
-        counter_width: int = 32,
-        enable_transaction_counters: bool = False,
-        enable_bandwidth_monitoring: bool = False,
-        enable_latency_tracking: bool = False,
-        enable_latency_measurement: bool = False,
-        enable_error_counting: bool = False,
-        enable_error_rate_tracking: bool = False,
-        enable_performance_grading: bool = False,
-        enable_perf_outputs: bool = False,
-        **kwargs,
-    ) -> TemplateObject:
-        """
-        Create performance configuration for templates.
-
-        Args:
-            counter_width: Width of performance counters
-            enable_transaction_counters: Enable transaction counters
-            enable_bandwidth_monitoring: Enable bandwidth monitoring
-            enable_latency_tracking: Enable latency tracking
-            enable_latency_measurement: Enable latency measurement
-            enable_error_counting: Enable error counting
-            enable_error_rate_tracking: Enable error rate tracking
-            enable_performance_grading: Enable performance grading
-            enable_perf_outputs: Enable performance outputs
-            **kwargs: Additional performance configuration
-
-        Returns:
-            TemplateObject with performance configuration
-        """
-        config = {
-            "counter_width": counter_width,
-            "enable_transaction_counters": enable_transaction_counters,
-            "enable_bandwidth_monitoring": enable_bandwidth_monitoring,
-            "enable_latency_tracking": enable_latency_tracking,
-            "enable_latency_measurement": enable_latency_measurement,
-            "enable_error_counting": enable_error_counting,
-            "enable_error_rate_tracking": enable_error_rate_tracking,
-            "enable_performance_grading": enable_performance_grading,
-            "enable_perf_outputs": enable_perf_outputs,
-            # Signal availability flags for performance counter template
-            "error_signals_available": kwargs.get("error_signals_available", False),
-            "network_signals_available": kwargs.get("network_signals_available", False),
-            "storage_signals_available": kwargs.get("storage_signals_available", False),
-            "graphics_signals_available": kwargs.get(
-                "graphics_signals_available", False
-            ),
-            "audio_signals_available": kwargs.get("audio_signals_available", False),
-            "media_signals_available": kwargs.get("media_signals_available", False),
-            "processor_signals_available": kwargs.get(
-                "processor_signals_available", False
-            ),
-            "usb_signals_available": kwargs.get("usb_signals_available", False),
-            "generic_signals_available": kwargs.get("generic_signals_available", True),
-            # Performance tuning parameters
-            "bandwidth_sample_period": kwargs.get("bandwidth_sample_period", 100000),
-            "transfer_width": kwargs.get("transfer_width", 4),
-            "bandwidth_shift": kwargs.get("bandwidth_shift", 10),
-            "min_operations_for_error_rate": kwargs.get(
-                "min_operations_for_error_rate", 100
-            ),
-            "avg_packet_size": kwargs.get("avg_packet_size", 1500),
-            # Performance thresholds
-            "high_performance_threshold": kwargs.get(
-                "high_performance_threshold", 1000
-            ),
-            "medium_performance_threshold": kwargs.get(
-                "medium_performance_threshold", 100
-            ),
-            "high_bandwidth_threshold": kwargs.get("high_bandwidth_threshold", 100),
-            "medium_bandwidth_threshold": kwargs.get("medium_bandwidth_threshold", 50),
-            "low_latency_threshold": kwargs.get("low_latency_threshold", 10),
-            "medium_latency_threshold": kwargs.get("medium_latency_threshold", 50),
-            "low_error_threshold": kwargs.get("low_error_threshold", 1),
-            "medium_error_threshold": kwargs.get("medium_error_threshold", 5),
-            **kwargs,
-        }
-
-        return TemplateObject(config)
-
-    def create_power_management_config(
-        self,
-        enable_power_management: bool = True,
-        clk_hz: int = 100_000_000,
-        transition_timeout_ns: int = 10_000_000,
-        enable_pme: bool = True,
-        enable_wake_events: bool = False,
-        transition_cycles: Optional[Dict[str, int]] = None,
-        **kwargs,
-    ) -> TemplateObject:
-        """
-        Create power management configuration for templates.
-
-        Args:
-            enable_power_management: Enable power management features
-            clk_hz: Clock frequency in Hz
-            transition_timeout_ns: Transition timeout in nanoseconds
-            enable_pme: Enable Power Management Events
-            enable_wake_events: Enable wake events
-            transition_cycles: Dict with transition cycle counts
-            **kwargs: Additional power management configuration
-
-        Returns:
-            TemplateObject with power management configuration
-        """
-        if transition_cycles is None:
-            transition_cycles = {
-                "d0_to_d1": 100,
-                "d1_to_d0": 200,
-                "d0_to_d3": 500,
-                "d3_to_d0": 1000,
+        # Update with provided values
+        config.update(
+            {
+                "enable_transaction_counters": kwargs.get(
+                    "enable_transaction_counters", False
+                ),
+                "enable_bandwidth_monitoring": kwargs.get(
+                    "enable_bandwidth_monitoring", False
+                ),
+                "enable_latency_tracking": kwargs.get("enable_latency_tracking", False),
+                "enable_latency_measurement": kwargs.get(
+                    "enable_latency_measurement", False
+                ),
+                "enable_error_counting": kwargs.get("enable_error_counting", False),
+                "enable_error_rate_tracking": kwargs.get(
+                    "enable_error_rate_tracking", False
+                ),
+                "enable_performance_grading": kwargs.get(
+                    "enable_performance_grading", False
+                ),
+                "enable_perf_outputs": kwargs.get("enable_perf_outputs", False),
             }
+        )
 
-        config = {
-            "enable_power_management": enable_power_management,
-            "clk_hz": clk_hz,
-            "transition_timeout_ns": transition_timeout_ns,
-            "enable_pme": enable_pme,
-            "enable_wake_events": enable_wake_events,
-            "transition_cycles": TemplateObject(transition_cycles),
-            # Add flag to indicate if interface signals are available
-            "has_interface_signals": kwargs.get("has_interface_signals", False),
-            **kwargs,
-        }
+        # Signal availability flags
+        for signal_type in [
+            "error",
+            "network",
+            "storage",
+            "graphics",
+            "audio",
+            "media",
+            "processor",
+            "usb",
+            "generic",
+        ]:
+            key = f"{signal_type}_signals_available"
+            config[key] = kwargs.get(key, signal_type == "generic")
 
+        # Add aliases for compatibility
+        config["enable_perf_counters"] = config["enable_transaction_counters"]
+        config["metrics_to_monitor"] = kwargs.get("metrics_to_monitor", [])
+
+        config.update(kwargs)
         return TemplateObject(config)
 
-    def create_error_handling_config(
-        self,
-        enable_error_detection: bool = True,
-        enable_error_logging: bool = True,
-        enable_auto_retry: bool = True,
-        max_retry_count: int = 3,
-        error_recovery_cycles: int = 100,
-        error_log_depth: int = 256,
-        **kwargs,
-    ) -> TemplateObject:
-        """
-        Create error handling configuration for templates.
+    def create_power_management_config(self, **kwargs) -> TemplateObject:
+        """Create power management configuration for templates."""
+        config = dict(self.config.power_defaults)
 
-        Args:
-            enable_error_detection: Enable error detection
-            enable_error_logging: Enable error logging
-            enable_auto_retry: Enable automatic retry
-            max_retry_count: Maximum retry count
-            error_recovery_cycles: Error recovery cycles
-            error_log_depth: Error log depth
-            **kwargs: Additional error handling configuration
+        config.update(
+            {
+                "enable_power_management": kwargs.get("enable_power_management", True),
+                "has_interface_signals": kwargs.get("has_interface_signals", False),
+            }
+        )
 
-        Returns:
-            TemplateObject with error handling configuration
-        """
-        config = {
-            "enable_error_detection": enable_error_detection,
-            "enable_error_logging": enable_error_logging,
-            "enable_auto_retry": enable_auto_retry,
-            "max_retry_count": max_retry_count,
-            "error_recovery_cycles": error_recovery_cycles,
-            "error_log_depth": error_log_depth,
-            **kwargs,
-        }
+        # Add transition_delays alias
+        config["transition_delays"] = config["transition_cycles"]
 
+        config.update(kwargs)
+        return TemplateObject(config)
+
+    def create_error_handling_config(self, **kwargs) -> TemplateObject:
+        """Create error handling configuration for templates."""
+        config = dict(self.config.error_defaults)
+
+        # Add specific error lists
+        config.update(
+            {
+                "fatal_errors": kwargs.get("fatal_errors", []),
+                "recoverable_errors": kwargs.get("recoverable_errors", []),
+                "enable_crc_check": kwargs.get("enable_crc_check", False),
+                "enable_timeout_detection": kwargs.get(
+                    "enable_timeout_detection", False
+                ),
+            }
+        )
+
+        config.update(kwargs)
         return TemplateObject(config)
 
     def create_device_specific_signals(
@@ -600,130 +707,51 @@ class UnifiedContextBuilder:
         device_type: str,
         **kwargs,
     ) -> TemplateObject:
-        """
-        Create device-specific signal configurations for templates.
+        """Create device-specific signal configurations."""
+        # Get base signals for device type
+        signals = self.config.device_specific_signals.get(device_type, {}).copy()
 
-        Args:
-            device_type: Type of device ('audio', 'network', 'storage', 'graphics', etc.)
-            **kwargs: Additional device-specific configuration
-
-        Returns:
-            TemplateObject with device-specific signals
-        """
-        signals = {}
-
-        # Ensure device_type is valid and not None
-        if not device_type or not isinstance(device_type, str):
-            device_type = "generic"
-
-        if device_type == "audio":
-            signals.update(
-                {
-                    "audio_enable": kwargs.get(
-                        "audio_enable", True
-                    ),  # Enable by default for audio devices
-                    "volume_left": kwargs.get("volume_left", 0x8000),  # 16-bit value
-                    "volume_right": kwargs.get("volume_right", 0x8000),  # 16-bit value
-                    "sample_rate": kwargs.get("sample_rate", 44100),
-                    "audio_format": kwargs.get("audio_format", 0),
-                }
-            )
-        elif device_type == "network":
-            signals.update(
-                {
-                    "link_up": kwargs.get("link_up", True),
-                    "link_speed": kwargs.get("link_speed", 1),  # 1Gbps
-                    "packet_size": kwargs.get("packet_size", 1500),
-                    "network_enable": kwargs.get("network_enable", True),
-                }
-            )
-        elif device_type == "storage":
-            signals.update(
-                {
-                    "storage_ready": kwargs.get("storage_ready", True),
-                    "sector_size": kwargs.get("sector_size", 512),
-                    "storage_enable": kwargs.get("storage_enable", True),
-                }
-            )
-        elif device_type == "graphics":
-            signals.update(
-                {
-                    "display_enable": kwargs.get("display_enable", True),
-                    "resolution_mode": kwargs.get("resolution_mode", 0),
-                    "pixel_clock": kwargs.get("pixel_clock", 25_000_000),  # 25MHz
-                }
-            )
-        elif device_type == "media":
-            signals.update(
-                {
-                    "media_enable": kwargs.get("media_enable", True),
-                    "codec_type": kwargs.get("codec_type", 0),
-                    "stream_count": kwargs.get("stream_count", 1),
-                }
-            )
-        elif device_type == "processor":
-            signals.update(
-                {
-                    "processor_enable": kwargs.get("processor_enable", True),
-                    "core_count": kwargs.get("core_count", 1),
-                    "freq_mhz": kwargs.get("freq_mhz", 1000),
-                }
-            )
-        elif device_type == "usb":
-            signals.update(
-                {
-                    "usb_enable": kwargs.get("usb_enable", True),
-                    "usb_version": kwargs.get("usb_version", 3),  # USB 3.0 by default
-                    "port_count": kwargs.get("port_count", 4),
-                }
-            )
-
-        # Add common device signals
+        # Add common signals
         signals.update(
             {
                 "device_type": device_type,
                 "device_ready": kwargs.get("device_ready", True),
                 "device_enable": kwargs.get("device_enable", True),
-                **kwargs,
             }
         )
 
+        # Override with any provided values
+        signals.update(kwargs)
+
         return TemplateObject(signals)
 
-    def create_complete_template_context(
+    def create_template_logic_flags(self, **kwargs) -> TemplateObject:
+        """Create template logic flags for advanced templates."""
+        flags = {
+            "clock_domain_logic": kwargs.get("enable_clock_domain_logic", False),
+            "device_specific_ports": kwargs.get("enable_device_specific_ports", False),
+            "interrupt_logic": kwargs.get("enable_interrupt_logic", True),
+            "read_logic": kwargs.get("enable_read_logic", True),
+            "register_logic": kwargs.get("enable_register_logic", True),
+        }
+        flags.update(kwargs)
+
+        return TemplateObject(flags)
+
+    def _create_base_context(
         self,
-        vendor_id: str = "8086",
-        device_id: str = "1234",
-        device_type: str = "network",
-        device_class: str = "enterprise",
+        vendor_id: str,
+        device_id: str,
+        device_type: str,
+        device_class: str,
         **kwargs,
-    ) -> TemplateObject:
-        """
-        Create a complete template context with all required variables.
+    ) -> Dict[str, Any]:
+        """Create the base context structure."""
+        # Parse integer values
+        vendor_id_int = self.parse_hex_to_int(vendor_id, 0x8086)
+        device_id_int = self.parse_hex_to_int(device_id, 0x1234)
 
-        This is useful for tests and ensures all templates have the variables they need.
-
-        Args:
-            vendor_id: PCI vendor ID
-            device_id: PCI device ID
-            device_type: Device type string
-            device_class: Device class string
-            **kwargs: Additional context overrides
-
-        Returns:
-            TemplateObject with complete context
-        """
-        # Validate and sanitize inputs
-        vendor_id = vendor_id or "8086"
-        device_id = device_id or "1234"
-        device_type = device_type or "network"
-        device_class = device_class or "enterprise"
-
-        # Ensure device_type is a known type
-        if device_type not in KNOWN_DEVICE_TYPES:
-            device_type = "generic"
-
-        # Create all sub-configurations
+        # Create sub-configurations
         active_device_config = self.create_active_device_config(
             vendor_id=vendor_id,
             device_id=device_id,
@@ -734,24 +762,10 @@ class UnifiedContextBuilder:
             device_signature=f"{vendor_id}:{device_id}"
         )
 
-        # Compute integer aliases early so sub-objects can reference them
-        def _parse_int(val, default):
-            try:
-                return int(str(val), 16)
-            except Exception:
-                try:
-                    return int(val)
-                except Exception:
-                    return default
-
-        vendor_id_int = _parse_int(vendor_id, 0x8086)
-        device_id_int = _parse_int(device_id, 0x1234)
-
         board_config = self.create_board_config()
-
         logic_flags = self.create_template_logic_flags()
 
-        # Create comprehensive performance config with all template variables
+        # Create performance config with device-specific signals
         perf_config = self.create_performance_config(
             enable_transaction_counters=kwargs.get("enable_transaction_counters", True),
             enable_bandwidth_monitoring=kwargs.get("enable_bandwidth_monitoring", True),
@@ -761,8 +775,6 @@ class UnifiedContextBuilder:
             enable_error_rate_tracking=kwargs.get("enable_error_rate_tracking", True),
             enable_performance_grading=kwargs.get("enable_performance_grading", True),
             enable_perf_outputs=kwargs.get("enable_perf_outputs", True),
-            # Set signal availability based on device type
-            error_signals_available=True,
             network_signals_available=(device_type == "network"),
             storage_signals_available=(device_type == "storage"),
             graphics_signals_available=(device_type == "graphics"),
@@ -770,214 +782,286 @@ class UnifiedContextBuilder:
             media_signals_available=(device_type == "media"),
             processor_signals_available=(device_type == "processor"),
             usb_signals_available=(device_type == "usb"),
-            generic_signals_available=True,
         )
 
-        # Ensure perf_config exposes an alias for enable_perf_counters and default metrics
-        try:
-            if isinstance(perf_config, TemplateObject):
-                perf_config._data.setdefault(
-                    "enable_perf_counters",
-                    getattr(perf_config, "enable_transaction_counters", True),
-                )
-                perf_config._data.setdefault(
-                    "metrics_to_monitor", getattr(perf_config, "metrics_to_monitor", [])
-                )
-        except Exception:
-            pass
-
-        # Create power management config with all required variables
         power_management_config = self.create_power_management_config(
             enable_power_management=kwargs.get("power_management", True),
             has_interface_signals=kwargs.get("has_power_interface_signals", False),
         )
 
-        # Ensure transition_delays alias exists
-        try:
-            if isinstance(power_management_config, TemplateObject):
-                power_management_config._data.setdefault(
-                    "transition_delays",
-                    getattr(power_management_config, "transition_cycles", {}),
-                )
-        except Exception:
-            pass
-
-        # Create error handling config
         error_handling_config = self.create_error_handling_config(
             enable_error_detection=kwargs.get("error_handling", True),
         )
 
-        # Ensure error handling exposes max_retry_count and fatal/recoverable lists
-        try:
-            if isinstance(error_handling_config, TemplateObject):
-                error_handling_config._data.setdefault(
-                    "max_retry_count",
-                    getattr(error_handling_config, "max_retry_count", 3),
-                )
-                error_handling_config._data.setdefault(
-                    "fatal_errors", getattr(error_handling_config, "fatal_errors", [])
-                )
-                error_handling_config._data.setdefault(
-                    "recoverable_errors",
-                    getattr(error_handling_config, "recoverable_errors", []),
-                )
-        except Exception:
-            pass
-
-        # Create device-specific signals
         device_signals = self.create_device_specific_signals(
             device_type=device_type,
             **kwargs,
         )
 
-        # Create complete context
+        # Build base context
         context = {
             "header": "// Generated SystemVerilog Module",
             "device_type": device_type,
             "device_class": device_class,
             "device_signature": f"32'h{vendor_id.upper()}{device_id.upper()}",
+            "vendor_id": vendor_id,
+            "device_id": device_id,
+            "vendor_id_int": vendor_id_int,
+            "device_id_int": device_id_int,
             # Core configurations
             "active_device_config": active_device_config,
             "generation_metadata": generation_metadata,
             "board_config": board_config,
             "perf_config": perf_config,
-            # Power management
-            "power_management": power_management_config,  # Use the config object, not just boolean
+            "power_management": power_management_config,
             "power_config": power_management_config,
-            # Error handling
-            "error_handling": error_handling_config,  # Use the config object, not just boolean
+            "error_handling": error_handling_config,
             "error_config": error_handling_config,
-            # Performance counters
             "performance_counters": perf_config,
-            # Device-specific signals - merge into main context
+            # Merge device signals
             **device_signals.to_dict(),
-            # Device configuration (converted to TemplateObject for template consistency)
-            "device_config": TemplateObject(
-                {
-                    "vendor_id": vendor_id,
-                    "device_id": device_id,
-                    "vendor_id_int": vendor_id_int,
-                    "device_id_int": device_id_int,
-                    "subsystem_vendor_id": vendor_id,
-                    "subsystem_device_id": device_id,
-                    "class_code": "020000" if device_type == "network" else "000000",
-                    "revision_id": "01",
-                    "max_payload_size": 256,
-                    "msi_vectors": 4,
-                    "enable_advanced_features": True,
-                    "enable_dma_operations": True,
-                    "device_type": device_type,  # Add device_type to device_config
-                    "device_class": device_class,  # Add device_class to device_config
-                }
-            ),
             # Template logic flags
             **logic_flags.to_dict(),
-            # Additional configurations (converted to TemplateObjects)
-            "config_space": TemplateObject({"size": 256, "raw_data": ""}),
-            "bar_config": TemplateObject({"bars": []}),
-            "interrupt_config": TemplateObject({"vectors": 4}),
-            "msix_config": TemplateObject({"table_size": 4}),
-            "timing_config": TemplateObject(
-                {
-                    "clock_frequency_mhz": kwargs.get("clock_frequency_mhz", 100),
-                    "read_latency": kwargs.get("read_latency", 2),
-                    "write_latency": kwargs.get("write_latency", 1),
-                    "setup_time": kwargs.get("setup_time", 1),
-                    "hold_time": kwargs.get("hold_time", 1),
-                    "burst_length": kwargs.get("burst_length", 4),
-                    "enable_clock_gating": kwargs.get("enable_clock_gating", False),
-                }
-            ),
-            "pcileech_config": type(
-                "PCILeechConfig",
-                (),
-                {
-                    "buffer_size": kwargs.get("buffer_size", 4096),
-                    "command_timeout": kwargs.get("command_timeout", 1000),
-                    "enable_dma": kwargs.get("enable_dma_operations", True),
-                    "enable_scatter_gather": kwargs.get("enable_scatter_gather", False),
-                    "max_payload_size": kwargs.get("max_payload_size", 256),
-                    "max_read_request_size": kwargs.get("max_read_request_size", 512),
-                },
-            )(),
-            # Template variables commonly expected
-            "registers": kwargs.get("registers", []),
-            # Enable flags for templates
-            "enable_performance_counters": perf_config.enable_transaction_counters,
-            "enable_error_detection": error_handling_config.enable_error_detection,
-            "enable_interrupt": True,
-            "enable_custom_config": True,
-            "enable_scatter_gather": False,
-            "enable_clock_crossing": True,
-            "enable_latency_measurement": perf_config.enable_latency_measurement,
-            "enable_latency_tracking": perf_config.enable_latency_tracking,
-            "enable_error_rate_tracking": perf_config.enable_error_rate_tracking,
-            "enable_performance_grading": perf_config.enable_performance_grading,
-            # Identifiers
-            "vendor_id": vendor_id,
-            "device_id": device_id,
-            # Variance model - required by register_declarations.sv.j2
-            "variance_model": TemplateObject(
-                {
-                    "enabled": True,
-                    "variance_type": "normal",
-                    "process_variation": 0.1,  # Required by template
-                    "temperature_coefficient": 0.05,  # Required by template
-                    "voltage_variation": 0.03,  # Required by template
-                    "parameters": {
-                        "mean": 0.0,
-                        "std_dev": 0.1,
-                        "min_value": -1.0,
-                        "max_value": 1.0,
-                    },
-                }
-            ),
-            # Power state request variable for power management
-            "power_state_req": 0x00,  # Default to D0 state (binary: 00)
-            **kwargs,  # Allow overrides
         }
 
-        # Provide a minimal `pcileech` top-level config object for TCL templates
-        context.setdefault(
-            "pcileech",
-            TemplateObject(
-                {
-                    "src_dir": kwargs.get("pcileech_src_dir", "src"),
-                    "ip_dir": kwargs.get("pcileech_ip_dir", "ip"),
-                    "source_files": kwargs.get("pcileech_source_files", []),
-                    "ip_files": kwargs.get("pcileech_ip_files", []),
-                    "coefficient_files": kwargs.get("pcileech_coefficient_files", []),
-                    "synthesis_strategy": kwargs.get("synthesis_strategy", "default"),
-                }
-            ),
+        return context
+
+    def _add_device_config(
+        self,
+        context: Dict[str, Any],
+        vendor_id: str,
+        device_id: str,
+        device_type: str,
+        device_class: str,
+    ) -> None:
+        """Add device configuration to context."""
+        vendor_id_int = context["vendor_id_int"]
+        device_id_int = context["device_id_int"]
+
+        device_config = TemplateObject(
+            {
+                "vendor_id": vendor_id,
+                "device_id": device_id,
+                "vendor_id_int": vendor_id_int,
+                "device_id_int": device_id_int,
+                "subsystem_vendor_id": vendor_id,
+                "subsystem_device_id": device_id,
+                "subsys_vendor_id": vendor_id,  # Alias
+                "subsys_device_id": device_id,  # Alias
+                "class_code": "020000" if device_type == "network" else "000000",
+                "revision_id": "01",
+                "max_payload_size": 256,
+                "msi_vectors": 4,
+                "enable_advanced_features": True,
+                "enable_dma_operations": True,
+                "device_type": device_type,
+                "device_class": device_class,
+            }
         )
 
-        # Minimal compatibility layer: keep only a small set of deterministic
-        # aliases that templates commonly use for formatting or queries.
-        # Templates should prefer canonical sub-objects (device_config, perf_config, board, etc.).
-        context.setdefault("msix_config", TemplateObject({"table_size": 4}))
+        context["device_config"] = device_config
+        # Add aliases
+        context["device"] = device_config
+        context["device_info"] = device_config
+        context["config"] = device_config
 
-        # Provide integer aliases for vendor/device IDs used for formatting.
-        try:
-            context["vendor_id_int"] = int(str(vendor_id), 16)
-        except Exception:
-            try:
-                context["vendor_id_int"] = int(vendor_id)
-            except Exception:
-                context["vendor_id_int"] = 0x8086
+    def _add_standard_configs(self, context: Dict[str, Any], **kwargs) -> None:
+        """Add standard configuration objects."""
+        # Config space
+        context["config_space"] = TemplateObject({"size": 256, "raw_data": ""})
 
-        try:
-            context["device_id_int"] = int(str(device_id), 16)
-        except Exception:
-            try:
-                context["device_id_int"] = int(device_id)
-            except Exception:
-                context["device_id_int"] = 0x1234
+        # BAR configuration
+        context["bar_config"] = TemplateObject(
+            {
+                "bars": [
+                    {
+                        "base": 0,
+                        "size": kwargs.get("BAR_APERTURE_SIZE", 0x1000),
+                        "type": "io",
+                    }
+                ]
+            }
+        )
+        context["bars"] = context["bar_config"].get("bars", [])
 
-        # Small conservative top-level defaults used by older templates until they are migrated.
+        # Interrupt configuration
+        context["interrupt_config"] = TemplateObject({"vectors": 4})
+
+        # MSI-X configuration
+        msix_config = TemplateObject(
+            {
+                "table_size": 4,
+                "num_vectors": 4,
+                "table_bir": 0,
+                "table_offset": 0x1000,
+                "pba_bir": 0,
+                "pba_offset": 0x2000,
+            }
+        )
+        context["msix_config"] = msix_config
+
+        # Timing configuration
+        timing_config = dict(DEFAULT_TIMING_CONFIG)
+        timing_config.update(
+            {
+                "clock_frequency_mhz": kwargs.get("clock_frequency_mhz", 100),
+                "read_latency": kwargs.get("read_latency", 2),
+                "write_latency": kwargs.get("write_latency", 1),
+                "enable_clock_gating": kwargs.get("enable_clock_gating", False),
+            }
+        )
+        context["timing_config"] = TemplateObject(timing_config)
+
+        # PCILeech configuration
+        context["pcileech_config"] = TemplateObject(
+            {
+                "buffer_size": kwargs.get("buffer_size", 4096),
+                "command_timeout": kwargs.get("command_timeout", 1000),
+                "enable_dma": kwargs.get("enable_dma_operations", True),
+                "enable_scatter_gather": kwargs.get("enable_scatter_gather", False),
+                "max_payload_size": kwargs.get("max_payload_size", 256),
+                "max_read_request_size": kwargs.get("max_read_request_size", 512),
+            }
+        )
+
+        # Variance model
+        context["variance_model"] = TemplateObject(DEFAULT_VARIANCE_MODEL)
+
+        # PCILeech project configuration
+        context["pcileech"] = TemplateObject(
+            {
+                "src_dir": kwargs.get("pcileech_src_dir", "src"),
+                "ip_dir": kwargs.get("pcileech_ip_dir", "ip"),
+                "source_files": kwargs.get("pcileech_source_files", []),
+                "ip_files": kwargs.get("pcileech_ip_files", []),
+                "coefficient_files": kwargs.get("pcileech_coefficient_files", []),
+                "synthesis_strategy": kwargs.get("synthesis_strategy", "default"),
+                "implementation_strategy": kwargs.get(
+                    "implementation_strategy", "default"
+                ),
+            }
+        )
+
+        # Project and build configuration
+        context["project"] = TemplateObject(
+            {"name": kwargs.get("project_name", "pcileech_project")}
+        )
+
+        context["build"] = TemplateObject(
+            {
+                "jobs": kwargs.get("build_jobs", 1),
+                "batch_mode": kwargs.get("batch_mode", False),
+            }
+        )
+
+    def _add_compatibility_aliases(self, context: Dict[str, Any], **kwargs) -> None:
+        """Add compatibility aliases for legacy templates."""
+        # Top-level aliases for nested values
+        context["enable_performance_counters"] = context[
+            "perf_config"
+        ].enable_transaction_counters
+        context["enable_error_detection"] = context[
+            "error_handling"
+        ].enable_error_detection
+        context["enable_perf_counters"] = context[
+            "perf_config"
+        ].enable_transaction_counters
+
+        # MSI-X aliases
+        context["NUM_MSIX"] = context["msix_config"].table_size
+        context["MSIX_TABLE_BIR"] = context["msix_config"].table_bir
+        context["MSIX_TABLE_OFFSET"] = context["msix_config"].table_offset
+        context["MSIX_PBA_BIR"] = context["msix_config"].pba_bir
+        context["MSIX_PBA_OFFSET"] = context["msix_config"].pba_offset
+
+        # Board/project aliases
+        context["board"] = context["board_config"]
+        context["board_name"] = context["board_config"].name
+        context["fpga_part"] = context["board_config"].fpga_part
+        context["fpga_family"] = context["board_config"].fpga_family
+        context["project_name"] = context["project"].name
+
+        # Power management aliases
+        context["clk_hz"] = context["power_management"].clk_hz
+        context["transition_delays"] = context["power_management"].transition_delays
+        context["tr_ns"] = context["power_management"].transition_timeout_ns
+
+        # Error handling aliases
+        context["enable_crc_check"] = context["error_handling"].enable_crc_check
+        context["enable_timeout_detection"] = context[
+            "error_handling"
+        ].enable_timeout_detection
+        context["enable_error_logging"] = context["error_handling"].enable_error_logging
+        context["recoverable_errors"] = context["error_handling"].recoverable_errors
+        context["fatal_errors"] = context["error_handling"].fatal_errors
+        context["error_recovery_cycles"] = context[
+            "error_handling"
+        ].error_recovery_cycles
+
+        # Performance aliases
+        context["error_signals_available"] = context[
+            "perf_config"
+        ].error_signals_available
+        context["network_signals_available"] = context[
+            "perf_config"
+        ].network_signals_available
+        context["metrics_to_monitor"] = context["perf_config"].metrics_to_monitor
+
+        # Misc aliases
+        context["generated_time"] = context["generation_metadata"].generated_time
+        context["generated_time_pretty"] = context[
+            "generation_metadata"
+        ].generated_time_pretty
+        context["class_code"] = context["device_config"].class_code
+        context["pcie_ip_type"] = context["board_config"].pcie_ip_type
+        context["max_lanes"] = context["board_config"].max_lanes
+        context["supports_msi"] = context["board_config"].supports_msi
+        context["supports_msix"] = context["board_config"].supports_msix
+
+        # Default values
         context.setdefault("BAR_APERTURE_SIZE", kwargs.get("BAR_APERTURE_SIZE", 0x1000))
         context.setdefault("CONFIG_SPACE_SIZE", kwargs.get("CONFIG_SPACE_SIZE", 256))
         context.setdefault("ROM_SIZE", kwargs.get("ROM_SIZE", 0))
+        context.setdefault("registers", kwargs.get("registers", []))
+        context.setdefault("enable_interrupt", True)
+        context.setdefault("enable_custom_config", True)
+        context.setdefault("enable_scatter_gather", False)
+        context.setdefault("enable_clock_crossing", True)
+        context.setdefault("power_state_req", 0x00)
+        context.setdefault("command_timeout", kwargs.get("command_timeout", 1000))
+        context.setdefault("num_vectors", kwargs.get("num_vectors", 1))
+        context.setdefault("timeout_cycles", kwargs.get("timeout_cycles", 1024))
+        context.setdefault("timeout_ms", kwargs.get("timeout_ms", 1000))
+        context.setdefault("enable_pme", kwargs.get("enable_pme", True))
+        context.setdefault(
+            "enable_wake_events", kwargs.get("enable_wake_events", False)
+        )
+        context.setdefault("fifo_type", kwargs.get("fifo_type", "simple"))
+        context.setdefault(
+            "integration_type", kwargs.get("integration_type", "default")
+        )
+        context.setdefault("OVERLAY_ENTRIES", kwargs.get("OVERLAY_ENTRIES", []))
+        context.setdefault("OVERLAY_MAP", kwargs.get("OVERLAY_MAP", {}))
+        context.setdefault("ROM_BAR_INDEX", kwargs.get("ROM_BAR_INDEX", 0))
+        context.setdefault("FLASH_ADDR_OFFSET", kwargs.get("FLASH_ADDR_OFFSET", 0))
+        context.setdefault("CONFIG_SHDW_HI", kwargs.get("CONFIG_SHDW_HI", 0xFFFF))
+        context.setdefault("CONFIG_SHDW_LO", kwargs.get("CONFIG_SHDW_LO", 0x0))
+        context.setdefault("CONFIG_SHDW_SIZE", kwargs.get("CONFIG_SHDW_SIZE", 4))
+        context.setdefault("DUAL_PORT", False)
+        context.setdefault("ALLOW_ROM_WRITES", False)
+        context.setdefault("USE_QSPI", False)
+        context.setdefault("INIT_ROM", False)
+        context.setdefault("SPI_FAST_CMD", False)
+        context.setdefault("USE_BYTE_ENABLES", False)
+        context.setdefault("ENABLE_SIGNATURE_CHECK", False)
+        context.setdefault("SIGNATURE_CHECK", False)
+        context.setdefault("batch_mode", False)
+        context.setdefault("enable_power_opt", kwargs.get("enable_power_opt", False))
+        context.setdefault(
+            "enable_incremental", kwargs.get("enable_incremental", False)
+        )
+        context.setdefault("project_dir", kwargs.get("project_dir", "."))
+        context.setdefault("device_specific_config", {})
         context.setdefault(
             "build_system_version", kwargs.get("build_system_version", "v1.0")
         )
@@ -990,1532 +1074,92 @@ class UnifiedContextBuilder:
             kwargs.get("generated_xdc_path", "constraints/generated.xdc"),
         )
         context.setdefault(
-            "project",
-            kwargs.get("project", TemplateObject({"name": "pcileech_project"})),
+            "synthesis_strategy", kwargs.get("synthesis_strategy", "default")
+        )
+        context.setdefault(
+            "implementation_strategy", kwargs.get("implementation_strategy", "default")
+        )
+        context.setdefault("pcie_rst_pin", kwargs.get("pcie_rst_pin", ""))
+        context.setdefault("constraint_files", kwargs.get("constraint_files", []))
+        context.setdefault("top_module", kwargs.get("top_module", "top"))
+        context.setdefault("error_thresholds", kwargs.get("error_thresholds", {}))
+        context.setdefault("CUSTOM_WIN_BASE", kwargs.get("CUSTOM_WIN_BASE", 0))
+        context.setdefault("ROM_HEX_FILE", kwargs.get("ROM_HEX_FILE", ""))
+        context.setdefault("ENABLE_CACHE", kwargs.get("ENABLE_CACHE", False))
+        context.setdefault("constraints", context["board_config"].constraints)
+        context.setdefault("pcie_config", kwargs.get("pcie_config", {}))
+        context.setdefault("meta", context["generation_metadata"])
+
+        # Add more missing attributes from failing tests
+        context.setdefault(
+            "enable_error_rate_tracking",
+            kwargs.get("enable_error_rate_tracking", False),
+        )
+        context.setdefault("is_64bit", kwargs.get("is_64bit", False))
+
+    def create_complete_template_context(
+        self,
+        vendor_id: str = DEFAULT_VENDOR_ID,
+        device_id: str = DEFAULT_DEVICE_ID,
+        device_type: str = "network",
+        device_class: str = "enterprise",
+        **kwargs,
+    ) -> TemplateObject:
+        """
+        Create a complete template context with all required variables.
+
+        This method creates a comprehensive context that includes all variables
+        expected by the various Jinja2 templates, with proper defaults and
+        compatibility aliases.
+
+        Args:
+            vendor_id: PCI vendor ID
+            device_id: PCI device ID
+            device_type: Device type string
+            device_class: Device class string
+            **kwargs: Additional context overrides
+
+        Returns:
+            TemplateObject with complete context
+        """
+        # Validate and sanitize inputs
+        vendor_id = vendor_id or DEFAULT_VENDOR_ID
+        device_id = device_id or DEFAULT_DEVICE_ID
+        device_type = device_type or "network"
+        device_class = device_class or "enterprise"
+
+        # Ensure device_type is known
+        if device_type not in KNOWN_DEVICE_TYPES:
+            self.logger.warning(f"Unknown device type '{device_type}', using 'generic'")
+            device_type = "generic"
+
+        # Create base context
+        context = self._create_base_context(
+            vendor_id=vendor_id,
+            device_id=device_id,
+            device_type=device_type,
+            device_class=device_class,
+            **kwargs,
         )
 
-        # Legacy top-level aliases (short-term)
-        context.setdefault(
-            "device",
-            context.get("device_config") or context.get("active_device_config"),
-        )
-        context.setdefault(
-            "device_info",
-            context.get("device_config") or context.get("active_device_config"),
-        )
-        context.setdefault(
-            "config",
-            context.get("device_config") or context.get("active_device_config"),
-        )
-        context.setdefault("board", context.get("board_config") or context.get("board"))
-
-        # MSIX aliases
-        try:
-            context.setdefault(
-                "MSIX_TABLE_BIR", context["msix_config"].get("table_bir", 0)
-            )
-            context.setdefault(
-                "MSIX_TABLE_OFFSET", context["msix_config"].get("table_offset", 0x1000)
-            )
-        except Exception:
-            context.setdefault("MSIX_TABLE_BIR", 0)
-            context.setdefault("MSIX_TABLE_OFFSET", 0x1000)
-
-        context.setdefault(
-            "NUM_MSIX",
-            kwargs.get(
-                "NUM_MSIX", getattr(context.get("msix_config"), "table_size", 4)
-            ),
+        # Add device configuration
+        self._add_device_config(
+            context, vendor_id, device_id, device_type, device_class
         )
 
-        # Misc defaults
-        context.setdefault("fifo_type", kwargs.get("fifo_type", "simple"))
-        context.setdefault(
-            "enable_perf_counters", kwargs.get("enable_perf_counters", True)
-        )
-        context.setdefault("timeout_ms", kwargs.get("timeout_ms", 1000))
-        context.setdefault("enable_pme", kwargs.get("enable_pme", True))
-        context.setdefault(
-            "enable_wake_events", kwargs.get("enable_wake_events", False)
-        )
+        # Add standard configurations
+        self._add_standard_configs(context, **kwargs)
 
+        # Apply any additional kwargs
+        context.update(kwargs)
+
+        # Create template object
         template_context = TemplateObject(context)
 
-        # Expose helper macros/aliases to templates via simple globals
-        try:
-            # If templates expect functions like safe_attr in globals, provide a thin wrapper
-            template_context._data.setdefault(
-                "safe_attr",
-                lambda obj, name, default="": (
-                    obj.get(name, default)
-                    if hasattr(obj, "get")
-                    else (getattr(obj, name, default) if obj is not None else default)
-                ),
-            )
-            # Provide safe board helper functions for templates that didn't import helpers
-            template_context._data.setdefault(
-                "safe_board_name",
-                lambda b: (
-                    b.get("name")
-                    if hasattr(b, "get")
-                    else (getattr(b, "name", b) if b is not None else "generic")
-                ),
-            )
-            template_context._data.setdefault(
-                "safe_board_fpga_part",
-                lambda b: (
-                    b.get("fpga_part")
-                    if hasattr(b, "get")
-                    else (getattr(b, "fpga_part", b) if b is not None else "xc7a35t")
-                ),
-            )
-        except Exception:
-            # best-effort; ignore if we can't inject
-            pass
+        # Add compatibility aliases
+        self._add_compatibility_aliases(template_context._data, **kwargs)
 
-        # Conservative top-level fallbacks for legacy templates
-        template_context._data.setdefault(
-            "synthesis_strategy",
-            template_context.get("pcileech", {}).get("synthesis_strategy", "default"),
-        )
-        template_context._data.setdefault(
-            "pcie_rst_pin", kwargs.get("pcie_rst_pin", "")
-        )
-
-        # Provide subsys alias commonly referenced by older templates
-        try:
-            devcfg = template_context.get("device_config")
-            if isinstance(devcfg, TemplateObject):
-                devcfg._data.setdefault(
-                    "subsys_device_id",
-                    devcfg.get(
-                        "subsystem_device_id",
-                        devcfg.get("subsystem_device_id", device_id),
-                    ),
-                )
-                devcfg._data.setdefault(
-                    "subsys_vendor_id",
-                    devcfg.get(
-                        "subsystem_vendor_id",
-                        devcfg.get("subsystem_vendor_id", vendor_id),
-                    ),
-                )
-        except Exception:
-            pass
-
-        # Ensure perf/power/error nested objects expose the small set of attributes templates expect
-        try:
-            pf = template_context.get("perf_config")
-            if isinstance(pf, TemplateObject):
-                pf._data.setdefault(
-                    "enable_perf_counters",
-                    getattr(pf, "enable_transaction_counters", True),
-                )
-                pf._data.setdefault(
-                    "metrics_to_monitor", getattr(pf, "metrics_to_monitor", [])
-                )
-        except Exception:
-            pass
-
-        try:
-            pm = template_context.get("power_management")
-            if isinstance(pm, TemplateObject):
-                pm._data.setdefault(
-                    "transition_delays", getattr(pm, "transition_cycles", {})
-                )
-        except Exception:
-            pass
-
-        try:
-            eh = template_context.get("error_handling")
-            if isinstance(eh, TemplateObject):
-                eh._data.setdefault(
-                    "max_retry_count", getattr(eh, "max_retry_count", 3)
-                )
-                eh._data.setdefault("fatal_errors", getattr(eh, "fatal_errors", []))
-                eh._data.setdefault(
-                    "recoverable_errors", getattr(eh, "recoverable_errors", [])
-                )
-        except Exception:
-            pass
-
-        # --- Coerce/ensure common objects and aliases to avoid template breakage ---
-        # Ensure generation metadata exposes generated_time & pretty values
-        try:
-            gen = template_context.get("generation_metadata")
-            if isinstance(gen, TemplateObject):
-                gen._data.setdefault(
-                    "generated_time", gen.get("generated_at", gen.get("timestamp", ""))
-                )
-                gen._data.setdefault(
-                    "generated_time_pretty",
-                    gen.get(
-                        "generated_time_pretty", str(gen.get("generated_time", ""))
-                    ),
-                )
-            else:
-                template_context._data["generation_metadata"] = TemplateObject(
-                    {
-                        "generated_at": gen or "",
-                        "generated_time": gen or "",
-                        "generated_time_pretty": str(gen or ""),
-                    }
-                )
-        except Exception:
-            template_context._data.setdefault(
-                "generation_metadata",
-                TemplateObject(
-                    {
-                        "generated_at": "",
-                        "generated_time": "",
-                        "generated_time_pretty": "",
-                    }
-                ),
-            )
-
-        # Ensure board is a TemplateObject (many templates assume board.name / board.fpga_part)
-        try:
-            b = template_context.get("board")
-            # Normalize strings/dicts into TemplateObject using create_board_config where possible
-            if isinstance(b, str):
-                template_context._data["board"] = self.create_board_config(
-                    board_name=b, fpga_part=b
-                )
-            elif isinstance(b, dict):
-                template_context._data["board"] = TemplateObject(b)
-            elif b is None:
-                # Prefer the explicit board_config if it exists; otherwise create a default
-                template_context._data["board"] = template_context.get(
-                    "board_config", self.create_board_config()
-                )
-
-            # Ensure nested board object has the commonly-expected attributes
-            board_obj = template_context.get("board")
-            if isinstance(board_obj, TemplateObject):
-                board_obj._data.setdefault(
-                    "name", getattr(board_obj, "name", "generic")
-                )
-                board_obj._data.setdefault(
-                    "fpga_part",
-                    getattr(
-                        board_obj,
-                        "fpga_part",
-                        template_context.get("fpga_part", "xc7a35t"),
-                    ),
-                )
-                board_obj._data.setdefault(
-                    "fpga_family",
-                    getattr(
-                        board_obj,
-                        "fpga_family",
-                        template_context.get("fpga_family", "artix7"),
-                    ),
-                )
-                board_obj._data.setdefault(
-                    "pcie_ip_type",
-                    getattr(
-                        board_obj,
-                        "pcie_ip_type",
-                        template_context.get("pcie_ip_type", "axi_pcie"),
-                    ),
-                )
-
-                # Ensure constraints exists and is TemplateObject-like with xdc_file
-                try:
-                    cons = board_obj.get("constraints", None)
-                    if cons is None:
-                        board_obj._data.setdefault(
-                            "constraints", TemplateObject({"xdc_file": None})
-                        )
-                    elif isinstance(cons, dict):
-                        board_obj._data["constraints"] = TemplateObject(cons)
-                    # else: assume it's already TemplateObject and fine
-                except Exception:
-                    board_obj._data.setdefault(
-                        "constraints", TemplateObject({"xdc_file": None})
-                    )
-
-                # Ensure features/defaults exist
-                board_obj._data.setdefault(
-                    "features", getattr(board_obj, "features", {})
-                )
-            else:
-                # last-resort default
-                template_context._data.setdefault("board", self.create_board_config())
-        except Exception:
-            template_context._data.setdefault("board", self.create_board_config())
-
-        # Ensure project is a TemplateObject
-        try:
-            p = template_context.get("project")
-            if isinstance(p, str):
-                template_context._data["project"] = TemplateObject({"name": p})
-            elif p is None:
-                template_context._data["project"] = TemplateObject(
-                    {"name": "pcileech_project"}
-                )
-        except Exception:
-            template_context._data.setdefault(
-                "project", TemplateObject({"name": "pcileech_project"})
-            )
-
-        # Ensure device/device_config aliases expose both string and integer ids
-        try:
-            dev = template_context.get("device_config")
-            if isinstance(dev, TemplateObject):
-                dev._data.setdefault("device_id", dev.get("device_id", device_id))
-                # ensure integer alias exists
-                try:
-                    dev._data.setdefault(
-                        "device_id_int",
-                        int(str(dev.get("device_id", device_id)), 16),
-                    )
-                except Exception:
-                    dev._data.setdefault("device_id_int", device_id_int)
-                try:
-                    dev._data.setdefault(
-                        "vendor_id_int",
-                        int(str(dev.get("vendor_id", vendor_id)), 16),
-                    )
-                except Exception:
-                    dev._data.setdefault("vendor_id_int", vendor_id_int)
-            else:
-                template_context._data["device_config"] = TemplateObject(
-                    {
-                        "device_id": device_id,
-                        "device_id_int": device_id_int,
-                        "vendor_id": vendor_id,
-                        "vendor_id_int": vendor_id_int,
-                    }
-                )
-        except Exception:
-            template_context._data.setdefault(
-                "device_config",
-                TemplateObject(
-                    {
-                        "device_id": device_id,
-                        "device_id_int": device_id_int,
-                        "vendor_id": vendor_id,
-                        "vendor_id_int": vendor_id_int,
-                    }
-                ),
-            )
-
-        # Ensure a top-level `device` alias exists and points to device_config
-        try:
-            if not isinstance(template_context.get("device"), TemplateObject):
-                template_context._data["device"] = template_context.get("device_config")
-            template_context._data.setdefault(
-                "device", template_context.get("device_config")
-            )
-            template_context._data.setdefault(
-                "device_info", template_context.get("device_config")
-            )
-            template_context._data.setdefault(
-                "config", template_context.get("device_config")
-            )
-        except Exception:
-            template_context._data.setdefault(
-                "device", template_context.get("device_config")
-            )
-
-        # Ensure bar list contains at least one bar to avoid index errors
-        try:
-            bar_config = template_context.get("bar_config")
-            if bar_config and hasattr(bar_config, "get"):
-                bars = bar_config.get("bars", [])
-                if not bars:
-                    default_bar = {
-                        "base": 0,
-                        "size": template_context.get("BAR_APERTURE_SIZE", 0x1000),
-                        "type": "io",
-                    }
-                    # assign as a plain list of dicts (TemplateObject will wrap during rendering if needed)
-                    if hasattr(bar_config, "_data"):
-                        bar_config._data.setdefault("bars", [default_bar])
-                    template_context._data.setdefault("bars", [default_bar])
-            else:
-                raise AttributeError("bar_config not found or invalid")
-        except Exception:
-            template_context._data.setdefault(
-                "bar_config",
-                TemplateObject(
-                    {
-                        "bars": [
-                            {
-                                "base": 0,
-                                "size": template_context.get(
-                                    "BAR_APERTURE_SIZE", 0x1000
-                                ),
-                                "type": "io",
-                            }
-                        ]
-                    }
-                ),
-            )
-
-        # Populate error-handling flags at both nested and top-level for templates that expect either
-        try:
-            eh = template_context.get("error_handling")
-            if not isinstance(eh, TemplateObject):
-                template_context._data["error_handling"] = TemplateObject(
-                    {
-                        "enable_crc_check": False,
-                        "enable_timeout_detection": False,
-                        "enable_error_logging": False,
-                        "recoverable_errors": [],
-                        "fatal_errors": [],
-                        "error_recovery_cycles": 100,
-                    }
-                )
-            else:
-                eh._data.setdefault("enable_crc_check", False)
-                eh._data.setdefault("enable_timeout_detection", False)
-                eh._data.setdefault("enable_error_logging", False)
-                eh._data.setdefault("recoverable_errors", [])
-                eh._data.setdefault("fatal_errors", [])
-                eh._data.setdefault("error_recovery_cycles", 100)
-
-            # mirror to top-level aliases
-            template_context._data.setdefault(
-                "enable_crc_check", getattr(eh, "enable_crc_check", False)
-            )
-            template_context._data.setdefault(
-                "enable_timeout_detection",
-                getattr(eh, "enable_timeout_detection", False),
-            )
-            template_context._data.setdefault(
-                "enable_error_logging", getattr(eh, "enable_error_logging", False)
-            )
-            template_context._data.setdefault(
-                "recoverable_errors", getattr(eh, "recoverable_errors", [])
-            )
-            template_context._data.setdefault(
-                "error_recovery_cycles", getattr(eh, "error_recovery_cycles", 100)
-            )
-        except Exception:
-            template_context._data.setdefault("enable_crc_check", False)
-            template_context._data.setdefault("enable_timeout_detection", False)
-            template_context._data.setdefault("enable_error_logging", False)
-            template_context._data.setdefault("recoverable_errors", [])
-            template_context._data.setdefault("error_recovery_cycles", 100)
-
-        # Ensure performance flags exist nested and top-level
-        try:
-            pf = template_context.get("perf_config")
-            if not isinstance(pf, TemplateObject):
-                template_context._data["perf_config"] = TemplateObject(
-                    {
-                        "enable_perf_outputs": False,
-                        "enable_transaction_counters": False,
-                        "metrics_to_monitor": [],
-                    }
-                )
-            else:
-                pf._data.setdefault(
-                    "enable_perf_outputs", getattr(pf, "enable_perf_outputs", False)
-                )
-                pf._data.setdefault(
-                    "enable_transaction_counters",
-                    getattr(pf, "enable_transaction_counters", False),
-                )
-                pf._data.setdefault(
-                    "metrics_to_monitor", getattr(pf, "metrics_to_monitor", [])
-                )
-
-            template_context._data.setdefault(
-                "enable_perf_outputs", getattr(pf, "enable_perf_outputs", False)
-            )
-            template_context._data.setdefault(
-                "enable_perf_counters",
-                getattr(pf, "enable_transaction_counters", False),
-            )
-            template_context._data.setdefault(
-                "metrics_to_monitor", getattr(pf, "metrics_to_monitor", [])
-            )
-        except Exception:
-            template_context._data.setdefault("enable_perf_outputs", False)
-            template_context._data.setdefault("enable_perf_counters", False)
-            template_context._data.setdefault("metrics_to_monitor", [])
-
-        # Ensure tr_ns top-level alias maps to power management transition timeout
-        try:
-            pm = template_context.get("power_management")
-            tr = (
-                getattr(pm, "transition_timeout_ns", None)
-                if isinstance(pm, TemplateObject)
-                else (
-                    pm.get("transition_timeout_ns", None)
-                    if isinstance(pm, dict)
-                    else None
-                )
-            )
-            template_context._data.setdefault("tr_ns", tr)
-        except Exception:
-            template_context._data.setdefault(
-                "tr_ns", template_context.get("tr_ns", None)
-            )
-
-        # Ensure a minimal 'config' object exists for templates that expect it
-        try:
-            cfg = template_context.get("config")
-            if not isinstance(cfg, TemplateObject):
-                template_context._data["config"] = TemplateObject(
-                    {
-                        "idle_threshold": kwargs.get("idle_threshold", 1000),
-                        "enable_clock_gating": kwargs.get("enable_clock_gating", False),
-                        "supported_states": kwargs.get(
-                            "supported_states", [{"name": "D0", "value": "D0"}]
-                        ),
-                    }
-                )
-            else:
-                # Populate missing fields on existing config object
-                if not hasattr(cfg, "idle_threshold"):
-                    try:
-                        setattr(
-                            cfg, "idle_threshold", kwargs.get("idle_threshold", 1000)
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "idle_threshold", kwargs.get("idle_threshold", 1000)
-                        )
-                if not hasattr(cfg, "enable_clock_gating"):
-                    try:
-                        setattr(
-                            cfg,
-                            "enable_clock_gating",
-                            kwargs.get("enable_clock_gating", False),
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "enable_clock_gating",
-                            kwargs.get("enable_clock_gating", False),
-                        )
-                # Ensure error/timing related defaults exist on config for templates
-                if not hasattr(cfg, "timeout_cycles"):
-                    try:
-                        setattr(
-                            cfg, "timeout_cycles", kwargs.get("timeout_cycles", 1024)
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "timeout_cycles", kwargs.get("timeout_cycles", 1024)
-                        )
-                if not hasattr(cfg, "enable_timeout_detection"):
-                    try:
-                        setattr(cfg, "enable_timeout_detection", False)
-                    except Exception:
-                        cfg._data.setdefault("enable_timeout_detection", False)
-                if not hasattr(cfg, "enable_error_logging"):
-                    try:
-                        setattr(cfg, "enable_error_logging", False)
-                    except Exception:
-                        cfg._data.setdefault("enable_error_logging", False)
-                if not hasattr(cfg, "error_recovery_cycles"):
-                    try:
-                        setattr(cfg, "error_recovery_cycles", 100)
-                    except Exception:
-                        cfg._data.setdefault("error_recovery_cycles", 100)
-                if not hasattr(cfg, "fatal_errors"):
-                    try:
-                        setattr(cfg, "fatal_errors", [])
-                    except Exception:
-                        cfg._data.setdefault("fatal_errors", [])
-                if not hasattr(cfg, "recoverable_errors"):
-                    try:
-                        setattr(cfg, "recoverable_errors", [])
-                    except Exception:
-                        cfg._data.setdefault("recoverable_errors", [])
-                # Ensure metrics and perf/error defaults are also present on config
-                if not hasattr(cfg, "metrics_to_monitor"):
-                    try:
-                        setattr(
-                            cfg,
-                            "metrics_to_monitor",
-                            kwargs.get("metrics_to_monitor", []),
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "metrics_to_monitor", kwargs.get("metrics_to_monitor", [])
-                        )
-                if not hasattr(cfg, "max_retry_count"):
-                    try:
-                        setattr(
-                            cfg, "max_retry_count", kwargs.get("max_retry_count", 3)
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "max_retry_count", kwargs.get("max_retry_count", 3)
-                        )
-                if not hasattr(cfg, "enable_perf_counters"):
-                    try:
-                        setattr(
-                            cfg,
-                            "enable_perf_counters",
-                            getattr(
-                                template_context.get("perf_config"),
-                                "enable_transaction_counters",
-                                True,
-                            ),
-                        )
-                    except Exception:
-                        cfg._data.setdefault(
-                            "enable_perf_counters",
-                            getattr(
-                                template_context.get("perf_config"),
-                                "enable_transaction_counters",
-                                True,
-                            ),
-                        )
-        except Exception:
-            # best-effort
-            template_context._data.setdefault(
-                "config",
-                TemplateObject(
-                    {
-                        "idle_threshold": kwargs.get("idle_threshold", 1000),
-                        "enable_clock_gating": kwargs.get("enable_clock_gating", False),
-                        "supported_states": [{"name": "D0", "value": "D0"}],
-                    }
-                ),
-            )
-
-        # Ensure device_config exposes id aliases as attributes
-        try:
-            dev = template_context.get("device_config")
-            if isinstance(dev, TemplateObject):
-                dev._data.setdefault("device_id", dev.get("device_id", device_id))
-                dev._data.setdefault(
-                    "device_id_int", dev.get("device_id_int", device_id_int)
-                )
-                dev._data.setdefault(
-                    "vendor_id_int", dev.get("vendor_id_int", vendor_id_int)
-                )
-            else:
-                template_context._data["device_config"] = TemplateObject(
-                    {
-                        "device_id": device_id,
-                        "device_id_int": device_id_int,
-                        "vendor_id": vendor_id,
-                        "vendor_id_int": vendor_id_int,
-                    }
-                )
-        except Exception:
-            # best-effort
-            template_context._data.setdefault(
-                "device_config",
-                TemplateObject(
-                    {
-                        "device_id": device_id,
-                        "device_id_int": device_id_int,
-                        "vendor_id": vendor_id,
-                        "vendor_id_int": vendor_id_int,
-                    }
-                ),
-            )
-
-        # Top-level aliases expected by many templates
-        template_context._data.setdefault(
-            "network_signals_available",
-            getattr(
-                template_context.get("perf_config"), "network_signals_available", False
-            ),
-        )
-        template_context._data.setdefault(
-            "metrics_to_monitor",
-            getattr(template_context.get("perf_config"), "metrics_to_monitor", []),
-        )
-        # tr_ns expected by PMCSR templates (map to transition timeout ns)
-        template_context._data.setdefault(
-            "tr_ns",
-            getattr(
-                template_context.get("power_management"),
-                "transition_timeout_ns",
-                kwargs.get("tr_ns", None),
-            ),
-        )
-
-        # Best-effort: populate nested TemplateObjects with commonly-expected attributes
-        def _populate(obj, defaults: Dict[str, Any]):
-            try:
-                if isinstance(obj, TemplateObject):
-                    for k, v in defaults.items():
-                        if not hasattr(obj, k):
-                            try:
-                                setattr(obj, k, v)
-                            except Exception:
-                                obj._data.setdefault(k, v)
-                elif isinstance(obj, dict):
-                    for k, v in defaults.items():
-                        obj.setdefault(k, v)
-            except Exception:
-                # best-effort only
-                pass
-
-        # Perf defaults
-        _populate(
-            template_context.get("perf_config", {}),
-            {
-                "enable_transaction_counters": getattr(
-                    template_context.get("perf_config"),
-                    "enable_transaction_counters",
-                    True,
-                ),
-                "enable_perf_outputs": getattr(
-                    template_context.get("perf_config"), "enable_perf_outputs", True
-                ),
-                "metrics_to_monitor": getattr(
-                    template_context.get("perf_config"), "metrics_to_monitor", []
-                ),
-                "error_signals_available": getattr(
-                    template_context.get("perf_config"),
-                    "error_signals_available",
-                    False,
-                ),
-                "network_signals_available": getattr(
-                    template_context.get("perf_config"),
-                    "network_signals_available",
-                    False,
-                ),
-            },
-        )
-
-        # Power management defaults
-        _populate(
-            template_context.get("power_management", {}),
-            {
-                "clk_hz": getattr(
-                    template_context.get("power_management"), "clk_hz", 100_000_000
-                ),
-                "enable_pme": getattr(
-                    template_context.get("power_management"), "enable_pme", True
-                ),
-                "enable_wake_events": getattr(
-                    template_context.get("power_management"),
-                    "enable_wake_events",
-                    False,
-                ),
-                "transition_delays": getattr(
-                    template_context.get("power_management"), "transition_delays", {}
-                ),
-            },
-        )
-
-        # Error handling defaults
-        _populate(
-            template_context.get("error_handling", {}),
-            {
-                "enable_crc_check": getattr(
-                    template_context.get("error_handling"), "enable_crc_check", False
-                ),
-                "enable_timeout_detection": getattr(
-                    template_context.get("error_handling"),
-                    "enable_timeout_detection",
-                    False,
-                ),
-                "enable_error_logging": getattr(
-                    template_context.get("error_handling"),
-                    "enable_error_logging",
-                    False,
-                ),
-                "recoverable_errors": getattr(
-                    template_context.get("error_handling"), "recoverable_errors", []
-                ),
-                "error_recovery_cycles": getattr(
-                    template_context.get("error_handling"), "error_recovery_cycles", 100
-                ),
-            },
-        )
-
-        # Device config defaults
-        _populate(
-            template_context.get("device_config", {}),
-            {
-                "class_code": getattr(
-                    template_context.get("device_config"), "class_code", "020000"
-                ),
-                "vendor_id": template_context.get("vendor_id", vendor_id),
-                "device_id": template_context.get("device_id", device_id),
-                "device_id_int": template_context.get(
-                    "device_id_int",
-                    (
-                        int(str(device_id), 16)
-                        if str(device_id).isdigit() or True
-                        else 0x1234
-                    ),
-                ),
-                "vendor_id_int": template_context.get(
-                    "vendor_id_int",
-                    (
-                        int(str(vendor_id), 16)
-                        if str(vendor_id).isdigit() or True
-                        else 0x8086
-                    ),
-                ),
-            },
-        )
-
-        # MSIX defaults
-        _populate(
-            template_context.get("msix_config", {}),
-            {
-                "table_size": getattr(
-                    template_context.get("msix_config"), "table_size", 4
-                ),
-                "num_vectors": getattr(
-                    template_context.get("msix_config"),
-                    "num_vectors",
-                    getattr(template_context.get("msix_config"), "table_size", 4),
-                ),
-                "table_bir": getattr(
-                    template_context.get("msix_config"), "table_bir", 0
-                ),
-                "table_offset": getattr(
-                    template_context.get("msix_config"), "table_offset", 0x1000
-                ),
-                "pba_bir": getattr(template_context.get("msix_config"), "pba_bir", 0),
-                "pba_offset": getattr(
-                    template_context.get("msix_config"), "pba_offset", 0x2000
-                ),
-            },
-        )
-
-        # Timing defaults
-        _populate(
-            template_context.get("timing_config", {}),
-            {
-                "clock_frequency_mhz": getattr(
-                    template_context.get("timing_config"), "clock_frequency_mhz", 100
-                ),
-                "enable_clock_gating": getattr(
-                    template_context.get("timing_config"), "enable_clock_gating", False
-                ),
-                "timeout_cycles": getattr(
-                    template_context.get("timing_config"), "timeout_cycles", 1024
-                ),
-            },
-        )
-
-        # Board / project defaults
-        _populate(
-            template_context.get("board", {}),
-            {
-                "name": getattr(template_context.get("board"), "name", "generic"),
-                "fpga_part": getattr(
-                    template_context.get("board"), "fpga_part", "xc7a35t"
-                ),
-            },
-        )
-        _populate(
-            template_context.get("project", {}),
-            {
-                "name": getattr(
-                    template_context.get("project"), "name", "pcileech_project"
-                )
-            },
-        )
-
-        # Top-level small defaults
-        template_context._data.setdefault(
-            "integration_type", kwargs.get("integration_type", "default")
-        )
-        template_context._data.setdefault(
-            "OVERLAY_ENTRIES", kwargs.get("OVERLAY_ENTRIES", [])
-        )
-        template_context._data.setdefault(
-            "ROM_BAR_INDEX", kwargs.get("ROM_BAR_INDEX", 0)
-        )
-        template_context._data.setdefault(
-            "FLASH_ADDR_OFFSET", kwargs.get("FLASH_ADDR_OFFSET", 0)
-        )
-        template_context._data.setdefault(
-            "CONFIG_SHDW_HI", kwargs.get("CONFIG_SHDW_HI", 0xFFFF)
-        )
-        template_context._data.setdefault(
-            "CONFIG_SHDW_LO", kwargs.get("CONFIG_SHDW_LO", 0x0)
-        )
-        template_context._data.setdefault(
-            "CONFIG_SHDW_SIZE", kwargs.get("CONFIG_SHDW_SIZE", 4)
-        )
-
-        # More conservative aliases to satisfy legacy templates during migration
-        template_context._data.setdefault(
-            "MSIX_PBA_BIR",
-            template_context.get("msix_config", {}).get("pba_bir", 0),
-        )
-        template_context._data.setdefault(
-            "MSIX_TABLE_BIR",
-            template_context.get("msix_config", {}).get("table_bir", 0),
-        )
-        template_context._data.setdefault(
-            "MSIX_TABLE_OFFSET",
-            template_context.get("msix_config", {}).get("table_offset", 0x1000),
-        )
-        template_context._data.setdefault("DUAL_PORT", False)
-        template_context._data.setdefault("ALLOW_ROM_WRITES", False)
-        template_context._data.setdefault("USE_QSPI", False)
-        template_context._data.setdefault("device_specific_config", {})
-        template_context._data.setdefault(
-            "class_code",
-            template_context.get("device_config", {}).get("class_code", "020000"),
-        )
-        template_context._data.setdefault(
-            "generated_time",
-            template_context.get("generation_metadata", {}).get("generated_time", ""),
-        )
-        template_context._data.setdefault(
-            "generated_time_pretty",
-            template_context.get("generation_metadata", {}).get(
-                "generated_time_pretty", ""
-            ),
-        )
-        # board/project name aliases used by many TCL templates
-        if isinstance(template_context.get("board"), str):
-            template_context._data.setdefault(
-                "board_name", template_context.get("board")
-            )
-        else:
-            template_context._data.setdefault(
-                "board_name",
-                template_context.get("board", {}).get("name", "generic"),
-            )
-        if isinstance(template_context.get("project"), str):
-            template_context._data.setdefault(
-                "project_name", template_context.get("project")
-            )
-        else:
-            template_context._data.setdefault(
-                "project_name",
-                template_context.get("project", {}).get("name", "pcileech_project"),
-            )
-        # IP / FPGA aliases
-        template_context._data.setdefault(
-            "pcie_ip_type",
-            template_context.get("pcie_ip_type", "axi_pcie"),
-        )
-        if isinstance(template_context.get("board"), str):
-            # keep fpga_part alias when board is a simple string
-            template_context._data.setdefault(
-                "fpga_part",
-                template_context.get("board"),
-            )
-        else:
-            template_context._data.setdefault(
-                "fpga_part",
-                template_context.get("board", {}).get("fpga_part", "xc7a35t"),
-            )
-
-        # Ensure meta alias for generation metadata
-        if not hasattr(template_context, "meta"):
-            template_context._data.setdefault(
-                "meta", template_context.get("generation_metadata")
-            )
-
-        # Map common nested values to legacy top-level aliases used by templates
-        try:
-            template_context._data.setdefault(
-                "MSIX_PBA_OFFSET",
-                template_context.get("msix_config", {}).get("pba_offset", 0x2000),
-            )
-        except Exception:
-            template_context._data.setdefault("MSIX_PBA_OFFSET", 0x2000)
-
-        # Overlays
-        template_context._data.setdefault(
-            "OVERLAY_MAP", template_context.get("OVERLAY_MAP", {})
-        )
-        template_context._data.setdefault(
-            "OVERLAY_ENTRIES", template_context.get("OVERLAY_ENTRIES", [])
-        )
-
-        # Bars
-        try:
-            template_context._data.setdefault(
-                "bars", template_context.get("bar_config").get("bars", [])
-            )
-        except Exception:
-            template_context._data.setdefault("bars", [])
-
-        # Error flags as top-level aliases
-        try:
-            template_context._data.setdefault(
-                "enable_crc_check",
-                getattr(
-                    template_context.get("error_handling"), "enable_crc_check", False
-                ),
-            )
-        except Exception:
-            template_context._data.setdefault("enable_crc_check", False)
-        try:
-            template_context._data.setdefault(
-                "enable_timeout_detection",
-                getattr(
-                    template_context.get("error_handling"),
-                    "enable_timeout_detection",
-                    False,
-                ),
-            )
-        except Exception:
-            template_context._data.setdefault("enable_timeout_detection", False)
-        try:
-            template_context._data.setdefault(
-                "enable_error_logging",
-                getattr(
-                    template_context.get("error_handling"),
-                    "enable_error_logging",
-                    False,
-                ),
-            )
-        except Exception:
-            template_context._data.setdefault("enable_error_logging", False)
-        template_context._data.setdefault(
-            "recoverable_errors",
-            template_context.get("error_handling", {}).get("recoverable_errors", []),
-        )
-        template_context._data.setdefault(
-            "error_recovery_cycles",
-            template_context.get("error_handling", {}).get(
-                "error_recovery_cycles", 100
-            ),
-        )
-
-        # Performance top-level aliases
-        template_context._data.setdefault(
-            "error_signals_available",
-            getattr(
-                template_context.get("perf_config"), "error_signals_available", False
-            ),
-        )
-        template_context._data.setdefault(
-            "metrics_to_monitor",
-            getattr(template_context.get("perf_config"), "metrics_to_monitor", []),
-        )
-
-        # Option ROM / SPI defaults
-        template_context._data.setdefault("INIT_ROM", False)
-        template_context._data.setdefault("SPI_FAST_CMD", False)
-
-        # Legacy macro/flag defaults often referenced by templates
-        template_context._data.setdefault("USE_BYTE_ENABLES", False)
-        template_context._data.setdefault("ENABLE_SIGNATURE_CHECK", False)
-        template_context._data.setdefault("SIGNATURE_CHECK", False)
-        template_context._data.setdefault("batch_mode", False)
-        # Power optimization flag used by implementation templates
-        template_context._data.setdefault(
-            "enable_power_opt", kwargs.get("enable_power_opt", False)
-        )
-        # Incremental implementation flag used by TCL templates
-        template_context._data.setdefault(
-            "enable_incremental", kwargs.get("enable_incremental", False)
-        )
-        template_context._data.setdefault("project_dir", kwargs.get("project_dir", "."))
-        # Ensure common interrupt support flags and a minimal build object exist
-        # These conservative defaults help legacy TCL templates that expect these top-level names.
-        template_context._data.setdefault(
-            "supports_msi",
-            getattr(template_context.get("board"), "supports_msi", False),
-        )
-        template_context._data.setdefault(
-            "supports_msix",
-            getattr(template_context.get("board"), "supports_msix", False),
-        )
-        template_context._data.setdefault(
-            "build",
-            TemplateObject(
-                {
-                    "jobs": kwargs.get("build_jobs", 1),
-                    "batch_mode": template_context.get("batch_mode", False),
-                }
-            ),
-        )
-        template_context._data.setdefault(
-            "timeout_cycles",
-            getattr(template_context.get("config"), "timeout_cycles", 1024),
-        )
-
-        # Extra conservative defaults for legacy templates still being migrated
-        template_context._data.setdefault(
-            "CUSTOM_WIN_BASE", kwargs.get("CUSTOM_WIN_BASE", 0)
-        )
-        template_context._data.setdefault(
-            "ROM_HEX_FILE", kwargs.get("ROM_HEX_FILE", "")
-        )
-        template_context._data.setdefault(
-            "ENABLE_CACHE", kwargs.get("ENABLE_CACHE", False)
-        )
-        # Ensure board fields commonly referenced by TCL templates exist
-        template_context._data.setdefault(
-            "fpga_family",
-            getattr(
-                template_context.get("board"),
-                "fpga_family",
-                kwargs.get("fpga_family", "artix7"),
-            ),
-        )
-        template_context._data.setdefault(
-            "pcie_ip_type",
-            getattr(
-                template_context.get("board"),
-                "pcie_ip_type",
-                kwargs.get("pcie_ip_type", "axi_pcie"),
-            ),
-        )
-        template_context._data.setdefault(
-            "constraints",
-            getattr(
-                template_context.get("board"),
-                "constraints",
-                kwargs.get("constraints", []),
-            ),
-        )
-
-        # Perf / metrics defaults
-        template_context._data.setdefault(
-            "enable_perf_counters",
-            getattr(
-                template_context.get("perf_config"), "enable_transaction_counters", True
-            ),
-        )
-        template_context._data.setdefault(
-            "metrics_to_monitor",
-            getattr(template_context.get("perf_config"), "metrics_to_monitor", []),
-        )
-
-        # Power defaults referenced by templates
-        template_context._data.setdefault(
-            "transition_delays",
-            getattr(template_context.get("power_management"), "transition_delays", {}),
-        )
-
-        # Additional conservative top-level fallbacks to help legacy TCL/SV templates
-        template_context._data.setdefault(
-            "fatal_errors",
-            template_context.get("error_handling", {}).get("fatal_errors", []),
-        )
-
-        # Ensure transition_delays top-level alias exists (some templates look here)
-        template_context._data.setdefault(
-            "transition_delays",
-            getattr(template_context.get("power_management"), "transition_delays", {}),
-        )
-
-        # Synthesis/implementation strategy used by some TCL flows
-        template_context._data.setdefault(
-            "implementation_strategy",
-            template_context.get("pcileech", {}).get(
-                "implementation_strategy",
-                template_context.get("synthesis_strategy", "default"),
-            ),
-        )
-
-        # FPGA/board related fallbacks
-        template_context._data.setdefault(
-            "max_lanes",
-            getattr(
-                template_context.get("board"),
-                "max_lanes",
-                getattr(template_context.get("board_config"), "max_lanes", 4),
-            ),
-        )
-
-        # Constraint/source defaults used by TCL project generation
-        template_context._data.setdefault(
-            "constraint_files",
-            kwargs.get(
-                "constraint_files",
-                template_context.get("pcileech", {}).get("coefficient_files", []),
-            ),
-        )
-        template_context._data.setdefault(
-            "top_module",
-            kwargs.get("top_module", "top"),
-        )
-        template_context._data.setdefault(
-            "pcie_rst_pin",
-            template_context.get("pcie_rst_pin", kwargs.get("pcie_rst_pin", "")),
-        )
-
-        # Ensure error_thresholds exists (used by some SV error templates)
-        template_context._data.setdefault(
-            "error_thresholds",
-            template_context.get("error_handling", {}).get("error_thresholds", {}),
-        )
-
-        # Force board and project to be TemplateObjects to avoid 'str' attribute errors
-        try:
-            bobj = template_context.get("board")
-            if not isinstance(bobj, TemplateObject):
-                # If it's a plain string or dict, coerce into TemplateObject using create_board_config
-                if isinstance(bobj, str):
-                    template_context._data["board"] = self.create_board_config(
-                        board_name=bobj, fpga_part=bobj
-                    )
-                elif isinstance(bobj, dict):
-                    template_context._data["board"] = TemplateObject(bobj)
-                else:
-                    template_context._data["board"] = self.create_board_config()
-        except Exception:
-            template_context._data.setdefault("board", self.create_board_config())
-
-        try:
-            pobj = template_context.get("project")
-            if not isinstance(pobj, TemplateObject):
-                if isinstance(pobj, str):
-                    template_context._data["project"] = TemplateObject({"name": pobj})
-                elif isinstance(pobj, dict):
-                    template_context._data["project"] = TemplateObject(pobj)
-                else:
-                    template_context._data["project"] = TemplateObject(
-                        {"name": "pcileech_project"}
-                    )
-        except Exception:
-            template_context._data.setdefault(
-                "project", TemplateObject({"name": "pcileech_project"})
-            )
-
-        # Ensure transition_delays is TemplateObject so templates can use attribute access
-        try:
-            pm = template_context.get("power_management")
-            if isinstance(pm, TemplateObject):
-                td = getattr(pm, "transition_delays", None) or getattr(
-                    pm, "transition_cycles", {}
-                )
-                if not isinstance(td, TemplateObject):
-                    pm._data["transition_delays"] = TemplateObject(
-                        td if isinstance(td, dict) else {}
-                    )
-                    template_context._data.setdefault(
-                        "transition_delays", pm._data["transition_delays"]
-                    )
-        except Exception:
-            template_context._data.setdefault("transition_delays", TemplateObject({}))
-
-        # Ensure device_config fields are plain scalars (avoid TemplateObject in numeric formatting)
-        try:
-            dev = template_context.get("device_config")
-            if isinstance(dev, TemplateObject):
-                # Force device_id to string
-                try:
-                    dev._data.setdefault(
-                        "device_id", str(dev.get("device_id", device_id))
-                    )
-                    dev._data["device_id"] = str(dev.get("device_id"))
-                except Exception:
-                    dev._data.setdefault("device_id", device_id)
-                # Ensure integer alias exists and is an int
-                try:
-                    dev._data.setdefault(
-                        "device_id_int",
-                        int(str(dev.get("device_id", device_id)), 16),
-                    )
-                except Exception:
-                    dev._data.setdefault("device_id_int", device_id_int)
-                try:
-                    dev._data.setdefault(
-                        "vendor_id_int",
-                        int(str(dev.get("vendor_id", vendor_id)), 16),
-                    )
-                except Exception:
-                    dev._data.setdefault("vendor_id_int", vendor_id_int)
-        except Exception:
-            # best-effort
-            template_context._data.setdefault(
-                "device_config",
-                TemplateObject(
-                    {
-                        "device_id": device_id,
-                        "device_id_int": device_id_int,
-                        "vendor_id": vendor_id,
-                        "vendor_id_int": vendor_id_int,
-                    }
-                ),
-            )
-
-        # Ensure device_id exists as both string and int where expected
-        template_context._data.setdefault(
-            "device_id", template_context.get("device_id", device_id)
-        )
-        template_context._data.setdefault(
-            "vendor_id", template_context.get("vendor_id", vendor_id)
-        )
-
-        # Perf counter flag
-        template_context._data.setdefault(
-            "enable_perf_counters",
-            getattr(
-                template_context.get("perf_config"), "enable_transaction_counters", True
-            ),
-        )
-
-        # Power / timing top-level
-        template_context._data.setdefault(
-            "clk_hz",
-            getattr(template_context.get("power_management"), "clk_hz", 100_000_000),
-        )
-        template_context._data.setdefault(
-            "transition_delays",
-            getattr(template_context.get("power_management"), "transition_cycles", {}),
-        )
-
-        # Generic aliases
-        template_context._data.setdefault(
-            "pcie_config", template_context.get("pcie_config", {})
-        )
-        template_context._data.setdefault(
-            "pcie_ip_type", template_context.get("pcie_ip_type", "axi_pcie")
-        )
-
-        # Generated time alias (map to generation metadata)
-        try:
-            template_context._data.setdefault(
-                "generated_time",
-                getattr(
-                    template_context.get("generation_metadata"), "generated_at", ""
-                ),
-            )
-        except Exception:
-            template_context._data.setdefault("generated_time", "")
-
-        # Robustly ensure nested TemplateObjects expose expected attributes
-        nested_defaults = {
-            "perf_config": {
-                "network_signals_available": getattr(
-                    template_context.get("perf_config"),
-                    "network_signals_available",
-                    False,
-                ),
-                "metrics_to_monitor": getattr(
-                    template_context.get("perf_config"),
-                    "metrics_to_monitor",
-                    [],
-                ),
-                "enable_transaction_counters": getattr(
-                    template_context.get("perf_config"),
-                    "enable_transaction_counters",
-                    True,
-                ),
-            },
-            "power_management": {
-                "clk_hz": getattr(
-                    template_context.get("power_management"), "clk_hz", 100_000_000
-                ),
-                "transition_cycles": getattr(
-                    template_context.get("power_management"), "transition_cycles", {}
-                ),
-                "tr_ns": getattr(
-                    template_context.get("power_management"),
-                    "transition_timeout_ns",
-                    None,
-                ),
-            },
-            "error_handling": {
-                "enable_crc_check": getattr(
-                    template_context.get("error_handling"),
-                    "enable_crc_check",
-                    False,
-                ),
-                "enable_timeout_detection": getattr(
-                    template_context.get("error_handling"),
-                    "enable_timeout_detection",
-                    False,
-                ),
-                "enable_error_logging": getattr(
-                    template_context.get("error_handling"),
-                    "enable_error_logging",
-                    False,
-                ),
-                "recoverable_errors": template_context.get("error_handling", {}).get(
-                    "recoverable_errors", []
-                ),
-                "error_recovery_cycles": template_context.get("error_handling", {}).get(
-                    "error_recovery_cycles", 100
-                ),
-                "fatal_errors": template_context.get("error_handling", {}).get(
-                    "fatal_errors", []
-                ),
-            },
-            "device_config": {
-                "device_id": template_context.get("device_id", device_id),
-                "device_id_int": template_context.get(
-                    "device_id_int", context.get("device_id_int")
-                ),
-                "vendor_id": template_context.get("vendor_id", vendor_id),
-                "class_code": template_context.get("device_config", {}).get(
-                    "class_code", "020000"
-                ),
-            },
-            "msix_config": {
-                "table_size": getattr(
-                    template_context.get("msix_config"), "table_size", 4
-                ),
-                "num_vectors": getattr(
-                    template_context.get("msix_config"),
-                    "num_vectors",
-                    getattr(template_context.get("msix_config"), "table_size", 4),
-                ),
-            },
-            "timing_config": {
-                "enable_clock_gating": getattr(
-                    template_context.get("timing_config"),
-                    "enable_clock_gating",
-                    False,
-                ),
-            },
-            "board": {
-                "fpga_part": getattr(
-                    template_context.get("board"),
-                    "fpga_part",
-                    template_context.get("fpga_part", "xc7a35t"),
-                ),
-                "name": getattr(
-                    template_context.get("board"),
-                    "name",
-                    template_context.get("board_name", "generic"),
-                ),
-                "fpga_family": getattr(
-                    template_context.get("board"),
-                    "fpga_family",
-                    template_context.get("fpga_family", "artix7"),
-                ),
-            },
-            "project": {
-                "name": getattr(
-                    template_context.get("project"),
-                    "name",
-                    template_context.get("project_name", "pcileech_project"),
-                ),
-            },
-            "bar_config": {
-                "bars": template_context.get("bar_config", {}).get(
-                    "bars",
-                    [
-                        {
-                            "base": 0,
-                            "size": template_context.get("BAR_APERTURE_SIZE", 0x1000),
-                            "type": "io",
-                        }
-                    ],
-                ),
-            },
-        }
-
-        for ns, defs in nested_defaults.items():
-            try:
-                ns_obj = template_context.get(ns)
-                if isinstance(ns_obj, TemplateObject):
-                    for k, v in defs.items():
-                        if not hasattr(ns_obj, k):
-                            try:
-                                setattr(ns_obj, k, v)
-                            except Exception:
-                                ns_obj._data.setdefault(k, v)
-                else:
-                    # ensure top-level mapping exists
-                    template_context._data.setdefault(ns, defs)
-            except Exception:
-                # best-effort
-                template_context._data.setdefault(ns, defs)
-
-        # Explicitly set attributes on nested TemplateObjects to avoid missing-attribute errors
-        try:
-            eh = template_context.get("error_handling")
-            if isinstance(eh, TemplateObject):
-                if not hasattr(eh, "max_retry_count"):
-                    try:
-                        setattr(eh, "max_retry_count", 3)
-                    except Exception:
-                        eh._data.setdefault("max_retry_count", 3)
-                if not hasattr(eh, "fatal_errors"):
-                    try:
-                        setattr(eh, "fatal_errors", [])
-                    except Exception:
-                        eh._data.setdefault("fatal_errors", [])
-                if not hasattr(eh, "recoverable_errors"):
-                    try:
-                        setattr(eh, "recoverable_errors", [])
-                    except Exception:
-                        eh._data.setdefault("recoverable_errors", [])
-        except Exception:
-            pass
-
-        try:
-            pf = template_context.get("perf_config")
-            if isinstance(pf, TemplateObject):
-                if not hasattr(pf, "enable_perf_counters"):
-                    try:
-                        setattr(
-                            pf,
-                            "enable_perf_counters",
-                            getattr(pf, "enable_transaction_counters", True),
-                        )
-                    except Exception:
-                        pf._data.setdefault(
-                            "enable_perf_counters",
-                            getattr(pf, "enable_transaction_counters", True),
-                        )
-                if not hasattr(pf, "metrics_to_monitor"):
-                    try:
-                        setattr(
-                            pf,
-                            "metrics_to_monitor",
-                            getattr(pf, "metrics_to_monitor", []),
-                        )
-                    except Exception:
-                        pf._data.setdefault(
-                            "metrics_to_monitor", getattr(pf, "metrics_to_monitor", [])
-                        )
-        except Exception:
-            pass
-
-        try:
-            pm = template_context.get("power_management")
-            if isinstance(pm, TemplateObject):
-                if not hasattr(pm, "transition_delays"):
-                    try:
-                        setattr(
-                            pm,
-                            "transition_delays",
-                            getattr(pm, "transition_cycles", {}),
-                        )
-                    except Exception:
-                        pm._data.setdefault(
-                            "transition_delays", getattr(pm, "transition_cycles", {})
-                        )
-        except Exception:
-            pass
-
-        try:
-            dev = template_context.get("device_config")
-            if isinstance(dev, TemplateObject):
-                if not hasattr(dev, "subsys_device_id"):
-                    try:
-                        setattr(
-                            dev,
-                            "subsys_device_id",
-                            dev.get("subsystem_device_id", device_id),
-                        )
-                    except Exception:
-                        dev._data.setdefault(
-                            "subsys_device_id",
-                            dev.get("subsystem_device_id", device_id),
-                        )
-                if not hasattr(dev, "subsys_vendor_id"):
-                    try:
-                        setattr(
-                            dev,
-                            "subsys_vendor_id",
-                            dev.get("subsystem_vendor_id", vendor_id),
-                        )
-                    except Exception:
-                        dev._data.setdefault(
-                            "subsys_vendor_id",
-                            dev.get("subsystem_vendor_id", vendor_id),
-                        )
-        except Exception:
-            pass
-
-        # Validate the context to ensure no missing values required by templates
+        # Validate the context
         self.validate_template_context(template_context)
 
         return template_context
@@ -2528,7 +1172,7 @@ class UnifiedContextBuilder:
             context: Template context to validate
 
         Raises:
-            ValueError: If critical values are missing
+            ConfigurationError: If critical values are missing
         """
         missing_keys = []
         for key in CRITICAL_TEMPLATE_CONTEXT_KEYS:
@@ -2536,11 +1180,11 @@ class UnifiedContextBuilder:
                 missing_keys.append(key)
 
         if missing_keys:
-            raise ValueError(
+            raise ConfigurationError(
                 f"Missing critical template context values: {missing_keys}"
             )
 
-        # Validate nested configurations have required fields
+        # Validate nested configurations
         if hasattr(context, "variance_model"):
             variance_required = [
                 "process_variation",
@@ -2549,30 +1193,9 @@ class UnifiedContextBuilder:
             ]
             for field in variance_required:
                 if not hasattr(context.variance_model, field):
-                    setattr(
-                        context.variance_model,
-                        field,
-                        {
-                            "process_variation": 0.1,
-                            "temperature_coefficient": 0.05,
-                            "voltage_variation": 0.03,
-                        }[field],
+                    self.logger.warning(
+                        f"Missing variance model field '{field}', using default"
                     )
-
-    def _get_device_class(self, class_code: str) -> str:
-        """Get device class from PCI class code."""
-        if class_code.startswith("01"):
-            return "storage"
-        elif class_code.startswith("02"):
-            return "network"
-        elif class_code.startswith("03"):
-            return "display"
-        elif class_code.startswith("04"):
-            return "multimedia"
-        elif class_code.startswith("0c"):
-            return "serial_bus"
-        else:
-            return "generic"
 
 
 def convert_to_template_object(data: Any) -> Any:

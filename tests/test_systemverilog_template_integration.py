@@ -88,7 +88,10 @@ class TestSystemVerilogTemplateIntegration:
                     ),
                 ],
             },
-            "board_config": {},
+            "board_config": {
+                "name": "test_board",
+                "fpga_part": "xc7a35t",
+            },
             "interrupt_config": {},
             "config_space_data": {},
             "timing_config": type(
@@ -119,6 +122,16 @@ class TestSystemVerilogTemplateIntegration:
                 "generated_at": "2024-01-01T12:00:00Z",
                 "version": "2.0.0",
                 "generator": "PCILeechFWGenerator",
+            },
+            "active_device_config": {
+                "vendor_id": "8086",
+                "device_id": "1533",
+                "class_code": "020000",
+                "revision_id": "03",
+                "subsystem_vendor_id": "8086",
+                "subsystem_device_id": "0001",
+                "num_sources": 1,
+                "default_priority": 0,
             },
         }
 
@@ -154,12 +167,15 @@ class TestSystemVerilogTemplateIntegration:
                 "device_id": "8168",
                 "class_code": "020000",
                 "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
                 "device_bdf": "0000:03:00.0",  # Required field for template
+                "enable_perf_counters": True,
             },
             "device_signature": "0xDEADBEEF",
             "msix_config": {},
             "bar_config": {},
-            # board_config is intentionally missing
+            "board_config": {},
             "interrupt_config": {},
             "config_space_data": {},
             "timing_config": {},
@@ -167,6 +183,16 @@ class TestSystemVerilogTemplateIntegration:
                 "buffer_size": 4096,
             },
             "generation_metadata": {},
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "01",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+                "num_sources": 1,
+                "default_priority": 0,
+            },
         }
 
         # The template should still render (board_config has default empty dict)
@@ -257,9 +283,7 @@ class TestSystemVerilogTemplateIntegration:
                 "msix_enabled": True,
                 "interrupt_moderation": True,
             },
-            "config_space_data": {
-                "data": list(range(256)),  # Some test data
-            },
+            "config_space_data": {"data": list(range(256))},  # Some test data
             "timing_config": {
                 "read_latency": 8,
                 "write_latency": 4,
@@ -269,9 +293,8 @@ class TestSystemVerilogTemplateIntegration:
                 "clock_frequency_mhz": 100,
             },
             "pcileech_config": {
-                "buffer_size": 4096,
-                "enable": True,
                 "buffer_size": 8192,
+                "enable": True,
                 "dma_enable": True,
                 "scatter_gather": True,
                 "command_timeout": 1000,
@@ -284,6 +307,16 @@ class TestSystemVerilogTemplateIntegration:
                 "version": "2.0.0",
                 "generator": "PCILeechFWGenerator",
                 "build_id": "test-build-123",
+            },
+            "active_device_config": {
+                "vendor_id": "8086",
+                "device_id": "1533",
+                "class_code": "020000",
+                "revision_id": "03",
+                "subsystem_vendor_id": "8086",
+                "subsystem_device_id": "0001",
+                "num_sources": 1,
+                "default_priority": 0,
             },
         }
 
@@ -321,6 +354,7 @@ class TestSystemVerilogTemplateIntegration:
                 "vendor_id": "10EC",
                 "device_id": "8168",
                 "class_code": "020000",
+                "default_priority": 0,
                 "revision_id": "03",
                 "subsystem_vendor_id": "10EC",
                 "subsystem_device_id": "8168",
@@ -347,7 +381,10 @@ class TestSystemVerilogTemplateIntegration:
                     )
                 ],
             },
-            "board_config": {},  # Required by validator
+            "board_config": {
+                "name": "test_board",
+                "fpga_part": "xc7a35t",
+            },  # Required by validator
             "device_signature": "0x12345678",  # Required for security
             "msix_config": {
                 "num_vectors": 1,
@@ -386,6 +423,15 @@ class TestSystemVerilogTemplateIntegration:
                 "generated_at": "2024-01-01T12:00:00Z",
                 "version": "2.0.0",
                 "generator": "PCILeechFWGenerator",
+            },
+            "active_device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "class_code": "020000",
+                "revision_id": "03",
+                "subsystem_vendor_id": "10EC",
+                "subsystem_device_id": "8168",
+                "num_sources": 1,
             },
         }
 

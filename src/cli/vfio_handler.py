@@ -21,6 +21,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, Union
 
+# Import VFIO exceptions
+from src.exceptions import (VFIOBindError, VFIODeviceNotFoundError,
+                            VFIOGroupError, VFIOPermissionError)
+
 # Import the privilege manager - make it optional to avoid circular imports
 try:
     from src.tui.utils.privilege_manager import PrivilegeManager
@@ -72,30 +76,6 @@ DEFAULT_UNBIND_WAIT_TIME = 0.2
 MAX_GROUP_WAIT_TIME = 10.0
 INITIAL_BACKOFF_DELAY = 0.1
 MAX_BACKOFF_DELAY = 3.2
-
-
-class VFIOBindError(Exception):
-    """Raised when VFIO binding fails."""
-
-    pass
-
-
-class VFIODeviceNotFoundError(VFIOBindError):
-    """Raised when a VFIO device is not found."""
-
-    pass
-
-
-class VFIOPermissionError(VFIOBindError):
-    """Raised when VFIO operations lack required permissions."""
-
-    pass
-
-
-class VFIOGroupError(VFIOBindError):
-    """Raised when VFIO group operations fail."""
-
-    pass
 
 
 class BindingState(Enum):

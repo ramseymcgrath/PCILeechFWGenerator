@@ -807,12 +807,10 @@ class ConfigurationManager:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Main Firmware Builder (Refactored)
+# Main Firmware Builder
 # ──────────────────────────────────────────────────────────────────────────────
 class FirmwareBuilder:
     """
-    Refactored firmware builder with modular architecture.
-
     This class orchestrates the firmware generation process using
     dedicated manager classes for different responsibilities.
     """
@@ -901,8 +899,6 @@ class FirmwareBuilder:
             return self.file_manager.list_artifacts()
 
         except PlatformCompatibilityError:
-            # For platform compatibility issues, don't log additional error messages
-            # The original detailed error was already logged
             raise
         except Exception as e:
             self.logger.error("Build failed: %s", str(e))

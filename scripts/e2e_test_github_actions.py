@@ -682,7 +682,8 @@ class E2ETestRunner:
 
         try:
             from src.template_context_validator import TemplateContextValidator
-            from src.template_security_validation import TemplateSecurityValidator
+            from src.template_security_validation import \
+                TemplateSecurityValidator
 
             # Find all template files
             template_dir = self.project_root / "src" / "templates"

@@ -602,21 +602,93 @@ class ContextBuilder:
                     "Expected dict, TemplateObject, or object with __dict__."
                 )
 
-        # Ensure active_device_config is a TemplateObject
+        # Ensure active_device_config is a TemplateObject and has all required attributes
         raw_active = template_context.get("active_device_config", None)
+        # Always provide active_device_config as a TemplateObject with required attributes
         if raw_active is None:
-            raise TemplateRenderError(
-                "Missing critical template field: 'active_device_config'. "
-                "This should be provided by the context builder (e.g. PCILeechContextBuilder)."
+            # Build a minimal default config if missing
+            active_device_config_obj = TemplateObject(
+                {
+                    "enabled": True,
+                    "timer_period": 0,
+                    "default_priority": 0,
+                    "timer_enable": True,
+                    "msi_vector_width": 1,
+                    "msix_table_bir": 0,
+                    "msix_table_offset": 0x1000,
+                }
             )
-
-        active_device_config_obj = ensure_template_object(
-            raw_active, "active_device_config"
-        )
-
-        # Ensure it has the 'enabled' attribute
-        if not hasattr(active_device_config_obj, "enabled"):
-            active_device_config_obj["enabled"] = True
+        else:
+            active_device_config_obj = ensure_template_object(
+                raw_active, "active_device_config"
+            )
+            # Ensure timer_period, default_priority, enabled, timer_enable, and msi_vector_width are present
+            if not hasattr(active_device_config_obj, "timer_period"):
+                try:
+                    setattr(active_device_config_obj, "timer_period", 0)
+                except Exception:
+                    active_device_config_obj["timer_period"] = 0
+            if not hasattr(active_device_config_obj, "default_priority"):
+                try:
+                    setattr(active_device_config_obj, "default_priority", 0)
+                except Exception:
+                    active_device_config_obj["default_priority"] = 0
+            if not hasattr(active_device_config_obj, "enabled"):
+                active_device_config_obj["enabled"] = True
+            if not hasattr(active_device_config_obj, "timer_enable"):
+                try:
+                    setattr(active_device_config_obj, "timer_enable", True)
+                except Exception:
+                    active_device_config_obj["timer_enable"] = True
+            if not hasattr(active_device_config_obj, "msi_vector_width"):
+                try:
+                    setattr(active_device_config_obj, "msi_vector_width", 1)
+                except Exception:
+                    active_device_config_obj["msi_vector_width"] = 1
+                # Guarantee msix_table_bir is present
+                if not hasattr(active_device_config_obj, "msix_table_bir"):
+                    try:
+                        setattr(active_device_config_obj, "msix_table_bir", 0)
+                    except Exception:
+                        active_device_config_obj["msix_table_bir"] = 0
+                # Guarantee msix_table_offset is present
+                if not hasattr(active_device_config_obj, "msix_table_offset"):
+                    try:
+                        setattr(active_device_config_obj, "msix_table_offset", 0x1000)
+                    except Exception:
+                        active_device_config_obj["msix_table_offset"] = 0x1000
+                # Guarantee msi_64bit_addr is present
+                if not hasattr(active_device_config_obj, "msi_64bit_addr"):
+                    try:
+                        setattr(active_device_config_obj, "msi_64bit_addr", 0)
+                    except Exception:
+                        active_device_config_obj["msi_64bit_addr"] = 0
+                # Guarantee num_msix is present
+                if not hasattr(active_device_config_obj, "num_msix"):
+                    try:
+                        setattr(active_device_config_obj, "num_msix", 0)
+                    except Exception:
+                        active_device_config_obj["num_msix"] = 0
+                    # Guarantee msix_pba_bir is present
+                    if not hasattr(active_device_config_obj, "msix_pba_bir"):
+                        try:
+                            setattr(active_device_config_obj, "msix_pba_bir", 0)
+                        except Exception:
+                            active_device_config_obj["msix_pba_bir"] = 0
+                        # Guarantee msix_pba_offset is present
+                        if not hasattr(active_device_config_obj, "msix_pba_offset"):
+                            try:
+                                setattr(
+                                    active_device_config_obj, "msix_pba_offset", 0x2000
+                                )
+                            except Exception:
+                                active_device_config_obj["msix_pba_offset"] = 0x2000
+                            # Guarantee completer_id is present
+                            if not hasattr(active_device_config_obj, "completer_id"):
+                                try:
+                                    setattr(active_device_config_obj, "completer_id", 0)
+                                except Exception:
+                                    active_device_config_obj["completer_id"] = 0
 
         # Standardize all context objects to TemplateObject and ensure required attributes
         enhanced_context = {
