@@ -165,6 +165,23 @@ class SVModuleGenerator:
         self, context: Dict[str, Any], modules: Dict[str, str]
     ) -> None:
         """Generate core PCILeech modules."""
+        # Ensure header is in context for templates that need it
+        if "header" not in context:
+            context = dict(context)  # Make a copy to avoid modifying original
+            context["header"] = generate_sv_header_comment(
+                "PCILeech Core Module",
+                generator="SVModuleGenerator",
+                features="Core PCILeech functionality",
+            )
+
+        # Ensure `device` object/dict exists with conservative defaults.
+        # Templates frequently reference `device.device_id` or similar attributes.
+        if "device" not in context or context.get("device") is None:
+            context["device"] = {
+                "vendor_id": context.get("device_config", {}).get("vendor_id", None),
+                "device_id": context.get("device_config", {}).get("device_id", None),
+            }
+
         # TLP BAR controller
         modules["pcileech_tlps128_bar_controller"] = self.renderer.render_template(
             self.templates.PCILEECH_TLPS_BAR_CONTROLLER, context
