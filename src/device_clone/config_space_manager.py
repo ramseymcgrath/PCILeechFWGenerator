@@ -772,8 +772,10 @@ class ConfigSpaceManager:
         try:
             from src.device_clone.device_info_lookup import lookup_device_info
 
-            # Get complete device info with fallback mechanisms
-            device_info = lookup_device_info(self.bdf, device_info)
+            # Get complete device info with fallback mechanisms, passing flag to prevent recursion
+            device_info = lookup_device_info(
+                self.bdf, device_info, from_config_manager=True
+            )
 
             log_info_safe(
                 logger,

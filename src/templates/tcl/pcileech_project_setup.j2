@@ -1,28 +1,23 @@
-{#- PCILeech Project Setup Template -#}
-{#- This template generates the main project setup script for PCILeech builds -#}
-{{ header_comment if header_comment else "# PCILeech Project Setup Script" }}
-#
-# PCILeech FPGA Firmware Project Setup
-# Generated for: {{ device.vendor_id if device.vendor_id else "Unknown" }}:{{ device.device_id if device.device_id else "Unknown" }}
-# Board: {{ board.name if board.name else "Unknown" }}
-# FPGA Part: {{ board.fpga_part if board.fpga_part else "Unknown" }}
-#
+{{ header_comment }}
+puts "setting project up..."
 
+{%- from "_helpers.j2" import safe_name, safe_attr, board_name, board_fpga_part, safe_board_name, safe_board_fpga_part %}
+{%- from "_helpers.j2" import safe_name, safe_attr %}
 # Set project variables
-set project_name "{{ project.name if project.name else 'pcileech_firmware' }}"
-set project_dir "{{ project.dir if project.dir else './vivado_project' }}"
-set output_dir "{{ project.output_dir if project.output_dir else '.' }}"
+set project_name "{{ safe_name(project) }}"
+set project_dir "{{ safe_attr(project, 'dir', project_dir|default('./vivado_project')) }}"
+set output_dir "{{ safe_attr(project, 'output_dir', '.') }}"
 
 # PCILeech-specific directories
-set pcileech_src_dir "{{ pcileech.src_dir if pcileech.src_dir else 'src' }}"
-set pcileech_ip_dir "{{ pcileech.ip_dir if pcileech.ip_dir else 'ip' }}"
+set pcileech_src_dir "{{ safe_attr(pcileech, 'src_dir', 'src') }}"
+set pcileech_ip_dir "{{ safe_attr(pcileech, 'ip_dir', 'ip') }}"
 
 # Device configuration
-set fpga_part "{{ board.fpga_part if board.fpga_part else 'xc7a35tcsg324-2' }}"
-set fpga_family "{{ board.fpga_family if board.fpga_family else 'Artix-7' }}"
+set fpga_part "{{ safe_attr(board, 'fpga_part', 'xc7a35tcsg324-2') }}"
+set fpga_family "{{ safe_attr(board, 'fpga_family', 'Artix-7') }}"
 
 # PCIe configuration
-set pcie_ip_type "{{ board.pcie_ip_type if board.pcie_ip_type else 'pcie7x' }}"
+set pcie_ip_type "{{ safe_attr(board, 'pcie_ip_type', 'pcie7x') }}"
 set max_lanes {{ max_lanes if max_lanes else 4 }}
 
 # Device identification

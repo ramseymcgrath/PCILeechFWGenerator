@@ -10,6 +10,8 @@ from typing import Any, ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from ...utils.validation_constants import KNOWN_DEVICE_TYPES
+
 # Define valid board types for validation
 VALID_BOARD_TYPES = [
     "pcileech_75t484_x1",
@@ -20,7 +22,7 @@ VALID_BOARD_TYPES = [
 ]
 
 # Define valid device types
-VALID_DEVICE_TYPES = ["generic", "network", "storage", "usb", "media", "processor"]
+VALID_DEVICE_TYPES = KNOWN_DEVICE_TYPES
 
 # Define valid optimization levels
 VALID_OPTIMIZATION_LEVELS = ["debug", "balanced", "size", "performance"]

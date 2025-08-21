@@ -41,6 +41,13 @@ help:
 	@echo "  security        - Run security scans"
 	@echo "  vfio-constants  - Build and patch VFIO ioctl constants"
 	@echo "  vfio-constants-clean - Clean VFIO build artifacts"
+	@echo ""
+	@echo "Version Management:"
+	@echo "  set-version VERSION=X.Y.Z     - Set explicit version"
+	@echo "  bump-version TYPE=patch|minor|major - Bump version automatically"
+	@echo "  bump-version-complete TYPE=patch|minor|major - Complete version bump with changelog"
+	@echo "  update-changelog VERSION=X.Y.Z - Update changelog for specific version"
+	@echo "  update-changelog-custom VERSION=X.Y.Z MESSAGE='...' - Update changelog with custom message"
 
 # Development targets
 install:
@@ -137,6 +144,18 @@ set-version:
 bump-version:
 	@echo "Bump package version using automation (patch/minor/major)"
 	python3 scripts/update_version.py --bump-type $${TYPE:-patch} --force
+
+bump-version-complete:
+	@echo "Complete version bump with changelog (use: make bump-version-complete TYPE=patch|minor|major)"
+	python3 scripts/bump_version.py --type $${TYPE:-patch}
+
+update-changelog:
+	@echo "Update changelog for specific version (use: make update-changelog VERSION=1.2.3)"
+	python3 scripts/update_changelog.py --version $(VERSION)
+
+update-changelog-custom:
+	@echo "Update changelog with custom message (use: make update-changelog-custom VERSION=1.2.3 MESSAGE='Custom message')"
+	python3 scripts/update_changelog.py --version $(VERSION) --message "$(MESSAGE)"
 
 # Convenience pattern target so maintainers can run:
 #   make set-version-1.2.3

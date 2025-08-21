@@ -2,7 +2,7 @@ name: Security
 
 on:
   push:
-    branches: [ main, advanced-behavior-handling ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:

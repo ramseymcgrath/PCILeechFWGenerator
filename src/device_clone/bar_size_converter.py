@@ -1,3 +1,5 @@
+from src.exceptions import ContextError
+
 #!/usr/bin/env python3
 """
 BAR Size Conversion Utility for PCILeech
@@ -13,6 +15,16 @@ from typing import Optional, Tuple, Union
 from src.device_clone.constants import BAR_SIZE_CONSTANTS
 
 logger = logging.getLogger(__name__)
+
+
+def extract_bar_size(bar: dict) -> int:
+    """Extract BAR size and raise ContextError for invalid sizes (0 or >= 4GB)."""
+    size = bar.get("size", 0)
+    if size == 0 or size >= 4294967296:
+        raise ContextError(
+            f"Invalid BAR size: size={size} (BAR size cannot be zero or >= 4GB)"
+        )
+    return size
 
 
 class BarSizeConverter:
@@ -196,26 +208,26 @@ class BarSizeConverter:
             return 0
 
         if bar_type.lower() == "io":
-            # Mask out the type bits
             mask = BAR_SIZE_CONSTANTS["IO_ADDRESS_MASK"]
             size_bits = encoded_value & mask
         else:
-            # Mask out the type bits
             mask = BAR_SIZE_CONSTANTS["MEMORY_ADDRESS_MASK"]
             size_bits = encoded_value & mask
 
         if size_bits == 0:
             return 0
 
-        # Find the least significant 0 bit to determine size
-        # First invert to make 0s into 1s
         inverted = ~size_bits & mask
         if inverted == 0:
             return 0
 
         # Find position of least significant 1 bit
-        size = inverted & -inverted
-        return size
+        bar_size = inverted & -inverted
+        if bar_size <= 0 or bar_size >= 2**32:
+            raise ContextError(
+                f"Invalid BAR size: {bar_size} (BAR size cannot be zero or >= 4GB)"
+            )
+        return bar_size
 
     @staticmethod
     def format_size(size: int) -> str:
@@ -246,21 +258,21 @@ class BarSizeConverter:
     @classmethod
     def convert_bar_for_shadow_space(cls, bar_info: dict) -> dict:
         """
-        Convert BAR information for use in shadow configuration space.
+            Convert BAR information for use in shadow configuration space.
 
-        Args:
-            bar_info: Dictionary containing BAR information with keys:
-                - base_address: Current BAR base address
-                - size: BAR size in bytes
-                - bar_type: "memory" or "io"
-                - is_64bit: Whether this is a 64-bit BAR
-                - prefetchable: Whether this is prefetchable
-
-        Returns:
-            Dictionary with:
-                - encoded_value: The encoded BAR value for shadow space
-                - size: The size in bytes
-                - size_str: Human-readable size string
+            Args:
+                bar_info: Dictionary containing BAR information with keys:
+                    - base_address: Current BAR base address
+                    - size: BAR size in bytes
+                    - bar_type: "memory" or "io"
+                    - is_64bit: Whether this is a 64-bit BAR
+                    - prefetchable: Whether this is prefetchable
+        return bar_size  # Ensure all code paths return an int
+            Returns:
+                Dictionary with:
+                    - encoded_value: The encoded BAR value for shadow space
+                    - size: The size in bytes
+                    - size_str: Human-readable size string
         """
         size = bar_info.get("size", 0)
         bar_type = bar_info.get("bar_type", "memory")

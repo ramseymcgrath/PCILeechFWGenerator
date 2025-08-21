@@ -1,10 +1,11 @@
-{#- PCILeech Sources Template -#}
-{#- This template generates the source file inclusion script for PCILeech builds -#}
-{{ header_comment if header_comment else "# PCILeech Sources Script" }}
+{{ header_comment }}
+puts "Setting up PCILeech source files..."
+{% from "_helpers.j2" import safe_board_name %}
+{{ header_comment if header_comment else "# PCILeech Sources" }}
 #
-# PCILeech FPGA Firmware Source Files
-# Generated for: {{ device.vendor_id if device.vendor_id else "Unknown" }}:{{ device.device_id if device.device_id else "Unknown" }}
-# Board: {{ board.name if board.name else "Unknown" }}
+ # Generated sources list
+ #
+ # Board: {{ safe_board_name(board) }}
 #
 
 # Source directories

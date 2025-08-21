@@ -1,5 +1,4 @@
-{#- Power Transitions Logic Template -#}
-{#- Generates power state transition timing and control logic -#}
+{% from "_helpers.j2" import safe_attr %}
 {{ header | safe }}
 
 module power_transitions #(
@@ -26,11 +25,26 @@ logic [2:0] transition_source_state;
 logic [2:0] transition_target_state;
 
 // Transition delay lookup
+// Use safe accessor for transition delays (fall back to top-level transition_delays)
+{%- set _td_candidate = safe_attr(config, 'transition_delays', transition_delays | default({})) -%}
+{%- if _td_candidate is mapping -%}
+{%- set _td = _td_candidate -%}
+{%- elif _td_candidate is sequence -%}
+{%- set _td = _td_candidate -%}
+{%- else -%}
+{%- set _td = {} -%}
+{%- endif -%}
 function automatic [15:0] get_transition_delay(logic [2:0] from_state, logic [2:0] to_state);
     case ({from_state, to_state})
-        {% for (from_state, to_state), delay in config.transition_delays.items() -%}
-        {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: return 16'd{{ delay }};
-        {% endfor %}
+        {% if _td is mapping %}
+            {% for pair, delay in _td.items() %}
+                {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: return 16'd{{ delay }};
+            {% endfor %}
+        {% elif _td is sequence %}
+            {% for pair in _td %}
+                {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: return 16'd{{ pair[2] if pair|length > 2 else pair[2-1] if pair|length>1 else 100 }};
+            {% endfor %}
+        {% endif %}
         default: return 16'd100; // Default transition delay
     endcase
 endfunction
@@ -86,22 +100,69 @@ end
 // Power domain control signals during transitions
 always_comb begin
     case ({transition_source_state, transition_target_state})
-        {% for (from_state, to_state), delay in config.transition_delays.items() -%}
-        {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: begin
-            {% set from_state_value = from_state.value if from_state.value is defined else (from_state.get('value', from_state.get('name', 'D0')) if from_state is mapping else from_state) -%}
-            {% set to_state_value = to_state.value if to_state.value is defined else (to_state.get('value', to_state.get('name', 'D0')) if to_state is mapping else to_state) -%}
-            {% if from_state_value == "D0" and to_state_value == "D3_HOT" -%}
-            power_domain_enable = transition_complete ? 1'b0 : 1'b1;
-            aux_power_enable = 1'b1;
-            {% elif from_state_value == "D3_HOT" and to_state_value == "D0" -%}
-            power_domain_enable = transition_complete ? 1'b1 : 1'b0;
-            aux_power_enable = 1'b1;
-            {% else -%}
-            power_domain_enable = 1'b1;
-            aux_power_enable = 1'b1;
-            {% endif %}
-        end
-        {% endfor %}
+        {% if _td is mapping %}
+            {% for pair, delay in _td.items() %}
+                {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: begin
+                    {% set from_state = pair[0] if pair is sequence else pair[0] %}
+                    {% set to_state = pair[1] if pair is sequence else pair[1] %}
+                    {%- if from_state is mapping -%}
+                        {%- set from_state_value = from_state.get('value', from_state.get('name', 'D0')) -%}
+                    {%- elif from_state is string -%}
+                        {%- set from_state_value = from_state -%}
+                    {%- else -%}
+                        {%- set from_state_value = (from_state|string) -%}
+                    {%- endif -%}
+                    {%- if to_state is mapping -%}
+                        {%- set to_state_value = to_state.get('value', to_state.get('name', 'D0')) -%}
+                    {%- elif to_state is string -%}
+                        {%- set to_state_value = to_state -%}
+                    {%- else -%}
+                        {%- set to_state_value = (to_state|string) -%}
+                    {%- endif -%}
+                    {% if from_state_value == "D0" and to_state_value == "D3_HOT" -%}
+                        power_domain_enable = transition_complete ? 1'b0 : 1'b1;
+                        aux_power_enable = 1'b1;
+                    {% elif from_state_value == "D3_HOT" and to_state_value == "D0" -%}
+                        power_domain_enable = transition_complete ? 1'b1 : 1'b0;
+                        aux_power_enable = 1'b1;
+                    {% else -%}
+                        power_domain_enable = 1'b1;
+                        aux_power_enable = 1'b1;
+                    {% endif %}
+                end
+            {% endfor %}
+        {% elif _td is sequence %}
+            {% for pair in _td %}
+                {3'd{{ loop.index0 }}, 3'd{{ loop.index0 + 1 }}}: begin
+                    {% set from_state = pair[0] if pair|length>0 else 'D0' %}
+                    {% set to_state = pair[1] if pair|length>1 else 'D0' %}
+                    {%- if from_state is mapping -%}
+                        {%- set from_state_value = from_state.get('value', from_state.get('name', 'D0')) -%}
+                    {%- elif from_state is string -%}
+                        {%- set from_state_value = from_state -%}
+                    {%- else -%}
+                        {%- set from_state_value = (from_state|string) -%}
+                    {%- endif -%}
+                    {%- if to_state is mapping -%}
+                        {%- set to_state_value = to_state.get('value', to_state.get('name', 'D0')) -%}
+                    {%- elif to_state is string -%}
+                        {%- set to_state_value = to_state -%}
+                    {%- else -%}
+                        {%- set to_state_value = (to_state|string) -%}
+                    {%- endif -%}
+                    {% if from_state_value == "D0" and to_state_value == "D3_HOT" -%}
+                        power_domain_enable = transition_complete ? 1'b0 : 1'b1;
+                        aux_power_enable = 1'b1;
+                    {% elif from_state_value == "D3_HOT" and to_state_value == "D0" -%}
+                        power_domain_enable = transition_complete ? 1'b1 : 1'b0;
+                        aux_power_enable = 1'b1;
+                    {% else -%}
+                        power_domain_enable = 1'b1;
+                        aux_power_enable = 1'b1;
+                    {% endif %}
+                end
+            {% endfor %}
+        {% endif %}
         default: begin
             power_domain_enable = 1'b1;
             aux_power_enable = 1'b1;

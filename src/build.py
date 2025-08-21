@@ -29,7 +29,8 @@ from .device_clone.board_config import (get_board_info,
                                         validate_board)
 # Import msix_capability at the module level to avoid late imports
 from .device_clone.msix_capability import parse_msix_capability
-from .exceptions import PlatformCompatibilityError
+from .exceptions import (ConfigurationError, ModuleImportError,
+                         PlatformCompatibilityError)
 from .log_config import get_logger, setup_logging
 from .string_utils import safe_format
 
@@ -64,12 +65,6 @@ class PCILeechBuildError(Exception):
     pass
 
 
-class ModuleImportError(PCILeechBuildError):
-    """Raised when required modules cannot be imported."""
-
-    pass
-
-
 class MSIXPreloadError(PCILeechBuildError):
     """Raised when MSI-X data preloading fails."""
 
@@ -84,12 +79,6 @@ class FileOperationError(PCILeechBuildError):
 
 class VivadoIntegrationError(PCILeechBuildError):
     """Raised when Vivado integration fails."""
-
-    pass
-
-
-class ConfigurationError(PCILeechBuildError):
-    """Raised when configuration is invalid."""
 
     pass
 
@@ -807,12 +796,10 @@ class ConfigurationManager:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Main Firmware Builder (Refactored)
+# Main Firmware Builder
 # ──────────────────────────────────────────────────────────────────────────────
 class FirmwareBuilder:
     """
-    Refactored firmware builder with modular architecture.
-
     This class orchestrates the firmware generation process using
     dedicated manager classes for different responsibilities.
     """
@@ -901,8 +888,6 @@ class FirmwareBuilder:
             return self.file_manager.list_artifacts()
 
         except PlatformCompatibilityError:
-            # For platform compatibility issues, don't log additional error messages
-            # The original detailed error was already logged
             raise
         except Exception as e:
             self.logger.error("Build failed: %s", str(e))
@@ -1014,7 +999,41 @@ class FirmwareBuilder:
         if donor_template:
             # Pass the donor template to the generator config
             self.gen.config.donor_template = donor_template
-        return self.gen.generate_pcileech_firmware()
+        result = self.gen.generate_pcileech_firmware()
+
+        # Inject config space hex/COE into template context if missing
+        try:
+            from src.device_clone.hex_formatter import ConfigSpaceHexFormatter
+
+            config_space_bytes = None
+            # Try to get config space bytes from result
+            if "config_space_data" in result:
+                config_space_bytes = result["config_space_data"].get("raw_config_space")
+                if not config_space_bytes:
+                    # Try config_space_bytes key
+                    config_space_bytes = result["config_space_data"].get(
+                        "config_space_bytes"
+                    )
+            if not config_space_bytes and "template_context" in result:
+                config_space_bytes = result["template_context"].get(
+                    "config_space_bytes"
+                )
+            # If we have config space bytes, format and inject
+            if config_space_bytes:
+                formatter = ConfigSpaceHexFormatter()
+                config_space_hex = formatter.format_config_space_to_hex(
+                    config_space_bytes
+                )
+                # Inject into template context
+                if "template_context" in result:
+                    result["template_context"]["config_space_hex"] = config_space_hex
+                    # Optionally also inject as config_space_coe for template compatibility
+                    result["template_context"]["config_space_coe"] = config_space_hex
+        except Exception as e:
+            # Log but do not fail build if hex generation fails
+            self.logger.warning(f"Config space hex generation failed: {e}")
+
+        return result
 
     def _inject_msix(self, result: Dict[str, Any], msix_data: MSIXData) -> None:
         """Inject MSI-X data into generation result."""

@@ -11,24 +11,18 @@ without needing to define defaults in the templates themselves.
 import copy
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Final,
-    List,
-    Optional,
-    Protocol,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import (Any, Callable, Dict, Final, List, Optional, Protocol, Set,
+                    Tuple, TypeVar, Union)
 
-from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe)
+
+from ..utils.validation_constants import (DEVICE_IDENTIFICATION_FIELDS,
+                                          SENSITIVE_TOKENS)
 
 # Type variable for return type of handler functions
 T = TypeVar("T")
@@ -89,26 +83,16 @@ class FallbackHandler(Protocol):
 
 class FallbackManager:
     """
-    Manages fallback values for template variables.
+    Manages template variable fallbacks with security-first approach.
 
-    This class provides a centralized way to register, retrieve, and apply
-    fallback values for template variables, ensuring consistent handling
-    across all templates.
-
-    Attributes:
+    Features:
+        CRITICAL_VARS: Variables that must be hardware-derived
         SENSITIVE_TOKENS: Tokens that indicate sensitive variables
-        DEFAULT_FALLBACKS: System-wide default fallback values
+        DEFAULT_FALLBACKS: Safe fallback values for non-critical variables
     """
 
-    # Class-level constants
-    SENSITIVE_TOKENS: Final[Tuple[str, ...]] = (
-        "vendor_id",
-        "device_id",
-        "revision_id",
-        "class_code",
-        "bars",
-        "subsys",
-    )
+    # Use centralized sensitive tokens from validation_constants
+    # SENSITIVE_TOKENS is now imported
 
     DEFAULT_FALLBACKS: Final[Dict[str, Any]] = {
         "board.name": "",
@@ -251,24 +235,37 @@ class FallbackManager:
 
     def _register_default_critical_variables(self) -> None:
         """Register default critical variables that should never have fallbacks."""
-        critical_vars = []
+        critical_vars: List[str] = []
 
-        # Build critical variable list from sensitive tokens
-        for token in self.SENSITIVE_TOKENS:
+        # Use explicit device identification fields as critical both
+        # in their namespaced (device.xxx) and unprefixed forms. This
+        # prevents registering static fallbacks for vendor/device ids
+        # which must be generated dynamically from hardware.
+        for field in DEVICE_IDENTIFICATION_FIELDS:
+            # namespaced
+            critical_vars.append(f"device.{field}")
+            # unprefixed (many modules use top-level keys like "vendor_id")
+            critical_vars.append(field)
+
+        # Also include other sensitive tokens under both names to be safe
+        for token in SENSITIVE_TOKENS:
             if token == "bars":
                 critical_vars.extend(["bars", "device.bars"])
             else:
-                critical_vars.append(f"device.{token}")
+                # avoid duplicating entries already added via DEVICE_IDENTIFICATION_FIELDS
+                if token not in DEVICE_IDENTIFICATION_FIELDS:
+                    critical_vars.append(f"device.{token}")
+                    critical_vars.append(token)
 
-        # Additional critical variables
-        critical_vars.extend(
-            [
-                "device.subsys_vendor_id",
-                "device.subsys_device_id",
-            ]
-        )
+        # Deduplicate while preserving order
+        seen: Set[str] = set()
+        deduped: List[str] = []
+        for v in critical_vars:
+            if v not in seen:
+                seen.add(v)
+                deduped.append(v)
 
-        self.mark_as_critical(critical_vars)
+        self.mark_as_critical(deduped)
 
     def _split_path(self, path: str) -> List[str]:
         """
@@ -308,14 +305,37 @@ class FallbackManager:
 
         # Navigate to parent of final key
         for part in path_parts[:-1]:
+            # Missing intermediate part
             if part not in current:
                 if create_missing:
-                    current[part] = {}
+                    # Create a template-compatible empty mapping when the
+                    # parent is TemplateObject-like so templates don't get
+                    # plain dicts inserted in their place.
+                    try:
+                        from src.utils.unified_context import TemplateObject
+
+                        current[part] = TemplateObject({})
+                    except Exception:
+                        # Fallback to plain dict if TemplateObject import fails
+                        current[part] = {}
                 else:
                     return None, None, False
-            elif not isinstance(current[part], dict):
-                return None, None, False
-            current = current[part]
+
+            next_obj = current[part]
+
+            # Accept plain dicts
+            if isinstance(next_obj, dict):
+                current = next_obj
+                continue
+
+            # Accept TemplateObject-like objects (duck-typed) that expose .get
+            # and __setitem__/__getitem__ so we can set attributes on them.
+            if hasattr(next_obj, "get") and callable(getattr(next_obj, "get")):
+                current = next_obj
+                continue
+
+            # Anything else is not navigable
+            return None, None, False
 
         return current, path_parts[-1], True
 
@@ -344,6 +364,12 @@ class FallbackManager:
                 var_name=var_name,
             )
             return False
+
+        # Idempotency: if the same static value is already registered, do nothing
+        existing = self._variables.get(var_name)
+        if existing and not existing.is_dynamic and existing.value == value:
+            # No change required
+            return True
 
         metadata = VariableMetadata(
             name=var_name,
@@ -396,6 +422,10 @@ class FallbackManager:
                 var_name=var_name,
             )
             return False
+        # Idempotency: if same dynamic handler already registered, do nothing
+        existing = self._variables.get(var_name)
+        if existing and existing.is_dynamic and existing.handler == handler:
+            return True
 
         metadata = VariableMetadata(
             name=var_name,
@@ -486,9 +516,7 @@ class FallbackManager:
 
         return metadata.value
 
-    def apply_fallbacks(
-        self, template_context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def apply_fallbacks(self, template_context: Optional[Any] = None) -> Dict[str, Any]:
         """
         Apply all registered fallbacks to a template context.
 
@@ -498,8 +526,31 @@ class FallbackManager:
         Returns:
             Updated template context with fallbacks applied
         """
+        # Prepare a working dict. If a TemplateObject-like context is provided
+        # (it exposes `to_dict()`), convert it to a plain dict first to avoid
+        # deep-copy recursion issues. Remember the original shape so we can
+        # convert back to template-compatible objects afterward.
+        original_was_template_object = False
+        working_ctx: Any = template_context
+
+        # Detect TemplateObject-like API and try to convert to plain dict
+        try:
+            if (
+                template_context is not None
+                and hasattr(template_context, "to_dict")
+                and callable(getattr(template_context, "to_dict"))
+            ):
+                original_was_template_object = True
+                try:
+                    working_ctx = template_context.to_dict()
+                except Exception:
+                    # Fall back to using the original object if conversion fails
+                    working_ctx = template_context
+        except Exception:
+            working_ctx = template_context
+
         # Deep copy to avoid modifying original
-        context = copy.deepcopy(template_context) if template_context else {}
+        context = copy.deepcopy(working_ctx) if working_ctx else {}
 
         # Apply all registered variables
         for var_name, metadata in self._variables.items():
@@ -507,6 +558,18 @@ class FallbackManager:
                 continue
 
             self._apply_single_fallback(context, metadata)
+
+        # If the original context was template-compatible, convert back so
+        # consumers still receive TemplateObjects rather than plain dicts.
+        if original_was_template_object:
+            try:
+                from src.utils.unified_context import \
+                    ensure_template_compatibility
+
+                return ensure_template_compatibility(context)
+            except Exception:
+                # If conversion fails, return the plain dict
+                return context
 
         return context
 
@@ -564,14 +627,14 @@ class FallbackManager:
     def _log_fallback_applied(self, var_name: str, is_dynamic: bool) -> None:
         """Log that a fallback was applied."""
         if is_dynamic:
-            log_info_safe(
+            log_debug_safe(
                 logger,
                 "Applied dynamic fallback for {var_name}",
                 prefix="FALLBACK",
                 var_name=var_name,
             )
         else:
-            log_info_safe(
+            log_debug_safe(
                 logger,
                 "Applied fallback for {var_name}",
                 prefix="FALLBACK",
@@ -686,7 +749,7 @@ class FallbackManager:
             return False
 
         name_lower = name.lower()
-        return any(token in name_lower for token in self.SENSITIVE_TOKENS)
+        return any(token in name_lower for token in SENSITIVE_TOKENS)
 
     def _determine_variable_type(self, var_name: str) -> VariableType:
         """
@@ -1031,3 +1094,48 @@ class FallbackManager:
         log_info_safe(
             logger, "Cleared all fallbacks and reset to defaults", prefix="FALLBACK"
         )
+
+
+# Global singleton accessor for sharing a single FallbackManager across the app
+_GLOBAL_FALLBACK_MANAGER: Optional["FallbackManager"] = None
+_FALLBACK_MANAGER_LOCK = threading.Lock()
+
+
+def get_global_fallback_manager(
+    config_path: Optional[Union[str, FallbackConfig]] = None,
+    mode: str = "prompt",
+    allowed_fallbacks: Optional[List[str]] = None,
+) -> "FallbackManager":
+    """Return a lazily-created global FallbackManager instance.
+
+    If a global manager already exists, the existing instance is returned.
+    The first call may pass initialization parameters which will be used to
+    construct the singleton.
+
+    This function is thread-safe using double-checked locking pattern.
+    """
+    global _GLOBAL_FALLBACK_MANAGER
+
+    # First check without lock (fast path for already initialized case)
+    if _GLOBAL_FALLBACK_MANAGER is not None:
+        return _GLOBAL_FALLBACK_MANAGER
+
+    # Acquire lock for initialization
+    with _FALLBACK_MANAGER_LOCK:
+        # Double-check after acquiring lock in case another thread initialized it
+        if _GLOBAL_FALLBACK_MANAGER is None:
+            _GLOBAL_FALLBACK_MANAGER = FallbackManager(
+                config_path=config_path, mode=mode, allowed_fallbacks=allowed_fallbacks
+            )
+
+    return _GLOBAL_FALLBACK_MANAGER
+
+
+def set_global_fallback_manager(manager: Optional["FallbackManager"]) -> None:
+    """Set or clear the global fallback manager (useful for tests).
+
+    This function is thread-safe.
+    """
+    global _GLOBAL_FALLBACK_MANAGER
+    with _FALLBACK_MANAGER_LOCK:
+        _GLOBAL_FALLBACK_MANAGER = manager

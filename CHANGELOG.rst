@@ -13,7 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0
 
 ## 📑 Table of Contents
 
+- [Version 0.13.4 (2025-08-16)](#version-0134-2025-08-16)
 - [Version 0.5.8 (2025-06-09)](#020---2025-06-09)
+
+---
+## Version 0.13.4 (2025-08-16)
+
+lots of stuff
 
 ---
 ## Version 0.7.5 (2025-06-09)
@@ -25,3 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0
 ## Version 0.5.8 (2025-06-09)
 
 Some templating fixes and pypi formatting fixes
+
+--- 
+
+

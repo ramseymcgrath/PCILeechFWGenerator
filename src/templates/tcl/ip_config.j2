@@ -7,12 +7,20 @@ Variables:
 #}
 {{ header }}
 
-puts "Creating PCIe IP core for device {{ device.vendor_id }}:{{ device.device_id }}..."
-puts "FPGA Part: {{ board.fpga_part }}"
-puts "Board: {{ board.name }}"
+{% from "_helpers.j2" import safe_fpga_part, safe_name, safe_attr %}
+puts "Creating PCIe IP core for device {{ (device_config.device_id | default(device.device_id) ) }}:{{ (device_config.vendor_id | default(device.vendor_id)) }}..."
+{% if board is string %}
+puts "FPGA Part: {{ safe_fpga_part(board) }}"
+puts "Board: {{ board }}"
+{% else %}
+puts "FPGA Part: {{ safe_fpga_part(board) }}"
+puts "Board: {{ safe_name(board) }}"
+{% endif %}
 
 # Create PCIe IP core based on FPGA family
-{% if board.pcie_ip_type == "pcie_7x" %}
+{# Use safe_attr to tolerate board being a string or TemplateObject #}
+{% set pcie_type = safe_attr(board, 'pcie_ip_type', None) %}
+{% if pcie_type == "pcie_7x" %}
 # Update IP catalog to ensure all IP cores are available
 puts "Updating IP catalog..."
 update_ip_catalog
@@ -81,11 +89,11 @@ set ip [get_ips pcie_7x_bridge]
 # BAR-0 configuration: use plain integer for size, not string with units
 safe_set $ip CONFIG.Bar0_Scale {Kilobytes}
 safe_set $ip CONFIG.Bar0_Size {128}
-safe_set $ip CONFIG.Device_ID {{ device.device_id }}
-safe_set $ip CONFIG.Vendor_ID {{ device.vendor_id }}
-safe_set $ip CONFIG.Subsystem_Vendor_ID {{ device.vendor_id }}
+safe_set $ip CONFIG.Device_ID {{ (device_config.device_id | default(device.device_id)) }}
+safe_set $ip CONFIG.Vendor_ID {{ (device_config.vendor_id | default(device.vendor_id)) }}
+safe_set $ip CONFIG.Subsystem_Vendor_ID {{ (device_config.vendor_id | default(device.vendor_id)) }}
 safe_set $ip CONFIG.Subsystem_ID {0x0000}
-safe_set $ip CONFIG.Revision_ID {{ device.revision_id }}
+safe_set $ip CONFIG.Revision_ID {{ (device.revision_id | default('0')) }}
 # Link speed must use exact enum values with underscores
 safe_set $ip CONFIG.Link_Speed {2.5_GT/s}
 safe_set $ip CONFIG.Link_Width {X1}
@@ -101,7 +109,7 @@ generate_target {instantiation_template synthesis implementation} $ip
 
 # Export IP user files for out-of-context runs
 export_ip_user_files -of_objects $ip -force
-{% elif board.pcie_ip_type == "pcie_ultrascale" %}
+{% elif pcie_type == "pcie_ultrascale" %}
 # Create PCIe UltraScale IP core
 create_ip -name pcie4_uscale_plus -vendor xilinx.com -library ip -module_name pcie4_uscale_plus_0
 
@@ -122,7 +130,7 @@ set_property -dict [list \
     CONFIG.PF0_MSIX_ENABLED {true} \
 ] [get_ips pcie4_uscale_plus_0]
 {% else %}
-# Custom PCIe implementation for {{ board.name }}
+# Custom PCIe implementation for {{ safe_name(board) }}
 # This part uses custom SystemVerilog modules instead of Xilinx IP cores
 
 # Set device-specific parameters for custom PCIe implementation
@@ -132,7 +140,7 @@ set REVISION_ID {{ device.revision_id }}
 set SUBSYSTEM_VENDOR_ID {{ device.vendor_id }}
 set SUBSYSTEM_ID 0x0000
 
-puts "Using custom PCIe implementation for {{ board.name }}"
+puts "Using custom PCIe implementation for {{ safe_name(board) }}"
 puts "Device ID: $DEVICE_ID"
 puts "Vendor ID: $VENDOR_ID"
 puts "Revision ID: $REVISION_ID"

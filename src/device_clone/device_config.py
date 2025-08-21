@@ -15,6 +15,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from ..utils.validation_constants import KNOWN_DEVICE_TYPES
+
 try:
     import yaml
 
@@ -32,11 +34,38 @@ logger = logging.getLogger(__name__)
 class DeviceType(Enum):
     """PCIe device types with their default configurations."""
 
-    NETWORK = "network"
     AUDIO = "audio"
-    STORAGE = "storage"
     GRAPHICS = "graphics"
-    GENERIC = "generic"
+    MEDIA = "media"
+    NETWORK = "network"
+    PROCESSOR = "processor"
+    STORAGE = "storage"
+    USB = "usb"
+    GENERIC = "generic"  # Keep generic last as it's the fallback
+
+    @classmethod
+    def validate_against_known_types(cls) -> None:
+        """Validate that enum values match centralized constants."""
+        enum_values = {member.value for member in cls}
+        constant_values = set(KNOWN_DEVICE_TYPES)
+
+        if enum_values != constant_values:
+            missing_in_enum = constant_values - enum_values
+            missing_in_constant = enum_values - constant_values
+            error_msg = []
+            if missing_in_enum:
+                error_msg.append(f"Missing in DeviceType enum: {missing_in_enum}")
+            if missing_in_constant:
+                error_msg.append(
+                    f"Missing in KNOWN_DEVICE_TYPES: {missing_in_constant}"
+                )
+            raise ValueError(
+                f"DeviceType enum and KNOWN_DEVICE_TYPES mismatch: {'; '.join(error_msg)}"
+            )
+
+
+# Validate at module load time to catch mismatches early
+DeviceType.validate_against_known_types()
 
 
 class DeviceClass(Enum):
@@ -84,19 +113,19 @@ class DeviceIdentification:
         # Convert vendor_id
         if isinstance(self.vendor_id, str):
             self.vendor_id = self._convert_to_int(self.vendor_id)
-        
-        # Convert device_id  
+
+        # Convert device_id
         if isinstance(self.device_id, str):
             self.device_id = self._convert_to_int(self.device_id)
-            
+
         # Convert class_code
         if isinstance(self.class_code, str):
             self.class_code = self._convert_to_int(self.class_code)
-            
+
         # Convert subsystem IDs
         if isinstance(self.subsystem_vendor_id, str):
             self.subsystem_vendor_id = self._convert_to_int(self.subsystem_vendor_id)
-            
+
         if isinstance(self.subsystem_device_id, str):
             self.subsystem_device_id = self._convert_to_int(self.subsystem_device_id)
 
@@ -339,6 +368,31 @@ class DeviceConfiguration:
         }
 
 
+def validate_hex_id(value: str, bit_width: int = 16) -> int:
+    """Validate and convert hex ID string to integer.
+
+    Accepts strings like '0x10ec' or '10ec' and enforces bit-width limits.
+    """
+    if isinstance(value, int):
+        return value
+
+    s = value.strip()
+    if s.startswith(("0x", "0X")):
+        s = s[2:]
+
+    if not re.match(r"^[0-9A-Fa-f]+$", s):
+        raise ValueError(f"Invalid hex format: {value}")
+
+    int_value = int(s, 16)
+    max_value = (1 << bit_width) - 1
+    if not (0 <= int_value <= max_value):
+        raise ValueError(
+            f"Value 0x{int_value:X} out of range for {bit_width}-bit field"
+        )
+
+    return int_value
+
+
 class DeviceConfigManager:
     """Manages device configurations with file loading and validation."""
 
@@ -415,27 +469,36 @@ class DeviceConfigManager:
 
         # Convert hex string values to integers if needed
         def convert_to_int(value: Any) -> int:
-            """Convert hex string or int to int."""
+            """Convert hex string or int to int.
+
+            Accepts '0x' prefixed hex, plain hex like '10ec', or decimal strings.
+            """
             if isinstance(value, int):
                 return value
-            elif isinstance(value, str):
-                if value.startswith(("0x", "0X")):
-                    return int(value, 16)
-                else:
-                    return int(value, 0)  # Auto-detect base
-            else:
-                return int(value)
+            if isinstance(value, str):
+                s = value.strip()
+                if s.startswith(("0x", "0X")):
+                    return int(s, 16)
+                if re.match(r"^\d+$", s):
+                    return int(s, 10)
+                if re.match(r"^[0-9A-Fa-f]+$", s):
+                    return int(s, 16)
+                try:
+                    return int(s, 0)
+                except ValueError:
+                    return int(s, 16)
+            return int(value)
 
         identification = DeviceIdentification(
             vendor_id=convert_to_int(data["identification"]["vendor_id"]),
             device_id=convert_to_int(data["identification"]["device_id"]),
             class_code=convert_to_int(data["identification"]["class_code"]),
-            subsystem_vendor_id=convert_to_int(data["identification"].get(
-                "subsystem_vendor_id", 0x0000
-            )),
-            subsystem_device_id=convert_to_int(data["identification"].get(
-                "subsystem_device_id", 0x0000
-            )),
+            subsystem_vendor_id=convert_to_int(
+                data["identification"].get("subsystem_vendor_id", 0x0000)
+            ),
+            subsystem_device_id=convert_to_int(
+                data["identification"].get("subsystem_device_id", 0x0000)
+            ),
         )
 
         registers = PCIeRegisters(
@@ -583,9 +646,11 @@ class DeviceConfigManager:
                 f"PCIE_{name.upper()}_CLASS_CODE environment variable is required"
             )
 
-        vendor_id = int(vendor_id_env, 0)
-        device_id = int(device_id_env, 0)
-        class_code = int(class_code_env, 0)
+        # Use robust validation/conversion for environment-provided hex IDs
+        vendor_id = validate_hex_id(vendor_id_env, bit_width=16)
+        device_id = validate_hex_id(device_id_env, bit_width=16)
+        # class_code is 24-bit
+        class_code = validate_hex_id(class_code_env, bit_width=24)
 
         identification = DeviceIdentification(
             vendor_id=vendor_id,
@@ -704,32 +769,6 @@ def get_device_config(profile_name: str) -> Optional[DeviceConfiguration]:
             profile_name=profile_name,
         )
         return None
-
-
-def validate_hex_id(value: str, bit_width: int = 16) -> int:
-    """Validate and convert hex ID string to integer."""
-    if isinstance(value, int):
-        return value
-
-    # Remove 0x prefix if present
-    if value.startswith(("0x", "0X")):
-        value = value[2:]
-
-    # Validate hex format
-    if not re.match(r"^[0-9A-Fa-f]+$", value):
-        raise ValueError(f"Invalid hex format: {value}")
-
-    # Convert to integer
-    int_value = int(value, 16)
-
-    # Validate range
-    max_value = (1 << bit_width) - 1
-    if not (0 <= int_value <= max_value):
-        raise ValueError(
-            f"Value 0x{int_value:X} out of range for {bit_width}-bit field"
-        )
-
-    return int_value
 
 
 def generate_device_state_machine(registers: List[Dict[str, Any]]) -> Dict[str, Any]:

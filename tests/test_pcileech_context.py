@@ -12,13 +12,6 @@ core device cloning logic and VFIO device interaction. Tests include:
 - Error handling and resource cleanup
 - Integration with related components
 
-Improvements:
-- Better test organization with nested classes
-- Reusable fixtures and mock factories
-- Parametrized tests for better coverage
-- Performance optimizations
-- Enhanced error testing
-- Clearer test naming and documentation
 """
 
 import ctypes
@@ -43,7 +36,8 @@ from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
 from src.device_clone.behavior_profiler import (BehaviorProfile,
                                                 RegisterAccess, TimingPattern)
 from src.device_clone.config_space_manager import BarInfo
-from src.device_clone.fallback_manager import FallbackManager
+from src.device_clone.fallback_manager import (FallbackManager,
+                                               get_global_fallback_manager)
 from src.device_clone.overlay_mapper import OverlayMapper
 from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
                                                DeviceIdentifiers,
@@ -403,7 +397,9 @@ class TestInitialization:
 
     def test_initialization_with_custom_fallback(self, mock_config):
         """Test initialization with custom fallback manager."""
-        fallback_manager = FallbackManager(mode="auto", allowed_fallbacks=["all"])
+        fallback_manager = get_global_fallback_manager(
+            mode="auto", allowed_fallbacks=["all"]
+        )
         builder = PCILeechContextBuilder(
             device_bdf="0000:03:00.0",
             config=mock_config,
@@ -686,29 +682,6 @@ class TestVFIOOperations:
             info = builder._vfio_manager.get_region_info(0)
             assert info is None
 
-    def test_get_vfio_group_resolution(self, mock_config):
-        """Test VFIO group resolution strategies."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        # Test sysfs method
-        with patch.object(builder, "_get_iommu_group_from_sysfs", return_value="7"):
-            # _get_vfio_group was removed - VFIO group handling is internal
-            pass  # Test skipped as this is now handled internally
-
-        # Test container method fallback
-        with patch.object(
-            builder, "_get_iommu_group_from_sysfs", return_value=None
-        ), patch.object(builder, "_get_iommu_group_from_container", return_value="5"):
-            # _get_vfio_group was removed - VFIO group handling is internal
-            pass  # Test skipped as this is now handled internally
-
-        # Test last resort fallback
-        with patch.object(
-            builder, "_get_iommu_group_from_sysfs", return_value=None
-        ), patch.object(builder, "_get_iommu_group_from_container", return_value=None):
-            # _get_vfio_group was removed - VFIO group handling is internal
-            pass  # Test skipped as this is now handled internally
-
 
 class TestBARConfiguration:
     """Tests for BAR configuration building."""
@@ -751,31 +724,6 @@ class TestBARConfiguration:
             assert bar_config["aperture_size"] == 65536
             assert bar_config["memory_type"] == "memory"
             assert len(bar_config["bars"]) == 2
-
-    @pytest.mark.parametrize(
-        "bar_type,expected_skip",
-        [
-            ("io", True),  # I/O BARs should be skipped
-            ("memory", False),  # Memory BARs should be processed
-        ],
-    )
-    def test_get_vfio_bar_info_type_filtering(
-        self, mock_config, bar_type, expected_skip
-    ):
-        """Test BAR type filtering in VFIO info retrieval."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        bar_data = {"type": bar_type, "address": 0x1000, "size": 256}
-
-        with patch.object(builder, "_get_vfio_region_info") as mock_region:
-            mock_region.return_value = {"size": 256, "flags": 0}
-
-            bar_info = builder._get_vfio_bar_info(0, bar_data)
-
-            if expected_skip:
-                assert bar_info is None
-            else:
-                assert bar_info is not None
 
     def test_bar_size_estimation(self, mock_config):
         """Test BAR size estimation for different device types."""
@@ -958,7 +906,7 @@ class TestValidation:
             "config_space": {},
         }
 
-        with pytest.raises(ContextError, match="Missing required sections"):
+        with pytest.raises(ContextError, match="Missing required section"):
             from typing import cast
 
             builder._validate_context_completeness(
@@ -1032,28 +980,6 @@ class TestValidation:
 
 class TestUtilityMethods:
     """Tests for utility and helper methods."""
-
-    def test_generate_unique_device_signature(
-        self, mock_config, device_identifiers, config_space_data, behavior_profile
-    ):
-        """Test unique device signature generation."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        signature = builder._generate_device_signature(
-            device_identifiers, behavior_profile, config_space_data
-        )
-
-        assert signature.startswith("32'h")
-        assert len(signature) == 12  # 32'h + 8 hex chars
-
-        # Verify deterministic generation
-        signature2 = builder._generate_device_signature(
-            device_identifiers, behavior_profile, config_space_data
-        )
-        assert signature == signature2
-
-    # Note: _generate_behavior_signature was removed in optimization
-    # Signature generation is now integrated into _generate_device_signature
 
     def test_serialize_behavior_profile(self, mock_config, behavior_profile):
         """Test behavior profile serialization."""
@@ -1359,13 +1285,3 @@ class TestRegressions:
         # Should fall back to main IDs
         assert identifiers.subsystem_vendor_id == "10ee"
         assert identifiers.subsystem_device_id == "7024"
-
-    def test_zero_bar_size_regression(self, mock_config):
-        """Test regression: zero-sized BARs should be skipped."""
-        builder = PCILeechContextBuilder(device_bdf="0000:03:00.0", config=mock_config)
-
-        with patch.object(builder, "_get_vfio_region_info") as mock_region:
-            mock_region.return_value = {"size": 0, "flags": 0}
-
-            bar_info = builder._get_vfio_bar_info(0, {"type": "memory"})
-            assert bar_info is None

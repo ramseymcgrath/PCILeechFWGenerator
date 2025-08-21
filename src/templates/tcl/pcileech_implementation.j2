@@ -1,13 +1,5 @@
-{#- PCILeech Implementation Template -#}
-{#- This template generates PCILeech-specific implementation settings for Vivado -#}
-{{ header_comment if header_comment else "# PCILeech Implementation Script" }}
-#
-# PCILeech FPGA Firmware Implementation Settings
-# Generated for: {{ device.vendor_id if device.vendor_id else "Unknown" }}:{{ device.device_id if device.device_id else "Unknown" }}
-# Board: {{ board.name if board.name else "Unknown" }}
-# FPGA Part: {{ board.fpga_part if board.fpga_part else "Unknown" }}
-#
-
+{{ header_comment }}
+puts "implementing"
 # Catch any errors during implementation
 if {[catch {
 
@@ -17,6 +9,12 @@ puts "Configuring PCILeech implementation settings..."
 set impl_strategy "{{ implementation_strategy if implementation_strategy else 'Performance_Explore' }}"
 set_property strategy $impl_strategy [get_runs impl_1]
 
+{%- from "_helpers.j2" import safe_attr %}
+{# Provide defaults for optimization directives if not defined in context #}
+{%- set opt_directive = (opt_directive if opt_directive is defined else 'Explore') -%}
+{%- set place_directive = (place_directive if place_directive is defined else 'Explore') -%}
+{%- set phys_opt_directive = (phys_opt_directive if phys_opt_directive is defined else 'Explore') -%}
+{%- set route_directive = (route_directive if route_directive is defined else 'Explore') -%}
 # PCILeech-specific implementation settings
 set_property STEPS.OPT_DESIGN.ARGS.DIRECTIVE {{ opt_directive if opt_directive else 'Explore' }} [get_runs impl_1]
 set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE {{ place_directive if place_directive else 'Explore' }} [get_runs impl_1]
@@ -33,15 +31,16 @@ set_property STEPS.PLACE_DESIGN.ARGS.VERBOSE true [get_runs impl_1]
 set_property STEPS.ROUTE_DESIGN.ARGS.VERBOSE true [get_runs impl_1]
 
 # PCIe-specific implementation settings
-{% if board.pcie_ip_type == "pcie7x" %}
+{%- set _pcie_ip_type = safe_attr(board, 'pcie_ip_type', pcie_ip_type|default('axi_pcie')) -%}
+{%- if _pcie_ip_type == "pcie7x" %}
 # PCIe 7-series optimizations
 set_property STEPS.PLACE_DESIGN.ARGS.MORE_OPTIONS {-fanout_opt} [get_runs impl_1]
 set_property STEPS.ROUTE_DESIGN.ARGS.MORE_OPTIONS {-tns_cleanup} [get_runs impl_1]
-{% elif board.pcie_ip_type == "ultrascale" %}
+{%- elif _pcie_ip_type == "ultrascale" %}
 # UltraScale+ optimizations
 set_property STEPS.PLACE_DESIGN.ARGS.MORE_OPTIONS {-ultrathreads} [get_runs impl_1]
 set_property STEPS.ROUTE_DESIGN.ARGS.MORE_OPTIONS {-ultrathreads} [get_runs impl_1]
-{% endif %}
+{%- endif %}
 
 # PCILeech BAR controller optimization
 set_property STEPS.PHYS_OPT_DESIGN.ARGS.MORE_OPTIONS {-critical_cell_opt -critical_pin_opt -rewire} [get_runs impl_1]

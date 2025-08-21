@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-PCI Capability Constants
+Shared PCI capability constants for PCILeechFWGenerator.
 
-This module contains all PCI-related constants extracted from the original
-pci_capability.py module, organized for better maintainability and reuse.
+This module centralizes constants used by multiple capability analyzers so
+they're not duplicated inside analyzer classes.
 """
+
+# PCI class codes for USB devices
+CLASS_CODES = {
+    "uhci": 0x0C0300,  # Serial bus controller, USB (UHCI)
+    "ohci": 0x0C0310,  # Serial bus controller, USB (OHCI)
+    "ehci": 0x0C0320,  # Serial bus controller, USB2 (EHCI)
+    "xhci": 0x0C0330,  # Serial bus controller, USB3 (xHCI)
+    "usb4": 0x0C0340,  # Serial bus controller, USB4
+    "other_usb": 0x0C0380,  # Serial bus controller, USB (Other)
+}
 
 # PCI Configuration Space Register Offsets
 PCI_VENDOR_ID_OFFSET = 0x00

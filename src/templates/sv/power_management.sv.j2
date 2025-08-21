@@ -1,4 +1,10 @@
+{{ header | safe }}
+
 {#- Power Management State Machine Template -#}
+{%- set d0_to_d1 = power_management.transition_cycles.d0_to_d1 if (power_management is defined and power_management.transition_cycles is defined and power_management.transition_cycles.d0_to_d1 is defined) else (transition_cycles.d0_to_d1 if (transition_cycles is defined and transition_cycles.d0_to_d1 is defined) else 100) -%}
+{%- set d1_to_d0 = power_management.transition_cycles.d1_to_d0 if (power_management is defined and power_management.transition_cycles is defined and power_management.transition_cycles.d1_to_d0 is defined) else (transition_cycles.d1_to_d0 if (transition_cycles is defined and transition_cycles.d1_to_d0 is defined) else 200) -%}
+{%- set d0_to_d3 = power_management.transition_cycles.d0_to_d3 if (power_management is defined and power_management.transition_cycles is defined and power_management.transition_cycles.d0_to_d3 is defined) else (transition_cycles.d0_to_d3 if (transition_cycles is defined and transition_cycles.d0_to_d3 is defined) else 500) -%}
+{%- set d3_to_d0 = power_management.transition_cycles.d3_to_d0 if (power_management is defined and power_management.transition_cycles is defined and power_management.transition_cycles.d3_to_d0 is defined) else (transition_cycles.d3_to_d0 if (transition_cycles is defined and transition_cycles.d3_to_d0 is defined) else 1000) -%}
     // Advanced Power Management State Machine
     typedef enum logic [2:0] {
         PM_D0_ACTIVE    = 3'b000,
@@ -23,8 +29,13 @@
     logic power_ready;
     
     // Connect power requests to interface signals
+    {%- if power_management.has_interface_signals %}
     assign power_down_request = (power_state_req == 2'b01) || (power_state_req == 2'b11);
     assign power_up_request = (power_state_req == 2'b00);
+    {%- else %}
+    // Power requests come from interface ports directly (defined in module interface)
+    // power_down_request and power_up_request are already module inputs
+    {%- endif %}
 
     // Power state transition logic
     always_ff @(posedge clk or negedge reset_n) begin
@@ -58,7 +69,7 @@
             
             PM_D0_TO_D1: begin
                 power_state_changing = 1'b1;
-                if (power_transition_timer >= {{ power_management.transition_cycles.d0_to_d1 }}) begin
+                if (power_transition_timer >= {{ d0_to_d1 }}) begin
                     pm_next_state = PM_D1_STANDBY;
                 end
             end
@@ -72,14 +83,14 @@
             
             PM_D1_TO_D0: begin
                 power_state_changing = 1'b1;
-                if (power_transition_timer >= {{ power_management.transition_cycles.d1_to_d0 }}) begin
+                if (power_transition_timer >= {{ d1_to_d0 }}) begin
                     pm_next_state = PM_D0_ACTIVE;
                 end
             end
             
             PM_D0_TO_D3: begin
                 power_state_changing = 1'b1;
-                if (power_transition_timer >= {{ power_management.transition_cycles.d0_to_d3 }}) begin
+                if (power_transition_timer >= {{ d0_to_d3 }}) begin
                     pm_next_state = PM_D3_SUSPEND;
                 end
             end
@@ -93,7 +104,7 @@
             
             PM_D3_TO_D0: begin
                 power_state_changing = 1'b1;
-                if (power_transition_timer >= {{ power_management.transition_cycles.d3_to_d0 }}) begin
+                if (power_transition_timer >= {{ d3_to_d0 }}) begin
                     pm_next_state = PM_D0_ACTIVE;
                 end
             end

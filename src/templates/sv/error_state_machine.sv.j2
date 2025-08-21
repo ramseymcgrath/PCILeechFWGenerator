@@ -33,6 +33,11 @@
         end
     end
 
+    {# Provide safe defaults if config or fields are missing in the template context #}
+    {%- set max_retry_count = config.max_retry_count if (config is defined and config.max_retry_count is defined) else 3 -%}
+    {%- set error_recovery_cycles = config.error_recovery_cycles if (config is defined and config.error_recovery_cycles is defined) else 16 -%}
+    {%- set enable_error_logging = config.enable_error_logging if (config is defined and config.enable_error_logging is defined) else false -%}
+
     // Error state combinational logic
     always_comb begin
         error_next_state = error_state;
@@ -49,10 +54,10 @@
             end
             
             ERR_ANALYZING: begin
-                if (error_recovery_timer >= {{ config.error_recovery_cycles }}) begin
+                if (error_recovery_timer >= {{ error_recovery_cycles }}) begin
                     if (timeout_error) begin
                         error_next_state = ERR_FATAL;  // Timeout is fatal
-                    end else if (retry_count < {{ config.max_retry_count }}) begin
+                    end else if (retry_count < {{ max_retry_count }}) begin
                         error_next_state = ERR_RETRY;
                     end else begin
                         error_next_state = ERR_FATAL;
@@ -61,14 +66,14 @@
             end
             
             ERR_RETRY: begin
-{%- if config.enable_error_logging %}
+{%- if enable_error_logging %}
                 error_next_state = ERR_LOGGING;
 {%- else %}
                 error_next_state = ERR_NORMAL;
 {%- endif %}
             end
             
-{%- if config.enable_error_logging %}
+{%- if enable_error_logging %}
             ERR_LOGGING: begin
                 error_next_state = ERR_NORMAL;
             end

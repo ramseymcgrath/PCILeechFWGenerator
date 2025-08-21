@@ -41,7 +41,8 @@ class TestTemplateContextValidator:
 
         # Check that defaults are provided
         assert requirements.default_values["supports_msix"] is False
-        assert requirements.default_values["device_signature"] == "32'hDEADBEEF"
+        # device_signature is required, not a default
+        assert "device_signature" in requirements.required_vars
 
     def test_get_template_requirements_tcl_template(self):
         """Test getting requirements for TCL templates."""

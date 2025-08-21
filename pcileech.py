@@ -261,6 +261,7 @@ try:
     from src.log_config import get_logger, setup_logging
     from src.string_utils import (log_error_safe, log_info_safe,
                                   log_warning_safe, safe_format)
+    from src.utils.validation_constants import KNOWN_DEVICE_TYPES
 except ImportError as e:
     print(f"❌ Failed to import PCILeech modules: {e}")
     print("Make sure you're running from the PCILeech project directory")
@@ -460,7 +461,7 @@ Environment Variables:
     )
     build_parser.add_argument(
         "--device-type",
-        choices=["generic", "network", "storage", "audio", "graphics"],
+        choices=KNOWN_DEVICE_TYPES,
         default="generic",
         help="Override device type detection (default: auto-detect from class code)",
     )

@@ -1,0 +1,169 @@
+{# Small helper macros to safely read project/board fields when they may be strings #}
+{% macro safe_name(obj) -%}
+  {%- if obj is string -%}
+    {{ obj }}
+  {%- else -%}
+    {{ (obj.name | default('pcileech_project')) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro safe_fpga_part(board) -%}
+  {%- if board is string -%}
+    {{ board }}
+  {%- else -%}
+  {{ (board.fpga_part | default('xc7a35t')) if (board is mapping or board is defined) else ('xc7a35t') }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#
+Safe attribute accessor: returns attribute `name` from `obj` if available,
+or `default` if the object is a string or attribute is missing.
+#}
+{% macro safe_attr(obj, name, default='') -%}
+  {%- if obj is not defined -%}
+    {{ default }}
+  {%- elif obj is string -%}
+    {{ default }}
+  {%- else -%}
+    {# Use obj.get(name, default) so it works for TemplateObject instances and dicts #}
+    {%- if obj is mapping -%}
+      {{ obj.get(name, default) }}
+    {%- else -%}
+      {{ (getattr(obj, name, default) if obj is not none else default) }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{#
+Convenience aliases for the common board fields. Templates should call
+`board_name(board)` and `board_fpga_part(board)` instead of accessing
+`board.name`/`board.fpga_part` directly. These handle strings, dicts,
+TemplateObject-like objects, and undefined values.
+#}
+{% macro board_name(board, default='Unknown') -%}
+  {%- if board is not defined -%}
+    {{ default }}
+  {%- elif board is string -%}
+    {{ board }}
+  {%- else -%}
+    {{ (board.name | default(default)) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#
+Device ID helpers: Provide consistent access to vendor_id and device_id
+across all templates with proper fallback chains. These macros handle:
+- Multiple possible source objects (device_config, device, config_space, etc.)
+- Both string and integer representations
+- Consistent default values
+- Safe type conversion
+#}
+
+{# Get vendor ID as hex string with fallback chain #}
+{% macro get_vendor_id(device_config=none, device=none, config_space=none, vendor_id_int=none, default=0x8086) -%}
+  {%- if device_config and device_config.vendor_id_int is defined -%}
+    {{ '%04x' % (device_config.vendor_id_int | safe_int(default)) }}
+  {%- elif vendor_id_int is defined and vendor_id_int is not none -%}
+    {{ '%04x' % (vendor_id_int | safe_int(default)) }}
+  {%- elif device and device.vendor_id is defined -%}
+    {{ '%04x' % (device.vendor_id | safe_int(default)) }}
+  {%- elif config_space and config_space.vendor_id is defined -%}
+    {{ '%04x' % (config_space.vendor_id | safe_int(default)) }}
+  {%- elif device_config and device_config.vendor_id is defined -%}
+    {{ '%04x' % (device_config.vendor_id | safe_int(default)) }}
+  {%- else -%}
+    {{ '%04x' % default }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Get device ID as hex string with fallback chain #}
+{% macro get_device_id(device_config=none, device=none, config_space=none, device_id_int=none, default=0x1234) -%}
+  {%- if device_config and device_config.device_id_int is defined -%}
+    {{ '%04x' % (device_config.device_id_int | safe_int(default)) }}
+  {%- elif device_id_int is defined and device_id_int is not none -%}
+    {{ '%04x' % (device_id_int | safe_int(default)) }}
+  {%- elif device and device.device_id is defined -%}
+    {{ '%04x' % (device.device_id | safe_int(default)) }}
+  {%- elif config_space and config_space.device_id is defined -%}
+    {{ '%04x' % (config_space.device_id | safe_int(default)) }}
+  {%- elif device_config and device_config.device_id is defined -%}
+    {{ '%04x' % (device_config.device_id | safe_int(default)) }}
+  {%- else -%}
+    {{ '%04x' % default }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Get subsystem vendor ID as hex string with fallback to main vendor ID #}
+{% macro get_subsystem_vendor_id(device_config=none, device=none, vendor_id_int=none, default=none) -%}
+  {%- set main_vendor = get_vendor_id(device_config, device, none, vendor_id_int, 0x8086) | safe_int(0x8086) -%}
+  {%- if device_config and device_config.subsystem_vendor_id_int is defined -%}
+    {{ '%04x' % (device_config.subsystem_vendor_id_int | safe_int(main_vendor)) }}
+  {%- elif device and device.subsys_vendor_id is defined and device.subsys_vendor_id != "0000" -%}
+    {{ '%04x' % (device.subsys_vendor_id | safe_int(main_vendor)) }}
+  {%- elif device_config and device_config.subsystem_vendor_id is defined -%}
+    {{ '%04x' % (device_config.subsystem_vendor_id | safe_int(main_vendor)) }}
+  {%- elif default is not none -%}
+    {{ '%04x' % (default | safe_int(main_vendor)) }}
+  {%- else -%}
+    {{ '%04x' % main_vendor }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Get subsystem device ID as hex string with fallback to main device ID #}
+{% macro get_subsystem_device_id(device_config=none, device=none, device_id_int=none, default=none) -%}
+  {%- set main_device = get_device_id(device_config, device, none, device_id_int, 0x1234) | safe_int(0x1234) -%}
+  {%- if device_config and device_config.subsystem_device_id_int is defined -%}
+    {{ '%04x' % (device_config.subsystem_device_id_int | safe_int(main_device)) }}
+  {%- elif device and device.subsys_device_id is defined and device.subsys_device_id != "0000" -%}
+    {{ '%04x' % (device.subsys_device_id | safe_int(main_device)) }}
+  {%- elif device_config and device_config.subsystem_device_id is defined -%}
+    {{ '%04x' % (device_config.subsystem_device_id | safe_int(main_device)) }}
+  {%- elif default is not none -%}
+    {{ '%04x' % (default | safe_int(main_device)) }}
+  {%- else -%}
+    {{ '%04x' % main_device }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro board_fpga_part(board, default='xc7a35t') -%}
+  {%- if board is not defined -%}
+    {{ default }}
+  {%- elif board is string -%}
+    {{ board }}
+  {%- else -%}
+  {{ safe_attr(board, 'fpga_part', default) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Backwards-compatible safe aliases with unique names to avoid
+  colliding with top-level context keys like `board_name` which can
+  be a plain string in legacy templates. Templates should import
+  `safe_board_name` / `safe_board_fpga_part` to avoid ambiguity. #}
+{% macro safe_board_name(board, default='Unknown') -%}
+  {{- board_name(board, default) -}}
+{%- endmacro %}
+
+{% macro safe_board_fpga_part(board, default='xc7a35t') -%}
+  {{- board_fpga_part(board, default) -}}
+{%- endmacro %}
+
+{#
+Safe integer conversion filter/macro: attempts to convert a value to int.
+Accepts decimal strings, hex strings (0x...), or integers. Returns fallback
+when conversion fails. Use in templates before applying integer-specific
+formatters like %x / %X.
+#}
+{% macro safe_int(value, default=0) -%}
+  {%- set _val = value -%}
+  {%- if _val is none -%}
+    {{ default }}
+  {%- else -%}
+    {%- if _val is number -%}
+      {{ _val }}
+    {%- else -%}
+      {# Delegate to the environment-registered filter, which handles
+         hex and decimal string coercion and has a safe fallback. #}
+      {{ (_val | safe_int(default)) }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}

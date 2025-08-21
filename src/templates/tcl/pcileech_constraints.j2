@@ -1,24 +1,27 @@
-{#- PCILeech Constraints Template -#}
-{#- This template generates PCILeech-specific timing constraints and pin assignments -#}
-{#- Improved for better readability, error handling, and maintainability -#}
-
-{{ header_comment if header_comment else "# PCILeech Constraints Script" }}
+{{ header_comment }}
 #
-# PCILeech FPGA Firmware Constraints
+puts "Setting up PCILeech build environment..."
+
+{%- from "_helpers.j2" import safe_name, safe_attr, board_name, board_fpga_part, safe_board_name, safe_board_fpga_part %}
 {% if not device.vendor_id or not device.device_id %}
 # WARNING: Missing vendor_id or device_id - Device identification incomplete
 {% else %}
 # Generated for: {{ device.vendor_id }}:{{ device.device_id }}
 {% endif %}
-{% if not board.name %}
+# compute safe board values using helpers to tolerate string/None
+{% from "_helpers.j2" import safe_attr, board_name %}
+{%- set _board_name = safe_attr(board, 'name', '') -%}
+{%- set _board_fpga = safe_attr(board, 'fpga_part', '') -%}
+{%- set _supports_msix = (supports_msix if supports_msix is defined else False) -%}
+{% if not _board_name %}
 # WARNING: Missing board name
 {% else %}
-# Board: {{ board.name }}
+# Board: {{ _board_name }}
 {% endif %}
-{% if not board.fpga_part %}
+{% if not _board_fpga %}
 # WARNING: Missing FPGA part information
 {% else %}
-# FPGA Part: {{ board.fpga_part }}
+# FPGA Part: {{ _board_fpga }}
 {% endif %}
 # Generation timestamp: [exec date]
 #
@@ -29,17 +32,18 @@
 puts "Applying PCILeech constraints..."
 
 {# No default values - all pins must be specified in board configuration #}
-{% set pcie_tx_p_pins = board.pcie_tx_p_pins if board.pcie_tx_p_pins is defined else [] %}
-{% set pcie_tx_n_pins = board.pcie_tx_n_pins if board.pcie_tx_n_pins is defined else [] %}
-{% set pcie_rx_p_pins = board.pcie_rx_p_pins if board.pcie_rx_p_pins is defined else [] %}
-{% set pcie_rx_n_pins = board.pcie_rx_n_pins if board.pcie_rx_n_pins is defined else [] %}
+{% set pcie_tx_p_pins = safe_attr(board, 'pcie_tx_p_pins', []) %}
+{% set pcie_tx_n_pins = safe_attr(board, 'pcie_tx_n_pins', []) %}
+{% set pcie_rx_p_pins = safe_attr(board, 'pcie_rx_p_pins', []) %}
+{% set pcie_rx_n_pins = safe_attr(board, 'pcie_rx_n_pins', []) %}
 
 #===============================================================================
 # BOARD-SPECIFIC CONSTRAINTS
 #===============================================================================
-{% if board.name %}
-# Include board-specific constraint file if available
-set board_name "{{ board.name }}"
+{# Include board-specific constraint file if available using safe board name #}
+{% set _board_name_safe = _board_name %}
+{% if _board_name_safe %}
+set board_name "{{ _board_name_safe }}"
 set constraint_file "${board_name}.xdc"
 
 if {[file exists $constraint_file]} {
@@ -56,21 +60,23 @@ if {[file exists $constraint_file]} {
 #===============================================================================
 # CLOCK CONSTRAINTS
 #===============================================================================
-{% if not board.pcie_clock_period %}
+{% set _pcie_clock_period = safe_attr(board, 'pcie_clock_period', '') %}
+{% if not _pcie_clock_period %}
 puts "ERROR: Missing required parameter: board.pcie_clock_period"
 puts "PCIe clock period must be explicitly specified in board configuration"
 return
 {% else %}
 # PCIe reference clock
-create_clock -period {{ board.pcie_clock_period }} -name pcie_clk [get_ports pcie_clk_p]
+create_clock -period {{ _pcie_clock_period }} -name pcie_clk [get_ports pcie_clk_p]
 {% endif %}
 
 # PCIe clock IO standards and pin assignments
-{% if not board.pcie_ip_type %}
+{% set _pcie_ip_type = safe_attr(board, 'pcie_ip_type', '') %}
+{% if not _pcie_ip_type %}
 puts "ERROR: Missing required parameter: board.pcie_ip_type"
 puts "PCIe IP type must be explicitly specified in board configuration"
 return
-{% elif board.pcie_ip_type == "pcie7x" %}
+{% elif _pcie_ip_type == "pcie7x" %}
 # PCIe 7-series specific clock constraints
 {% if not pcie_clk_p_pin %}
 puts "ERROR: Missing required parameter: pcie_clk_p_pin for 7-series device"
@@ -86,7 +92,7 @@ set_property PACKAGE_PIN {{ pcie_clk_n_pin }} [get_ports pcie_clk_n]
 {% endif %}
 set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_p]
 set_property IOSTANDARD DIFF_HSTL_I [get_ports pcie_clk_n]
-{% elif board.pcie_ip_type == "ultrascale" %}
+{% elif _pcie_ip_type == "ultrascale" %}
 # UltraScale+ specific clock constraints
 {% if not pcie_clk_p_pin %}
 puts "ERROR: Missing required parameter: pcie_clk_p_pin for UltraScale device"
@@ -166,26 +172,29 @@ set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *cfg_shad
 set_false_path -from [get_pins -hierarchical *cfg_shadow*/reg*/C] -to [get_clocks pcie_clk]
 
 # PCILeech FIFO timing constraints
-{% if not board.fifo_max_delay or not board.fifo_min_delay %}
+{% set _fifo_max = safe_attr(board, 'fifo_max_delay', '') %}
+{% set _fifo_min = safe_attr(board, 'fifo_min_delay', '') %}
+{% if not _fifo_max or not _fifo_min %}
 puts "ERROR: Missing required parameters: board.fifo_max_delay and/or board.fifo_min_delay"
 puts "FIFO timing constraints must be specified in board configuration"
 return
 {% else %}
-set_max_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ board.fifo_max_delay }}
-set_min_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ board.fifo_min_delay }}
+set_max_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ _fifo_max }}
+set_min_delay -from [get_pins -hierarchical *pcileech_fifo*/reg*/C] -to [get_pins -hierarchical *pcileech_fifo*/reg*/D] {{ _fifo_min }}
 {% endif %}
 
 #===============================================================================
 # FEATURE-SPECIFIC CONSTRAINTS
 #===============================================================================
 # MSI-X table constraints (if supported)
-{% if supports_msix %}
+{%- if _supports_msix %}
 set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *msix_table*/reg*/D]
 set_false_path -from [get_pins -hierarchical *msix_table*/reg*/C] -to [get_clocks pcie_clk]
-{% endif %}
+{%- endif %}
 
 # Option ROM constraints (if present)
-{% if device.has_option_rom %}
+{%- set _has_option_rom = (device.has_option_rom if (device is defined and device is mapping or device is defined and device.has_option_rom is defined) else (device.get('has_option_rom', False) if device is mapping else False)) -%}
+{%- if _has_option_rom %}
 set_false_path -from [get_clocks pcie_clk] -to [get_pins -hierarchical *option_rom*/reg*/D]
 set_false_path -from [get_pins -hierarchical *option_rom*/reg*/C] -to [get_clocks pcie_clk]
 {% endif %}
@@ -193,6 +202,7 @@ set_false_path -from [get_pins -hierarchical *option_rom*/reg*/C] -to [get_clock
 #===============================================================================
 # DEVICE-SPECIFIC CONSTRAINTS
 #===============================================================================
+# Device {{ device.vendor_id }}:{{ device.device_id }} specific constraints
 {% if device.vendor_id and device.device_id %}
 # Device {{ device.vendor_id }}:{{ device.device_id }} specific constraints
 {% if device.class_code %}
@@ -244,22 +254,26 @@ puts "INFO: No device class code specified. Using default timing constraints."
 #===============================================================================
 # Implementation constraints
 set_property CFGBVS VCCO [current_design]
-{% if not board.config_voltage %}
+{% set _config_voltage = safe_attr(board, 'config_voltage', '') %}
+{% if not _config_voltage %}
 puts "ERROR: Missing required parameter: board.config_voltage"
 return
 {% else %}
-set_property CONFIG_VOLTAGE {{ board.config_voltage }} [current_design]
+set_property CONFIG_VOLTAGE {{ _config_voltage }} [current_design]
 {% endif %}
 
 # Bitstream generation constraints
-{% if not board.bitstream_unusedpin or not board.bitstream_spi_buswidth or not board.bitstream_configrate %}
+{% set _bit_unusedpin = safe_attr(board, 'bitstream_unusedpin', '') %}
+{% set _bit_spi = safe_attr(board, 'bitstream_spi_buswidth', '') %}
+{% set _bit_rate = safe_attr(board, 'bitstream_configrate', '') %}
+{% if not _bit_unusedpin or not _bit_spi or not _bit_rate %}
 puts "ERROR: Missing required bitstream parameters"
 puts "Required: board.bitstream_unusedpin, board.bitstream_spi_buswidth, board.bitstream_configrate"
 return
 {% else %}
-set_property BITSTREAM.CONFIG.UNUSEDPIN {{ board.bitstream_unusedpin }} [current_design]
-set_property BITSTREAM.CONFIG.SPI_BUSWIDTH {{ board.bitstream_spi_buswidth }} [current_design]
-set_property BITSTREAM.CONFIG.CONFIGRATE {{ board.bitstream_configrate }} [current_design]
+set_property BITSTREAM.CONFIG.UNUSEDPIN {{ _bit_unusedpin }} [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH {{ _bit_spi }} [current_design]
+set_property BITSTREAM.CONFIG.CONFIGRATE {{ _bit_rate }} [current_design]
 {% endif %}
 
 # PCILeech-specific bitstream settings

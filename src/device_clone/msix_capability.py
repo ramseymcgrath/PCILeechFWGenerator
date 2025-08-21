@@ -447,13 +447,13 @@ def parse_msix_capability(cfg: str) -> Dict[str, Any]:
         )
 
         # Check for alignment warnings
-        if table_offset_bir & 0x7 != 0:
+        if table_offset & 0x7 != 0:
             log_warning_safe(
                 logger,
-                "MSI-X table offset 0x{table_offset_bir:x} is not 8-byte aligned "
-                "(actual offset: 0x{table_offset_bir:x}, aligned: 0x{table_offset:x})",
-                table_offset_bir=table_offset_bir,
+                "MSI-X table offset 0x{table_offset:x} is not 8-byte aligned "
+                "(actual offset: 0x{table_offset:x}, aligned: 0x{aligned:x})",
                 table_offset=table_offset,
+                aligned=table_offset & 0xFFFFFFF8,
             )
 
         return result

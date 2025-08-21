@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.utils.unified_context import get_package_version
+
 from .models.device import PCIDevice
 
 
@@ -461,7 +463,7 @@ class SystemInfo:
                 "implementation": platform.python_implementation(),
             },
             "pcileech": {
-                "tui_version": "2.0.0",  # This would come from __version__
+                "tui_version": get_package_version(),  # Use centralized version
                 "features": [
                     "Device scanning",
                     "Configuration management",

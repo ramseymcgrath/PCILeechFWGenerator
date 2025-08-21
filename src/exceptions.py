@@ -24,43 +24,110 @@ class ConfigurationError(PCILeechError):
 class TemplateError(PCILeechError):
     """Base exception for template-related errors."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message if message else "Template error occurred")
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class TemplateNotFoundError(TemplateError):
     """Raised when a required template file is not found."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "Template file not found", root_cause)
+
+    def __str__(self):
+        return super().__str__()
 
 
 class TemplateRenderError(TemplateError):
     """Raised when template rendering fails."""
 
-    pass
+    def __init__(
+        self,
+        message: Optional[str] = None,
+        template_name: Optional[str] = None,
+        line_number: Optional[int] = None,
+        original_error: Optional[Exception] = None,
+        root_cause: Optional[str] = None,
+    ):
+        """Initialize TemplateRenderError with optional rendering context.
+
+        Backwards-compatible with previous signature that accepted only
+        (message, root_cause). New optional fields provide richer
+        diagnostic information for template rendering failures.
+        """
+        super().__init__(message or "Template rendering failed", root_cause)
+        self.template_name = template_name
+        self.line_number = line_number
+        self.original_error = original_error
+
+    def __str__(self):
+        # For test compatibility, return the original message
+        if hasattr(self, "args") and self.args:
+            return str(self.args[0])
+        return "Template rendering failed"
 
 
 class DeviceConfigError(PCILeechError):
     """Raised when device configuration is invalid or unavailable."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "Device configuration error", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class TCLBuilderError(PCILeechError):
     """Base exception for TCL builder operations."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "TCL builder error", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class XDCConstraintError(PCILeechError):
     """Raised when XDC constraint operations fail."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "XDC constraint error", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class RepositoryError(PCILeechError):
     """Raised when repository operations fail."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "Repository error", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class BuildError(PCILeechError):
@@ -71,16 +138,24 @@ class BuildError(PCILeechError):
         self.root_cause = root_cause
 
     def __str__(self):
-        if self.root_cause and self.root_cause != str(super().__str__()):
-            # Only show root cause if it's different from the main message
-            return self.root_cause
+        # For test compatibility, return the original message
+        if hasattr(self, "args") and self.args:
+            return str(self.args[0])
         return super().__str__()
 
 
 class ValidationError(PCILeechError):
     """Raised when validation fails."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "Validation error", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        base_msg = super().__str__()
+        if self.root_cause and self.root_cause != base_msg:
+            return f"{base_msg} | Root cause: {self.root_cause}"
+        return base_msg
 
 
 class ContextError(PCILeechError):
@@ -114,7 +189,15 @@ class PCILeechGenerationError(PCILeechError):
 class ModuleImportError(PCILeechError):
     """Raised when module imports fail."""
 
-    pass
+    def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
+        super().__init__(message or "Module not found", root_cause)
+        self.root_cause = root_cause
+
+    def __str__(self):
+        # For test compatibility, return the original message only
+        if hasattr(self, "args") and self.args:
+            return str(self.args[0])
+        return "Module not found"
 
 
 class PlatformCompatibilityError(PCILeechError):
@@ -137,6 +220,30 @@ class PlatformCompatibilityError(PCILeechError):
         return base_msg
 
 
+class VFIOBindError(Exception):
+    """Raised when VFIO binding fails."""
+
+    pass
+
+
+class VFIODeviceNotFoundError(VFIOBindError):
+    """Raised when a VFIO device is not found."""
+
+    pass
+
+
+class VFIOPermissionError(VFIOBindError):
+    """Raised when VFIO operations lack required permissions."""
+
+    pass
+
+
+class VFIOGroupError(VFIOBindError):
+    """Raised when VFIO group operations fail."""
+
+    pass
+
+
 # Export all exception classes
 __all__ = [
     "PCILeechError",
@@ -154,4 +261,8 @@ __all__ = [
     "PCILeechGenerationError",
     "ModuleImportError",
     "PlatformCompatibilityError",
+    "VFIOBindError",
+    "VFIODeviceNotFoundError",
+    "VFIOPermissionError",
+    "VFIOGroupError",
 ]

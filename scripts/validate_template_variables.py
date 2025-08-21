@@ -13,15 +13,13 @@ Usage:
 """
 
 import argparse
-import glob
 import json
 import logging
-import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -34,10 +32,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from src.device_clone.fallback_manager import FallbackManager
-    from src.string_utils import (log_error_safe, log_info_safe,
-                                  log_warning_safe)
-    from src.templating.template_renderer import TemplateRenderer
+    from src.device_clone.fallback_manager import get_global_fallback_manager
 except ImportError:
     print("PCILeech modules not found. Run from project root.")
     sys.exit(1)
@@ -122,10 +117,13 @@ class TemplateVariableValidator:
     """Validates template variables usage and definitions."""
 
     def __init__(self, verbose: bool = False):
+        """Initialize the validator."""
         self.verbose = verbose
         self.variables: Dict[str, VariableDefinition] = {}
         self.env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
-        self.fallback_manager = FallbackManager()
+
+        # Use shared/global fallback manager for CI validation
+        self.fallback_manager = get_global_fallback_manager()
         self.setup_logger()
 
     def setup_logger(self):
@@ -342,17 +340,21 @@ class TemplateVariableValidator:
 
     def print_summary(self, report: Dict, issues: List[str]):
         """Print a summary of the report."""
-        total = report["total_variables"]
-        safe = report["safely_handled"]
-        unsafe = len(report["unsafe_variables"])
-        unsafe_defaults = len(report["variables_with_unsafe_defaults"])
+        total = report.get("total_variables", 0)
+        safe = report.get("safely_handled", 0)
+        unsafe = len(report.get("unsafe_variables", []))
+        unsafe_defaults = len(report.get("variables_with_unsafe_defaults", []))
+
+        # Avoid division by zero when computing percentages
+        pct_safe = (safe / total * 100) if total else 0.0
+        pct_unsafe = (unsafe / total * 100) if total else 0.0
 
         print("=" * 80)
-        print(f"TEMPLATE VARIABLE VALIDATION REPORT")
+        print("TEMPLATE VARIABLE VALIDATION REPORT")
         print("=" * 80)
         print(f"Total variables found: {total}")
-        print(f"Safely handled: {safe} ({safe/total*100:.1f}%)")
-        print(f"Unsafe variables: {unsafe} ({unsafe/total*100:.1f}%)")
+        print(f"Safely handled: {safe} ({pct_safe:.1f}%)")
+        print(f"Unsafe variables: {unsafe} ({pct_unsafe:.1f}%)")
         print(f"Variables with unsafe defaults: {unsafe_defaults}")
         print("=" * 80)
 
@@ -365,7 +367,7 @@ class TemplateVariableValidator:
         # Print top templates by variable count
         print("Top 5 templates by variable count:")
         template_counts = [
-            (t, len(v)) for t, v in report["variables_by_template"].items()
+            (t, len(v)) for t, v in report.get("variables_by_template", {}).items()
         ]
         for template, count in sorted(
             template_counts, key=lambda x: x[1], reverse=True

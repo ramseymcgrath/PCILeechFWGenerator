@@ -258,6 +258,21 @@ def main():
     # Update version file
     update_version_file(version_file, new_version, commit_hash)
 
+    # Update changelog
+    try:
+        changelog_script = project_root / "scripts" / "update_changelog.py"
+        if changelog_script.exists():
+            print(f"Updating changelog for version {new_version}...")
+            changelog_cmd = f"python3 {changelog_script} --version {new_version}"
+            run_command(
+                changelog_cmd, check=False
+            )  # Don't fail build if changelog update fails
+            print("Changelog updated successfully")
+        else:
+            print("Changelog update script not found, skipping changelog update")
+    except Exception as e:
+        print(f"Warning: Failed to update changelog: {e}")
+
     # Output for CI/CD
     print(f"::set-output name=version::{new_version}")
     print(f"::set-output name=previous_version::{current_version}")

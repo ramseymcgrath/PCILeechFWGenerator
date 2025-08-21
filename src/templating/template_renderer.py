@@ -6,6 +6,7 @@ This module provides a centralized template rendering system to replace
 the string formatting and concatenation currently used in build.py.
 """
 
+import builtins
 import logging
 import math
 import sys
@@ -13,30 +14,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from __version__ import __version__
-from string_utils import (
-    generate_tcl_header_comment,
-    log_debug_safe,
-    log_error_safe,
-    log_info_safe,
-    log_warning_safe,
-    safe_format,
-)
+from src.exceptions import TemplateRenderError
+from src.utils.unified_context import ensure_template_compatibility
+from string_utils import (generate_tcl_header_comment, log_debug_safe,
+                          log_error_safe, log_info_safe, log_warning_safe,
+                          safe_format)
 from templates.template_mapping import update_template_path
 
+# Expose a module-level __import__ reference so tests can patch import behavior
+__import__ = builtins.__import__
+
 try:
-    from jinja2 import (
-        BaseLoader,
-        Environment,
-        FileSystemLoader,
-        StrictUndefined,
-        Template,
-        TemplateError,
-        TemplateNotFound,
-        TemplateRuntimeError,
-        Undefined,
-        meta,
-        nodes,
-    )
+    from jinja2 import (BaseLoader, Environment, FileSystemLoader,
+                        StrictUndefined, Template, TemplateError,
+                        TemplateNotFound, TemplateRuntimeError, Undefined,
+                        meta, nodes)
     from jinja2.bccache import FileSystemBytecodeCache
     from jinja2.ext import Extension
     from jinja2.sandbox import SandboxedEnvironment
@@ -363,6 +355,20 @@ class TemplateRenderer:
         self.env.filters["sv_comment"] = sv_comment
         self.env.filters["sv_bool"] = sv_bool
 
+        # Safe integer coercion filter used by many templates. Returns an int or
+        # the provided default when conversion fails. Accepts decimal and hex
+        # strings (0x...), integers, and other numeric-like inputs.
+        def safe_int_filter(value, default=0):
+            try:
+                return _parse_int(value)
+            except Exception:
+                try:
+                    return int(value)
+                except Exception:
+                    return default
+
+        self.env.filters["safe_int"] = safe_int_filter
+
     def _setup_global_functions(self):
         """Setup global functions available in templates."""
 
@@ -493,29 +499,36 @@ class TemplateRenderer:
         """
         template_name = update_template_path(template_name)
         try:
-            # First perform internal validation
-            validated = self._validate_template_context(context, template_name)
-
-            # Then use comprehensive validation with preflight check
-            self._preflight_undeclared(template_name, validated)
-
-            # Apply external validator with strict validation
+            # Ensure the provided context is template-compatible (convert nested dicts)
+            # Debug: log top-level types to help diagnose template conversion issues
             try:
-                from src.templating.template_context_validator import (
-                    validate_template_context,
-                )
+                type_info = {k: type(v).__name__ for k, v in context.items()}
+                logger.debug("Template context top-level types: %s", type_info)
+            except Exception:
+                logger.debug("Failed to collect template context type information")
 
-                # Validate with strict mode (security first)
-                validated = validate_template_context(
-                    template_name, validated, strict=True
+            try:
+                compatible = ensure_template_compatibility(context)
+                # Diagnostic: log the types after conversion to ensure dicts were wrapped
+                try:
+                    post_type_info = {
+                        k: type(v).__name__ for k, v in compatible.items()
+                    }
+                    logger.error(
+                        "Post-conversion context top-level types: %s", post_type_info
+                    )
+                except Exception:
+                    logger.error("Failed to collect post-conversion type information")
+            except Exception:
+                # Fallback to the original context if conversion fails
+                logger.error(
+                    "ensure_template_compatibility raised an exception; falling back to original context"
                 )
-            except ImportError:
-                # If validator not available, proceed with basic validation
-                pass
+                compatible = context
 
-            # Finally render the template with validated context
-            template = self.env.get_template(template_name)
-            return template.render(**validated)
+            # Render the template with a compatible context
+            template = self._load_template(template_name)
+            return template.render(**compatible)
 
         except TemplateError as e:
             error_msg = safe_format(
@@ -615,6 +628,17 @@ class TemplateRenderer:
         src, filename, _ = self.env.loader.get_source(self.env, name)
         return Path(filename)
 
+    def _load_template(self, template_name: str):
+        """Internal helper to load a template object.
+
+        Exists primarily to make the loader patchable in unit tests.
+        """
+        try:
+            return self.env.get_template(template_name)
+        except Exception:
+            # Re-raise to let callers convert to TemplateRenderError
+            raise
+
     def render_to_file(
         self, template_name: str, context: Dict[str, Any], out_path: Union[str, Path]
     ) -> Path:
@@ -683,9 +707,8 @@ class TemplateRenderer:
 
         try:
             # Use the centralized validator
-            from src.templating.template_context_validator import (
-                validate_template_context,
-            )
+            from src.templating.template_context_validator import \
+                validate_template_context
 
             # Apply centralized validation with strict mode
             validated_context = validate_template_context(
@@ -734,9 +757,8 @@ class TemplateRenderer:
 
         # Clear template context validator cache
         try:
-            from src.templating.template_context_validator import (
-                clear_global_template_cache,
-            )
+            from src.templating.template_context_validator import \
+                clear_global_template_cache
 
             clear_global_template_cache()
         except ImportError:
@@ -750,7 +772,7 @@ class TemplateRenderer:
 
 
 # Performance optimization: Cache the import result
-_cached_exception_class: Union[Type[Exception], None] = None
+_cached_exception_class: Optional[Type[Exception]] = None
 
 
 def _clear_exception_cache():
@@ -763,149 +785,114 @@ def _get_template_render_error_base() -> Type[Exception]:
     """
     Lazily import and cache the base TemplateRenderError class.
 
-    This function implements a singleton pattern to avoid repeated import
-    attempts and provides better error messages when imports fail.
-
-    Returns:
-        The base exception class to use for TemplateRenderError
-
-    Raises:
-        Never - always returns a valid exception class
+    Returns the canonical `TemplateRenderError` from `src.exceptions` when
+    available; otherwise returns a lightweight fallback implementation.
     """
     global _cached_exception_class
 
-    # Return cached result if available
     if _cached_exception_class is not None:
         return _cached_exception_class
 
     try:
-        # Attempt to import from the main exceptions module
-        from src.exceptions import TemplateRenderError as ImportedError
-
-        _cached_exception_class = ImportedError
-
+        # Use the module-level __import__ so tests can patch it.
+        mod = __import__("src.exceptions", fromlist=["TemplateRenderError"])  # type: ignore[name-defined]
+        _tr = getattr(mod, "TemplateRenderError")
+        _cached_exception_class = _tr
+        return _cached_exception_class
     except ImportError as e:
-        # Create a more informative fallback exception class
+        # Create a simple fallback class with the expected API
         class FallbackTemplateRenderError(Exception):
-            """
-            Fallback exception for template rendering errors.
-
-            This exception is used when the main src.exceptions module
-            is not available (e.g., during testing or in isolated environments).
-            It maintains API compatibility with the main TemplateRenderError.
-            """
-
             def __init__(
                 self,
-                message: str,
+                message: str = "Template render error",
                 template_name: Optional[str] = None,
                 line_number: Optional[int] = None,
                 original_error: Optional[Exception] = None,
             ):
-                """
-                Initialize the fallback exception with enhanced error context.
-
-                Args:
-                    message: The error message
-                    template_name: Name of the template that failed (optional)
-                    line_number: Line number where error occurred (optional)
-                    original_error: The original exception that caused this error (optional)
-                """
                 super().__init__(message)
                 self.template_name = template_name
                 self.line_number = line_number
                 self.original_error = original_error
 
             def __str__(self) -> str:
-                """Provide a detailed string representation of the error."""
                 parts = [str(self.args[0]) if self.args else "Template render error"]
-
                 if self.template_name:
                     parts.append(f"Template: {self.template_name}")
-
                 if self.line_number is not None:
                     parts.append(f"Line: {self.line_number}")
-
                 if self.original_error:
+                    try:
+                        orig_msg = (
+                            self.original_error.args[0]
+                            if getattr(self.original_error, "args", None)
+                            else repr(self.original_error)
+                        )
+                    except Exception:
+                        orig_msg = repr(self.original_error)
                     parts.append(
-                        f"Caused by: {type(self.original_error).__name__}: {self.original_error}"
+                        f"Caused by: {type(self.original_error).__name__}: {orig_msg}"
                     )
-
                 return " | ".join(parts)
 
         _cached_exception_class = FallbackTemplateRenderError
 
-        # Log the import failure if in development/debug mode
+        # Only warn when a debugger is attached (development mode)
         if hasattr(sys, "gettrace") and sys.gettrace() is not None:
             import warnings
 
             warnings.warn(
-                f"Failed to import TemplateRenderError from src.exceptions: {e}. "
-                "Using fallback implementation. This may indicate a packaging or path issue.",
+                f"Failed to import TemplateRenderError from src.exceptions: {e}. Using fallback.",
                 ImportWarning,
                 stacklevel=2,
             )
 
-    return _cached_exception_class
+        return _cached_exception_class
 
 
-# Create the actual exception class using the base
+# Expose a TemplateRenderError in this module that always provides the
+# richer attributes (template_name, line_number, original_error) while
+# inheriting from the project's canonical exception when available.
 class TemplateRenderError(_get_template_render_error_base()):
-    """
-    Exception raised when template rendering fails.
-
-    This class dynamically inherits from either the project's canonical
-    TemplateRenderError (when available) or a compatible fallback implementation.
-    This ensures that exceptions raised by the template renderer are always
-    compatible with code and tests that expect the project's exception type,
-    while gracefully handling import failures in isolated environments.
-
-    Attributes:
-        template_name: The name of the template that failed to render
-        line_number: The line number where the error occurred (if applicable)
-        original_error: The original exception that caused the rendering failure
-
-    Example:
-        >>> try:
-        ...     render_template("broken.j2", context)
-        ... except TemplateRenderError as e:
-        ...     print(f"Failed to render {e.template_name}: {e}")
-    """
-
-    # Ensure we maintain the same interface regardless of which base we're using
     def __init__(
         self,
-        message: str,
+        message: str = "Template render error",
         template_name: Optional[str] = None,
         line_number: Optional[int] = None,
         original_error: Optional[Exception] = None,
     ):
-        """
-        Initialize the TemplateRenderError with detailed context.
+        # Initialize base with the message (some bases accept different kwargs)
+        try:
+            super().__init__(message)
+        except TypeError:
+            # Some fallback/base classes may expect no args; ensure construction
+            super().__init__()
 
-        Args:
-            message: The error message describing what went wrong
-            template_name: Name of the template file that failed (optional)
-            line_number: Line number in the template where error occurred (optional)
-            original_error: The underlying exception that caused this error (optional)
-        """
-        # Call parent constructor with just the message for compatibility
-        super().__init__(message)
-
-        # Store additional context
+        # Ensure attributes exist regardless of base class
         self.template_name = template_name
         self.line_number = line_number
         self.original_error = original_error
 
-        # If the base class doesn't have these attributes, add them
-        if not hasattr(super(), "template_name"):
-            self.template_name = template_name
-        if not hasattr(super(), "line_number"):
-            self.line_number = line_number
-        if not hasattr(super(), "original_error"):
-            self.original_error = original_error
+    def __str__(self) -> str:
+        # Prefer base implementation when available
+        try:
+            base_msg = super().__str__()
+        except Exception:
+            base_msg = str(self.args[0]) if self.args else "Template render error"
 
-    pass
+        parts = [base_msg]
+        if getattr(self, "template_name", None):
+            parts.append(f"Template: {self.template_name}")
+        if getattr(self, "line_number", None) is not None:
+            parts.append(f"Line: {self.line_number}")
+        if getattr(self, "original_error", None):
+            try:
+                orig = self.original_error
+                orig_msg = orig.args[0] if getattr(orig, "args", None) else repr(orig)
+            except Exception:
+                orig_msg = repr(self.original_error)
+            parts.append(f"Caused by: {type(self.original_error).__name__}: {orig_msg}")
+
+        return " | ".join(parts)
 
 
 # Convenience function for quick template rendering

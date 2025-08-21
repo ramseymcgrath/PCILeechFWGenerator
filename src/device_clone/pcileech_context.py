@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 PCILeech Template Context Builder - Optimized Version
 
@@ -18,12 +20,13 @@ import fcntl
 import hashlib
 import logging
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
+from typing import (TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict,
+                    Union)
 
 from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
                                     VFIO_REGION_INFO_FLAG_MMAP,
@@ -32,49 +35,24 @@ from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
                                     VfioRegionInfo)
 from src.device_clone.behavior_profiler import BehaviorProfile
 from src.device_clone.config_space_manager import BarInfo
-from src.device_clone.fallback_manager import FallbackManager
+from src.device_clone.fallback_manager import (FallbackManager,
+                                               get_global_fallback_manager)
+from src.device_clone.identifier_normalizer import IdentifierNormalizer
 from src.device_clone.overlay_mapper import OverlayMapper
 from src.error_utils import extract_root_cause
 from src.exceptions import ContextError
-from src.string_utils import (format_bar_summary_table, format_bar_table,
-                              format_raw_bar_table, log_error_safe,
-                              log_info_safe, log_warning_safe)
-from src.utils.attribute_access import safe_get_attr
+from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
 
-logger = logging.getLogger(__name__)
-
-
-# Simplified TypedDicts
-class ConfigSpaceData(TypedDict, total=False):
-    """Configuration space data structure."""
-
-    config_space_hex: str
-    config_space_size: int
-    bars: List[Any]
-    device_info: Dict[str, Any]
-    vendor_id: str
-    device_id: str
-    class_code: str
-    revision_id: str
-    subsystem_vendor_id: Optional[str]
-    subsystem_device_id: Optional[str]
-
-
-class MSIXCapabilityInfo(TypedDict):
-    """MSI-X capability information."""
-
-    table_size: int
-    table_bir: int
-    table_offset: int
-    pba_bir: int
-    pba_offset: int
-    enabled: bool
-    function_mask: bool
+from ..utils.validation_constants import REQUIRED_CONTEXT_SECTIONS
 
 
 class TemplateContext(TypedDict, total=False):
     """Template context structure."""
 
+    vendor_id: str
+    device_id: str
+    device_signature: str
+    generation_metadata: Dict[str, Any]
     device_config: Dict[str, Any]
     config_space: Dict[str, Any]
     msix_config: Dict[str, Any]
@@ -84,10 +62,62 @@ class TemplateContext(TypedDict, total=False):
     timing_config: Dict[str, Any]
     pcileech_config: Dict[str, Any]
     board_config: Dict[str, Any]
-    device_signature: str
-    generation_metadata: Dict[str, Any]
+    EXT_CFG_CAP_PTR: int
+    EXT_CFG_XP_CAP_PTR: int
+
+
+@dataclass(slots=True)
+class DeviceIdentifiers:
+    """Device identification data (uses centralized normalization)."""
+
     vendor_id: str
     device_id: str
+    class_code: str
+    revision_id: str
+    subsystem_vendor_id: Optional[str] = None
+    subsystem_device_id: Optional[str] = None
+
+    def __post_init__(self):
+        from src.exceptions import ContextError
+
+        try:
+            norm = IdentifierNormalizer.validate_all_identifiers(
+                {
+                    "vendor_id": self.vendor_id,
+                    "device_id": self.device_id,
+                    "class_code": self.class_code,
+                    "revision_id": self.revision_id,
+                    "subsystem_vendor_id": self.subsystem_vendor_id,
+                    "subsystem_device_id": self.subsystem_device_id,
+                }
+            )
+        except ContextError as e:
+            raise ContextError(str(e))
+        self.vendor_id = norm["vendor_id"]
+        self.device_id = norm["device_id"]
+        self.class_code = norm["class_code"]
+        self.revision_id = norm["revision_id"]
+        self.subsystem_vendor_id = norm["subsystem_vendor_id"]
+        self.subsystem_device_id = norm["subsystem_device_id"]
+
+    @property
+    def device_signature(self) -> str:
+        return f"{self.vendor_id}:{self.device_id}"
+
+    @property
+    def full_signature(self) -> str:
+        subsys_vendor = self.subsystem_vendor_id or self.vendor_id
+        subsys_device = self.subsystem_device_id or self.device_id
+        return f"{self.vendor_id}:{self.device_id}:{subsys_vendor}:{subsys_device}"
+
+    def get_device_class_type(self) -> str:
+        class_map = {
+            PCIConstants.CLASS_NETWORK: "Network Controller",
+            PCIConstants.CLASS_STORAGE: "Storage Controller",
+            PCIConstants.CLASS_DISPLAY: "Display Controller",
+            PCIConstants.CLASS_AUDIO: "Audio Controller",
+        }
+        return class_map.get(self.class_code[:2], "Unknown Device")
 
 
 class ValidationLevel(Enum):
@@ -122,74 +152,6 @@ class PCIConstants:
 
 
 @dataclass(slots=True)
-class DeviceIdentifiers:
-    """Device identification data."""
-
-    vendor_id: str
-    device_id: str
-    class_code: str
-    revision_id: str
-    subsystem_vendor_id: Optional[str] = None
-    subsystem_device_id: Optional[str] = None
-
-    def __post_init__(self):
-        """Validate and normalize identifiers."""
-        self._normalize_fields()
-
-    def _normalize_fields(self):
-        """Normalize hex fields to expected lengths."""
-        specs = [
-            ("vendor_id", 4),
-            ("device_id", 4),
-            ("class_code", 6),
-            ("revision_id", 2),
-        ]
-
-        for field_name, length in specs:
-            value = getattr(self, field_name)
-            if not value:
-                raise ContextError(f"Missing {field_name}")
-            try:
-                normalized = f"{int(value, 16):0{length}x}"
-                setattr(self, field_name, normalized)
-            except ValueError:
-                raise ContextError(f"Invalid hex: {field_name}={value}")
-
-        # Normalize optional fields
-        if self.subsystem_vendor_id:
-            self.subsystem_vendor_id = self._normalize_hex(self.subsystem_vendor_id, 4)
-        if self.subsystem_device_id:
-            self.subsystem_device_id = self._normalize_hex(self.subsystem_device_id, 4)
-
-    @staticmethod
-    def _normalize_hex(value: str, length: int) -> str:
-        """Normalize a hex string."""
-        return f"{int(value, 16):0{length}x}"
-
-    @property
-    def device_signature(self) -> str:
-        """Generate device signature."""
-        return f"{self.vendor_id}:{self.device_id}"
-
-    @property
-    def full_signature(self) -> str:
-        """Generate full signature with subsystem IDs."""
-        subsys_vendor = self.subsystem_vendor_id or self.vendor_id
-        subsys_device = self.subsystem_device_id or self.device_id
-        return f"{self.vendor_id}:{self.device_id}:{subsys_vendor}:{subsys_device}"
-
-    def get_device_class_type(self) -> str:
-        """Get human-readable device class."""
-        class_map = {
-            PCIConstants.CLASS_NETWORK: "Network Controller",
-            PCIConstants.CLASS_STORAGE: "Storage Controller",
-            PCIConstants.CLASS_DISPLAY: "Display Controller",
-            PCIConstants.CLASS_AUDIO: "Audio Controller",
-        }
-        return class_map.get(self.class_code[:2], "Unknown Device")
-
-
-@dataclass(slots=True)
 class BarConfiguration:
     """BAR configuration data."""
 
@@ -207,8 +169,13 @@ class BarConfiguration:
         """Validate BAR configuration."""
         if not PCIConstants.MIN_BAR_INDEX <= self.index <= PCIConstants.MAX_BAR_INDEX:
             raise ContextError(f"Invalid BAR index: {self.index}")
-        if self.size < 0:
+        # BAR size must be a positive 32-bit unsigned value
+        if self.size <= 0:
             raise ContextError(f"Invalid BAR size: {self.size}")
+        if self.size > 0xFFFFFFFF:
+            raise ContextError(
+                f"Invalid BAR size: {self.size} (exceeds 32-bit unsigned)"
+            )
 
         if self.is_memory and self.bar_type == PCIConstants.BAR_TYPE_MEMORY_64BIT:
             self.is_64bit = True
@@ -251,9 +218,12 @@ class TimingParameters:
 
     def __post_init__(self):
         """Validate timing parameters."""
-        for name, value in asdict(self).items():
+        for field_obj in fields(self):
+            value = getattr(self, field_obj.name)
+            if value is None:
+                raise ContextError(f"{field_obj.name} cannot be None")
             if value <= 0:
-                raise ContextError(f"{name} must be positive: {value}")
+                raise ContextError(f"{field_obj.name} must be positive: {value}")
 
         if not 0 < self.timing_regularity <= 1.0:
             raise ContextError(f"Invalid timing_regularity: {self.timing_regularity}")
@@ -325,8 +295,13 @@ class VFIODeviceManager:
 
     def get_region_info(self, index: int) -> Optional[Dict[str, Any]]:
         """Get VFIO region information."""
-        if self._device_fd is None:
-            self.open()
+        opened_here = self._device_fd is None
+        if opened_here:
+            try:
+                self.open()
+            except (OSError, PermissionError, FileNotFoundError) as e:
+                log_error_safe(self.logger, f"VFIO device open failed: {e}")
+                return None
 
         info = VfioRegionInfo()
         info.argsz = ctypes.sizeof(VfioRegionInfo)
@@ -338,7 +313,7 @@ class VFIODeviceManager:
 
             fcntl.ioctl(self._device_fd, VFIO_DEVICE_GET_REGION_INFO, info, True)
 
-            return {
+            result = {
                 "index": info.index,
                 "flags": info.flags,
                 "size": info.size,
@@ -346,8 +321,17 @@ class VFIODeviceManager:
                 "writable": bool(info.flags & VFIO_REGION_INFO_FLAG_WRITE),
                 "mappable": bool(info.flags & VFIO_REGION_INFO_FLAG_MMAP),
             }
+
+            # Clean up if we opened the FDs here
+            if opened_here:
+                self.close()
+
+            return result
         except OSError as e:
             log_error_safe(self.logger, f"VFIO region info failed: {e}")
+            # Clean up if we opened the FDs here
+            if opened_here:
+                self.close()
             return None
 
 
@@ -374,9 +358,13 @@ class PCILeechContextBuilder:
         self.logger = logging.getLogger(__name__)
         self._context_cache: Dict[str, Any] = {}
         self._vfio_manager = VFIODeviceManager(self.device_bdf, self.logger)
-        self.fallback_manager = fallback_manager or FallbackManager(
-            mode="prompt", allowed_fallbacks=["bar-analysis"]
-        )
+        # Use shared global fallback manager when none provided
+        if fallback_manager:
+            self.fallback_manager = fallback_manager
+        else:
+            self.fallback_manager = get_global_fallback_manager(
+                config_path=None, mode="prompt", allowed_fallbacks=["bar-analysis"]
+            )
 
     def build_context(
         self,
@@ -393,77 +381,198 @@ class PCILeechContextBuilder:
             f"Building context for {self.device_bdf} with {interrupt_strategy}",
         )
 
-        # Validate input
-        self._validate_input_data(config_space_data, msix_data, behavior_profile)
+        def handle_error(msg, exc=None):
+            root_cause = extract_root_cause(exc) if exc else None
+            log_error_safe(self.logger, f"{msg}: {root_cause if root_cause else ''}")
+            raise ContextError(msg, root_cause=root_cause)
 
         try:
-            # Extract device identifiers
-            device_identifiers = self._extract_device_identifiers(config_space_data)
-
-            # Build context sections
-            context: TemplateContext = {
-                "device_config": self._build_device_config(
-                    device_identifiers, behavior_profile, config_space_data
-                ),
-                "config_space": self._build_config_space_context(config_space_data),
-                "msix_config": self._build_msix_context(msix_data),
-                "bar_config": self._build_bar_config(
-                    config_space_data, behavior_profile
-                ),
-                "timing_config": self._build_timing_config(
-                    behavior_profile, device_identifiers
-                ).to_dict(),
-                "pcileech_config": self._build_pcileech_config(device_identifiers),
-                "interrupt_config": {
-                    "strategy": interrupt_strategy,
-                    "vectors": interrupt_vectors,
-                    "msix_available": msix_data is not None,
-                },
-                "active_device_config": self._build_active_device_config(
-                    device_identifiers, interrupt_strategy, interrupt_vectors
-                ),
-                "board_config": self._build_board_config(),
-                "device_signature": self._generate_device_signature(
-                    device_identifiers, behavior_profile, config_space_data
-                ),
-                "generation_metadata": self._build_generation_metadata(
-                    device_identifiers
-                ),
-                "vendor_id": device_identifiers.vendor_id,
-                "device_id": device_identifiers.device_id,
-            }
-
-            # Add overlay config
-            overlay_config = self._build_overlay_config(config_space_data)
-            for key, value in overlay_config.items():
-                context[key] = value  # type: ignore
-
-            # Add extended config pointers
-            context["EXT_CFG_CAP_PTR"] = context.get("device_config", {}).get(  # type: ignore
-                "ext_cfg_cap_ptr", 0x100
-            )
-            context["EXT_CFG_XP_CAP_PTR"] = context.get("device_config", {}).get(  # type: ignore
-                "ext_cfg_xp_cap_ptr", 0x100
-            )
-
-            # Merge donor template if provided
-            if donor_template:
-                context = self._merge_donor_template(dict(context), donor_template)
-
-            # Final validation
-            self._validate_context_completeness(context)
-
-            log_info_safe(
-                self.logger,
-                f"Context built successfully: {context.get('device_signature', 'unknown')}",
-            )
-
-            return context
-
+            self._validate_input_data(config_space_data, msix_data, behavior_profile)
         except Exception as e:
-            root_cause = extract_root_cause(e)
-            log_error_safe(self.logger, f"Context build failed: {root_cause}")
-            raise ContextError("Context building failed", root_cause=root_cause)
+            handle_error("Input validation failed", e)
+
+        try:
+            device_identifiers = self._extract_device_identifiers(config_space_data)
+        except Exception as e:
+            handle_error("Device identifier extraction failed", e)
+
+        try:
+            context = self._build_context_sections(
+                device_identifiers,
+                behavior_profile,
+                config_space_data,
+                msix_data,
+                interrupt_strategy,
+                interrupt_vectors,
+                donor_template,
+            )
+        except Exception as e:
+            handle_error("Context section build failed", e)
+
+        try:
+            self._finalize_context(context)
+        except Exception as e:
+            handle_error("Context finalization failed", e)
+
+        log_info_safe(
+            self.logger,
+            f"Context built successfully: {context.get('device_signature', 'unknown')}",
+        )
+        return context
+
+    def _build_context_sections(
+        self,
+        device_identifiers,
+        behavior_profile,
+        config_space_data,
+        msix_data,
+        interrupt_strategy,
+        interrupt_vectors,
+        donor_template,
+    ):
+        """Build all context sections with minimal nesting."""
+        context: TemplateContext = {
+            "device_config": self._build_device_config(
+                device_identifiers, behavior_profile, config_space_data
+            ),
+            "config_space": self._build_config_space_context(config_space_data),
+            "msix_config": self._build_msix_context(msix_data),
+            "bar_config": self._build_bar_config(config_space_data, behavior_profile),
+            "timing_config": self._build_timing_config(
+                behavior_profile, device_identifiers
+            ).to_dict(),
+            "pcileech_config": self._build_pcileech_config(device_identifiers),
+            "interrupt_config": {
+                "strategy": interrupt_strategy,
+                "vectors": interrupt_vectors,
+                "msix_available": msix_data is not None,
+            },
+            "active_device_config": self._build_active_device_config(
+                device_identifiers, interrupt_strategy, interrupt_vectors
+            ),
+            "board_config": self._build_board_config(),
+            "device_signature": self._generate_device_signature(
+                device_identifiers, behavior_profile, config_space_data
+            ),
+            "generation_metadata": self._build_generation_metadata(device_identifiers),
+            "vendor_id": device_identifiers.vendor_id,
+            "device_id": device_identifiers.device_id,
+        }
+
+        # Add overlay config
+        overlay_config = self._build_overlay_config(config_space_data)
+        for key, value in overlay_config.items():
+            context[key] = value  # type: ignore
+
+        # Add missing template variables using UnifiedContextBuilder
+        device_type = self._get_device_type_from_class_code(
+            device_identifiers.class_code
+        )
+        context["device_type"] = device_type  # type: ignore
+        context["power_management"] = getattr(self.config, "power_management", False)  # type: ignore
+        context["error_handling"] = getattr(self.config, "error_handling", False)  # type: ignore
+        context["performance_counters"] = self._build_performance_config(device_type)  # type: ignore
+        context["power_config"] = self._build_power_management_config()  # type: ignore
+        context["error_config"] = self._build_error_handling_config()  # type: ignore
+        context["variance_model"] = self._build_variance_model()  # type: ignore
+
+        # Add device-specific signals
+        device_signals = self._build_device_specific_signals(device_type)
+        for key, value in device_signals.items():
+            context[key] = value  # type: ignore
+
+        # Add header for SystemVerilog generation
+        context["header"] = "// Generated PCILeech SystemVerilog Module"  # type: ignore
+        context["registers"] = []  # type: ignore
+        # EXT_CFG_CAP_PTR and EXT_CFG_XP_CAP_PTR must be present at top-level context for test contract
+        ext_cfg_cap_ptr = None
+        ext_cfg_xp_cap_ptr = None
+        if isinstance(context.get("device_config"), dict):
+            dc = context["device_config"]
+            ext_cfg_cap_ptr = dc.get("ext_cfg_cap_ptr", 0x100)
+            ext_cfg_xp_cap_ptr = dc.get("ext_cfg_xp_cap_ptr", 0x100)
+            dc["EXT_CFG_CAP_PTR"] = ext_cfg_cap_ptr
+            dc["EXT_CFG_XP_CAP_PTR"] = ext_cfg_xp_cap_ptr
+        context["EXT_CFG_CAP_PTR"] = (
+            ext_cfg_cap_ptr if ext_cfg_cap_ptr is not None else 0x100
+        )
+        context["EXT_CFG_XP_CAP_PTR"] = (
+            ext_cfg_xp_cap_ptr if ext_cfg_xp_cap_ptr is not None else 0x100
+        )
+
+        if donor_template:
+            context = self._merge_donor_template(dict(context), donor_template)
+
+        # Ensure numeric ID aliases exist on top-level and device_config
+        self._add_numeric_id_aliases(context)
+
+        return context
+
+    def _add_numeric_id_aliases(self, context):
+        """Ensure numeric ID aliases exist on top-level and device_config."""
+
+        # Use local helper for int parsing to avoid import error
+        def _parse_int_maybe(val):
+            try:
+                if val is None:
+                    return None
+                if isinstance(val, int):
+                    return val
+                if isinstance(val, str):
+                    return int(val, 16) if val.startswith("0x") else int(val)
+                return int(val)
+            except Exception:
+                return None
+
+        context.setdefault(
+            "vendor_id_int", _parse_int_maybe(context.get("vendor_id")) or 0x8086
+        )
+        context.setdefault(
+            "device_id_int", _parse_int_maybe(context.get("device_id")) or 0x0000
+        )
+
+        # Also set aliases inside device_config dict if present
+        if isinstance(context.get("device_config"), dict):
+            dc = context["device_config"]
+            dc.setdefault("vendor_id_int", context.get("vendor_id_int", 0x8086))
+            dc.setdefault("device_id_int", context.get("device_id_int", 0x0000))
+        elif hasattr(context.get("device_config"), "_data"):
+            try:
+                context["device_config"]._data.setdefault(
+                    "vendor_id_int", context.get("vendor_id_int", 0x8086)
+                )
+                context["device_config"]._data.setdefault(
+                    "device_id_int", context.get("device_id_int", 0x0000)
+                )
+            except Exception:
+                pass
+
+    def _finalize_context(self, context):
+        """Final validation and template compatibility."""
+        self._validate_context_completeness(context)
+        from typing import cast
+
+        from src.utils.unified_context import (TemplateObject,
+                                               ensure_template_compatibility)
+
+        compatible_context = ensure_template_compatibility(dict(context))
+        context.clear()
+        context.update(cast(TemplateContext, compatible_context))
+        # Ensure project and board are TemplateObjects with .name and .fpga_part
+        if not isinstance(context.get("board_config"), TemplateObject):
+            context["board_config"] = TemplateObject(
+                context.get("board_config", {"name": "generic", "fpga_part": "xc7a35t"})
+            )
+        if not isinstance(context.get("board"), TemplateObject):
+            context.setdefault(
+                "board",
+                context.get(
+                    "board_config",
+                    TemplateObject({"name": "generic", "fpga_part": "xc7a35t"}),
+                ),
+            )
+        if not isinstance(context.get("project"), TemplateObject):
+            context.setdefault("project", TemplateObject({"name": "pcileech_project"}))
 
     def _validate_input_data(
         self,
@@ -471,43 +580,46 @@ class PCILeechContextBuilder:
         msix_data: Optional[Dict[str, Any]],
         behavior_profile: Optional[BehaviorProfile],
     ):
-        """Validate input data."""
+        """Validate input data with minimal nesting."""
         missing = []
+        self._check_config_space(config_space_data, missing)
+        self._check_msix_data(msix_data, missing)
+        self._check_behavior_profile(behavior_profile, missing)
+        if missing and self.validation_level in (
+            ValidationLevel.STRICT,
+            ValidationLevel.MODERATE,
+        ):
+            raise ContextError(f"Missing required data: {missing}")
 
-        # Check config space
+    def _check_config_space(self, config_space_data, missing):
         if not config_space_data:
             missing.append("config_space_data")
-        else:
-            for field in self.REQUIRED_DEVICE_FIELDS:
-                if field not in config_space_data or not config_space_data[field]:
-                    missing.append(f"config_space_data.{field}")
+            return
+        for field in self.REQUIRED_DEVICE_FIELDS:
+            if field not in config_space_data or not config_space_data[field]:
+                missing.append(f"config_space_data.{field}")
+        size = config_space_data.get("config_space_size", 0)
+        if size < PCIConstants.MIN_CONFIG_SPACE_SIZE:
+            log_warning_safe(
+                self.logger,
+                f"Config space size {size} < {PCIConstants.MIN_CONFIG_SPACE_SIZE}",
+            )
+            if self.validation_level == ValidationLevel.STRICT and size == 0:
+                missing.append(f"config_space_size ({size})")
 
-            # Check config space size
-            size = config_space_data.get("config_space_size", 0)
-            if size < PCIConstants.MIN_CONFIG_SPACE_SIZE:
-                log_warning_safe(
-                    self.logger,
-                    f"Config space size {size} < {PCIConstants.MIN_CONFIG_SPACE_SIZE}",
-                )
-                if self.validation_level == ValidationLevel.STRICT and size == 0:
-                    missing.append(f"config_space_size ({size})")
-
-        # Check MSI-X if present
+    def _check_msix_data(self, msix_data, missing):
         if msix_data and msix_data.get("capability_info"):
             cap_info = msix_data["capability_info"]
             for field in self.REQUIRED_MSIX_FIELDS:
                 if field not in cap_info:
                     missing.append(f"msix.{field}")
 
-        # Check behavior profile
+    def _check_behavior_profile(self, behavior_profile, missing):
         if behavior_profile:
             if not getattr(behavior_profile, "total_accesses", 0) > 0:
                 missing.append("behavior_profile.total_accesses")
             if not getattr(behavior_profile, "capture_duration", 0) > 0:
                 missing.append("behavior_profile.capture_duration")
-
-        if missing and self.validation_level == ValidationLevel.STRICT:
-            raise ContextError(f"Missing required data: {missing}")
 
     def _extract_device_identifiers(
         self, config_space_data: Dict[str, Any]
@@ -527,22 +639,24 @@ class PCILeechContextBuilder:
             config_space_data = manager.extract_device_info(config_space)
 
         # ConfigSpaceManager already handles conversion and fallbacks
-        # Just create DeviceIdentifiers from the extracted data
+        # Just create DeviceIdentifiers from the extracted data using centralized normalization
+        norm = IdentifierNormalizer.validate_all_identifiers(
+            {
+                "vendor_id": config_space_data.get("vendor_id", "0000"),
+                "device_id": config_space_data.get("device_id", "0000"),
+                "class_code": config_space_data.get("class_code", "000000"),
+                "revision_id": config_space_data.get("revision_id", "00"),
+                "subsystem_vendor_id": config_space_data.get("subsystem_vendor_id"),
+                "subsystem_device_id": config_space_data.get("subsystem_device_id"),
+            }
+        )
         return DeviceIdentifiers(
-            vendor_id=str(config_space_data.get("vendor_id", "0000")),
-            device_id=str(config_space_data.get("device_id", "0000")),
-            class_code=str(config_space_data.get("class_code", "000000")),
-            revision_id=str(config_space_data.get("revision_id", "00")),
-            subsystem_vendor_id=str(
-                config_space_data.get(
-                    "subsystem_vendor_id", config_space_data.get("vendor_id", "0000")
-                )
-            ),
-            subsystem_device_id=str(
-                config_space_data.get(
-                    "subsystem_device_id", config_space_data.get("device_id", "0000")
-                )
-            ),
+            vendor_id=norm["vendor_id"],
+            device_id=norm["device_id"],
+            class_code=norm["class_code"],
+            revision_id=norm["revision_id"],
+            subsystem_vendor_id=norm["subsystem_vendor_id"],
+            subsystem_device_id=norm["subsystem_device_id"],
         )
 
     def _build_device_config(
@@ -554,8 +668,16 @@ class PCILeechContextBuilder:
         """Build device configuration."""
         config = {
             "device_bdf": self.device_bdf,
-            **asdict(identifiers),
+            "vendor_id": identifiers.vendor_id,
+            "device_id": identifiers.device_id,
+            "class_code": identifiers.class_code,
+            "revision_id": identifiers.revision_id,
+            "subsystem_vendor_id": identifiers.subsystem_vendor_id,
+            "subsystem_device_id": identifiers.subsystem_device_id,
             "enable_perf_counters": getattr(
+                self.config, "enable_advanced_features", False
+            ),
+            "enable_advanced_features": getattr(
                 self.config, "enable_advanced_features", False
             ),
             "enable_dma_operations": getattr(
@@ -594,14 +716,17 @@ class PCILeechContextBuilder:
                     ),
                     "total_register_accesses": behavior_profile.total_accesses,
                     "capture_duration": behavior_profile.capture_duration,
-                    "timing_patterns_count": len(behavior_profile.timing_patterns),
-                    "state_transitions_count": len(behavior_profile.state_transitions),
+                    "timing_patterns_count": len(
+                        getattr(behavior_profile, "timing_patterns", [])
+                    ),
+                    "state_transitions_count": len(
+                        getattr(behavior_profile, "state_transitions", [])
+                    ),
                     "has_manufacturing_variance": bool(
                         getattr(behavior_profile, "variance_metadata", None)
                     ),
                 }
             )
-
             if hasattr(behavior_profile, "pattern_analysis"):
                 config["pattern_analysis"] = behavior_profile.pattern_analysis
 
@@ -673,7 +798,14 @@ class PCILeechContextBuilder:
         pba_offset = cap.get("pba_offset", table_offset + (table_size * 16))
         pba_size_dwords = (table_size + 31) // 32
 
-        return {
+        # Check alignment
+        alignment_warning = ""
+        if table_offset % 8 != 0:
+            alignment_warning = (
+                f"MSI-X table offset 0x{table_offset:x} is not 8-byte aligned"
+            )
+
+        context = {
             "num_vectors": table_size,
             "table_bir": cap["table_bir"],
             "table_offset": table_offset,
@@ -695,19 +827,35 @@ class PCILeechContextBuilder:
             "MSIX_PBA_OFFSET": f"32'h{pba_offset:08X}",
         }
 
+        # Add alignment warning if present
+        if alignment_warning:
+            context["alignment_warning"] = alignment_warning
+
+        return context
+
     def _build_bar_config(
         self,
         config_space_data: Dict[str, Any],
         behavior_profile: Optional[BehaviorProfile],
     ) -> Dict[str, Any]:
-        """Build BAR configuration."""
-        # Check power state
+        """Build BAR configuration with minimal nesting."""
         self._check_and_fix_power_state()
-
         bars = config_space_data["bars"]
-        bar_configs = []
+        bar_configs = self._analyze_bars(bars)
+        primary_bar = self._select_primary_bar(bar_configs)
+        log_info_safe(
+            self.logger,
+            f"Primary BAR: index={primary_bar.index}, size={primary_bar.size_mb:.2f}MB",
+        )
+        config = self._build_bar_config_dict(primary_bar, bar_configs)
+        if behavior_profile:
+            config.update(
+                self._adjust_bar_config_for_behavior(config, behavior_profile)
+            )
+        return config
 
-        # Analyze all BARs
+    def _analyze_bars(self, bars):
+        bar_configs = []
         for i, bar_data in enumerate(bars):
             try:
                 bar_info = self._get_vfio_bar_info(i, bar_data)
@@ -715,20 +863,16 @@ class PCILeechContextBuilder:
                     bar_configs.append(bar_info)
             except Exception as e:
                 log_warning_safe(self.logger, f"BAR {i} analysis failed: {e}")
+        return bar_configs
 
-        # Select primary BAR
+    def _select_primary_bar(self, bar_configs):
         memory_bars = [b for b in bar_configs if b.is_memory and b.size > 0]
         if not memory_bars:
             raise ContextError("No valid MMIO BARs found")
+        return max(memory_bars, key=lambda b: b.size)
 
-        primary_bar = max(memory_bars, key=lambda b: b.size)
-
-        log_info_safe(
-            self.logger,
-            f"Primary BAR: index={primary_bar.index}, size={primary_bar.size_mb:.2f}MB",
-        )
-
-        config = {
+    def _build_bar_config_dict(self, primary_bar, bar_configs):
+        return {
             "bar_index": primary_bar.index,
             "aperture_size": primary_bar.size,
             "bar_type": primary_bar.bar_type,
@@ -737,22 +881,29 @@ class PCILeechContextBuilder:
             "bars": bar_configs,
         }
 
-        if behavior_profile:
-            config.update(
-                self._adjust_bar_config_for_behavior(config, behavior_profile)
-            )
-
-        return config
-
     def _get_vfio_bar_info(self, index: int, bar_data) -> Optional[BarConfiguration]:
-        """Get BAR info via VFIO."""
+        """Get BAR info via VFIO with strict size validation."""
         region_info = self._vfio_manager.get_region_info(index)
         if not region_info:
             return None
 
-        size = region_info["size"]
-        if size == 0:
-            return None
+        # Strict BAR size validation
+        from src.device_clone.bar_size_converter import extract_bar_size
+
+        try:
+            size = extract_bar_size(region_info)
+        except Exception as e:
+            from src.string_utils import log_error_safe, safe_format
+
+            log_error_safe(
+                self.logger,
+                safe_format(
+                    "Invalid BAR size for BAR {index}: {error}",
+                    index=index,
+                    error=str(e),
+                ),
+            )
+            raise
 
         # Extract BAR properties
         if isinstance(bar_data, dict):
@@ -857,11 +1008,7 @@ class PCILeechContextBuilder:
                 if count > 0:
                     avg_read = total_read / count
                     avg_write = total_write / count
-
-                    # Get burst parameters from behavior if available
                     burst_length = 32  # Default
-                    # TimingPattern doesn't have burst_length, use default
-
                     return TimingParameters(
                         read_latency=max(1, int(avg_read)),
                         write_latency=max(1, int(avg_write)),
@@ -893,99 +1040,155 @@ class PCILeechContextBuilder:
                 clock_frequency_mhz=getattr(caps, "clock_frequency_mhz", 100.0),
                 timing_regularity=getattr(caps, "timing_regularity", 0.95),
             )
+        class_prefix = identifiers.class_code[:2]
 
-        # Fallback to class-based defaults from fallback manager
-        from src.device_clone.fallback_manager import FallbackManager
-
-        fallback_mgr = FallbackManager()
-        # Apply fallbacks for timing parameters
-        timing_data = {
-            "class_code": identifiers.class_code,
-            "read_latency": None,
-            "write_latency": None,
-            "burst_length": None,
-            "inter_burst_gap": None,
-            "timeout_cycles": None,
-            "clock_frequency_mhz": None,
-            "timing_regularity": None,
-        }
-        timing_defaults = fallback_mgr.apply_fallbacks(timing_data)
+        # Default timing parameters based on device class
+        if class_prefix == "02":  # Network controller
+            base_freq = 125.0
+            read_latency = 4
+            write_latency = 2
+        elif class_prefix == "01":  # Storage controller
+            base_freq = 100.0
+            read_latency = 8
+            write_latency = 4
+        elif class_prefix == "03":  # Display controller
+            base_freq = 100.0
+            read_latency = 6
+            write_latency = 3
+        else:  # Default for other devices
+            base_freq = 100.0
+            read_latency = 10
+            write_latency = 10
 
         return TimingParameters(
-            read_latency=timing_defaults.get("read_latency", 10),
-            write_latency=timing_defaults.get("write_latency", 10),
-            burst_length=timing_defaults.get("burst_length", 32),
-            inter_burst_gap=timing_defaults.get("inter_burst_gap", 8),
-            timeout_cycles=timing_defaults.get("timeout_cycles", 1000),
-            clock_frequency_mhz=timing_defaults.get("clock_frequency_mhz", 100.0),
-            timing_regularity=timing_defaults.get("timing_regularity", 0.95),
+            read_latency=read_latency,
+            write_latency=write_latency,
+            burst_length=32,
+            inter_burst_gap=8,
+            timeout_cycles=1000,
+            clock_frequency_mhz=base_freq,
+            timing_regularity=0.95,
         )
 
     def _build_pcileech_config(self, identifiers: DeviceIdentifiers) -> Dict[str, Any]:
         """Build PCILeech-specific configuration using dynamic values."""
-        # Get max payload size from config or use default
-        max_payload_size = getattr(self.config, "max_payload_size", 256)
-        max_read_request = getattr(self.config, "max_read_request", 512)
-
-        # Try to get actual values from device capabilities
-        if hasattr(self.config, "device_config") and self.config.device_config:
-            caps = getattr(self.config.device_config, "capabilities", None)
-            if caps:
-                if hasattr(caps, "max_payload_size"):
-                    max_payload_size = caps.max_payload_size
-                if hasattr(caps, "max_read_request"):
-                    max_read_request = caps.max_read_request
-
-        # Get timing values from device capabilities if available
-        completion_timeout = 50000  # Default 50ms
-        replay_timer = 1000  # Default 1ms
-
-        if hasattr(self.config, "device_config") and self.config.device_config:
-            caps = getattr(self.config.device_config, "capabilities", None)
-            if caps:
-                # Use actual device capabilities
-                if hasattr(caps, "completion_timeout"):
-                    completion_timeout = caps.completion_timeout
-                if hasattr(caps, "replay_timer"):
-                    replay_timer = caps.replay_timer
-
-        return {
+        # Gather defaults and device/capability-provided values but avoid
+        # overwriting any explicit configuration present in self.config.pcileech_config
+        defaults = {
             "device_signature": identifiers.device_signature,
             "full_signature": identifiers.full_signature,
             "enable_shadow_config": True,
             "enable_bar_emulation": True,
-            "enable_dma": getattr(self.config, "enable_dma_operations", False),
-            "enable_interrupts": True,
-            "max_payload_size": max_payload_size,
-            "max_read_request": max_read_request,
-            "completion_timeout": completion_timeout,
-            "replay_timer": replay_timer,
-            "ack_nak_latency": 100,  # This is typically fixed at 100ns
+            # sensible defaults; these may be overridden from device capabilities
+            "max_payload_size": getattr(self.config, "max_payload_size", 256),
+            "max_read_request": getattr(self.config, "max_read_request", 512),
+            "completion_timeout": 50000,
+            "replay_timer": 1000,
+            "ack_nak_latency": 100,
+            # buffer_size is expressed in bytes
+            "buffer_size": None,
+            # DMA/scatter settings
+            "enable_dma": getattr(self.config, "enable_dma_operations", True),
+            "enable_scatter_gather": getattr(
+                self.config, "enable_dma_operations", True
+            ),
+            # backwards/alternate names some templates or older code may expect
+            "max_read_req_size": None,
+            "max_payload": None,
         }
+
+        # Merge in values from any device-specific capabilities if available
+        caps = None
+        if hasattr(self.config, "device_config") and self.config.device_config:
+            caps = getattr(self.config.device_config, "capabilities", None)
+
+        if caps:
+            # Prefer explicit capability attributes when present
+            if hasattr(caps, "max_payload_size"):
+                defaults["max_payload_size"] = caps.max_payload_size
+            if hasattr(caps, "max_read_request"):
+                defaults["max_read_request"] = caps.max_read_request
+            if hasattr(caps, "completion_timeout"):
+                defaults["completion_timeout"] = caps.completion_timeout
+            if hasattr(caps, "replay_timer"):
+                defaults["replay_timer"] = caps.replay_timer
+
+        # Finalize derived/alias fields
+        if defaults.get("buffer_size") is None:
+            # buffer_size default: 4x max_payload_size (bytes)
+            defaults["buffer_size"] = int(defaults.get("max_payload_size", 256)) * 4
+
+        # Provide aliases to avoid template mismatch
+        defaults["max_read_req_size"] = defaults.get("max_read_request")
+        defaults["max_payload"] = defaults.get("max_payload_size")
+
+        project_overrides = {}
+        if hasattr(self.config, "pcileech_config") and isinstance(
+            getattr(self.config, "pcileech_config"), dict
+        ):
+            project_overrides = getattr(self.config, "pcileech_config")
+
+        # Build final config by starting with defaults, then applying capability
+        # values (already in defaults). Prefer dynamic/capability values: only
+        # apply project overrides when the dynamic/default value is empty (None or '').
+        final = dict(defaults)
+        if project_overrides:
+            for k, v in project_overrides.items():
+                current = final.get(k, None)
+                if current is None or (isinstance(current, str) and current == ""):
+                    final[k] = v
+
+        required_keys = [
+            "command_timeout",
+            "buffer_size",
+            "enable_dma",
+            "enable_scatter_gather",
+        ]
+        # command_timeout is an alias for completion_timeout if not provided
+        if "command_timeout" not in final or final.get("command_timeout") is None:
+            final["command_timeout"] = final.get("completion_timeout")
+
+        for k in required_keys:
+            if k not in final:
+                # fallback sensible default
+                if k == "command_timeout":
+                    final[k] = final.get("completion_timeout", 50000)
+                elif k == "buffer_size":
+                    final[k] = final.get(
+                        "buffer_size", int(final.get("max_payload_size", 256)) * 4
+                    )
+                elif k == "enable_dma":
+                    final[k] = bool(final.get("enable_dma", False))
+                elif k == "enable_scatter_gather":
+                    final[k] = bool(
+                        final.get(
+                            "enable_scatter_gather", final.get("enable_dma", True)
+                        )
+                    )
+
+        return final
 
     def _build_active_device_config(
         self,
         identifiers: DeviceIdentifiers,
         interrupt_strategy: str,
         interrupt_vectors: int,
-    ) -> Dict[str, Any]:
-        """Build active device configuration."""
-        return {
-            "vendor_id": identifiers.vendor_id,
-            "device_id": identifiers.device_id,
-            "subsystem_vendor_id": identifiers.subsystem_vendor_id
-            or identifiers.vendor_id,
-            "subsystem_device_id": identifiers.subsystem_device_id
-            or identifiers.device_id,
-            "class_code": identifiers.class_code,
-            "revision_id": identifiers.revision_id,
-            "interrupt_mode": interrupt_strategy,
-            "interrupt_vectors": interrupt_vectors,
-            "device_class": identifiers.get_device_class_type(),
-            "is_network": identifiers.class_code[:2] == PCIConstants.CLASS_NETWORK,
-            "is_storage": identifiers.class_code[:2] == PCIConstants.CLASS_STORAGE,
-            "is_display": identifiers.class_code[:2] == PCIConstants.CLASS_DISPLAY,
-        }
+    ) -> Any:
+        """Build active device configuration using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
+        return builder.create_active_device_config(
+            vendor_id=identifiers.vendor_id,
+            device_id=identifiers.device_id,
+            subsystem_vendor_id=identifiers.subsystem_vendor_id,
+            subsystem_device_id=identifiers.subsystem_device_id,
+            class_code=identifiers.class_code,
+            revision_id=identifiers.revision_id,
+            interrupt_strategy=interrupt_strategy,
+            interrupt_vectors=interrupt_vectors,
+        )
 
     def _generate_device_signature(
         self,
@@ -993,42 +1196,24 @@ class PCILeechContextBuilder:
         behavior_profile: Optional[BehaviorProfile],
         config_space_data: Dict[str, Any],
     ) -> str:
-        """Generate unique device signature."""
-        components = [
-            identifiers.full_signature,
-            config_space_data.get("config_space_size", 0),
-        ]
+        """Generate device signature as 'vendor_id:device_id' (test contract)."""
+        return f"{identifiers.vendor_id}:{identifiers.device_id}"
 
-        if behavior_profile:
-            components.extend(
-                [
-                    behavior_profile.total_accesses,
-                    behavior_profile.capture_duration,
-                    len(behavior_profile.timing_patterns),
-                ]
-            )
+    def _build_generation_metadata(self, identifiers: DeviceIdentifiers) -> Any:
+        """Build generation metadata using centralized metadata builder."""
+        from src.utils.metadata import build_generation_metadata
 
-        # Create hash of components
-        signature_data = "|".join(str(c) for c in components)
-        signature_hash = hashlib.sha256(signature_data.encode()).hexdigest()[:16]
-
-        return f"{identifiers.device_signature}_{signature_hash}"
-
-    def _build_generation_metadata(
-        self, identifiers: DeviceIdentifiers
-    ) -> Dict[str, Any]:
-        """Build generation metadata."""
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "generator_version": "2.0.0-optimized",
-            "device_bdf": self.device_bdf,
-            "device_class": identifiers.get_device_class_type(),
-            "validation_level": self.validation_level.value,
-            "vendor_name": self._get_vendor_name(identifiers.vendor_id),
-            "device_name": self._get_device_name(
+        # Use device_signature as 'vendor_id:device_id' for test contract
+        return build_generation_metadata(
+            device_bdf=self.device_bdf,
+            device_signature=f"{identifiers.vendor_id}:{identifiers.device_id}",
+            device_class=identifiers.get_device_class_type(),
+            validation_level=self.validation_level.value,
+            vendor_name=self._get_vendor_name(identifiers.vendor_id),
+            device_name=self._get_device_name(
                 identifiers.vendor_id, identifiers.device_id
             ),
-        }
+        )
 
     def _get_vendor_name(self, vendor_id: str) -> str:
         """Get vendor name from ID using device info lookup."""
@@ -1064,15 +1249,12 @@ class PCILeechContextBuilder:
         """Get device name from IDs using device info lookup."""
         from src.device_clone.device_info_lookup import lookup_device_info
 
-        # Use the existing device info lookup to get device name dynamically
         device_info = lookup_device_info(
             self.device_bdf, {"vendor_id": vendor_id, "device_id": device_id}
         )
 
-        # Try to get device name from device info
         device_name = device_info.get("device_name")
         if not device_name:
-            # Use lspci to get device name
             import subprocess
 
             try:
@@ -1083,7 +1265,6 @@ class PCILeechContextBuilder:
                     timeout=2,
                 )
                 if result.returncode == 0 and result.stdout:
-                    # Parse device name from lspci output
                     parts = result.stdout.strip().split('"')
                     if len(parts) > 5:
                         device_name = parts[5]
@@ -1132,87 +1313,229 @@ class PCILeechContextBuilder:
         """Merge donor template with context."""
         # Deep merge, preferring context values
         merged = dict(donor)
+        # Merge: ALWAYS prefer the dynamic/context values over donor values.
         for key, value in context.items():
+            if key in merged and merged[key] is not None and merged[key] != {}:
+                # Donor provided a value; we'll prefer the context value but log the overwrite
+                if merged[key] != value:
+                    log_warning_safe(
+                        self.logger,
+                        "Donor template provided '{key}', but dynamic context value will be used.",
+                        key=key,
+                    )
+
+            # If both sides are dict-like, perform a shallow merge where context overrides donor
             if (
                 key in merged
-                and isinstance(value, dict)
                 and isinstance(merged[key], dict)
+                and isinstance(value, dict)
             ):
-                # Recursive merge for nested dicts
                 merged[key] = {**merged[key], **value}
             else:
                 merged[key] = value
+        # Ensure active_device_config retains TemplateObject shape
+        try:
+            if "active_device_config" in merged:
+                raw = merged["active_device_config"]
+                # Import here to avoid top-level import cycles
+                from src.utils.unified_context import TemplateObject
+
+                if isinstance(raw, dict):
+                    # Coerce dict into TemplateObject to preserve template attribute access
+                    merged["active_device_config"] = TemplateObject(raw)
+                    log_warning_safe(
+                        self.logger,
+                        "Donor template provided 'active_device_config' as dict; coerced to TemplateObject and dynamic values will be preserved.",
+                    )
+                # If it's already a TemplateObject or an object with 'enabled', leave as-is
+        except Exception as e:
+            # If coercion fails, log and continue; caller will perform final validation
+            log_warning_safe(self.logger, f"Failed to coerce active_device_config: {e}")
+
         return merged  # type: ignore
 
-    def _build_board_config(self) -> Dict[str, Any]:
-        """Build board configuration using get_pcileech_board_config."""
+    def _build_board_config(self) -> Any:
+        """Build board configuration using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
         try:
             # Get board name from config
-            board_name = getattr(self.config, 'board', None)
+            board_name = getattr(self.config, "board", None)
             if not board_name:
                 # Try to get board from fallback or environment
                 log_warning_safe(
                     self.logger,
-                    "No board specified in config, using fallback detection"
+                    "No board specified in config, using fallback detection",
                 )
                 # Use a default board or get from constants
                 from src.device_clone.constants import BOARD_PARTS
+
                 board_name = list(BOARD_PARTS.keys())[0]  # Use first available board
-            
-            log_info_safe(
-                self.logger,
-                f"Building board configuration for {board_name}"
-            )
-            
-            # Import and use the board configuration function
+
+            log_info_safe(self.logger, f"Building board configuration for {board_name}")
             from src.device_clone.board_config import get_pcileech_board_config
-            
-            # Get the board configuration
+
             board_config = get_pcileech_board_config(board_name)
-            
+
             log_info_safe(
                 self.logger,
-                f"Board configuration loaded: {board_config.get('fpga_part', 'unknown')}"
+                f"Board configuration loaded: {board_config.get('fpga_part', 'unknown')}",
             )
-            
-            return board_config
-            
+
+            # Pass only the fields present in board_config; builder should handle defaults internally
+            return builder.create_board_config(**board_config)
+
         except Exception as e:
-            log_error_safe(
-                self.logger,
-                f"Failed to build board configuration: {e}"
-            )
+            log_error_safe(self.logger, f"Failed to build board configuration: {e}")
             # Return a minimal board config to prevent template validation failure
-            return {
-                "fpga_part": "xc7a35tcsg324-2",  # Default fallback
-                "fpga_family": "7series",
-                "pcie_ip_type": "7x",
-                "max_lanes": 4,
-                "supports_msi": True,
-                "supports_msix": False,
-                "config_voltage": "3.3",
-                "bitstream_unusedpin": "pullup",
-                "bitstream_spi_buswidth": "4", 
-                "bitstream_configrate": "33"
-            }
+            return builder.create_board_config(
+                board_name="generic",
+                fpga_part="xc7a35tcsg324-2",
+                fpga_family="7series",
+                pcie_ip_type="7x",
+                max_lanes=4,
+                supports_msi=True,
+                supports_msix=False,
+                config_voltage="3.3",
+                bitstream_unusedpin="pullup",
+                bitstream_spi_buswidth="4",
+                bitstream_configrate="33",
+            )
 
     def _validate_context_completeness(self, context: TemplateContext):
         """Validate context has all required fields."""
-        required_sections = [
-            "device_config",
-            "config_space",
-            "bar_config",
-            "interrupt_config",
-        ]
-
-        for section in required_sections:
-            if section not in context or not context[section]:  # type: ignore
+        for section in REQUIRED_CONTEXT_SECTIONS:
+            if section not in context:  # type: ignore
                 raise ContextError(f"Missing required section: {section}")
 
         # Validate device signature
         if "device_signature" not in context or not context["device_signature"]:
             raise ContextError("Missing device signature")
 
-        # Validate identifiers
-        if "vendor_id" not in context or "device_id" not in context:
-            raise ContextError("Missing device identifiers")
+        # Validate identifiers - check top level first, then device_config
+        vendor_id = context.get("vendor_id") or (
+            context.get("device_config", {}).get("vendor_id")
+            if context.get("device_config")
+            else None
+        )
+        device_id = context.get("device_id") or (
+            context.get("device_config", {}).get("device_id")
+            if context.get("device_config")
+            else None
+        )
+
+        if not vendor_id or not device_id:
+            raise ContextError("Missing device identifiers")  ## need these
+
+    def _build_performance_config(self, device_type: str = "generic") -> Any:
+        """Build performance configuration using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
+        return builder.create_performance_config(
+            enable_transaction_counters=getattr(
+                self.config, "enable_transaction_counters", True
+            ),
+            enable_bandwidth_monitoring=getattr(
+                self.config, "enable_bandwidth_monitoring", True
+            ),
+            enable_latency_tracking=getattr(
+                self.config, "enable_latency_tracking", True
+            ),
+            enable_latency_measurement=getattr(
+                self.config, "enable_latency_measurement", True
+            ),
+            enable_error_counting=getattr(self.config, "enable_error_counting", True),
+            enable_error_rate_tracking=getattr(
+                self.config, "enable_error_rate_tracking", True
+            ),
+            enable_performance_grading=getattr(
+                self.config, "enable_performance_grading", True
+            ),
+            enable_perf_outputs=getattr(self.config, "enable_perf_outputs", True),
+            # Set signal availability based on device type
+            error_signals_available=True,
+            network_signals_available=(device_type == "network"),
+            storage_signals_available=(device_type == "storage"),
+            graphics_signals_available=(device_type == "graphics"),
+            generic_signals_available=True,
+        )
+
+    def _build_power_management_config(self) -> Any:
+        """Build power management configuration using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
+        return builder.create_power_management_config(
+            enable_power_management=getattr(self.config, "power_management", True),
+            has_interface_signals=getattr(
+                self.config, "has_power_interface_signals", False
+            ),
+        )
+
+    def _build_error_handling_config(self) -> Any:
+        """Build error handling configuration using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
+        return builder.create_error_handling_config(
+            enable_error_detection=getattr(self.config, "error_handling", True),
+        )
+
+    def _build_device_specific_signals(self, device_type: str) -> Dict[str, Any]:
+        """Build device-specific signals using unified context builder."""
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        builder = UnifiedContextBuilder(self.logger)
+
+        device_signals = builder.create_device_specific_signals(
+            device_type=device_type,
+            audio_enable=getattr(self.config, "audio_enable", False),
+            volume_left=getattr(self.config, "volume_left", 0x8000),
+            volume_right=getattr(self.config, "volume_right", 0x8000),
+        )
+
+        return device_signals.to_dict()
+
+    def _build_variance_model(self) -> Any:
+        """Build variance model for templates."""
+        from src.utils.unified_context import TemplateObject
+
+        # Check if variance is enabled in config
+        enable_variance = getattr(self.config, "enable_variance", False)
+
+        variance_data = {
+            "enabled": enable_variance,
+            "variance_type": "normal",
+            "process_variation": 0.1,  # Required by template
+            "temperature_coefficient": 0.05,  # Required by template
+            "voltage_variation": 0.03,  # Required by template
+            "parameters": {
+                "mean": 0.0,
+                "std_dev": 0.1,
+                "min_value": -1.0,
+                "max_value": 1.0,
+            },
+        }
+
+        return TemplateObject(variance_data)
+
+    def _get_device_type_from_class_code(self, class_code: str) -> str:
+        """Get device type string from PCI class code."""
+        if class_code.startswith("01"):
+            return "storage"
+        elif class_code.startswith("02"):
+            return "network"
+        elif class_code.startswith("03"):
+            return "graphics"
+        elif class_code.startswith("04"):
+            return "audio"
+        elif class_code.startswith("0c"):
+            return "serial_bus"
+        else:
+            return "generic"

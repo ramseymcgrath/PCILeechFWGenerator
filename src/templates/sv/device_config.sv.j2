@@ -1,14 +1,17 @@
 {#- Device Configuration Module Template -#}
+{% from "_helpers.j2" import safe_attr, get_vendor_id, get_device_id, get_subsystem_vendor_id, get_subsystem_device_id %}
 {{ header | safe }}
 
 module device_config #(
-    parameter VENDOR_ID = {{ vendor_id | sv_hex(16) }},
-    parameter DEVICE_ID = {{ device_id | sv_hex(16) }},
-    parameter CLASS_CODE = {{ class_code | sv_hex(24) }},
-    parameter SUBSYSTEM_VENDOR_ID = {{ vendor_id | sv_hex(16) }},
-    parameter SUBSYSTEM_DEVICE_ID = {{ device_id | sv_hex(16) }},
+    {# Use centralized helper macros for consistent ID handling #}
+    parameter VENDOR_ID = {{ get_vendor_id(device_config, device, config_space, vendor_id_int) | sv_hex(16) }},
+    parameter DEVICE_ID = {{ get_device_id(device_config, device, config_space, device_id_int) | sv_hex(16) }},
+    parameter CLASS_CODE = {{ (device_config.class_code | default('000000')) | sv_hex(24) }},
+    parameter SUBSYSTEM_VENDOR_ID = {{ get_subsystem_vendor_id(device_config, device, vendor_id_int) | sv_hex(16) }},
+    parameter SUBSYSTEM_DEVICE_ID = {{ get_subsystem_device_id(device_config, device, device_id_int) | sv_hex(16) }},
 {%- for i in range(6) %}
-    parameter BAR{{ i }}_APERTURE = {{ bars[i] | sv_hex(32) }}{{ "," if not loop.last else "" }}
+    {# guard bars indexing and coerce numeric default for apertures #}
+    parameter BAR{{ i }}_APERTURE = {{ (safe_attr(bars[i], 'size', 0) if (bars is defined and bars|length > i and bars[i] is not none) else 0) | sv_hex(32) }}{{ "," if not loop.last else "" }}
 {%- endfor %}
 ) (
     // Configuration space interface

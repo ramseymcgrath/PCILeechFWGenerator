@@ -8,11 +8,16 @@ Context variables expected:
 - device: Device information (vendor_id, device_id, revision_id)
 - board: Board information (name, fpga_part)
 #}
+{% from "_helpers.j2" import safe_board_fpga_part, safe_board_name, get_vendor_id, get_device_id %}
 {{ header }}
 
-puts "Creating PCIe UltraScale IP core for device {{ device.vendor_id }}:{{ device.device_id }}..."
-puts "FPGA Part: {{ board.fpga_part }}"
-puts "Board: {{ board.name }}"
+puts "Creating PCIe UltraScale IP core for device {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }}..."
+puts "FPGA Part: {{ safe_board_fpga_part(board) }}"
+puts "Board: {{ safe_board_name(board) }}"
+puts "Configuring PCIe IP for Ultrascale parts"
+puts "Device: {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }}"
+puts "FPGA Part: {{ safe_board_fpga_part(board) }}"
+puts "Board: {{ safe_board_name(board) }}"
 
 # Update IP catalog to ensure all IP cores are available
 puts "Updating IP catalog..."
@@ -75,9 +80,9 @@ set_property -dict [list \
     CONFIG.PL_LINK_CAP_MAX_LINK_SPEED {2.5_GT/s} \
     CONFIG.PL_LINK_CAP_MAX_LINK_WIDTH {X1} \
     CONFIG.AXISTEN_IF_EXT_512_RQ_STRADDLE {false} \
-    CONFIG.PF0_DEVICE_ID {0x{{ device.device_id }}} \
-    CONFIG.PF0_VENDOR_ID {0x{{ device.vendor_id }}} \
-    CONFIG.PF0_SUBSYSTEM_VENDOR_ID {0x{{ device.vendor_id }}} \
+    CONFIG.PF0_DEVICE_ID {0x{{ get_device_id(device_config, device, config_space, device_id_int) }}} \
+    CONFIG.PF0_VENDOR_ID {0x{{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}} \
+    CONFIG.PF0_SUBSYSTEM_VENDOR_ID {0x{{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}} \
     CONFIG.PF0_SUBSYSTEM_ID {0x0000} \
     CONFIG.PF0_REVISION_ID {0x{{ device.revision_id }}} \
     CONFIG.PF0_CLASS_CODE {0x040300} \

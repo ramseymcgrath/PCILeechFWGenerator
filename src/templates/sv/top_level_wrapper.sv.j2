@@ -1,5 +1,6 @@
 {#- PCILeech Top-Level Wrapper Template -#}
 {{ header | safe }}
+{% from "_helpers.j2" import safe_int, get_vendor_id, get_device_id %}
 
 module pcileech_top (
     // Clock and reset
@@ -133,8 +134,8 @@ module pcileech_top (
         .MSIX_TABLE_OFFSET({{ active_device_config.msix_table_offset }}),
         .MSIX_PBA_BIR({{ active_device_config.msix_pba_bir }}),
         .MSIX_PBA_OFFSET({{ active_device_config.msix_pba_offset }}),
-        .DEVICE_ID({{ active_device_config.device_id }}),
-        .VENDOR_ID({{ active_device_config.vendor_id }}),
+        .DEVICE_ID(16'h{{ get_device_id(active_device_config, device, config_space, device_id_int) }}),
+        .VENDOR_ID(16'h{{ get_vendor_id(active_device_config, device, config_space, vendor_id_int) }}),
         .COMPLETER_ID({{ active_device_config.completer_id }}),
         .NUM_INTERRUPT_SOURCES({{ active_device_config.num_sources }}),
         .DEFAULT_PRIORITY({{ active_device_config.default_priority }})
@@ -262,7 +263,10 @@ module pcileech_top (
             endcase
 
             // Update debug status with device ID and current state
-            debug_status <= {16'h{{ vendor_id[2:] }}, 8'h{{ device_id[2:4] }}, 5'h0, tlp_state};
+            {% set _vendor_str = get_vendor_id(active_device_config, device, config_space, vendor_id_int) %}
+            {% set _device_str = get_device_id(active_device_config, device, config_space, device_id_int) %}
+            {# Since the helpers now return hex strings, just use them directly #}
+            debug_status <= {16'h{{ _vendor_str }}, 8'h{{ _device_str[:2] }}, 5'h0, tlp_state};
         end
     end
 

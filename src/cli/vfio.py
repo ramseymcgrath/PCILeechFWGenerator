@@ -11,10 +11,6 @@ from .vfio_handler import (VFIOBinder, VFIOBindError, render_pretty,
                            run_diagnostics)
 from .vfio_helpers import get_device_fd
 
-# Legacy compatibility functions - these are kept for backward compatibility
-# but they now use the correct implementation internally
-
-
 try:
     from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
                                 log_warning_safe)

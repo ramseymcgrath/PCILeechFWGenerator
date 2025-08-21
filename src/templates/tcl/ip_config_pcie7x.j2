@@ -11,9 +11,11 @@ Context variables expected:
 #}
 {{ header }}
 
-puts "Creating PCIe IP core for device {{ device.vendor_id }}:{{ device.device_id }}..."
-puts "FPGA Part: {{ board.fpga_part }}"
-puts "Board: {{ board.name }}"
+{% from "_helpers.j2" import safe_fpga_part, safe_name, get_vendor_id, get_device_id %}
+
+puts "Creating PCIe IP core for device {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }}..."
+puts "FPGA Part: {{ safe_fpga_part(board) }}"
+puts "Board: {{ safe_name(board) }}"
 
 # Update IP catalog to ensure all IP cores are available
 puts "Updating IP catalog..."
@@ -83,9 +85,9 @@ set ip [get_ips pcie_7x_bridge]
 # BAR-0 configuration: use plain integer for size, not string with units
 safe_set $ip CONFIG.Bar0_Scale {Kilobytes}
 safe_set $ip CONFIG.Bar0_Size {128}
-safe_set $ip CONFIG.Device_ID {0x{{ device.device_id }}}
-safe_set $ip CONFIG.Vendor_ID {0x{{ device.vendor_id }}}
-safe_set $ip CONFIG.Subsystem_Vendor_ID {0x{{ device.vendor_id }}}
+safe_set $ip CONFIG.Device_ID {0x{{ get_device_id(device_config, device, config_space, device_id_int) }}}
+safe_set $ip CONFIG.Vendor_ID {0x{{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}}
+safe_set $ip CONFIG.Subsystem_Vendor_ID {0x{{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}}
 safe_set $ip CONFIG.Subsystem_ID {0x0000}
 safe_set $ip CONFIG.Revision_ID {0x{{ device.revision_id }}}
 # Link speed must use exact enum values with underscores

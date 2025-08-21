@@ -1,7 +1,8 @@
 {#- Error Detection Logic Template -#}
     // Error Detection Logic
+{% from "_helpers.j2" import safe_attr %}
 
-{%- if config.enable_timeout_detection %}
+{%- if safe_attr(config, 'enable_timeout_detection', false) %}
     // Timeout detection
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
@@ -17,7 +18,7 @@
     end
 {%- endif %}
 
-{%- if config.enable_parity_check %}
+{%- if safe_attr(config, 'enable_parity_check', false) %}
     // Parity error detection
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
@@ -30,7 +31,7 @@
     end
 {%- endif %}
 
-{%- if config.enable_crc_check %}
+{%- if safe_attr(config, 'enable_crc_check', false) %}
     // CRC error detection
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
@@ -46,7 +47,7 @@
     end
 {%- endif %}
 
-{%- if config.enable_ecc %}
+{%- if safe_attr(config, 'enable_ecc', false) %}
     // ECC error detection (simplified)
     logic [6:0] ecc_syndrome;
     always_ff @(posedge clk or negedge reset_n) begin

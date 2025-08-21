@@ -6,11 +6,14 @@ This module provides a user-friendly interface for managing fallback values
 for template variables, with a focus on safety and documentation.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -19,10 +22,17 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.device_clone.fallback_manager import FallbackManager
+from typing import TYPE_CHECKING
+
+from src.device_clone.fallback_manager import get_global_fallback_manager
+from src.log_config import get_logger
+
+if TYPE_CHECKING:
+    from src.device_clone.fallback_manager import FallbackManager
+
 from src.string_utils import log_error_safe, log_info_safe, log_warning_safe
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Path to fallback configuration YAML file
 DEFAULT_FALLBACK_CONFIG = Path("configs/fallbacks.yaml")
@@ -50,20 +60,10 @@ class FallbackInterface:
         self.fallback_config = fallback_config or DEFAULT_FALLBACK_CONFIG
         self.export_path = export_path or DEFAULT_CONTEXT_EXPORT
         self.verbose = verbose
-        self.setup_logger()
 
-        # Initialize fallback manager with config path
-        self.fallback_manager = FallbackManager(
-            str(self.fallback_config) if self.fallback_config.exists() else None
-        )
-
-    def setup_logger(self):
-        """Set up logging."""
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter("%(levelname)s - %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO if self.verbose else logging.WARNING)
+        # Initialize fallback manager with config path (shared singleton)
+        cfg = str(self.fallback_config) if self.fallback_config.exists() else None
+        self.fallback_manager = get_global_fallback_manager(config_path=cfg)
 
     def load_fallbacks(self) -> bool:
         """
@@ -76,13 +76,23 @@ class FallbackInterface:
         its own configuration in the constructor if a config path is provided.
         """
         if not self.fallback_config.exists():
-            logger.warning(f"Fallback configuration not found: {self.fallback_config}")
+            log_warning_safe(
+                logger,
+                "Fallback configuration not found: {config_path}",
+                prefix="FALLBACK",
+                config_path=self.fallback_config,
+            )
             return False
 
         # Use the FallbackManager's built-in config loading functionality
         result = self.fallback_manager.load_from_config(str(self.fallback_config))
         if result:
-            logger.info(f"Loaded fallbacks from {self.fallback_config}")
+            log_info_safe(
+                logger,
+                "Loaded fallbacks from {config_path}",
+                prefix="FALLBACK",
+                config_path=self.fallback_config,
+            )
         return result
 
     def validate_context(self, template_context: Dict[str, Any]) -> bool:
@@ -95,16 +105,33 @@ class FallbackInterface:
         Returns:
             True if validation passed, False otherwise
         """
+        # Snapshot the incoming template_context before applying fallbacks so
+        # a user (especially on macOS where they may run the CLI) can share
+        # the exact pre-fallback keys and types for debugging.
+        try:
+            self._write_pre_fallback_snapshot(template_context)
+        except Exception:
+            # Don't fail validation because snapshot failed; just log.
+            logger.exception("Failed to write pre-fallback snapshot")
+
         # First apply fallbacks
         template_context = self.fallback_manager.apply_fallbacks(template_context)
 
         # Then validate critical variables
         if not self.fallback_manager.validate_critical_variables(template_context):
-            logger.error("Validation failed: Missing critical variables")
+            log_error_safe(
+                logger,
+                "Validation failed: Missing critical variables",
+                prefix="FALLBACK",
+            )
             self._export_missing_context(template_context)
             return False
 
-        logger.info("Template context validation passed")
+        log_info_safe(
+            logger,
+            "Template context validation passed",
+            prefix="FALLBACK",
+        )
         return True
 
     def validate_templates(self, template_dir: str, pattern: str = "*.j2") -> bool:
@@ -121,23 +148,32 @@ class FallbackInterface:
         Returns:
             True if validation passed, False otherwise
         """
-        logger.info(
-            f"Validating templates in {template_dir} for critical variable usage"
+        log_info_safe(
+            logger,
+            "Validating templates in {template_dir} for critical variable usage",
+            prefix="FALLBACK",
+            template_dir=template_dir,
         )
         result = self.fallback_manager.validate_templates_for_critical_vars(
             template_dir, pattern
         )
 
         if result:
-            logger.info(
-                "Template security validation passed: No critical variables used directly"
+            log_info_safe(
+                logger,
+                "Template security validation passed: No critical variables used directly",
+                prefix="FALLBACK",
             )
         else:
-            logger.error(
-                "Template security validation FAILED: Critical variables used directly"
+            log_error_safe(
+                logger,
+                "Template security validation FAILED: Critical variables used directly",
+                prefix="FALLBACK",
             )
-            logger.error(
-                "This is a security risk - hardware-only values must not be in templates"
+            log_error_safe(
+                logger,
+                "This is a security risk - hardware-only values must not be in templates",
+                prefix="FALLBACK",
             )
 
         return result
@@ -247,7 +283,12 @@ class FallbackInterface:
         with open(self.export_path, "w") as f:
             yaml.dump(export_data, f, default_flow_style=False, sort_keys=False)
 
-        logger.info(f"Exported missing context data to {self.export_path}")
+        log_info_safe(
+            logger,
+            "Exported missing context data to {export_path}",
+            prefix="FALLBACK",
+            export_path=self.export_path,
+        )
         # Also print a short user-facing message so CLI users immediately see the export
         try:
             print(f"Missing context exported: {self.export_path}")
@@ -279,6 +320,71 @@ class FallbackInterface:
 
         return descriptions.get(var_name, "No description available")
 
+    def _write_pre_fallback_snapshot(self, template_context: Dict[str, Any]) -> None:
+        """
+        Write a sanitized snapshot of the template_context to a JSON file before
+        fallbacks are applied. Sensitive/hardware-only variables (as defined by
+        the FallbackManager) are removed.
+
+        The file is written next to the configured export path so CLI users can
+        easily find and attach it to bug reports.
+        """
+
+        # Instead of writing a JSON file, log a sanitized snapshot so remote
+        # users (Linux) can paste logs. We remove sensitive/hardware-only
+        # fields and truncate long values to keep logs readable.
+        def _sanitize(ctx: Any, path: List[str]) -> Any:
+            if not isinstance(ctx, dict):
+                return ctx
+            out: Dict[str, Any] = {}
+            for k, v in ctx.items():
+                var_name = ".".join(path + [k]) if path else k
+                if self._is_sensitive_var(var_name):
+                    continue
+                if isinstance(v, dict):
+                    out[k] = _sanitize(v, path + [k])
+                else:
+                    # Keep values but truncate their string representation
+                    try:
+                        s = repr(v)
+                    except Exception:
+                        s = f"<{type(v).__name__}>"
+                    if len(s) > 200:
+                        s = s[:200] + "...<truncated>"
+                    out[k] = s
+            return out
+
+        def _shape(ctx: Any) -> Any:
+            if not isinstance(ctx, dict):
+                return type(ctx).__name__
+            return {k: _shape(v) for k, v in ctx.items()}
+
+        sanitized = _sanitize(template_context or {}, [])
+        shape = _shape(sanitized)
+
+        # Log shape and a truncated sanitized JSON for debugging.
+        try:
+            # Log the structure (keys/types)
+            log_info_safe(
+                logger,
+                "Pre-fallback snapshot (shape): {shape}",
+                prefix="FALLBACK",
+                shape=shape,
+            )
+
+            # Log sanitized content (truncated)
+            s = json.dumps(sanitized, indent=2, sort_keys=True)
+            if len(s) > 6000:
+                s = s[:6000] + "...<truncated>"
+            log_info_safe(
+                logger,
+                "Pre-fallback snapshot (sanitized): {snapshot}",
+                prefix="FALLBACK",
+                snapshot=s,
+            )
+        except Exception:
+            logger.exception("Failed to log pre-fallback snapshot")
+
     # local alias to the manager's helper (keeps previous API used in some places)
     def _is_sensitive_var(self, var_name: str) -> bool:
         return self.fallback_manager.is_sensitive_var(var_name)
@@ -294,7 +400,12 @@ class FallbackInterface:
             Template context dictionary or None if failed
         """
         if not context_file.exists():
-            logger.error(f"Context file not found: {context_file}")
+            log_error_safe(
+                logger,
+                "Context file not found: {context_file}",
+                prefix="FALLBACK",
+                context_file=context_file,
+            )
             return None
 
         try:
@@ -302,7 +413,11 @@ class FallbackInterface:
                 data = yaml.safe_load(f)
 
             if not data or "template_context" not in data:
-                logger.error("Invalid context file format")
+                log_error_safe(
+                    logger,
+                    "Invalid context file format",
+                    prefix="FALLBACK",
+                )
                 return None
 
             # Apply values from missing_critical_variables section
@@ -363,11 +478,21 @@ class FallbackInterface:
 
             _sanitize_inplace(context)
 
-            logger.info(f"Loaded context from {context_file}")
+            log_info_safe(
+                logger,
+                "Loaded context from {context_file}",
+                prefix="FALLBACK",
+                context_file=context_file,
+            )
             return context
 
         except Exception as e:
-            logger.error(f"Error loading context file: {e}")
+            log_error_safe(
+                logger,
+                "Error loading context file: {error}",
+                prefix="FALLBACK",
+                error=e,
+            )
             return None
 
 

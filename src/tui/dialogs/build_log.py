@@ -63,7 +63,7 @@ class BuildLogDialog(ModalScreen[bool]):
             ComposeResult: The composed UI elements.
         """
         with Container(id="build-log-dialog"):
-            yield Static("📋 Build Logs & History", id="dialog-title")
+            yield Static("Build Logs & History", id="dialog-title")
 
             # Current build log section
             with Container(id="current-build"):

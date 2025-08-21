@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional
 from src.device_clone.behavior_profiler import BehaviorProfiler
 from src.device_clone.manufacturing_variance import (
     DeviceClass, ManufacturingVarianceSimulator, VarianceModel)
-from src.string_utils import log_info_safe
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe, safe_format)
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +28,17 @@ class VarianceManager:
         self.variance_simulator = None
         self.behavior_profiler = None
 
-        # Use provided fallback manager or create a default one
+        # Use provided fallback manager or the shared/global one
         if fallback_manager is None:
             try:
-                from src.device_clone.fallback_manager import FallbackManager
+                from src.device_clone.fallback_manager import \
+                    get_global_fallback_manager
 
-                self.fallback_manager = FallbackManager(mode="none")
+                self.fallback_manager = get_global_fallback_manager(mode="none")
             except ImportError:
                 self.fallback_manager = None
         else:
             self.fallback_manager = fallback_manager
-
 
     def apply_manufacturing_variance(self, device_info: Dict[str, Any]) -> List[str]:
         """Apply manufacturing variance simulation."""
@@ -46,7 +47,7 @@ class VarianceManager:
         try:
             if not DeviceClass or not VarianceModel:
                 error_msg = "Manufacturing variance modules not available"
-                logger.warning(error_msg)
+                log_warning_safe(logger, safe_format("{msg}", msg=error_msg))
 
                 # Check with fallback manager if available
                 if (
@@ -57,7 +58,10 @@ class VarianceManager:
                         "Variance simulation enhances realism but isn't critical for functionality.",
                     )
                 ):
-                    logger.error("Manufacturing variance fallback denied by policy")
+                    log_error_safe(
+                        logger,
+                        safe_format("Manufacturing variance fallback denied by policy"),
+                    )
 
                 return variance_files
 
@@ -112,7 +116,7 @@ class VarianceManager:
 
         except Exception as e:
             error_msg = f"Error applying manufacturing variance: {e}"
-            logger.error(error_msg)
+            log_error_safe(logger, safe_format("{msg}", msg=error_msg))
 
             # Check with fallback manager if available
             if self.fallback_manager:
@@ -124,9 +128,7 @@ class VarianceManager:
 
         return variance_files
 
-
     def run_behavior_profiling(
-
         self, device_info: Dict[str, Any], duration: int = 30
     ) -> Optional[str]:
         """
@@ -148,7 +150,7 @@ class VarianceManager:
         """
         if not BehaviorProfiler:
             error_msg = "Behavior profiler not available"
-            logger.warning(error_msg)
+            log_warning_safe(logger, safe_format("{msg}", msg=error_msg))
 
             # Check with fallback manager if available
             if self.fallback_manager and not self.fallback_manager.confirm_fallback(
@@ -156,12 +158,20 @@ class VarianceManager:
                 error_msg,
                 "Behavior profiling enhances device emulation but isn't critical for functionality.",
             ):
-                logger.error("Behavior profiling fallback denied by policy")
+                log_error_safe(
+                    logger, safe_format("Behavior profiling fallback denied by policy")
+                )
 
             return None
 
         try:
-            logger.info(f"Starting behavior profiling for {duration} seconds")
+            log_info_safe(
+                logger,
+                safe_format(
+                    "Starting behavior profiling for {duration} seconds",
+                    duration=duration,
+                ),
+            )
             self.behavior_profiler = BehaviorProfiler(self.bdf)
 
             # Capture behavior profile
@@ -204,12 +214,17 @@ class VarianceManager:
             with open(profile_file, "w") as f:
                 json.dump(profile_dict, f, indent=2)
 
-            logger.info(f"Behavior profiling completed, saved to {profile_file}")
+            log_info_safe(
+                logger,
+                safe_format(
+                    "Behavior profiling completed, saved to {file}", file=profile_file
+                ),
+            )
             return str(profile_file)
 
         except Exception as e:
             error_msg = f"Error during behavior profiling: {e}"
-            logger.error(error_msg)
+            log_error_safe(logger, safe_format("{msg}", msg=error_msg))
 
             # Check with fallback manager if available
             if self.fallback_manager and not self.fallback_manager.confirm_fallback(
@@ -217,7 +232,9 @@ class VarianceManager:
                 str(e),
                 "Without behavior profiling, the generated firmware may not accurately reflect device timing patterns.",
             ):
-                logger.error("Behavior profiling fallback denied by policy")
+                log_error_safe(
+                    logger, safe_format("Behavior profiling fallback denied by policy")
+                )
 
             return None
 

@@ -18,7 +18,7 @@ module clock_gating #(
     output logic gated_clk
 );
 
-{% if config.enable_clock_gating -%}
+{% if (config.enable_clock_gating | default(false)) -%}
 // Clock Gating Logic
 logic clock_enable;
 logic clock_enable_latched;
@@ -46,15 +46,15 @@ end
 // Clock enable generation
 always_comb begin
     case (current_state)
-        {% for state in config.supported_states -%}
-        {% set state_value = state.value if state.value is defined else (state.get('value', state.get('name', 'D0')) if state is mapping else state) -%}
-        {% set state_name = state.name if state.name is defined else (state.get('name', state.get('value', 'D0')) if state is mapping else state) -%}
-        {% if state_value == "D0" -%}
-        {{ state_name }}: clock_enable = !idle_counter_expired || !power_save_mode;
-        {% else -%}
-        {{ state_name }}: clock_enable = 1'b0;
-        {% endif %}
-        {% endfor %}
+    {% for state in (config.supported_states | default(['D0'])) -%}
+    {% set state_value = (state.value if (state is mapping and state.value is defined) else (state.get('value', state.get('name', 'D0')) if state is mapping else state)) -%}
+    {% set state_name = (state.name if (state is mapping and state.name is defined) else (state.get('name', state.get('value', 'D0')) if state is mapping else state)) -%}
+    {% if state_value == "D0" -%}
+    {{ state_name }}: clock_enable = !idle_counter_expired || !power_save_mode;
+    {% else -%}
+    {{ state_name }}: clock_enable = 1'b0;
+    {% endif %}
+    {% endfor %}
         default: clock_enable = 1'b1;
     endcase
 end

@@ -101,7 +101,38 @@ class TestTemplateRendering:
 
     def test_main_module_with_string_values(self, renderer, base_context):
         """Test main_module template with string device_type and device_class."""
-        result = renderer.render_template("sv/main_module.sv.j2", base_context)
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context(
+            vendor_id="10EE",
+            device_id="1234",
+            device_type="network",
+            device_class="enterprise",
+        )
+
+        # Convert to dict for template rendering
+        context_dict = complete_context.to_dict()
+        context_dict["error_signals_available"] = False  # Add missing variable
+        context_dict["network_signals_available"] = False  # Add missing variable
+        # Add other missing performance counter variables
+        context_dict.update(
+            {
+                "enable_transaction_counters": False,
+                "enable_bandwidth_monitoring": False,
+                "enable_latency_measurement": False,
+                "enable_latency_tracking": False,
+                "enable_error_rate_tracking": False,
+                "storage_signals_available": False,
+                "graphics_signals_available": False,
+                "generic_signals_available": False,
+                "enable_performance_grading": False,
+                "enable_perf_outputs": False,
+            }
+        )
+
+        result = renderer.render_template("sv/main_module.sv.j2", context_dict)
 
         # Should include device type and class in module name
         assert "pcileech_advanced_network_enterprise" in result
@@ -112,18 +143,76 @@ class TestTemplateRendering:
         self, renderer, base_context
     ):
         """Test main_module template with optional performance_counters."""
-        # Security-first approach: must explicitly provide performance_counters
-        # even if it's just an empty dict - None values are not allowed
-        base_context["performance_counters"] = {"counter_width": 32}
-        result = renderer.render_template("sv/main_module.sv.j2", base_context)
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context(
+            vendor_id="10EE",
+            device_id="1234",
+            enable_transaction_counters=True,  # Enable performance counters
+        )
+
+        # Override performance counters specifically
+        context_dict = complete_context.to_dict()
+        context_dict["performance_counters"] = {"counter_width": 32}
+        context_dict["error_signals_available"] = False  # Add missing variable
+        context_dict["network_signals_available"] = False  # Add missing variable
+        # Add other missing performance counter variables
+        context_dict.update(
+            {
+                "enable_transaction_counters": False,
+                "enable_bandwidth_monitoring": False,
+                "enable_latency_measurement": False,
+                "enable_latency_tracking": False,
+                "enable_error_rate_tracking": False,
+                "storage_signals_available": False,
+                "graphics_signals_available": False,
+                "generic_signals_available": False,
+                "enable_performance_grading": False,
+                "enable_perf_outputs": False,
+            }
+        )
+
+        result = renderer.render_template("sv/main_module.sv.j2", context_dict)
 
         # Should use explicitly provided counter width
         assert "COUNTER_WIDTH = 32" in result
 
     def test_main_module_with_performance_counters(self, renderer, base_context):
         """Test main_module template with performance_counters defined."""
-        base_context["performance_counters"] = {"counter_width": 64}
-        result = renderer.render_template("sv/main_module.sv.j2", base_context)
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context(
+            vendor_id="10EE",
+            device_id="1234",
+            enable_transaction_counters=True,  # Enable performance counters
+        )
+
+        # Override performance counters specifically
+        context_dict = complete_context.to_dict()
+        context_dict["performance_counters"] = {"counter_width": 64}
+        context_dict["error_signals_available"] = False  # Add missing variable
+        context_dict["network_signals_available"] = False  # Add missing variable
+        # Add other missing performance counter variables
+        context_dict.update(
+            {
+                "enable_transaction_counters": False,
+                "enable_bandwidth_monitoring": False,
+                "enable_latency_measurement": False,
+                "enable_latency_tracking": False,
+                "enable_error_rate_tracking": False,
+                "storage_signals_available": False,
+                "graphics_signals_available": False,
+                "generic_signals_available": False,
+                "enable_performance_grading": False,
+                "enable_perf_outputs": False,
+            }
+        )
+
+        result = renderer.render_template("sv/main_module.sv.j2", context_dict)
 
         # Should use specified counter width
         assert "COUNTER_WIDTH = 64" in result
@@ -161,22 +250,31 @@ class TestTemplateRendering:
 
     def test_error_recovery_template_with_various_formats(self, renderer):
         """Test error_recovery template handles different error type formats."""
-        context = {
-            "header": "// Test header",
-            "config": {
-                "max_retry_count": 3,
-            },
-            "recoverable_errors": [
-                "ERROR_TIMEOUT",  # String
-                {"value": "ERROR_CRC", "name": "CRC Error"},  # Dict
-            ],
-            "fatal_errors": [
-                "ERROR_FATAL",
-                {"value": "ERROR_SYSTEM", "name": "System Error"},
-            ],
-            "error_types": [],
-            "error_thresholds": {},  # Add empty error_thresholds
-        }
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context()
+
+        # Convert to dict and add specific test data
+        context = complete_context.to_dict()
+        context.update(
+            {
+                "config": {
+                    "max_retry_count": 3,
+                },
+                "recoverable_errors": [
+                    "ERROR_TIMEOUT",  # String
+                    {"value": "ERROR_CRC", "name": "CRC Error"},  # Dict
+                ],
+                "fatal_errors": [
+                    "ERROR_FATAL",
+                    {"value": "ERROR_SYSTEM", "name": "System Error"},
+                ],
+                "error_types": [],
+                "error_thresholds": {},  # Add empty error_thresholds
+            }
+        )
 
         # Template should handle both string and dict formats
         result = renderer.render_template("sv/error_recovery.sv.j2", context)
@@ -185,16 +283,26 @@ class TestTemplateRendering:
 
     def test_clock_gating_template_with_state_handling(self, renderer):
         """Test clock_gating template handles state objects correctly."""
-        context = {
-            "header": "// Test header",
-            "config": {
-                "supported_states": [
-                    "D0",  # String
-                    {"value": "D1", "name": "D1_STATE"},  # Dict
-                    {"value": "D3_HOT", "name": "D3_HOT_STATE"},
-                ]
-            },
-        }
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context()
+
+        # Convert to dict and add specific test data
+        context = complete_context.to_dict()
+        context.update(
+            {
+                "config": {
+                    "enable_clock_gating": True,  # This template expects config.enable_clock_gating
+                    "supported_states": [
+                        "D0",  # String
+                        {"value": "D1", "name": "D1_STATE"},  # Dict
+                        {"value": "D3_HOT", "name": "D3_HOT_STATE"},
+                    ],
+                },
+            }
+        )
 
         result = renderer.render_template("sv/clock_gating.sv.j2", context)
         # Should handle all state formats
@@ -202,18 +310,27 @@ class TestTemplateRendering:
 
     def test_register_logic_with_value_handling(self, renderer):
         """Test register_logic template handles register values correctly."""
-        context = {
-            "header": "// Test header",
-            "registers": [
-                {"name": "control_reg", "value": 0x1234},  # Direct value
-                {
-                    "name": "status_reg",
-                    "value": {"value": 0x5678, "default": 0},
-                },  # Dict with value
-                {"name": "data_reg", "value": "0xABCD"},  # String value
-            ],
-            "variance_model": None,
-        }
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context()
+
+        # Convert to dict and add specific test data
+        context = complete_context.to_dict()
+        context.update(
+            {
+                "registers": [
+                    {"name": "control_reg", "value": 0x1234},  # Direct value
+                    {
+                        "name": "status_reg",
+                        "value": {"value": 0x5678, "default": 0},
+                    },  # Dict with value
+                    {"name": "data_reg", "value": "0xABCD"},  # String value
+                ],
+                "variance_model": None,
+            }
+        )
 
         result = renderer.render_template("sv/register_logic.sv.j2", context)
         # Should handle all value formats
@@ -223,19 +340,21 @@ class TestTemplateRendering:
 
     def test_advanced_controller_template(self, renderer, base_context):
         """Test advanced_controller template with complete context."""
-        # Security-first: ensure all fields have non-None values
-        base_context.update(
-            {
-                "device_type": "network",
-                "device_class": "enterprise",
-                "perf_config": {"counter_width": 32},
-                "power_config": {},  # Empty dict instead of None
-                "error_config": {},  # Empty dict instead of None
-                "device_signature": "32'hDEADBEEF",  # Required for PCILeech templates
-            }
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        complete_context = builder.create_complete_template_context(
+            vendor_id="8086",
+            device_id="1234",
+            device_type="network",
+            device_class="enterprise",
         )
 
-        result = renderer.render_template("sv/advanced_controller.sv.j2", base_context)
+        # Convert to dict for template rendering
+        context_dict = complete_context.to_dict()
+
+        result = renderer.render_template("sv/advanced_controller.sv.j2", context_dict)
 
         # Should render module with parameters
         assert "advanced_pcileech_controller" in result
@@ -244,25 +363,39 @@ class TestTemplateRendering:
 
     def test_template_explicit_variable_initialization(self, renderer, base_context):
         """Test security-first approach requiring explicit variable initialization."""
-        # Create a context with all required fields explicitly initialized
-        secure_context = {
-            "header": "// Test header",
-            "device_config": base_context["device_config"],
-            "registers": [],
-            # Explicitly initialize all required variables, even if with empty values
-            "power_management": False,
-            "error_handling": False,
-            "performance_counters": {"counter_width": 32},
-            "power_config": {},  # Empty dict instead of None
-            "error_config": {},  # Empty dict instead of None
-            "perf_config": {"counter_width": 32},
-            "device_type": "network",
-            "device_class": "enterprise",
-            "device_signature": "32'hDEADBEEF",  # Required for PCILeech templates
-        }
+        from src.utils.unified_context import UnifiedContextBuilder
+
+        # Create a complete context using the unified builder
+        builder = UnifiedContextBuilder()
+        secure_context = builder.create_complete_template_context(
+            vendor_id="8086",
+            device_id="1234",
+            device_type="network",
+            device_class="enterprise",
+        )
+
+        # Convert to dict for template rendering
+        context_dict = secure_context.to_dict()
+        context_dict["error_signals_available"] = False  # Add missing variable
+        context_dict["network_signals_available"] = False  # Add missing variable
+        # Add other missing performance counter variables
+        context_dict.update(
+            {
+                "enable_transaction_counters": False,
+                "enable_bandwidth_monitoring": False,
+                "enable_latency_measurement": False,
+                "enable_latency_tracking": False,
+                "enable_error_rate_tracking": False,
+                "storage_signals_available": False,
+                "graphics_signals_available": False,
+                "generic_signals_available": False,
+                "enable_performance_grading": False,
+                "enable_perf_outputs": False,
+            }
+        )
 
         # With all variables explicitly initialized, rendering should succeed
-        result = renderer.render_template("sv/main_module.sv.j2", secure_context)
+        result = renderer.render_template("sv/main_module.sv.j2", context_dict)
         assert result is not None
         assert "pcileech_advanced" in result
 

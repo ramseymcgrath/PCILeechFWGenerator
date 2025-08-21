@@ -39,6 +39,9 @@ from src.string_utils import (generate_sv_header_comment, log_debug_safe,
 from src.utils.attribute_access import (get_attr_or_raise, has_attr,
                                         require_attrs, safe_get_attr)
 
+from ..utils.unified_context import (DEFAULT_TIMING_CONFIG, MSIX_DEFAULT,
+                                     PCILEECH_DEFAULT, TemplateObject,
+                                     normalize_config_to_dict)
 from .advanced_sv_features import (AdvancedSVFeatureGenerator,
                                    ErrorHandlingConfig, PerformanceConfig)
 from .advanced_sv_power import PowerManagementConfig
@@ -340,6 +343,10 @@ class ContextBuilder:
             "enable_pme": power_config.enable_pme,
             "enable_wake_events": power_config.enable_wake_events,
             "transition_cycles": tc_dict,
+            # Mirror the unified context behavior: provide interface signal flag
+            "has_interface_signals": getattr(
+                power_config, "has_interface_signals", False
+            ),
         }
 
     @staticmethod
@@ -494,16 +501,18 @@ class ContextBuilder:
             "subsys_device_id": device_config["subsystem_device_id"],
             "class_code": device_config["class_code"],
             "revision_id": device_config["revision_id"],
+            # Conservative default: templates may check for option ROM presence
+            "has_option_rom": device_config.get("has_option_rom", False),
         }
 
     @staticmethod
     def create_enhanced_context(
-        template_context: Dict[str, Any],
-        device_config: Dict[str, Any],
-        power_config: PowerManagementConfig,
-        error_config: ErrorHandlingConfig,
-        perf_config: PerformanceConfig,
-        device_obj: DeviceSpecificLogic,
+        template_context,
+        device_config_dict,
+        power_config,
+        error_config,
+        perf_config,
+        device_config_obj,
     ) -> Dict[str, Any]:
         """
         Create enhanced template context for PCILeech modules.
@@ -526,43 +535,238 @@ class ContextBuilder:
             device_type="PCIe Device Controller",
             features="PCILeech integration, MSI-X support, BAR controller",
         )
-
         # Create device object for template compatibility
-        device_info = ContextBuilder.create_device_info(device_config)
+        device_info = ContextBuilder.create_device_info(device_config_dict)
 
-        # Set up common enable flags
-        enable_scatter_gather = getattr(device_obj, "enable_dma", False)
+        # Set up common enable flags from the provided DeviceSpecificLogic object
+        enable_scatter_gather = getattr(device_config_obj, "enable_dma", False)
+
+        # Canonicalize specific configs using unified context helper which handles
+        # dict/object/TemplateObject inputs and centralizes defaults.
+        pcfg_dict = normalize_config_to_dict(
+            template_context.get("pcileech_config", None), default=PCILEECH_DEFAULT
+        )
+        mcfg_dict = normalize_config_to_dict(
+            template_context.get("msix_config", None), default=MSIX_DEFAULT
+        )
+        tcfg_dict = normalize_config_to_dict(
+            template_context.get("timing_config", None), default=DEFAULT_TIMING_CONFIG
+        )
+
+        # Keep canonicalized configs as plain dicts here. The TemplateRenderer
+        # will convert dicts to TemplateObject at render time. Many callers and
+        # tests expect plain dicts, so avoid wrapping here to preserve that
+        # contract and prevent surprising type changes.
+        pcfg_obj = pcfg_dict
+        mcfg_obj = mcfg_dict
+        tcfg_obj = tcfg_dict
 
         # Build enhanced context incrementally for better performance
+        def ensure_template_object(obj, name="object"):
+            """Convert any object to TemplateObject for consistent template access."""
+            if isinstance(obj, TemplateObject):
+                return obj
+            elif isinstance(obj, dict):
+                # Clean the dictionary to ensure all keys are strings
+                cleaned_dict = {}
+                for key, value in obj.items():
+                    # Ensure key is a string
+                    if isinstance(key, str):
+                        clean_key = key
+                    elif hasattr(key, "name"):
+                        clean_key = key.name
+                    elif hasattr(key, "value"):
+                        clean_key = str(key.value)
+                    else:
+                        clean_key = str(key)
+
+                    # Convert enum values to their string representation
+                    if hasattr(value, "value"):
+                        clean_value = value.value
+                    elif hasattr(value, "name"):
+                        clean_value = value.name
+                    else:
+                        clean_value = value
+
+                    cleaned_dict[clean_key] = clean_value
+
+                return TemplateObject(cleaned_dict)
+            elif hasattr(obj, "__dict__"):
+                # Convert regular objects to TemplateObject, but handle special types
+                obj_dict = {}
+                for key, value in vars(obj).items():
+                    # Ensure key is a string
+                    if isinstance(key, str):
+                        clean_key = key
+                    elif hasattr(key, "name"):
+                        clean_key = key.name
+                    elif hasattr(key, "value"):
+                        clean_key = str(key.value)
+                    else:
+                        clean_key = str(key)
+
+                    # Convert enum values to their string representation
+                    if hasattr(value, "value"):
+                        clean_value = value.value
+                    elif hasattr(value, "name"):
+                        clean_value = value.name
+                    else:
+                        clean_value = value
+
+                    obj_dict[clean_key] = clean_value
+
+                return TemplateObject(obj_dict)
+            else:
+                raise TemplateRenderError(
+                    f"Cannot convert {name} of type {type(obj).__name__} to TemplateObject. "
+                    "Expected dict, TemplateObject, or object with __dict__."
+                )
+
+        # Ensure active_device_config is a TemplateObject and has all required attributes
+        raw_active = template_context.get("active_device_config", None)
+        # Always provide active_device_config as a TemplateObject with required attributes
+        if raw_active is None:
+            # Build a minimal default config if missing
+            active_device_config_obj = TemplateObject(
+                {
+                    "enabled": True,
+                    "timer_period": 0,
+                    "default_priority": 0,
+                    "timer_enable": True,
+                    "msi_vector_width": 1,
+                    "msix_table_bir": 0,
+                    "msix_table_offset": 0x1000,
+                }
+            )
+        else:
+            active_device_config_obj = ensure_template_object(
+                raw_active, "active_device_config"
+            )
+            # Ensure timer_period, default_priority, enabled, timer_enable, and msi_vector_width are present
+            if not hasattr(active_device_config_obj, "timer_period"):
+                try:
+                    setattr(active_device_config_obj, "timer_period", 0)
+                except Exception:
+                    active_device_config_obj["timer_period"] = 0
+            if not hasattr(active_device_config_obj, "default_priority"):
+                try:
+                    setattr(active_device_config_obj, "default_priority", 0)
+                except Exception:
+                    active_device_config_obj["default_priority"] = 0
+            if not hasattr(active_device_config_obj, "enabled"):
+                active_device_config_obj["enabled"] = True
+            if not hasattr(active_device_config_obj, "timer_enable"):
+                try:
+                    setattr(active_device_config_obj, "timer_enable", True)
+                except Exception:
+                    active_device_config_obj["timer_enable"] = True
+            if not hasattr(active_device_config_obj, "msi_vector_width"):
+                try:
+                    setattr(active_device_config_obj, "msi_vector_width", 1)
+                except Exception:
+                    active_device_config_obj["msi_vector_width"] = 1
+                # Guarantee msix_table_bir is present
+                if not hasattr(active_device_config_obj, "msix_table_bir"):
+                    try:
+                        setattr(active_device_config_obj, "msix_table_bir", 0)
+                    except Exception:
+                        active_device_config_obj["msix_table_bir"] = 0
+                # Guarantee msix_table_offset is present
+                if not hasattr(active_device_config_obj, "msix_table_offset"):
+                    try:
+                        setattr(active_device_config_obj, "msix_table_offset", 0x1000)
+                    except Exception:
+                        active_device_config_obj["msix_table_offset"] = 0x1000
+                # Guarantee msi_64bit_addr is present
+                if not hasattr(active_device_config_obj, "msi_64bit_addr"):
+                    try:
+                        setattr(active_device_config_obj, "msi_64bit_addr", 0)
+                    except Exception:
+                        active_device_config_obj["msi_64bit_addr"] = 0
+                # Guarantee num_msix is present
+                if not hasattr(active_device_config_obj, "num_msix"):
+                    try:
+                        setattr(active_device_config_obj, "num_msix", 0)
+                    except Exception:
+                        active_device_config_obj["num_msix"] = 0
+                    # Guarantee msix_pba_bir is present
+                    if not hasattr(active_device_config_obj, "msix_pba_bir"):
+                        try:
+                            setattr(active_device_config_obj, "msix_pba_bir", 0)
+                        except Exception:
+                            active_device_config_obj["msix_pba_bir"] = 0
+                        # Guarantee msix_pba_offset is present
+                        if not hasattr(active_device_config_obj, "msix_pba_offset"):
+                            try:
+                                setattr(
+                                    active_device_config_obj, "msix_pba_offset", 0x2000
+                                )
+                            except Exception:
+                                active_device_config_obj["msix_pba_offset"] = 0x2000
+                            # Guarantee completer_id is present
+                            if not hasattr(active_device_config_obj, "completer_id"):
+                                try:
+                                    setattr(active_device_config_obj, "completer_id", 0)
+                                except Exception:
+                                    active_device_config_obj["completer_id"] = 0
+
+        # Standardize all context objects to TemplateObject and ensure required attributes
         enhanced_context = {
-            # Copy only essential keys from original context
-            "device_config": template_context["device_config"],
-            "msix_config": template_context.get("msix_config", {}),
-            "bar_config": template_context.get("bar_config", {}),
-            "board_config": template_context.get("board_config", {}),
-            "interrupt_config": template_context.get("interrupt_config", {}),
-            "config_space_data": template_context.get("config_space_data", {}),
-            "timing_config": template_context.get("timing_config", {}),
-            "pcileech_config": template_context.get("pcileech_config", {}),
-            "active_device_config": template_context.get("active_device_config", {}),
+            # Convert essential context objects to TemplateObjects
+            "device_config": ensure_template_object(
+                # Ensure device_config has a conservative default for manufacturing variance
+                dict(
+                    {
+                        **template_context.get("device_config", {}),
+                        "has_manufacturing_variance": template_context.get(
+                            "device_config", {}
+                        ).get("has_manufacturing_variance", False),
+                    }
+                ),
+                "device_config",
+            ),
+            # Use canonicalized TemplateObjects for these configs so centralized
+            # defaults live in one place (unified_context.TemplateObject)
+            # Wrap the normalized dicts with TemplateObject here so templates
+            # receive attribute-accessible objects (e.g. msix_config.num_vectors).
+            "msix_config": ensure_template_object(mcfg_obj, "msix_config"),
+            "bar_config": ensure_template_object(
+                template_context.get("bar_config", {}), "bar_config"
+            ),
+            "board_config": ensure_template_object(
+                template_context.get("board_config", {}), "board_config"
+            ),
+            "interrupt_config": ensure_template_object(
+                template_context.get("interrupt_config", {}), "interrupt_config"
+            ),
+            "config_space_data": ensure_template_object(
+                template_context.get("config_space_data", {}), "config_space_data"
+            ),
+            "timing_config": ensure_template_object(tcfg_obj, "timing_config"),
+            "pcileech_config": ensure_template_object(pcfg_obj, "pcileech_config"),
+            "active_device_config": active_device_config_obj,
             # CRITICAL: device_signature must be present - use direct access for fail-fast
             "device_signature": template_context["device_signature"],
-            "generation_metadata": template_context.get("generation_metadata", {}),
-            # Add power and error config objects for template compatibility
-            "power_config": power_config,
-            "error_config": error_config,
-            "perf_config": perf_config,
+            "generation_metadata": ensure_template_object(
+                template_context.get("generation_metadata", {}), "generation_metadata"
+            ),
+            # Add power and error config objects for template compatibility (as TemplateObjects)
+            "power_config": ensure_template_object(vars(power_config), "power_config"),
+            "error_config": ensure_template_object(vars(error_config), "error_config"),
+            "perf_config": ensure_template_object(vars(perf_config), "perf_config"),
             # Add new template variables
             "header": header,
             "device": device_info,
             "config_space": {
-                "vendor_id": device_config["vendor_id"],
-                "device_id": device_config["device_id"],
-                "class_code": device_config.get("class_code", DEFAULT_CLASS_CODE),
-                "revision_id": device_config.get("revision_id", DEFAULT_REVISION_ID),
+                "vendor_id": device_config_dict["vendor_id"],
+                "device_id": device_config_dict["device_id"],
+                "class_code": device_config_dict.get("class_code", DEFAULT_CLASS_CODE),
+                "revision_id": device_config_dict.get(
+                    "revision_id", DEFAULT_REVISION_ID
+                ),
             },
             "enable_custom_config": True,
-            "enable_scatter_gather": getattr(device_obj, "enable_dma", True),
+            "enable_scatter_gather": getattr(device_config_obj, "enable_dma", True),
             "enable_interrupt": template_context.get("interrupt_config", {}).get(
                 "vectors", 0
             )
@@ -571,44 +775,43 @@ class ContextBuilder:
             "enable_performance_counters": getattr(
                 perf_config, "enable_transaction_counters", True
             ),
-            "enable_error_detection": getattr(error_config, "enable_ecc", True),
+            "enable_error_detection": getattr(
+                error_config, "enable_error_detection", True
+            ),
             "fifo_type": "block_ram",
             "fifo_depth": DEFAULT_FIFO_DEPTH,
             "data_width": DEFAULT_DATA_WIDTH,
             "fpga_family": DEFAULT_FPGA_FAMILY,
-            "vendor_id": device_config["vendor_id"],
-            "device_id": device_config["device_id"],
-            "vendor_id_hex": device_config["vendor_id"],
-            "device_id_hex": device_config["device_id"],
+            "vendor_id": device_config_dict["vendor_id"],
+            "device_id": device_config_dict["device_id"],
+            "vendor_id_hex": device_config_dict["vendor_id"],
+            "device_id_hex": device_config_dict["device_id"],
             "device_specific_config": {},
+            # Provide conservative defaults for commonly-checked 'has_*' flags used in templates
+            # so templates can rely on attribute access without raising UndefinedError.
+            "has_option_rom": template_context.get("has_option_rom", False),
+            "has_manufacturing_variance": template_context.get(
+                "has_manufacturing_variance", False
+            ),
             # Add variables needed by pcileech_cfgspace.coe.j2 template
             "bar": template_context.get("bar", []),
-            "table_offset_bir": template_context.get("msix_config", {}).get(
-                "table_bir", 0
-            )
-            | (template_context.get("msix_config", {}).get("table_offset", 0) & ~0x7),
-            "pba_offset_bir": template_context.get("msix_config", {}).get("pba_bir", 0)
-            | (template_context.get("msix_config", {}).get("pba_offset", 0) & ~0x7),
+            "table_offset_bir": mcfg_obj.get("table_bir", 0)
+            | (mcfg_obj.get("table_offset", 0) & ~0x7),
+            "pba_offset_bir": mcfg_obj.get("pba_bir", 0)
+            | (mcfg_obj.get("pba_offset", 0) & ~0x7),
             # Add individual MSI-X variables that the template expects
-            "msix_table_bir": template_context.get("msix_config", {}).get(
-                "table_bir", 0
-            ),
-            "msix_table_offset": template_context.get("msix_config", {}).get(
-                "table_offset", 0x1000
-            ),
-            "msix_pba_bir": template_context.get("msix_config", {}).get("pba_bir", 0),
-            "msix_pba_offset": template_context.get("msix_config", {}).get(
-                "pba_offset", 0x2000
-            ),
+            "msix_table_bir": mcfg_obj.get("table_bir", 0),
+            "msix_table_offset": mcfg_obj.get("table_offset", 0x1000),
+            "msix_pba_bir": mcfg_obj.get("pba_bir", 0),
+            "msix_pba_offset": mcfg_obj.get("pba_offset", 0x2000),
         }
 
-        # Add enable_advanced_features to device_config section if it doesn't exist
-        if "device_config" in enhanced_context and isinstance(
-            enhanced_context["device_config"], dict
-        ):
-            enhanced_context["device_config"]["enable_advanced_features"] = getattr(
-                error_config, "enable_ecc", True
-            )
+        # Ensure device_config has enable_advanced_features attribute
+        # Determine the value based on error handling configuration
+        enable_advanced = getattr(error_config, "enable_error_detection", True)
+        enhanced_context["device_config"]["enable_advanced_features"] = enable_advanced
+
+        # No debug logs here - keep enhanced_context minimal and stable.
 
         return enhanced_context
 
@@ -1050,10 +1253,14 @@ class AdvancedSVGenerator:
         self._validate_template_requirements()
 
         # Prepare template context - ensure both power_config and power_management are available
-        # since templates use both names
+        # since templates use both names. Wrap power management context with TemplateObject
+        # so templates can use attribute access (e.g., power_management.has_interface_signals).
         power_management_ctx = ContextBuilder.build_power_management_context(
             self.power_config
         )
+        # Convert dict -> TemplateObject for template compatibility if needed
+        if not isinstance(power_management_ctx, TemplateObject):
+            power_management_ctx = TemplateObject(power_management_ctx)
 
         # Create a modified power_config dictionary that includes enable_power_management
         power_config_dict = {"enable_power_management": True}
@@ -1263,15 +1470,22 @@ class AdvancedSVGenerator:
             if not device_config:
                 raise TemplateRenderError(ERROR_MESSAGES["missing_critical_field"])
 
-            if not isinstance(device_config, dict):
+            # Handle both dictionary and TemplateObject types for device_config
+            if not isinstance(device_config, (dict, TemplateObject)):
                 raise TemplateRenderError(
                     ERROR_MESSAGES["device_config_not_dict"].format(
                         type_name=type(device_config).__name__
                     )
                 )
 
+            # Convert TemplateObject to dict for validation if needed
+            if isinstance(device_config, TemplateObject):
+                device_config_dict = dict(device_config)
+            else:
+                device_config_dict = device_config
+
             # Validate critical device identification fields
-            self._validate_device_identification(device_config)
+            self._validate_device_identification(device_config_dict)
 
             # Validate critical security fields before proceeding
             # device_signature is REQUIRED - no fallback allowed per no-fallback policy
@@ -1282,10 +1496,21 @@ class AdvancedSVGenerator:
             if not device_signature:
                 raise TemplateRenderError(ERROR_MESSAGES["empty_device_signature"])
 
+            # Ensure other required fields are present (tests expect these to be required)
+            if "bar_config" not in template_context:
+                raise TemplateRenderError(
+                    "Required field 'bar_config' is missing from template context"
+                )
+
+            if "generation_metadata" not in template_context:
+                raise TemplateRenderError(
+                    "Required field 'generation_metadata' is missing from template context"
+                )
+
             # Create enhanced context efficiently - avoid full copy for performance
             enhanced_context = ContextBuilder.create_enhanced_context(
                 template_context,
-                device_config,
+                device_config_dict,
                 self.power_config,
                 self.error_config,
                 self.perf_config,
@@ -1308,6 +1533,34 @@ class AdvancedSVGenerator:
             )
 
             # Generate configuration space COE file
+            # Diagnostic logging: record types of key config objects to help debug
+            # cases where templates receive plain dicts instead of TemplateObject.
+            try:
+                type_info = {
+                    "template_msix_config": type(
+                        template_context.get("msix_config")
+                    ).__name__,
+                    "enhanced_msix_config": type(
+                        enhanced_context.get("msix_config")
+                    ).__name__,
+                    "enhanced_timing_config": type(
+                        enhanced_context.get("timing_config")
+                    ).__name__,
+                    "enhanced_pcileech_config": type(
+                        enhanced_context.get("pcileech_config")
+                    ).__name__,
+                }
+            except Exception:
+                type_info = {"error": "failed to collect types"}
+
+            # Use error-level logging for diagnostics to ensure visibility in test captures
+            log_error_safe(
+                self.logger,
+                "Context types before rendering pcileech_cfgspace: {type_info}",
+                type_info=type_info,
+                prefix="CONTEXT_TYPES",
+            )
+
             modules["pcileech_cfgspace.coe"] = self.renderer.render_template(
                 TEMPLATE_PATHS["pcileech_cfgspace"], enhanced_context
             )

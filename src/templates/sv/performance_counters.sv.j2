@@ -1,12 +1,14 @@
-{#- Performance Counter Template -#}
-{#- Generates comprehensive performance monitoring logic -#}
+{{ header | safe }}
 
-{#- Extract the enable flag from perf_config if it exists -#}
-{% set enable_transaction_counters = perf_config.enable_transaction_counters if perf_config else false %}
-{% set enable_bandwidth_monitoring = perf_config.enable_bandwidth_monitoring if perf_config else false %}
-{% set enable_latency_tracking = perf_config.enable_latency_tracking if perf_config else false %}
-{% set enable_latency_measurement = perf_config.enable_latency_measurement if perf_config else false %}
-{% set enable_error_counting = perf_config.enable_error_counting if perf_config else false %}
+{# Local safe variables for performance config flags to avoid UndefinedError when perf_config is omitted #}
+{%- set enable_transaction_counters = perf_config.enable_transaction_counters if (perf_config is defined and perf_config.enable_transaction_counters is defined) else false -%}
+{%- set enable_bandwidth_monitoring = perf_config.enable_bandwidth_monitoring if (perf_config is defined and perf_config.enable_bandwidth_monitoring is defined) else false -%}
+{%- set enable_latency_tracking = perf_config.enable_latency_tracking if (perf_config is defined and perf_config.enable_latency_tracking is defined) else false -%}
+{%- set enable_latency_measurement = perf_config.enable_latency_measurement if (perf_config is defined and perf_config.enable_latency_measurement is defined) else false -%}
+{%- set enable_error_counting = perf_config.enable_error_counting if (perf_config is defined and perf_config.enable_error_counting is defined) else false -%}
+{%- set enable_performance_grading = perf_config.enable_performance_grading if (perf_config is defined and perf_config.enable_performance_grading is defined) else false -%}
+{%- set enable_perf_outputs = perf_config.enable_perf_outputs if (perf_config is defined and perf_config.enable_perf_outputs is defined) else false -%}
+{%- set enable_error_rate_tracking = perf_config.enable_error_rate_tracking if (perf_config is defined and perf_config.enable_error_rate_tracking is defined) else false -%}
 
 {% if enable_transaction_counters %}
 // Transaction Counter Logic

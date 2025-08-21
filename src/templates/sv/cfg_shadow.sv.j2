@@ -50,10 +50,21 @@ module pcileech_tlps128_cfgspace_shadow #(
     logic [31:0] overlay_ram[0:OVERLAY_ENTRIES-1];
     
     // Auto-generated overlay constants
-{% for reg, mask in OVERLAY_MAP %}
-    localparam int OVR_IDX_{{ "%03X"|format(reg) }} = {{ loop.index0 }};
-    localparam logic [31:0] OVR_MASK_{{ "%03X"|format(reg) }} = 32'h{{ "%08X"|format(mask) }};
-{% endfor %}
+    {%- if OVERLAY_MAP is mapping -%}
+        {%- for reg, mask in OVERLAY_MAP.items() -%}
+            localparam int OVR_IDX_{{ "%03X"|format(reg) }} = {{ loop.index0 }};
+            localparam logic [31:0] OVR_MASK_{{ "%03X"|format(reg) }} = 32'h{{ "%08X"|format(mask) }};
+        {%- endfor -%}
+    {%- elif OVERLAY_MAP is sequence -%}
+        {%- for pair in OVERLAY_MAP -%}
+            {%- set reg = pair[0] if pair|length > 0 else 0 -%}
+            {%- set mask = pair[1] if pair|length > 1 else pair[0] if pair|length>0 else 0 -%}
+            localparam int OVR_IDX_{{ "%03X"|format(reg) }} = {{ loop.index0 }};
+            localparam logic [31:0] OVR_MASK_{{ "%03X"|format(reg) }} = 32'h{{ "%08X"|format(mask) }};
+        {%- endfor -%}
+    {%- else -%}
+        // No overlays defined
+    {%- endif -%}
     
     // Overlay RAM address mapping lookup table
     logic [31:0] overlay_indices[0:1023];
@@ -128,10 +139,18 @@ module pcileech_tlps128_cfgspace_shadow #(
             end
             
             // Set valid entries from OVERLAY_MAP
-{% for reg, mask in OVERLAY_MAP %}
-            overlay_indices[{{ reg }}] <= OVR_IDX_{{ "%03X"|format(reg) }};
-            overlay_masks[{{ reg }}] <= OVR_MASK_{{ "%03X"|format(reg) }};
-{% endfor %}
+            {%- if OVERLAY_MAP is mapping -%}
+                {%- for reg, mask in OVERLAY_MAP.items() -%}
+                    overlay_indices[{{ reg }}] <= OVR_IDX_{{ "%03X"|format(reg) }};
+                    overlay_masks[{{ reg }}] <= OVR_MASK_{{ "%03X"|format(reg) }};
+                {%- endfor -%}
+            {%- elif OVERLAY_MAP is sequence -%}
+                {%- for pair in OVERLAY_MAP -%}
+                    {%- set reg = pair[0] if pair|length>0 else 0 -%}
+                    overlay_indices[{{ reg }}] <= OVR_IDX_{{ "%03X"|format(reg) }};
+                    overlay_masks[{{ reg }}] <= OVR_MASK_{{ "%03X"|format(reg) }};
+                {%- endfor -%}
+            {%- endif -%}
 
             // Initialize overlay RAM to zeros (replacing second initial block)
             for (int i = 0; i < OVERLAY_ENTRIES; i++) begin

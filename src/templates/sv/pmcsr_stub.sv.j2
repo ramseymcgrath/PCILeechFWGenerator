@@ -1,17 +1,4 @@
-{#- PMCSR Stub Module Template -#}
-{#- Minimal PCIe D-state handshake & PME generator -#}
-{#- Generates just enough logic for a cloned device to satisfy OS power-management probes -#}
-{#- Resource cost: <40 LUT, <50 FF on most FPGAs -#}
-
-// pmcsr_stub.sv — Minimal PCIe D‑state handshake & PME generator
-// Generates just enough logic for a cloned device to satisfy OS power‑management
-// probes.  Resource cost: <40 LUT, <50 FF on most FPGAs.
-//
-//  * Exposes 16‑bit PMCSR at config‑space offset 0x44 (DW 0)
-//  * Implements D0 ↔ D3hot transitions with a {{ timeout_ms }} ms timeout
-//  * Supports PME_En / PME_Status and pulses PME# when a wake event arrives
-//  * No D1/D2, no ASPM state machine, no real gating — everything else handled
-//    by the PCIe hard‑macro or left unimplemented.
+{{ header | safe }}
 
 module pmcsr_stub #(
     // Fabric clock frequency (Hz). Used only for the fake transition timer.

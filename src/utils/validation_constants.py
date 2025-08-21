@@ -1,0 +1,108 @@
+"""
+Centralized validation constants used across the PCILeech firmware generator.
+
+This module provides consistent validation lists that are used in multiple
+places throughout the codebase for template context validation, critical
+variable tracking, and security checks.
+"""
+
+from typing import Dict, Final, List, Tuple
+
+# Critical template context keys that must be present for safe firmware generation
+CRITICAL_TEMPLATE_CONTEXT_KEYS: Final[List[str]] = [
+    "vendor_id",
+    "device_id",
+    "device_type",
+    "device_class",
+    "active_device_config",
+    "generation_metadata",
+    "board_config",
+]
+
+# Required context sections for PCILeech context completeness validation
+REQUIRED_CONTEXT_SECTIONS: Final[List[str]] = [
+    "device_config",
+    "config_space",
+    "bar_config",
+    "interrupt_config",
+]
+
+# Sensitive tokens that indicate variables should never have fallbacks
+# These are used by the fallback manager to identify critical hardware identifiers
+SENSITIVE_TOKENS: Final[Tuple[str, ...]] = (
+    "vendor_id",
+    "device_id",
+    "revision_id",
+    "class_code",
+    "bars",
+    "subsys",
+    # Common sensitive tokens - avoid exposing these in fallbacks
+    "token",
+    "secret",
+    "password",
+    "credential",
+    "key",
+)
+
+# Device identification fields that are required for all device configurations
+DEVICE_IDENTIFICATION_FIELDS: Final[List[str]] = [
+    "vendor_id",
+    "device_id",
+    "subsystem_vendor_id",
+    "subsystem_device_id",
+    "class_code",
+    "revision_id",
+]
+
+# Board configuration fields that are essential for FPGA targeting
+ESSENTIAL_BOARD_CONFIG_FIELDS: Final[List[str]] = [
+    "name",
+    "fpga_part",
+    "fpga_family",
+    "pcie_ip_type",
+]
+
+# Generation metadata fields required for firmware provenance
+REQUIRED_METADATA_FIELDS: Final[List[str]] = [
+    "generated_at",
+    "generator_version",
+    "device_signature",
+    "build_timestamp",
+]
+
+# Known device types supported by the firmware generator
+KNOWN_DEVICE_TYPES: Final[List[str]] = [
+    "audio",
+    "graphics",
+    "media",
+    "network",
+    "processor",
+    "storage",
+    "usb",
+    "generic",  # Keep generic last as it's the fallback
+]
+
+# Device class mappings for PCI class code prefixes (hex string -> device type)
+DEVICE_CLASS_MAPPINGS: Final[Dict[str, str]] = {
+    "01": "storage",
+    "02": "network",
+    "03": "display",
+    "04": "multimedia",
+    "0c": "serial_bus",
+}
+
+# Power state transition cycle constants (units: cycles)
+# These values should be set according to hardware timing requirements.
+# Prefer hardware/profile-driven overrides; these are safe defaults.
+D0_TO_D1_CYCLES: Final[int] = 100
+D1_TO_D0_CYCLES: Final[int] = 200
+D0_TO_D3_CYCLES: Final[int] = 500
+D3_TO_D0_CYCLES: Final[int] = 1000
+
+# Mapping for convenient consumption by other modules
+POWER_TRANSITION_CYCLES: Final[dict] = {
+    "d0_to_d1": D0_TO_D1_CYCLES,
+    "d1_to_d0": D1_TO_D0_CYCLES,
+    "d0_to_d3": D0_TO_D3_CYCLES,
+    "d3_to_d0": D3_TO_D0_CYCLES,
+}

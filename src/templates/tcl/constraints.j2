@@ -23,6 +23,7 @@ Context variables expected:
 #}
 {{ header }}
 
+{% from "_helpers.j2" import board_name, board_fpga_part, safe_attr %}
 puts "Adding constraint files..."
 
 # Get script directory for reliable path resolution
@@ -41,9 +42,11 @@ if {[file exists $generated_xdc]} {
 # Use explicit directory to avoid pulling stale XDC from sibling directories
 set xdc_files [glob -nocomplain -directory $script_dir *.xdc]
 set already_added_files [list]
-{% if board.constraints and board.constraints.xdc_file %}
-lappend already_added_files "{{ board.constraints.xdc_file }}"
-{% endif %}
+{%- set _board_cons = safe_attr(board, 'constraints', {}) -%}
+{%- set _board_xdc_file = _board_cons.xdc_file if (_board_cons is mapping or _board_cons is defined and _board_cons.xdc_file is defined) else (_board_cons.get('xdc_file', None) if _board_cons is mapping else None) -%}
+{%- if _board_xdc_file %}
+lappend already_added_files "{{ _board_xdc_file }}"
+{%- endif %}
 
 # Filter out already added files
 set filtered_xdc_files [list]
@@ -64,39 +67,38 @@ if {[llength $filtered_xdc_files] > 0} {
 # Generate device-specific timing constraints
 puts "Adding device-specific timing constraints..."
 # Try to use board-specific XDC constraints if board type is specified
-{% if board and board.name %}
-puts "Attempting to load board-specific XDC constraints for: {{ board.name }}"
+{%- if board is defined -%}
+puts "Attempting to load board-specific XDC constraints for: {{ board_name(board) }}"
 
-{% if board.constraints and board.constraints.xdc_file %}
-# Load board-specific XDC file
-puts "Constraints for {{ board.name }}"
-set board_xdc_file "{{ board.constraints.xdc_file }}"
+{%- if _board_xdc_file %}
+puts "Constraints for {{ board_name(board) }}"
+set board_xdc_file "{{ _board_xdc_file }}"
 if {[file exists $board_xdc_file]} {
     add_files -fileset constrs_1 -norecurse $board_xdc_file
     lappend already_added_files $board_xdc_file
     puts "Added board-specific XDC constraints: $board_xdc_file"
 } else {
-    puts "WARNING: XDC file not found for board {{ board.name }}: $board_xdc_file"
+    puts "WARNING: XDC file not found for board {{ board_name(board) }}: $board_xdc_file"
     puts "Continuing with generic constraints..."
 }
-{% elif board_xdc_content %}
+{%- elif board_xdc_content is defined and board_xdc_content %}
 # Load XDC constraints from PCILeech repository
 # This will be populated by the constraint generation system
 # with actual XDC content from the PCILeech FPGA repository
 # Write board XDC content to temporary file to avoid brace/semicolon issues
-set board_auto_xdc_file [file join $script_dir "{{ board.name }}_auto.xdc"]
+set board_auto_xdc_file [file join $script_dir "{{ board_name(board) }}_auto.xdc"]
 set fp [open $board_auto_xdc_file w]
 puts $fp {{ "{" ~ board_xdc_content ~ "}" }}
 close $fp
 add_files -fileset constrs_1 -norecurse $board_auto_xdc_file
 read_xdc $board_auto_xdc_file
 puts "Added auto-generated board XDC: $board_auto_xdc_file"
-{% else %}
+{%- else %}
 # No board-specific XDC available, using generic constraints
-puts "WARNING: No board-specific XDC constraints available for {{ board.name }}"
+puts "WARNING: No board-specific XDC constraints available for {{ board_name(board) }}"
 puts "Using generic timing constraints only. You may need to add board-specific pin assignments."
-{% endif %}
-{% endif %}
+{%- endif %}
+{%- endif %}
 
 # Generate device-specific timing constraints file
 {% set sys_clk_period = (1000.0 / (sys_clk_freq_mhz | default(100))) | round(3) %}
@@ -108,7 +110,7 @@ create_clock -period {{ sys_clk_period }} -name sys_clk [get_ports clk]
 set_input_delay -clock sys_clk 2.000 [get_ports reset_n]
 
 # Device-specific constraints for {{ device.vendor_id }}:{{ device.device_id }}
-# Board-specific pin assignments for {{ board.name }}
+# Board-specific pin assignments for {{ board_name(board) }}
 
 # NOTE: Pin assignments MUST be loaded from board-specific XDC files from the PCILeech repository.
 # We NEVER generate fallback XDC content as it contains critical pin assignments.

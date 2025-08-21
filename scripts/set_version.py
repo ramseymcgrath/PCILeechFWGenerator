@@ -94,6 +94,37 @@ def update_version_file(
     version_file.write_text(content_new)
     print(f"Updated {version_file} -> {new_version} (commit: {commit})")
 
+    # Update changelog
+    try:
+        changelog_script = (
+            version_file.parent.parent / "scripts" / "update_changelog.py"
+        )
+        if changelog_script.exists():
+            print(f"Updating changelog for version {new_version}...")
+            import subprocess
+
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(changelog_script),
+                    "--version",
+                    new_version,
+                    "--message",
+                    "Version update.",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode == 0:
+                print("Changelog updated successfully")
+            else:
+                print(f"Warning: Changelog update failed: {result.stderr}")
+        else:
+            print("Changelog update script not found, skipping changelog update")
+    except Exception as e:
+        print(f"Warning: Failed to update changelog: {e}")
+
 
 def main() -> int:
     p = argparse.ArgumentParser(

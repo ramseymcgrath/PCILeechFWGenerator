@@ -14,12 +14,14 @@
     logic ecc_error = 1'b0;
     logic [31:0] timeout_counter = 32'h0;
 
-{%- if config.enable_crc_check %}
+{# Use safe_attr default false to be defensive during template migration #}
+{% from "_helpers.j2" import safe_attr %}
+{%- if safe_attr(config, 'enable_crc_check', false) %}
     logic [7:0] calculated_crc = 8'h0;
     logic [7:0] expected_crc = 8'h0;
 {%- endif %}
 
-{%- if config.enable_error_logging %}
+{%- if safe_attr(config, 'enable_error_logging', false) %}
     logic [31:0] error_log [0:15];
     logic [3:0] error_log_ptr = 4'h0;
 {%- endif %}

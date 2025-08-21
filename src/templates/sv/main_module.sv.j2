@@ -1,4 +1,5 @@
 {#- Advanced SystemVerilog Module Template -#}
+{% from "_helpers.j2" import get_vendor_id, get_device_id %}
 {{ header | safe }}
 
 {#- Handle device_type: can be string, dict, or object with .value -#}
@@ -34,6 +35,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
             {%- set perf_counter_width = performance_counters.counter_width -%}
         {%- endif -%}
     {%- endif -%}
+    {%- set enable_perf_outputs = performance_counters.enable_perf_outputs if (performance_counters is defined and performance_counters.enable_perf_outputs is defined) else false -%}
     parameter COUNTER_WIDTH = {{ perf_counter_width }}
 ) (
     // Clock and reset
@@ -114,18 +116,18 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
     output logic        device_ready
 );
 
-{%- include 'systemverilog/components/register_declarations.sv.j2' %}
+{%- include 'sv/register_declarations.sv.j2' %}
 
 {%- if power_management %}
-{%- include 'systemverilog/advanced/power_management.sv.j2' %}
+{%- include 'sv/power_management.sv.j2' %}
 {%- endif %}
 
 {%- if error_handling %}
-{%- include 'systemverilog/advanced/error_handling.sv.j2' %}
+{%- include 'sv/error_handling.sv.j2' %}
 {%- endif %}
 
 {%- if performance_counters is defined and performance_counters %}
-{%- include 'systemverilog/advanced/performance_counters.sv.j2' %}
+{%- include 'sv/performance_counters.sv.j2' %}
 {%- endif %}
 
     // Register access logic
@@ -179,7 +181,7 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
             if (cfg_ext_read_received) begin
                 cfg_ext_read_data_valid <= 1'b1;
                 case (cfg_ext_register_number)
-                    10'h000: cfg_ext_read_data <= {16'h{{ device_config.device_id[2:] }}, 16'h{{ device_config.vendor_id[2:] }}};
+                    10'h000: cfg_ext_read_data <= {16'h{{ get_device_id(device_config, device, config_space, device_id_int) }}, 16'h{{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}};
                     10'h001: cfg_ext_read_data <= {16'h0000, 16'h0010};  // Status and Command
                     10'h002: cfg_ext_read_data <= {8'h{{ device_config.class_code[2:4] }}, 24'h{{ device_config.class_code[4:] }}};  // Class code and revision
 {%- if power_management %}
@@ -249,8 +251,8 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
     // Device ready and debug status
     assign device_ready = power_ready && !error_recovery_active;
     assign debug_status = {
-        8'h{{ device_config.vendor_id[2:4] }},  // Vendor ID high byte
-        8'h{{ device_config.device_id[2:4] }},  // Device ID high byte
+        8'h{{ '%02x' % ((get_vendor_id(device_config, device, config_space, vendor_id_int) | safe_int(0x8086)) // 256) }},  // Vendor ID high byte
+        8'h{{ '%02x' % ((get_device_id(device_config, device, config_space, device_id_int) | safe_int(0x1234)) // 256) }},  // Device ID high byte
         4'h0,
         current_power_state,
         error_state[1:0],

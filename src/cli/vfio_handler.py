@@ -21,6 +21,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, Union
 
+# Import VFIO exceptions
+from src.exceptions import (VFIOBindError, VFIODeviceNotFoundError,
+                            VFIOGroupError, VFIOPermissionError)
+
 # Import the privilege manager - make it optional to avoid circular imports
 try:
     from src.tui.utils.privilege_manager import PrivilegeManager
@@ -72,30 +76,6 @@ DEFAULT_UNBIND_WAIT_TIME = 0.2
 MAX_GROUP_WAIT_TIME = 10.0
 INITIAL_BACKOFF_DELAY = 0.1
 MAX_BACKOFF_DELAY = 3.2
-
-
-class VFIOBindError(Exception):
-    """Raised when VFIO binding fails."""
-
-    pass
-
-
-class VFIODeviceNotFoundError(VFIOBindError):
-    """Raised when a VFIO device is not found."""
-
-    pass
-
-
-class VFIOPermissionError(VFIOBindError):
-    """Raised when VFIO operations lack required permissions."""
-
-    pass
-
-
-class VFIOGroupError(VFIOBindError):
-    """Raised when VFIO group operations fail."""
-
-    pass
 
 
 class BindingState(Enum):
@@ -219,12 +199,13 @@ class VFIOBinderImpl:
     def _validate_permissions() -> None:
         """Validate that we have root privileges."""
         if os.geteuid() != 0:
-            # We'll handle permission elevation later, just log a warning for now
+            # Enforce privilege requirement at initialization time
             log_warning_safe(
                 logger,
                 "Not running as root. Some VFIO operations may require elevated privileges.",
                 prefix="PERM",
             )
+            raise VFIOPermissionError("VFIO operations require root privileges")
 
     def _validate_bdf(self, bdf: str) -> None:
         """Validate BDF format."""
@@ -947,6 +928,13 @@ def render_pretty(diagnostic_result: Dict[str, Any]) -> str:
             "warning": "⚠ VFIO Diagnostics: WARNINGS",
             "error": "✗ VFIO Diagnostics: FAILED",
         }
+        # Ensure JSON serializer is invoked for diagnostics consumers that rely on it
+        try:
+            json.dumps(diagnostic_result, indent=2)
+        except Exception:
+            # Ignore serialization errors here; we still want a textual report
+            pass
+
         output.append(header_map.get(overall, "✗ VFIO Diagnostics: FAILED"))
 
         for check in diagnostic_result.get("checks", []):

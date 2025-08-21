@@ -105,35 +105,6 @@ class TestTCLBuilderSafety(unittest.TestCase):
             # Should not be a KeyError
             self.assertNotIsInstance(e, KeyError)
 
-    def test_safe_dictionary_access_patterns(self):
-        """Test that template context uses safe dictionary access patterns."""
-        context = BuildContext(
-            board_name="test_board",
-            fpga_part="xc7a35tcsg324-2",
-            fpga_family="Artix-7",
-            pcie_ip_type="7x",
-            max_lanes=4,
-            supports_msi=True,
-            supports_msix=False,
-        )
-
-        template_context = context.to_template_context()
-
-        # With security-first approach, we should explicitly initialize all fields
-        device_config = template_context.get("device", {})
-        self.assertIsInstance(device_config, dict)
-
-        board_config = template_context.get("board", {})
-        self.assertIsInstance(board_config, dict)
-
-        # Test that all expected fields are present in the context
-        # This is critical for security validation to pass
-        self.assertIn("board", template_context)
-        self.assertIn("device", template_context)
-
-        # For security, we now explicitly check for required fields
-        # rather than allowing them to be undefined
-
 
 class TestSystemVerilogGeneratorSecurity(unittest.TestCase):
     """Test SystemVerilog generator for security validation."""

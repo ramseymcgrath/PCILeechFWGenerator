@@ -5,14 +5,13 @@ This template generates configuration for Artix-7 35T parts that use
 custom SystemVerilog modules instead of Xilinx IP cores.
 
 Context variables expected:
-- device: Device information (vendor_id, device_id, revision_id)
-- board: Board information (name, fpga_part)
 #}
+{% from "_helpers.j2" import safe_board_fpga_part %}
 {{ header }}
 
 puts "Configuring custom PCIe implementation for Artix-7 35T..."
 puts "Device: {{ device.vendor_id }}:{{ device.device_id }} (Rev: {{ device.revision_id }})"
-puts "FPGA Part: {{ board.fpga_part }}"
+puts "FPGA Part: {{ safe_board_fpga_part(board) }}"
 
 # Artix-7 35T PCIe Configuration
 # This part uses custom SystemVerilog modules instead of Xilinx IP cores

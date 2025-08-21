@@ -166,8 +166,10 @@ class TestUpdateChecking:
         """Test getting update info from cache."""
         mock_cache.return_value = {"latest_version": "0.6.0", "update_available": True}
 
-        result = check_for_updates(force=False)
-        assert result == ("0.6.0", True)
+        # Set environment to use cache
+        with patch.dict(os.environ, {"PCILEECH_USE_CACHE": "1"}):
+            result = check_for_updates(force=False)
+            assert result == ("0.6.0", True)
 
     @patch("src.cli.version_checker.fetch_latest_version")
     @patch("src.cli.version_checker.save_cache")

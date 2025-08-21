@@ -1,10 +1,10 @@
 {#- Sampling Logic Template -#}
-{#- Generates performance sampling logic -#}
 {{ header | safe }}
 
 module sampling_logic #(
     parameter COUNTER_WIDTH = {{ config.counter_width | default(32) }},
-    parameter NUM_METRICS = {{ config.metrics_to_monitor|length | default(4) }},
+    {%- set metrics = config.metrics_to_monitor | default([]) %}
+    parameter NUM_METRICS = {{ (metrics|length) if metrics else 1 }},
     parameter SAMPLING_PERIOD = {{ config.sampling_period | default(1000) }}
 ) (
     input  logic clk,
@@ -48,24 +48,33 @@ end
 // Sample data capture
 always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        {% for i in range(config.metrics_to_monitor|length | default(4)) -%}
-        sample_data[{{ i }}] <= COUNTER_WIDTH'h0;
-        {% endfor %}
+    {%- if metrics -%}
+    {%- for i in range(metrics|length) -%}
+    sample_data[{{ i }}] <= COUNTER_WIDTH'h0;
+    {%- endfor -%}
+    {%- else -%}
+    sample_data[0] <= COUNTER_WIDTH'h0;
+    {%- endif -%}
     end else if (sample_valid) begin
-        {% for metric in config.metrics_to_monitor | default([{"value": "tlp_count"}, {"value": "completion_latency"}, {"value": "bandwidth_utilization"}, {"value": "error_rate"}]) -%}
-        {% set metric_value = metric.value if metric.value is defined else (metric.get('value', metric.get('name', 'tlp_count')) if metric is mapping else metric) -%}
-        {% if metric_value == "tlp_count" -%}
-        sample_data[{{ loop.index0 }}] <= transaction_count;
-        {% elif metric_value == "completion_latency" -%}
-        sample_data[{{ loop.index0 }}] <= latency_accumulator;
-        {% elif metric_value == "bandwidth_utilization" -%}
-        sample_data[{{ loop.index0 }}] <= bandwidth_counter;
-        {% elif metric_value == "error_rate" -%}
-        sample_data[{{ loop.index0 }}] <= error_count;
-        {% else -%}
-        sample_data[{{ loop.index0 }}] <= performance_data;
-        {% endif %}
-        {% endfor %}
+    {%- if metrics -%}
+    {% for metric in metrics -%}
+    {% set metric_value = metric.value if metric is defined and metric.value is defined else (metric.get('value', metric.get('name', 'tlp_count')) if metric is mapping else metric) -%}
+    {% if metric_value == "tlp_count" -%}
+    sample_data[{{ loop.index0 }}] <= transaction_count;
+    {% elif metric_value == "completion_latency" -%}
+    sample_data[{{ loop.index0 }}] <= latency_accumulator;
+    {% elif metric_value == "bandwidth_utilization" -%}
+    sample_data[{{ loop.index0 }}] <= bandwidth_counter;
+    {% elif metric_value == "error_rate" -%}
+    sample_data[{{ loop.index0 }}] <= error_count;
+    {% else -%}
+    sample_data[{{ loop.index0 }}] <= performance_data;
+    {% endif %}
+    {% endfor %}
+    {%- else -%}
+    // No metrics configured - provide single placeholder mapping
+    sample_data[0] <= performance_data;
+    {%- endif -%}
     end
 end
 

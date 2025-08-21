@@ -1,14 +1,5 @@
-{#
-# USB-required commit 2025-06-16
-Synthesis Template - Synthesis Configuration and Execution
-
-This template configures and runs synthesis with appropriate settings.
-
-Context variables expected:
-- header: TCL header comment
-#}
 {{ header }}
-
+# PCILeech Synthesis Script
 puts "Configuring synthesis settings..."
 set_property strategy "Vivado Synthesis Defaults" [get_runs synth_1]
 set_property steps.synth_design.args.directive "AreaOptimized_high" [get_runs synth_1]

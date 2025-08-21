@@ -1,15 +1,7 @@
-{#
-Master Build Template - Complete Build Script with Error Reporting
+{{ header_comment }}
 
-This template creates a master script that sources all individual build stages
-with comprehensive error detection and reporting.
+{% from "_helpers.j2" import safe_name, safe_attr, board_name, safe_board_name, get_vendor_id, get_device_id %}
 
-Context variables expected:
-- device: Device information (vendor_id, device_id, class_code)
-- board: Board information (name)
-- header: TCL header comment
-#}
-{{ header }}
 
 # Guard against re-sourcing this master script
 if {[info exists ::build_master_running]} return
@@ -33,8 +25,8 @@ proc log {msg} {
 log "=========================================="
 log "PCILeech Firmware Build Process"
 log "=========================================="
-log "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
-log "Board: {{ board.name if board.name else board }}"
+log "Device: {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }} (Class: {{ device_config.class_code | default(device.class_code) }})"
+log "Board: {{ safe_name(board) }}"
 log "Build started: [clock format [clock seconds]]"
 log ""
 
@@ -56,6 +48,9 @@ set color_reset "\033\[0m"
 # Portable color detection using environment variables
 set use_colors [expr {[info exists ::env(TERM)] && [regexp {xterm|vt100|ansi|screen} $::env(TERM)]}]
 
+# Defensive defaults for legacy templates
+set batch_mode [info exists ::env(BATCH_MODE) ? $::env(BATCH_MODE) : 0]
+
 # Get script directory for relative path resolution
 set script_dir [file dirname [info script]]
 
@@ -71,7 +66,7 @@ proc report_error {script_name error_msg {severity "ERROR"}} {
         incr build_errors
         lappend error_details $formatted_msg
         if {$use_colors} {
-            log "${color_red}❌ $formatted_msg${color_reset}"
+            log "${color_red} $formatted_msg${color_reset}"
         } else {
             log "ERROR: $formatted_msg"
         }
@@ -79,13 +74,13 @@ proc report_error {script_name error_msg {severity "ERROR"}} {
         incr build_warnings
         lappend warning_details $formatted_msg
         if {$use_colors} {
-            log "${color_yellow}⚠️  $formatted_msg${color_reset}"
+            log "${color_yellow}  $formatted_msg${color_reset}"
         } else {
             log "WARNING: $formatted_msg"
         }
     } else {
         if {$use_colors} {
-            log "${color_green}ℹ️  $formatted_msg${color_reset}"
+            log "${color_green}ℹ  $formatted_msg${color_reset}"
         } else {
             log "INFO: $formatted_msg"
         }
@@ -131,7 +126,7 @@ proc execute_script {script_name} {
     set script_duration [expr $script_end - $script_start]
     
     if {$use_colors} {
-        log "${color_blue}✅ Completed: $script_name (${script_duration}s)${color_reset}"
+        log "${color_blue} Completed: $script_name (${script_duration}s)${color_reset}"
     } else {
         log "Completed: $script_name (${script_duration}s)"
     }
@@ -149,8 +144,8 @@ proc write_error_report {} {
     puts $report_file "VIVADO BUILD ERROR REPORT"
     puts $report_file "=========================================="
     puts $report_file "Generated: [clock format [clock seconds]]"
-    puts $report_file "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
-    puts $report_file "Board: {{ board.name if board.name else board }}"
+    puts $report_file "Device: {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }} (Class: {{ device.class_code }})"
+    puts $report_file "Board: {{ safe_board_name(board) }}"
     puts $report_file ""
     
     puts $report_file "SUMMARY:"
@@ -252,25 +247,25 @@ log "=========================================="
 log "BUILD SUMMARY"
 log "=========================================="
 log "Total build time: ${duration_min}m ${duration_sec}s"
-log "Device: {{ device.vendor_id }}:{{ device.device_id }} (Class: {{ device.class_code }})"
-log "Board: {{ board.name if board.name else board }}"
+log "Device: {{ get_vendor_id(device_config, device, config_space, vendor_id_int) }}:{{ get_device_id(device_config, device, config_space, device_id_int) }} (Class: {{ device_config.class_code | default(device.class_code) }})"
+log "Board: {{ safe_name(board) }} ({{ safe_board_name(board) }})"
 log "Successful scripts: $successful_scripts/[llength $build_scripts]"
 
 if {$build_errors > 0} {
     if {$use_colors} {
-        log "${color_red}❌ Build FAILED with $build_errors error(s)${color_reset}"
+        log "${color_red} Build FAILED with $build_errors error(s)${color_reset}"
     } else {
         log "BUILD FAILED with $build_errors error(s)"
     }
 } elseif {$build_warnings > 0} {
     if {$use_colors} {
-        log "${color_yellow}⚠️  Build completed with $build_warnings warning(s)${color_reset}"
+        log "${color_yellow}  Build completed with $build_warnings warning(s)${color_reset}"
     } else {
         log "Build completed with $build_warnings warning(s)"
     }
 } else {
     if {$use_colors} {
-        log "${color_green}✅ Build completed successfully!${color_reset}"
+        log "${color_green} Build completed successfully!${color_reset}"
     } else {
         log "Build completed successfully!"
     }
@@ -281,7 +276,7 @@ if {[file exists "pcileech_top.bit"]} {
     set bitfile_size [file size "pcileech_top.bit"]
     set bitfile_size_kb [expr $bitfile_size / 1024]
     if {$use_colors} {
-        log "${color_green}📁 Bitstream: pcileech_top.bit (${bitfile_size_kb} KB)${color_reset}"
+        log "${color_green} Bitstream: pcileech_top.bit (${bitfile_size_kb} KB)${color_reset}"
     } else {
         log "Bitstream: pcileech_top.bit (${bitfile_size_kb} KB)"
     }
