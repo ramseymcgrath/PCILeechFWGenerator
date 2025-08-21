@@ -22,19 +22,21 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-# Try to import project-specific renderer
+# Try to import project-specific renderer (prefer importing as `src.templating`)
 try:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    from templating.template_renderer import TemplateRenderer
+    # Ensure repository root is on sys.path so `src` package can be imported
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from src.templating.template_renderer import TemplateRenderer
 
     HAS_TEMPLATE_RENDERER = True
-except ImportError:
+except Exception:
     HAS_TEMPLATE_RENDERER = False
 
 # Try to import Jinja2
 try:
-    from jinja2 import (Environment, FileSystemLoader, TemplateError,
-                        TemplateSyntaxError)
+    from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateSyntaxError
 
     HAS_JINJA2 = True
 except ImportError:

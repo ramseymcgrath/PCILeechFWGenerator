@@ -63,3 +63,4 @@ site/worker/package-lock.json
 site/site/
 
 .github/copilot-instructions.md
+template_variables_report.json

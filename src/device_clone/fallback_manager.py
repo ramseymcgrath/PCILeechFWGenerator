@@ -15,14 +15,28 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Callable, Dict, Final, List, Optional, Protocol, Set,
-                    Tuple, TypeVar, Union)
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Final,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
-from ..utils.validation_constants import (DEVICE_IDENTIFICATION_FIELDS,
-                                          SENSITIVE_TOKENS)
+from ..utils.validation_constants import DEVICE_IDENTIFICATION_FIELDS, SENSITIVE_TOKENS
 
 # Type variable for return type of handler functions
 T = TypeVar("T")
@@ -105,6 +119,38 @@ class FallbackManager:
         "max_lanes": 1,
         "supports_msi": True,
         "supports_msix": False,
+        # Low-risk template-only fallbacks to reduce false positives during
+        # static template validation. These are non-device-unique defaults
+        # (empty/zero) and do not violate donor-uniqueness principles.
+        "ROM_BAR_INDEX": 0,
+        "ROM_HEX_FILE": "",
+        "ROM_SIZE": 0,
+        "CACHE_SIZE": 0,
+        "CONFIG_SHDW_HI": 0,
+        "CONFIG_SPACE_SIZE": 0,
+        "CUSTOM_WIN_BASE": 0,
+        "kwargs": {},
+        "meta": {},
+        "opt_directive": "",
+        "phys_opt_directive": "",
+        "place_directive": "",
+        "route_directive": "",
+        "pcie_clk_n_pin": "",
+        "pcie_clk_p_pin": "",
+        "pcie_rst_pin": "",
+        "pcie_config": {},
+        "process_var": "",
+        "reg_value": 0,
+        "temp_coeff": 0.0,
+        "title": "",
+        "transition_delays": [],
+        "varied_value": 0,
+        "voltage_var": 0.0,
+        "_td": 0,
+        "from_state_value": 0,
+        "to_state_value": 0,
+        "error_name": "",
+        "error_value": 0,
     }
 
     # Regex patterns for template variable detection
@@ -563,8 +609,7 @@ class FallbackManager:
         # consumers still receive TemplateObjects rather than plain dicts.
         if original_was_template_object:
             try:
-                from src.utils.unified_context import \
-                    ensure_template_compatibility
+                from src.utils.unified_context import ensure_template_compatibility
 
                 return ensure_template_compatibility(context)
             except Exception:

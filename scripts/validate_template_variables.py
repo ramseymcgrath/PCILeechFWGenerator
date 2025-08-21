@@ -15,8 +15,12 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import re
 import sys
+import ast
+import importlib
+import inspect
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
@@ -116,15 +120,183 @@ class VariableDefinition:
 class TemplateVariableValidator:
     """Validates template variables usage and definitions."""
 
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False, capture_runtime: bool = False):
         """Initialize the validator."""
         self.verbose = verbose
         self.variables: Dict[str, VariableDefinition] = {}
-        self.env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
+        self.captured_runtime = False
+        self.capture_runtime = capture_runtime
+        # Prefer using the project's TemplateRenderer so custom filters and
+        # extensions (e.g. safe_int, sv_hex, python_list, {% error %}) are
+        # available during parsing. Fall back to a plain Environment only
+        # if the renderer cannot be imported.
+        try:
+            from src.templating.template_renderer import TemplateRenderer
+
+            renderer = TemplateRenderer(template_dir=TEMPLATES_DIR, strict=True)
+            self.env = renderer.env
+        except Exception:
+            logger.warning(
+                "TemplateRenderer unavailable; falling back to basic Jinja2 Env"
+            )
+            self.env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
 
         # Use shared/global fallback manager for CI validation
         self.fallback_manager = get_global_fallback_manager()
         self.setup_logger()
+        # Register runtime-provided names (Jinja globals, template constants,
+        # and fallback manager keys) as definitions so templates that rely on
+        # injected values aren't reported as unsafe.
+        self._register_runtime_definitions()
+
+    def _register_runtime_definitions(self):
+        """Register names provided by the renderer, constants, and fallbacks."""
+        try:
+            # Jinja global functions/filters available as variables
+            for name in getattr(self.env, "globals", {}).keys():
+                if name in EXCLUDED_VARS:
+                    continue
+                if name not in self.variables:
+                    self.variables[name] = VariableDefinition(name)
+                self.variables[name].add_definition("<jinja_global>")
+        except Exception:
+            pass
+        try:
+            # Register template constants from src.templates.constants
+            from src.templates.constants import get_template_constants
+
+            consts = get_template_constants()
+            for name in consts.keys():
+                if name in EXCLUDED_VARS:
+                    continue
+                if name not in self.variables:
+                    self.variables[name] = VariableDefinition(name)
+                self.variables[name].add_definition("<template_constants>")
+        except Exception:
+            pass
+
+        try:
+            # Fallback manager registered keys should be treated as fallbacks
+            fm = self.fallback_manager
+            exposable = fm.get_exposable_fallbacks()
+            for name in exposable.keys():
+                if name in EXCLUDED_VARS:
+                    continue
+                if name not in self.variables:
+                    self.variables[name] = VariableDefinition(name)
+                self.variables[name].set_fallback_defined()
+                self.variables[name].add_definition("<fallback_manager>")
+        except Exception:
+            pass
+
+    def _capture_runtime_definitions(self):
+        """Attempt to capture runtime template keys by calling safe context builders.
+
+        This method is defensive: each import/call is wrapped in try/except to
+        avoid executing unsafe code paths. We only call functions that take no
+        required arguments (no-arg to_template_context functions) and the
+        BuildContext.to_template_context with a safe, minimal BuildContext.
+        """
+        collected_keys: Set[str] = set()
+
+        # 1) Explicit: BuildContext from src.templating.tcl_builder
+        try:
+            mod = importlib.import_module("src.templating.tcl_builder")
+            if hasattr(mod, "BuildContext"):
+                BuildContext = getattr(mod, "BuildContext")
+                # Instantiate with safe dummy values (required fields only)
+                try:
+                    bc = BuildContext(
+                        board_name="pcileech_35t325_x4",
+                        fpga_part="xc7a35tcsg324-2",
+                        fpga_family="Artix-7",
+                        pcie_ip_type="7x",
+                        max_lanes=1,
+                        supports_msi=False,
+                        supports_msix=False,
+                    )
+                    ctx = bc.to_template_context()
+                    if isinstance(ctx, dict):
+                        collected_keys.update(ctx.keys())
+                except Exception:
+                    # Ignore errors constructing/using BuildContext
+                    pass
+        except Exception:
+            pass
+
+        # 2) Heuristic: import modules under CODE_DIRS and call no-arg
+        #    to_template_context
+        for code_dir in CODE_DIRS:
+            if not code_dir.exists():
+                continue
+            if code_dir.is_file():
+                files = [code_dir]
+            else:
+                files = list(code_dir.glob("**/*.py"))
+
+            for f in files:
+                try:
+                    rel = f.relative_to(Path.cwd())
+                except Exception:
+                    rel = f
+
+                # Build module name from path: e.g. src/templating/foo.py
+                # -> src.templating.foo
+                try:
+                    mod_name = ".".join(Path(rel).with_suffix("").parts)
+                    # Only consider modules under 'src.'
+                    if not mod_name.startswith("src."):
+                        continue
+                    module = importlib.import_module(mod_name)
+                except Exception:
+                    continue
+
+                func = getattr(module, "to_template_context", None)
+                if not func or not callable(func):
+                    continue
+
+                # Ensure function has no required parameters
+                try:
+                    sig = inspect.signature(func)
+                    # If any parameter is required (no default and not VAR_*), skip
+                    skip = False
+                    for p in sig.parameters.values():
+                        if (
+                            p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+                            or p.default is not inspect._empty
+                        ):
+                            continue
+                        # Parameter has no default
+                        skip = True
+                        break
+                    if skip:
+                        continue
+                except Exception:
+                    # Can't introspect, skip to be safe
+                    continue
+
+                # Call the function and collect keys
+                try:
+                    result = func()
+                    if isinstance(result, dict):
+                        collected_keys.update(result.keys())
+                except Exception:
+                    # Some modules may still perform unsafe operations; ignore failures
+                    continue
+
+        # Register captured keys as definitions
+        for key in collected_keys:
+            if key in EXCLUDED_VARS:
+                continue
+            if key not in self.variables:
+                self.variables[key] = VariableDefinition(key)
+            self.variables[key].add_definition("<runtime_capture>")
+
+        if collected_keys:
+            logger.info(f"Captured {len(collected_keys)} runtime template keys")
+            self.captured_runtime = True
+
+    # End _capture_runtime_definitions
 
     def setup_logger(self):
         """Set up logging."""
@@ -146,6 +318,43 @@ class TemplateVariableValidator:
             variables = meta.find_undeclared_variables(ast)
             # Filter out excluded variables
             variables = variables - EXCLUDED_VARS
+
+            # Detect template-local definitions so they aren't reported as missing
+            # Macro parameters: {% macro name(arg1, arg2) %}
+            local_names = set()
+            for m in re.finditer(
+                r"{%\s*macro\s+[\w\.]+\s*\(([^)]*)\)", template_source
+            ):
+                params = m.group(1).strip()
+                if params:
+                    for p in params.split(","):
+                        name = p.split("=")[0].strip()
+                        if name:
+                            local_names.add(name)
+
+            # Set statements: {% set var = ... %}
+            for m in re.finditer(
+                r"{%\s*set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", template_source
+            ):
+                local_names.add(m.group(1))
+
+            # For-loop targets: {% for a, b in ... %} or {% for item in ... %}
+            for m in re.finditer(r"{%\s*for\s+([^\s]+)\s+in\s+", template_source):
+                target = m.group(1)
+                # split on comma for multiple targets
+                for t in target.split(","):
+                    name = t.strip()
+                    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+                        local_names.add(name)
+
+            # Register any local names we care about as definitions
+            for name in local_names:
+                if name in EXCLUDED_VARS:
+                    continue
+                if name not in self.variables:
+                    # create a placeholder so it shows up in details if used
+                    self.variables[name] = VariableDefinition(name)
+                self.variables[name].add_definition("<template_local>")
 
             logger.info(f"Found {len(variables)} variables in {rel_path}")
             return variables
@@ -252,12 +461,212 @@ class TemplateVariableValidator:
                         code_file, patterns, fallback_patterns
                     )
 
+        # Heuristic: scan code files for literal dict keys (e.g. 'vendor_id': ...)
+        # Many template context builders construct dicts with literal keys; treat
+        # those keys as definitions to avoid false positives.
+        key_pattern = re.compile(r"[\'\"]([A-Za-z0-9_]+)[\'\"]\s*:\s*")
+        for code_dir in CODE_DIRS:
+            if code_dir.is_file():
+                files = [code_dir]
+            else:
+                files = list(code_dir.glob("**/*.py"))
+
+            for f in files:
+                try:
+                    content = f.read_text(encoding="utf-8")
+                    for m in key_pattern.finditer(content):
+                        key = m.group(1)
+                        if key in self.variables:
+                            try:
+                                rel = os.path.relpath(str(f), start=str(Path.cwd()))
+                            except Exception:
+                                rel = str(f)
+                            self.variables[key].add_definition(rel)
+                except Exception:
+                    continue
+
+        # Additionally, try AST-based extraction to find literal dict keys and
+        # explicit return dicts inside `to_template_context` functions. This is
+        # more precise than regex scanning and captures nested keys.
+        for code_dir in CODE_DIRS:
+            if code_dir.is_file():
+                afiles = [code_dir]
+            else:
+                afiles = list(code_dir.glob("**/*.py"))
+
+            for f in afiles:
+                try:
+                    src = f.read_text(encoding="utf-8")
+                    tree = ast.parse(src)
+                except Exception:
+                    continue
+
+                # Pre-scan assignments to capture variables assigned to dict literals
+                dict_assigns = {}
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Assign) and isinstance(
+                        node.value, ast.Dict
+                    ):
+                        # Handle simple name targets: tmp = { 'k': v }
+                        for t in node.targets:
+                            if isinstance(t, ast.Name):
+                                keys = set()
+                                for key_node in node.value.keys:
+                                    if isinstance(
+                                        key_node, ast.Constant
+                                    ) and isinstance(key_node.value, str):
+                                        keys.add(key_node.value)
+                                if keys:
+                                    dict_assigns[t.id] = keys
+
+                # Walk AST to find dict literal nodes and return statements
+                for node in ast.walk(tree):
+                    # Detect calls like template_context.update({...}) or context.update({...})
+                    # and extract literal dict keys from the first positional arg when
+                    # it's a dict literal. Also support update(var) where var is
+                    # previously assigned a dict literal (captured in dict_assigns).
+                    if isinstance(node, ast.Call) and isinstance(
+                        node.func, ast.Attribute
+                    ):
+                        if node.func.attr == "update":
+                            # check positional args for dict literals or names
+                            for arg in node.args:
+                                if isinstance(arg, ast.Dict):
+                                    for key_node in arg.keys:
+                                        if isinstance(
+                                            key_node, ast.Constant
+                                        ) and isinstance(key_node.value, str):
+                                            key = key_node.value
+                                            if key in self.variables:
+                                                try:
+                                                    rel = os.path.relpath(
+                                                        str(f), start=str(Path.cwd())
+                                                    )
+                                                except Exception:
+                                                    rel = str(f)
+                                                self.variables[key].add_definition(rel)
+                                elif isinstance(arg, ast.Name):
+                                    # arg refers to a variable name assigned earlier
+                                    varname = arg.id
+                                    keys = dict_assigns.get(varname, set())
+                                    for key in keys:
+                                        if key in self.variables:
+                                            try:
+                                                rel = os.path.relpath(
+                                                    str(f), start=str(Path.cwd())
+                                                )
+                                            except Exception:
+                                                rel = str(f)
+                                            self.variables[key].add_definition(rel)
+
+                    # Dict literal keys like {'vendor_id': ...}
+                    if isinstance(node, ast.Dict):
+                        for key_node in node.keys:
+                            if isinstance(key_node, ast.Constant) and isinstance(
+                                key_node.value, str
+                            ):
+                                key = key_node.value
+                                if key in self.variables:
+                                    try:
+                                        rel = os.path.relpath(
+                                            str(f), start=str(Path.cwd())
+                                        )
+                                    except Exception:
+                                        rel = str(f)
+                                    self.variables[key].add_definition(rel)
+
+                    # Look for functions named to_template_context and returned dicts
+                    if (
+                        isinstance(node, ast.FunctionDef)
+                        and node.name == "to_template_context"
+                    ):
+                        # Search return statements in this function
+                        for sub in ast.walk(node):
+                            if isinstance(sub, ast.Return) and sub.value is not None:
+                                # If the return value is a dict literal, extract keys
+                                if isinstance(sub.value, ast.Dict):
+                                    for key_node in sub.value.keys:
+                                        if isinstance(
+                                            key_node, ast.Constant
+                                        ) and isinstance(key_node.value, str):
+                                            key = key_node.value
+                                            if key in self.variables:
+                                                try:
+                                                    rel = os.path.relpath(
+                                                        str(f), start=str(Path.cwd())
+                                                    )
+                                                except Exception:
+                                                    rel = str(f)
+                                                self.variables[key].add_definition(rel)
+
+                    # Detect subscription assignments like template_context['key'] = ...
+                    if isinstance(node, ast.Assign):
+                        for tgt in node.targets:
+                            if isinstance(tgt, ast.Subscript):
+                                # tgt.value may be Name (template_context) or Attribute
+                                try:
+                                    sub_value = tgt.value
+                                    # slice can be Constant for Python3.8+ or Index(Constant)
+                                    slice_node = tgt.slice
+                                    if isinstance(
+                                        slice_node, ast.Constant
+                                    ) and isinstance(slice_node.value, str):
+                                        key = slice_node.value
+                                    elif (
+                                        isinstance(slice_node, ast.Index)
+                                        and isinstance(slice_node.value, ast.Constant)
+                                        and isinstance(slice_node.value.value, str)
+                                    ):
+                                        key = slice_node.value.value
+                                    else:
+                                        key = None
+
+                                    if key and isinstance(
+                                        sub_value, (ast.Name, ast.Attribute)
+                                    ):
+                                        if key in self.variables:
+                                            try:
+                                                rel = os.path.relpath(
+                                                    str(f), start=str(Path.cwd())
+                                                )
+                                            except Exception:
+                                                rel = str(f)
+                                            self.variables[key].add_definition(rel)
+                                except Exception:
+                                    pass
+
+                    # Detect setdefault calls: template_context.setdefault('key', ...)
+                    if isinstance(node, ast.Call) and isinstance(
+                        node.func, ast.Attribute
+                    ):
+                        if node.func.attr == "setdefault":
+                            # check first positional arg
+                            if node.args:
+                                first = node.args[0]
+                                if isinstance(first, ast.Constant) and isinstance(
+                                    first.value, str
+                                ):
+                                    key = first.value
+                                    if key in self.variables:
+                                        try:
+                                            rel = os.path.relpath(
+                                                str(f), start=str(Path.cwd())
+                                            )
+                                        except Exception:
+                                            rel = str(f)
+                                        self.variables[key].add_definition(rel)
+
     def _search_file_for_definitions(
         self, file_path: Path, patterns: List[str], fallback_patterns: List[str]
     ):
         """Search a file for variable definitions and fallbacks."""
         file_content = file_path.read_text(encoding="utf-8")
-        rel_path = file_path.relative_to(Path.cwd())
+        # Use os.path.relpath which tolerates absolute vs relative mixes and
+        # files outside the current working directory.
+        try:
+            rel_path = os.path.relpath(str(file_path), start=str(Path.cwd()))
+        except Exception:
+            rel_path = str(file_path)
 
         # Look for direct definitions
         for pattern in patterns:
@@ -274,6 +683,29 @@ class TemplateVariableValidator:
                 if var_name in self.variables:
                     self.variables[var_name].set_fallback_defined()
                     logger.info(f"Found fallback for {var_name} in {rel_path}")
+
+        # Heuristic: detect keys returned by `to_template_context()` functions.
+        # Many builder classes return a literal dict with the template keys; scan
+        # the function body for string keys in dict literals and register them.
+        try:
+            if "def to_template_context" in file_content:
+                for func_match in re.finditer(
+                    r"def\s+to_template_context\s*\([^\)]*\):([\s\S]*?)(?:\n\s*\n|\Z)",
+                    file_content,
+                ):
+                    body = func_match.group(1)
+                    for key_match in re.finditer(
+                        r"[\"']([A-Za-z0-9_]+)[\"']\s*:\s", body
+                    ):
+                        var_name = key_match.group(1)
+                        if var_name in self.variables:
+                            self.variables[var_name].add_definition(str(rel_path))
+                            logger.info(
+                                f"Found definition for {var_name} in {rel_path} (to_template_context)"
+                            )
+        except Exception:
+            # Non-critical heuristic; ignore failures
+            pass
 
     def generate_report(self) -> Tuple[Dict, List[str]]:
         """Generate a report of variable status."""
@@ -380,7 +812,14 @@ class TemplateVariableValidator:
         # Scan templates
         self.scan_template_files()
 
-        # Find definitions
+        # Optionally capture runtime-provided definitions (safe mode)
+        if getattr(self, "capture_runtime", False):
+            try:
+                self._capture_runtime_definitions()
+            except Exception:
+                logger.warning("Runtime capture failed; continuing")
+
+        # Find definitions (static analysis)
         self.find_variable_definitions()
 
         # Generate report
@@ -400,6 +839,11 @@ def main():
     parser = argparse.ArgumentParser(description="Validate template variables")
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose output"
+    )
+    parser.add_argument(
+        "--capture-runtime",
+        action="store_true",
+        help="Attempt to import and call safe context builders to capture keys",
     )
     parser.add_argument(
         "--fix",
