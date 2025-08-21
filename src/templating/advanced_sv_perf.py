@@ -14,9 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from ..string_utils import (generate_sv_header_comment, log_error_safe,
-                            log_info_safe, log_warning_safe, safe_format,
-                            safe_log_format)
+from ..string_utils import log_info_safe, safe_format
 
 __all__ = [
     "DeviceType",

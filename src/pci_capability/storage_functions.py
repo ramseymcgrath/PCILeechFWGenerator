@@ -67,8 +67,11 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         device_lower = self.device_id & 0xFF00
         device_upper = (self.device_id >> 8) & 0xFF
 
+        # Import vendor ID constants
+        from src.device_clone.constants import VENDOR_ID_INTEL
+
         # Vendor-specific patterns
-        if self.vendor_id == 0x8086:  # Intel
+        if self.vendor_id == VENDOR_ID_INTEL:  # Intel
             if device_lower in [0x2800, 0x2900, 0x3A00]:  # SATA ranges
                 return "sata"
             elif device_lower in [0x0900, 0x0A00]:  # NVMe ranges

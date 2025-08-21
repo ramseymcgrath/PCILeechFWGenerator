@@ -770,7 +770,11 @@ class ConfigSpaceManager:
 
         # Use resilient device lookup to fill in any missing information
         try:
-            from src.device_clone.device_info_lookup import lookup_device_info
+            # Use dynamic import to avoid circular dependency
+            device_info_lookup = importlib.import_module(
+                "src.device_clone.device_info_lookup"
+            )
+            lookup_device_info = getattr(device_info_lookup, "lookup_device_info")
 
             # Get complete device info with fallback mechanisms, passing flag to prevent recursion
             device_info = lookup_device_info(

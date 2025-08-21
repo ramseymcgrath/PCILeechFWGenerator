@@ -33,9 +33,20 @@ else:
 
 # Now import and run the build module
 if __name__ == "__main__":
-    # Import the build module
-    import build
+    try:
+        # Import the build module
+        from src import build
 
-    # Run the main function with the original arguments
-    sys.argv[0] = "build.py"  # Fix the script name for argument parsing
-    build.main()
+        # Run the main function with the original arguments
+        sys.argv[0] = "build.py"  # Fix the script name for argument parsing
+        build.main()
+    except (ImportError, AttributeError) as e:
+        # Try alternative import path
+        try:
+            import build
+
+            sys.argv[0] = "build.py"  # Fix the script name for argument parsing
+            build.main()
+        except (ImportError, AttributeError):
+            print(f"Error: Could not import build module or main function: {e}")
+            sys.exit(1)

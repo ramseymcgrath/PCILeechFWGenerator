@@ -294,12 +294,16 @@ def _validate_driver_compatibility(
 
     # Device-specific warnings
     vendor_id = device_info.get("vendor_id", 0)
-    if vendor_id == 0x8086:  # Intel
+
+    # Import vendor ID constants
+    from src.device_clone.constants import VENDOR_ID_INTEL, VENDOR_ID_NVIDIA
+
+    if vendor_id == VENDOR_ID_INTEL:  # Intel
         if table_size > 128:
             warnings.append(
                 "Intel devices with >128 MSI-X vectors may have compatibility issues"
             )
-    elif vendor_id == 0x10DE:  # NVIDIA
+    elif vendor_id == VENDOR_ID_NVIDIA:  # NVIDIA
         if table_bar != 0:
             warnings.append("NVIDIA drivers typically expect MSI-X structures in BAR 0")
 
@@ -377,46 +381,49 @@ def auto_fix_msix_configuration(
         return fixed_bars, fixed_capabilities, fix_messages
 
     msix_cap = fixed_capabilities[msix_cap_index]
-    table_bar = msix_cap.get("table_bar", 0)
-    pba_bar = msix_cap.get("pba_bar", 0)
-    table_size = msix_cap.get("table_size", 0) + 1
+    table_bar_index = msix_cap.get("table_bar", 0)
+    pba_bar_index = msix_cap.get("pba_bar", 0)
+    table_size_value = msix_cap.get("table_size", 0) + 1
 
     # Fix 1: Align offsets to 4KB boundaries
-    table_offset = msix_cap.get("table_offset", 0)
-    if table_offset % 0x1000 != 0:
-        new_offset = ((table_offset + 0xFFF) // 0x1000) * 0x1000
-        msix_cap["table_offset"] = new_offset
-        fix_messages.append(f"Aligned MSI-X table offset to 0x{new_offset:x}")
+    table_offset_value = msix_cap.get("table_offset", 0)
+    if table_offset_value % 0x1000 != 0:
+        new_table_offset = ((table_offset_value + 0xFFF) // 0x1000) * 0x1000
+        msix_cap["table_offset"] = new_table_offset
+        fix_messages.append(f"Aligned MSI-X table offset to 0x{new_table_offset:x}")
 
-    pba_offset = msix_cap.get("pba_offset", 0)
-    if pba_offset % 0x1000 != 0:
-        new_offset = ((pba_offset + 0xFFF) // 0x1000) * 0x1000
-        msix_cap["pba_offset"] = new_offset
-        fix_messages.append(f"Aligned MSI-X PBA offset to 0x{new_offset:x}")
+    pba_offset_value = msix_cap.get("pba_offset", 0)
+    if pba_offset_value % 0x1000 != 0:
+        new_pba_offset = ((pba_offset_value + 0xFFF) // 0x1000) * 0x1000
+        msix_cap["pba_offset"] = new_pba_offset
+        fix_messages.append(f"Aligned MSI-X PBA offset to 0x{new_pba_offset:x}")
 
     # Fix 2: Resolve overlaps in same BAR
-    if table_bar == pba_bar:
-        table_offset = msix_cap.get("table_offset", 0)
-        pba_offset = msix_cap.get("pba_offset", 0)
-        table_size_bytes = table_size * 16
-        table_end = table_offset + table_size_bytes
-        pba_size_bytes = ((table_size + 31) // 32) * 4
-        pba_end = pba_offset + pba_size_bytes
+    if table_bar_index == pba_bar_index:
+        updated_table_offset = msix_cap.get("table_offset", 0)
+        updated_pba_offset = msix_cap.get("pba_offset", 0)
+        table_size_bytes = table_size_value * 16
+        table_end_value = updated_table_offset + table_size_bytes
+        pba_size_bytes = ((table_size_value + 31) // 32) * 4
+        pba_end_value = updated_pba_offset + pba_size_bytes
 
-        if table_offset < pba_end and table_end > pba_offset:
+        if (
+            updated_table_offset < pba_end_value
+            and table_end_value > updated_pba_offset
+        ):
             # Move PBA after table
-            new_pba_offset = ((table_end + 0xFFF) // 0x1000) * 0x1000
-            msix_cap["pba_offset"] = new_pba_offset
+            new_pba_offset_value = ((table_end_value + 0xFFF) // 0x1000) * 0x1000
+            msix_cap["pba_offset"] = new_pba_offset_value
             fix_messages.append(
-                f"Moved MSI-X PBA to 0x{new_pba_offset:x} to avoid table overlap"
+                f"Moved MSI-X PBA to 0x{new_pba_offset_value:x} to avoid table overlap"
             )
 
     # Fix 3: Ensure adequate BAR sizes
     for bar_config in fixed_bars:
         bar_index = bar_config.get("bar", -1)
 
-        if bar_index == table_bar:
-            required_size = msix_cap.get("table_offset", 0) + (table_size * 16)
+        if bar_index == table_bar_index:
+            required_size = msix_cap.get("table_offset", 0) + (table_size_value * 16)
             required_size = (
                 (required_size + 0xFFF) // 0x1000
             ) * 0x1000  # Round up to 4KB
@@ -426,8 +433,8 @@ def auto_fix_msix_configuration(
                     f"Increased BAR {bar_index} size to 0x{required_size:x} for MSI-X table"
                 )
 
-        if bar_index == pba_bar:
-            pba_size_bytes = ((table_size + 31) // 32) * 4
+        if bar_index == pba_bar_index:
+            pba_size_bytes = ((table_size_value + 31) // 32) * 4
             required_size = msix_cap.get("pba_offset", 0) + pba_size_bytes
             required_size = (
                 (required_size + 0xFFF) // 0x1000
@@ -441,24 +448,24 @@ def auto_fix_msix_configuration(
     # Fix 4: Move structures away from reserved regions
     reserved_end = 0x8000  # First 32KB reserved for control regions
 
-    table_offset = msix_cap.get("table_offset", 0)
-    if table_offset < reserved_end:
-        new_offset = ((reserved_end + 0xFFF) // 0x1000) * 0x1000
-        msix_cap["table_offset"] = new_offset
+    updated_table_offset = msix_cap.get("table_offset", 0)
+    if updated_table_offset < reserved_end:
+        new_table_offset_value = ((reserved_end + 0xFFF) // 0x1000) * 0x1000
+        msix_cap["table_offset"] = new_table_offset_value
         fix_messages.append(
-            f"Moved MSI-X table to 0x{new_offset:x} to avoid reserved region"
+            f"Moved MSI-X table to 0x{new_table_offset_value:x} to avoid reserved region"
         )
 
-    pba_offset = msix_cap.get("pba_offset", 0)
-    if pba_offset < reserved_end:
-        new_offset = ((reserved_end + 0xFFF) // 0x1000) * 0x1000
+    updated_pba_offset = msix_cap.get("pba_offset", 0)
+    if updated_pba_offset < reserved_end:
+        new_pba_offset_value = ((reserved_end + 0xFFF) // 0x1000) * 0x1000
         # Ensure no overlap with moved table
-        table_end = msix_cap.get("table_offset", 0) + (table_size * 16)
-        if new_offset < table_end:
-            new_offset = ((table_end + 0xFFF) // 0x1000) * 0x1000
-        msix_cap["pba_offset"] = new_offset
+        updated_table_end = msix_cap.get("table_offset", 0) + (table_size_value * 16)
+        if new_pba_offset_value < updated_table_end:
+            new_pba_offset_value = ((updated_table_end + 0xFFF) // 0x1000) * 0x1000
+        msix_cap["pba_offset"] = new_pba_offset_value
         fix_messages.append(
-            f"Moved MSI-X PBA to 0x{new_offset:x} to avoid reserved region"
+            f"Moved MSI-X PBA to 0x{new_pba_offset_value:x} to avoid reserved region"
         )
 
     return fixed_bars, fixed_capabilities, fix_messages
@@ -527,7 +534,10 @@ if __name__ == "__main__":
         }
     ]
 
-    sample_device = {"vendor_id": 0x8086, "device_id": 0x1572}
+    # Import vendor ID constant for sample
+    from src.device_clone.constants import VENDOR_ID_INTEL
+
+    sample_device = {"vendor_id": VENDOR_ID_INTEL, "device_id": 0x1572}
 
     is_valid, errors, warnings = validate_msix_bar_configuration(
         sample_bars, sample_capabilities, sample_device

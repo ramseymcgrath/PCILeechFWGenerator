@@ -61,18 +61,22 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         device_lower = self.device_id & 0xFF00
         device_upper = (self.device_id >> 8) & 0xFF
 
+        # Import vendor ID constants
+        from src.device_clone.constants import (VENDOR_ID_AMD, VENDOR_ID_INTEL,
+                                                VENDOR_ID_NVIDIA)
+
         # Vendor-specific patterns
-        if self.vendor_id == 0x8086:  # Intel
+        if self.vendor_id == VENDOR_ID_INTEL:  # Intel
             if device_lower in [0x2600, 0x2700, 0x2800]:  # HD Audio ranges
                 return "hdaudio"
             elif device_lower in [0x5900, 0x5A00]:  # Video ranges
                 return "video"
-        elif self.vendor_id == 0x10DE:  # NVIDIA
+        elif self.vendor_id == VENDOR_ID_NVIDIA:  # NVIDIA
             if device_lower in [0x0E00, 0x0F00]:  # Audio over HDMI
                 return "hdaudio"
             elif device_lower in [0x1000, 0x1100]:  # Video capture
                 return "video"
-        elif self.vendor_id == 0x1002:  # AMD/ATI
+        elif self.vendor_id == VENDOR_ID_AMD:  # AMD/ATI
             if device_lower in [0xAA00, 0xAB00]:  # Audio
                 return "hdaudio"
         elif self.vendor_id == 0x13F6:  # C-Media

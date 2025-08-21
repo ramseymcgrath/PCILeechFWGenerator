@@ -5,6 +5,73 @@ This module consolidates board mappings and other constants that were
 previously duplicated across the build system.
 """
 
+import random
+from typing import Dict, Final, List, Optional, Union
+
+# Import the VendorID enum for use in fallback functions
+try:
+    from src.pci_capability.dynamic_functions import \
+        VendorID as ExternalVendorID
+
+    # Use the external VendorID enum values
+    VENDOR_ID_INTEL = ExternalVendorID.INTEL
+    VENDOR_ID_REALTEK = ExternalVendorID.REALTEK
+    VENDOR_ID_NVIDIA = ExternalVendorID.NVIDIA
+    VENDOR_ID_AMD = ExternalVendorID.AMD_ATI
+except ImportError:
+    # Define fallback values if the import fails
+    VENDOR_ID_INTEL = 0x8086
+    VENDOR_ID_REALTEK = 0x10EC
+    VENDOR_ID_NVIDIA = 0x10DE
+    VENDOR_ID_AMD = 0x1002
+
+# Common device IDs
+DEVICE_ID_GENERIC = 0x1234  # Generic device ID for fallback
+DEVICE_ID_INTEL_ETH = 0x1533  # Intel I210 Gigabit Network Connection
+DEVICE_ID_INTEL_NVME = 0x2522  # Intel NVMe SSD Controller
+DEVICE_ID_NVIDIA_GPU = 0x2204  # NVIDIA RTX GPU
+
+# Fallback vendor ID list for generating random vendor IDs when needed
+FALLBACK_VENDOR_IDS: Final[List[int]] = [
+    VENDOR_ID_INTEL,  # Intel
+    VENDOR_ID_REALTEK,  # Realtek
+    VENDOR_ID_NVIDIA,  # NVIDIA
+    VENDOR_ID_AMD,  # AMD/ATI
+]
+
+
+def get_fallback_vendor_id(prefer_random: bool = False) -> int:
+    """Get a fallback vendor ID, randomly selecting from list if requested.
+
+    Args:
+        prefer_random: If True, returns a random vendor ID from the fallback list.
+                      If False, returns Intel's vendor ID (0x8086).
+
+    Returns:
+        A vendor ID integer to use as fallback.
+    """
+    if prefer_random:
+        return random.choice(FALLBACK_VENDOR_IDS)
+    return VENDOR_ID_INTEL  # Default to Intel
+
+
+def get_fallback_device_id(vendor_id: Optional[int] = None) -> int:
+    """Get a fallback device ID appropriate for the given vendor ID.
+
+    Args:
+        vendor_id: The vendor ID to get a matching device ID for.
+                  If None, returns the generic device ID (0x1234).
+
+    Returns:
+        A device ID integer to use as fallback.
+    """
+    if vendor_id == VENDOR_ID_INTEL:
+        return DEVICE_ID_INTEL_ETH
+    elif vendor_id == VENDOR_ID_NVIDIA:
+        return DEVICE_ID_NVIDIA_GPU
+    return DEVICE_ID_GENERIC  # Default to generic device ID
+
+
 # Board to FPGA part mapping
 BOARD_PARTS = {
     # Original boards

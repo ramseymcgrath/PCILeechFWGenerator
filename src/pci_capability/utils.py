@@ -9,9 +9,50 @@ categorization, and pruning operations.
 import logging
 from typing import Dict
 
-from .constants import TWO_BYTE_HEADER_CAPABILITIES
+# Import local modules
+from .constants import (  # Standard capability size constants; Extended capability size constants
+    EXT_CAP_SIZE_ACCESS_CONTROL_SERVICES,
+    EXT_CAP_SIZE_ADVANCED_ERROR_REPORTING, EXT_CAP_SIZE_DEFAULT,
+    EXT_CAP_SIZE_DOWNSTREAM_PORT_CONTAINMENT, EXT_CAP_SIZE_RESIZABLE_BAR,
+    EXTENDED_CAPABILITY_NAMES, PCI_EXT_CAP_ALIGNMENT, PCI_EXT_CAP_START,
+    PCI_EXT_CONFIG_SPACE_END, STANDARD_CAPABILITY_NAMES, STD_CAP_SIZE_DEFAULT,
+    STD_CAP_SIZE_MSI, STD_CAP_SIZE_MSI_X, STD_CAP_SIZE_PCI_EXPRESS,
+    STD_CAP_SIZE_POWER_MANAGEMENT, TWO_BYTE_HEADER_CAPABILITIES)
 from .types import (CapabilityInfo, CapabilityType, EmulationCategory,
                     PCICapabilityID, PCIExtCapabilityID, PruningAction)
+
+# Global logger for this module
+module_logger = logging.getLogger(__name__)
+
+# Import project utilities or use fallbacks
+try:
+    from string_utils import log_info_safe, safe_format
+except ImportError:
+    # Fallback implementations for standalone use
+    def log_info_safe(log_instance, template, **kwargs):
+        """
+        Safe logging of info messages with string formatting.
+
+        Args:
+            log_instance: Logger instance
+            template: Message template with placeholders
+            **kwargs: Values for template placeholders
+        """
+        log_instance.info(template.format(**kwargs))
+
+    def safe_format(template, **kwargs):
+        """
+        Safe string formatting that won't raise exceptions.
+
+        Args:
+            template: String template with placeholders
+            **kwargs: Values for template placeholders
+
+        Returns:
+            Formatted string
+        """
+        return template.format(**kwargs)
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,47 +83,33 @@ def categorize_capability(cap_info: CapabilityInfo) -> EmulationCategory:
     cap_id = cap_info.cap_id
     cap_type = cap_info.cap_type
 
+    # Default category
+    category = EmulationCategory.UNSUPPORTED
+
     if cap_type == CapabilityType.STANDARD:
         # Categorize standard capabilities
         if cap_id == PCICapabilityID.POWER_MANAGEMENT.value:
-            return EmulationCategory.PARTIALLY_SUPPORTED
+            category = EmulationCategory.PARTIALLY_SUPPORTED
         elif cap_id == PCICapabilityID.MSI.value:
-            return EmulationCategory.FULLY_SUPPORTED
+            category = EmulationCategory.FULLY_SUPPORTED
         elif cap_id == PCICapabilityID.MSI_X.value:
-            return EmulationCategory.FULLY_SUPPORTED
+            category = EmulationCategory.FULLY_SUPPORTED
         elif cap_id == PCICapabilityID.PCI_EXPRESS.value:
-            return EmulationCategory.PARTIALLY_SUPPORTED
-        elif cap_id in [
-            PCICapabilityID.AGP.value,
-            PCICapabilityID.VPD.value,
-            PCICapabilityID.SLOT_ID.value,
-            PCICapabilityID.PCI_X.value,
-            PCICapabilityID.AF.value,
-            PCICapabilityID.VENDOR_SPECIFIC.value,
-        ]:
-            return EmulationCategory.UNSUPPORTED
-        else:
-            # Unknown standard capability - unsupported
-            return EmulationCategory.UNSUPPORTED
-
+            category = EmulationCategory.PARTIALLY_SUPPORTED
     elif cap_type == CapabilityType.EXTENDED:
         # Categorize extended capabilities
         if cap_id == PCIExtCapabilityID.ADVANCED_ERROR_REPORTING.value:
-            return EmulationCategory.PARTIALLY_SUPPORTED
+            category = EmulationCategory.PARTIALLY_SUPPORTED
         elif cap_id == PCIExtCapabilityID.ACCESS_CONTROL_SERVICES.value:
             # ACS - partially supported as requested
-            return EmulationCategory.PARTIALLY_SUPPORTED
+            category = EmulationCategory.PARTIALLY_SUPPORTED
         elif cap_id == PCIExtCapabilityID.DOWNSTREAM_PORT_CONTAINMENT.value:
             # DPC - partially supported as requested
-            return EmulationCategory.PARTIALLY_SUPPORTED
+            category = EmulationCategory.PARTIALLY_SUPPORTED
         elif cap_id == PCIExtCapabilityID.RESIZABLE_BAR.value:
-            return EmulationCategory.PARTIALLY_SUPPORTED
-        else:
-            # All other extended capabilities - unsupported
-            return EmulationCategory.UNSUPPORTED
+            category = EmulationCategory.PARTIALLY_SUPPORTED
 
-    # Default to unsupported for unknown types
-    return EmulationCategory.UNSUPPORTED
+    return category
 
 
 def categorize_capabilities(
@@ -115,17 +142,16 @@ def determine_pruning_action(category: EmulationCategory) -> PruningAction:
     Returns:
         PruningAction to take for the capability
     """
-    if category == EmulationCategory.FULLY_SUPPORTED:
-        return PruningAction.KEEP
-    elif category == EmulationCategory.PARTIALLY_SUPPORTED:
-        return PruningAction.MODIFY
-    elif category == EmulationCategory.UNSUPPORTED:
-        return PruningAction.REMOVE
-    elif category == EmulationCategory.CRITICAL:
-        return PruningAction.KEEP
-    else:
-        # Default to remove for unknown categories
-        return PruningAction.REMOVE
+    # Map categories to actions
+    action_map = {
+        EmulationCategory.FULLY_SUPPORTED: PruningAction.KEEP,
+        EmulationCategory.PARTIALLY_SUPPORTED: PruningAction.MODIFY,
+        EmulationCategory.UNSUPPORTED: PruningAction.REMOVE,
+        EmulationCategory.CRITICAL: PruningAction.KEEP,
+    }
+
+    # Default to remove for unknown categories
+    return action_map.get(category, PruningAction.REMOVE)
 
 
 def determine_pruning_actions(
@@ -143,7 +169,7 @@ def determine_pruning_actions(
     """
     actions = {}
 
-    for offset, cap_info in capabilities.items():
+    for offset in capabilities:
         category = categories.get(offset, EmulationCategory.UNSUPPORTED)
         actions[offset] = determine_pruning_action(category)
 
@@ -162,8 +188,6 @@ def get_capability_name(cap_id: int, cap_type: CapabilityType) -> str:
         Human-readable capability name
     """
     if cap_type == CapabilityType.STANDARD:
-        from .constants import STANDARD_CAPABILITY_NAMES
-
         return STANDARD_CAPABILITY_NAMES.get(
             cap_id,
             safe_format(
@@ -171,24 +195,22 @@ def get_capability_name(cap_id: int, cap_type: CapabilityType) -> str:
                 cap_id=cap_id,
             ),
         )
-    else:
-        from .constants import EXTENDED_CAPABILITY_NAMES
 
-        name = EXTENDED_CAPABILITY_NAMES.get(
-            cap_id,
-            safe_format(
-                "Unknown Extended (0x{cap_id:04x})",
-                cap_id=cap_id,
-            ),
+    name = EXTENDED_CAPABILITY_NAMES.get(
+        cap_id,
+        safe_format(
+            "Unknown Extended (0x{cap_id:04x})",
+            cap_id=cap_id,
+        ),
+    )
+    if cap_id not in EXTENDED_CAPABILITY_NAMES and cap_id <= 0x0029:
+        log_info_safe(
+            module_logger,
+            "Unknown extended capability ID 0x{cap_id:04x} encountered",
+            prefix="PCI_CAP",
+            cap_id=cap_id,
         )
-        if cap_id not in EXTENDED_CAPABILITY_NAMES and cap_id <= 0x0029:
-            log_info_safe(
-                logger,
-                "Unknown extended capability ID 0x{cap_id:04x} encountered",
-                prefix="PCI_CAP",
-                cap_id=cap_id,
-            )
-        return name
+    return name
 
 
 def validate_capability_offset(offset: int, cap_type: CapabilityType) -> bool:
@@ -206,15 +228,12 @@ def validate_capability_offset(offset: int, cap_type: CapabilityType) -> bool:
         # Standard capabilities should be in the first 256 bytes
         # and typically start after the standard header (0x40+)
         return 0x40 <= offset < 0x100
-    else:
-        # Extended capabilities start at 0x100 and should be DWORD aligned
-        from .constants import (PCI_EXT_CAP_ALIGNMENT, PCI_EXT_CAP_START,
-                                PCI_EXT_CONFIG_SPACE_END)
 
-        return (
-            PCI_EXT_CAP_START <= offset < PCI_EXT_CONFIG_SPACE_END
-            and offset & PCI_EXT_CAP_ALIGNMENT == 0
-        )
+    # Extended capabilities start at 0x100 and should be DWORD aligned
+    return (
+        PCI_EXT_CAP_START <= offset < PCI_EXT_CONFIG_SPACE_END
+        and offset & PCI_EXT_CAP_ALIGNMENT == 0
+    )
 
 
 def format_capability_info(cap_info: CapabilityInfo) -> str:
@@ -222,19 +241,26 @@ def format_capability_info(cap_info: CapabilityInfo) -> str:
     Format capability information for display.
 
     Args:
-        cap_info: CapabilityInfo object to format
+        cap_info: CapabilityInfo object to forma
 
     Returns:
         Formatted string representation of the capability
     """
     if cap_info.cap_type == CapabilityType.STANDARD:
         return safe_format(
-            "Standard Cap @ 0x{cap_info.offset:02x}: {cap_info.name} (ID: 0x{cap_info.cap_id:02x})"
+            "Standard Cap @ 0x{offset:02x}: {name} (ID: 0x{cap_id:02x})",
+            offset=cap_info.offset,
+            name=cap_info.name,
+            cap_id=cap_info.cap_id,
         )
-    else:
-        return safe_format(
-            "Extended Cap @ 0x{cap_info.offset:03x}: {cap_info.name} (ID: 0x{cap_info.cap_id:04x}, Ver: {cap_info.version})"
-        )
+
+    return safe_format(
+        "Extended Cap @ 0x{offset:03x}: {name} (ID: 0x{cap_id:04x}, Ver: {version})",
+        offset=cap_info.offset,
+        name=cap_info.name,
+        cap_id=cap_info.cap_id,
+        version=cap_info.version,
+    )
 
 
 def get_capability_size_estimate(cap_info: CapabilityInfo) -> int:
@@ -245,7 +271,7 @@ def get_capability_size_estimate(cap_info: CapabilityInfo) -> int:
     bounds checking and space calculations.
 
     Args:
-        cap_info: CapabilityInfo object
+        cap_info: CapabilityInfo objec
 
     Returns:
         Estimated size in bytes
@@ -253,28 +279,25 @@ def get_capability_size_estimate(cap_info: CapabilityInfo) -> int:
     cap_id = cap_info.cap_id
     cap_type = cap_info.cap_type
 
-    if cap_type == CapabilityType.STANDARD:
-        # Standard capability size estimates
-        if cap_id == PCICapabilityID.POWER_MANAGEMENT.value:
-            return 8  # PM capability is typically 8 bytes
-        elif cap_id == PCICapabilityID.MSI.value:
-            return 24  # MSI can be 10-24 bytes depending on features
-        elif cap_id == PCICapabilityID.MSI_X.value:
-            return 12  # MSI-X capability structure is 12 bytes
-        elif cap_id == PCICapabilityID.PCI_EXPRESS.value:
-            return 60  # PCIe capability can be quite large
-        else:
-            return 16  # Default estimate for unknown standard capabilities
+    # Default sizes
+    standard_default = STD_CAP_SIZE_DEFAULT
+    extended_default = EXT_CAP_SIZE_DEFAULT
 
-    else:
-        # Extended capability size estimates
-        if cap_id == PCIExtCapabilityID.ADVANCED_ERROR_REPORTING.value:
-            return 48  # AER is typically 48 bytes
-        elif cap_id == PCIExtCapabilityID.ACCESS_CONTROL_SERVICES.value:
-            return 8  # ACS is typically 8 bytes
-        elif cap_id == PCIExtCapabilityID.DOWNSTREAM_PORT_CONTAINMENT.value:
-            return 16  # DPC is typically 16 bytes
-        elif cap_id == PCIExtCapabilityID.RESIZABLE_BAR.value:
-            return 16  # Resizable BAR varies, but 16 bytes is common
-        else:
-            return 32  # Default estimate for unknown extended capabilities
+    if cap_type == CapabilityType.STANDARD:
+        # Standard capability size map
+        std_size_map = {
+            PCICapabilityID.POWER_MANAGEMENT.value: STD_CAP_SIZE_POWER_MANAGEMENT,
+            PCICapabilityID.MSI.value: STD_CAP_SIZE_MSI,
+            PCICapabilityID.MSI_X.value: STD_CAP_SIZE_MSI_X,
+            PCICapabilityID.PCI_EXPRESS.value: STD_CAP_SIZE_PCI_EXPRESS,
+        }
+        return std_size_map.get(cap_id, standard_default)
+
+    # Extended capability size map
+    ext_size_map = {
+        PCIExtCapabilityID.ADVANCED_ERROR_REPORTING.value: EXT_CAP_SIZE_ADVANCED_ERROR_REPORTING,
+        PCIExtCapabilityID.ACCESS_CONTROL_SERVICES.value: EXT_CAP_SIZE_ACCESS_CONTROL_SERVICES,
+        PCIExtCapabilityID.DOWNSTREAM_PORT_CONTAINMENT.value: EXT_CAP_SIZE_DOWNSTREAM_PORT_CONTAINMENT,
+        PCIExtCapabilityID.RESIZABLE_BAR.value: EXT_CAP_SIZE_RESIZABLE_BAR,
+    }
+    return ext_size_map.get(cap_id, extended_default)

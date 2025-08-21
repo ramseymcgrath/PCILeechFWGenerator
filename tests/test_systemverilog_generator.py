@@ -360,6 +360,16 @@ class TestAdvancedSVGenerator:
                 },
                 "device_signature": "0xDEADBEEF",  # Required security field
                 "active_device_config": {},  # Required by SystemVerilog generator
+                "bar_config": {
+                    "bars": [
+                        {
+                            "type": "memory",
+                            "size": 0x1000,
+                            "prefetchable": False,
+                            "is_64bit": False,
+                        }
+                    ]
+                },
             }
 
             result = generator.generate_pcileech_modules(template_context)
@@ -406,6 +416,16 @@ class TestAdvancedSVGenerator:
                         "msix_config": {"is_supported": True, "num_vectors": 4},
                         "device_signature": "0xCAFEBABE",
                         "active_device_config": {},  # Required by SystemVerilog generator
+                        "bar_config": {
+                            "bars": [
+                                {
+                                    "type": "memory",
+                                    "size": 0x1000,
+                                    "prefetchable": False,
+                                    "is_64bit": False,
+                                }
+                            ]
+                        },
                     }
 
                     result = generator.generate_pcileech_modules(template_context)
@@ -450,6 +470,16 @@ class TestAdvancedSVGenerator:
                 },
                 "device_signature": "0xCAFEBABE",
                 "active_device_config": {},  # Required by SystemVerilog generator
+                "bar_config": {
+                    "bars": [
+                        {
+                            "type": "memory",
+                            "size": 0x1000,
+                            "prefetchable": False,
+                            "is_64bit": False,
+                        }
+                    ]
+                },
             }
 
             with pytest.raises(TemplateRenderError, match="PCILeech template error"):

@@ -6,6 +6,7 @@ This module provides memory profiling and monitoring capabilities to help
 optimize memory usage during large firmware generation operations.
 """
 
+import functools
 import logging
 import tracemalloc
 from contextlib import contextmanager

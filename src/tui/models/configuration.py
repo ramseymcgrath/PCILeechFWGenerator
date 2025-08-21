@@ -132,6 +132,7 @@ class BuildConfiguration(BaseModel):
 
     # Validators
     @field_validator("board_type")
+    @classmethod
     def validate_board_type(cls, v):
         """Validate that the board type is supported."""
         if v not in VALID_BOARD_TYPES:
@@ -141,6 +142,7 @@ class BuildConfiguration(BaseModel):
         return v
 
     @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate that the name is not empty."""
         if not v or len(v.strip()) == 0:
@@ -148,6 +150,7 @@ class BuildConfiguration(BaseModel):
         return v.strip()
 
     @field_validator("device_type")
+    @classmethod
     def validate_device_type(cls, v):
         """Validate that the device type is supported."""
         if v not in VALID_DEVICE_TYPES:
@@ -157,6 +160,7 @@ class BuildConfiguration(BaseModel):
         return v
 
     @field_validator("optimization_level")
+    @classmethod
     def validate_optimization_level(cls, v):
         """Validate that the optimization level is supported."""
         if v not in VALID_OPTIMIZATION_LEVELS:
@@ -166,6 +170,7 @@ class BuildConfiguration(BaseModel):
         return v
 
     @field_validator("profile_duration")
+    @classmethod
     def validate_profile_duration(cls, v):
         """Validate that the profile duration is reasonable."""
         if v <= 0:
@@ -289,6 +294,7 @@ class BuildProgress(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
     @field_validator("status")
+    @classmethod
     def validate_status(cls, v):
         """Validate that the status is one of the allowed values."""
         valid_statuses = ["pending", "running", "completed", "failed", "cancelled"]

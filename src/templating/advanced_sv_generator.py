@@ -16,8 +16,7 @@ from typing import Dict, List, Optional, Union
 
 # Import device configuration system
 from ..device_clone import DeviceConfiguration as NewDeviceConfiguration
-from ..device_clone import (ManufacturingVarianceSimulator, VarianceModel,
-                            get_device_config)
+from ..device_clone import VarianceModel
 from ..device_clone.manufacturing_variance import DeviceClass
 # Import from centralized utils
 from ..string_utils import generate_sv_header_comment
@@ -25,26 +24,8 @@ from ..utils.unified_context import TemplateObject
 from ..utils.validation_constants import POWER_TRANSITION_CYCLES
 # Import template renderer
 from . import TemplateRenderer, TemplateRenderError
-
-
-class PowerState(Enum):
-    """PCIe power states."""
-
-    D0 = "D0"  # Fully operational
-    D1 = "D1"  # Intermediate power state
-    D2 = "D2"  # Intermediate power state
-    D3_HOT = "D3_HOT"  # Software power down
-    D3_COLD = "D3_COLD"  # Hardware power down
-
-
-class LinkState(Enum):
-    """PCIe link power states."""
-
-    L0 = "L0"  # Active state
-    L0S = "L0s"  # Standby state
-    L1 = "L1"  # Low power standby
-    L2 = "L2"  # Auxiliary power
-    L3 = "L3"  # Off state
+# Import centralized enums and constants
+from .advanced_sv_features import LinkState, PowerState
 
 
 class ErrorType(Enum):

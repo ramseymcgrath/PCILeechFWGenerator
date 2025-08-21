@@ -10,31 +10,13 @@ Simplified Power Management feature for the PCILeechFWGenerator project.
 """
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Optional
 
 from ..string_utils import generate_sv_header_comment
+from ..utils.validation_constants import POWER_TRANSITION_CYCLES
+# Import PowerState and TransitionCycles from central features module
+from .advanced_sv_features import PowerState, TransitionCycles
 from .template_renderer import TemplateRenderer
-
-
-class PowerState(Enum):
-    """PCIe power states as defined in the PCIe specification."""
-
-    D0 = "D0"  # Fully operational
-    D1 = "D1"  # Low power state 1
-    D2 = "D2"  # Low power state 2
-    D3_HOT = "D3hot"  # Hot reset state
-    D3_COLD = "D3cold"  # Cold reset state
-
-
-@dataclass
-class TransitionCycles:
-    """Power state transition cycle counts."""
-
-    d0_to_d1: int = 100
-    d1_to_d0: int = 50
-    d0_to_d3: int = 200
-    d3_to_d0: int = 150
 
 
 @dataclass

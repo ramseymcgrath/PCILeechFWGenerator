@@ -126,9 +126,9 @@ module pcileech_top (
     
     active_device_interrupt #(
         .TIMER_PERIOD({{ active_device_config.timer_period }}),
-        .TIMER_ENABLE({{ active_device_config.timer_enable }}),
+        .TIMER_ENABLE({{ '1\'b1' if active_device_config.timer_enable else '1\'b0' }}),
         .MSI_VECTOR_WIDTH({{ active_device_config.msi_vector_width }}),
-        .MSI_64BIT_ADDR({{ active_device_config.msi_64bit_addr }}),
+        .MSI_64BIT_ADDR({{ '1\'b1' if active_device_config.msi_64bit_addr else '1\'b0' }}),
         .NUM_MSIX({{ active_device_config.num_msix }}),
         .MSIX_TABLE_BIR({{ active_device_config.msix_table_bir }}),
         .MSIX_TABLE_OFFSET({{ active_device_config.msix_table_offset }}),

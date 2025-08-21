@@ -11,8 +11,27 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from ..build import VivadoIntegrationError
-from ..log_config import get_logger
+
+# Define error class here to avoid cyclic import with src.build
+class VivadoIntegrationError(Exception):
+    """Exception raised when Vivado integration fails."""
+
+    pass
+
+
+# Import logger utility function
+def get_logger(name: str) -> logging.Logger:
+    """Get a configured logger instance."""
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    return logger
 
 
 class VivadoRunner:
@@ -163,9 +182,11 @@ echo "Vivado synthesis completed on host"
         self.logger.info(f"Starting Vivado build for board: {self.board}")
         self.logger.info(f"Output directory: {self.output_dir}")
 
+        # Import these functions dynamically to avoid circular dependencies
         try:
-            from . import (integrate_pcileech_build,
-                           run_vivado_with_error_reporting)
+            # Delay these imports to avoid circular dependencies
+            from .pcileech_build_integration import integrate_pcileech_build
+            from .vivado_error_reporter import run_vivado_with_error_reporting
         except ImportError as e:
             raise VivadoIntegrationError("Vivado handling modules not available") from e
 

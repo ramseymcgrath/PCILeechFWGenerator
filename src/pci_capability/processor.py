@@ -707,7 +707,7 @@ class CapabilityProcessor:
             else:
                 # For other capabilities, create generic patches
                 patches.extend(self._create_generic_modification_patches(cap_info))
-        except Exception as e:
+        except (ValueError, IndexError, KeyError, TypeError) as e:
             log_error_safe(
                 logger,
                 "Error creating patches for capability {name} at 0x{offset:02x}: {error}",
@@ -832,7 +832,7 @@ class CapabilityProcessor:
                     if patch:
                         patches.append(patch)
 
-        except Exception as e:
+        except (IndexError, ValueError, TypeError, KeyError) as e:
             log_error_safe(
                 logger,
                 "Error creating MSI patches: {error}",

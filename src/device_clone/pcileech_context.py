@@ -7,17 +7,10 @@ PCILeech Template Context Builder - Optimized Version
 Builds comprehensive template context from device profiling data.
 Integrates BehaviorProfiler, ConfigSpaceManager, and MSIXCapability data.
 
-Key optimizations:
-- Reduced code duplication through helper methods
-- Simplified complex logic flows
-- Improved type safety with streamlined hints
-- Better performance through caching
-- Consolidated similar functionality
 """
 
 import ctypes
 import fcntl
-import hashlib
 import logging
 import os
 from dataclasses import asdict, dataclass, field, fields
@@ -481,8 +474,10 @@ class PCILeechContextBuilder:
         for key, value in device_signals.items():
             context[key] = value  # type: ignore
 
-        # Add header for SystemVerilog generation
-        context["header"] = "// Generated PCILeech SystemVerilog Module"  # type: ignore
+        # Add header for SystemVerilog generation from central constants
+        from src.utils.validation_constants import SV_FILE_HEADER
+
+        context["header"] = SV_FILE_HEADER  # type: ignore
         context["registers"] = []  # type: ignore
         # EXT_CFG_CAP_PTR and EXT_CFG_XP_CAP_PTR must be present at top-level context for test contract
         ext_cfg_cap_ptr = None
@@ -510,6 +505,7 @@ class PCILeechContextBuilder:
 
     def _add_numeric_id_aliases(self, context):
         """Ensure numeric ID aliases exist on top-level and device_config."""
+        from src.device_clone.constants import get_fallback_vendor_id
 
         # Use local helper for int parsing to avoid import error
         def _parse_int_maybe(val):
@@ -524,26 +520,30 @@ class PCILeechContextBuilder:
             except Exception:
                 return None
 
-        context.setdefault(
-            "vendor_id_int", _parse_int_maybe(context.get("vendor_id")) or 0x8086
+        # Get fallback vendor ID from central function
+        fallback_vendor_id = get_fallback_vendor_id(
+            prefer_random=getattr(self.config, "test_mode", False)
         )
-        context.setdefault(
-            "device_id_int", _parse_int_maybe(context.get("device_id")) or 0x0000
-        )
+
+        # Set vendor_id_int with parsed value or fallback
+        parsed_vid = _parse_int_maybe(context.get("vendor_id"))
+        parsed_did = _parse_int_maybe(context.get("device_id"))
+        context.setdefault("vendor_id_int", parsed_vid or fallback_vendor_id)
+        context.setdefault("device_id_int", parsed_did or 0x0000)
 
         # Also set aliases inside device_config dict if present
         if isinstance(context.get("device_config"), dict):
             dc = context["device_config"]
-            dc.setdefault("vendor_id_int", context.get("vendor_id_int", 0x8086))
-            dc.setdefault("device_id_int", context.get("device_id_int", 0x0000))
+            vid_int = context.get("vendor_id_int", fallback_vendor_id)
+            did_int = context.get("device_id_int", 0x0000)
+            dc.setdefault("vendor_id_int", vid_int)
+            dc.setdefault("device_id_int", did_int)
         elif hasattr(context.get("device_config"), "_data"):
             try:
-                context["device_config"]._data.setdefault(
-                    "vendor_id_int", context.get("vendor_id_int", 0x8086)
-                )
-                context["device_config"]._data.setdefault(
-                    "device_id_int", context.get("device_id_int", 0x0000)
-                )
+                vid_int = context.get("vendor_id_int", fallback_vendor_id)
+                did_int = context.get("device_id_int", 0x0000)
+                context["device_config"]._data.setdefault("vendor_id_int", vid_int)
+                context["device_config"]._data.setdefault("device_id_int", did_int)
             except Exception:
                 pass
 
@@ -1089,8 +1089,11 @@ class PCILeechContextBuilder:
             "buffer_size": None,
             # DMA/scatter settings
             "enable_dma": getattr(self.config, "enable_dma_operations", True),
+            # Use explicit scatter_gather setting if present, otherwise fall back to DMA operations
             "enable_scatter_gather": getattr(
-                self.config, "enable_dma_operations", True
+                self.config,
+                "enable_scatter_gather",
+                getattr(self.config, "enable_dma_operations", True),
             ),
             # backwards/alternate names some templates or older code may expect
             "max_read_req_size": None,
@@ -1160,6 +1163,9 @@ class PCILeechContextBuilder:
                 elif k == "enable_dma":
                     final[k] = bool(final.get("enable_dma", False))
                 elif k == "enable_scatter_gather":
+                    # Always use explicit scatter_gather setting if provided,
+                    # otherwise use the explicit DMA setting if provided,
+                    # with a final fallback to True (safe default)
                     final[k] = bool(
                         final.get(
                             "enable_scatter_gather", final.get("enable_dma", True)

@@ -15,6 +15,7 @@ set_msg_config -id {Common 17-55} -suppress
 set_msg_config -id {Vivado 12-1387} -suppress
 set_msg_config -id {Synth 8-3331} -suppress
 set_msg_config -id {Synth 8-3332} -suppress
+# End of error handling configuration
 
 {%- set _proj_name = safe_name(project) -%}
 {%- set _proj_dir = (project.dir if project is defined and project.dir is defined else project_dir|default('.')) -%}

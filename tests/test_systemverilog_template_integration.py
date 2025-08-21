@@ -198,6 +198,8 @@ class TemplateContextBuilder:
             {
                 "buffer_size": 4096,
                 "command_timeout": 1000,
+                # Both DMA and scatter-gather flags are explicitly set to show their relationship
+                # In production code, enable_scatter_gather will default to enable_dma's value if not set
                 "enable_dma": True,
                 "enable_scatter_gather": True,
                 "max_payload_size": 256,

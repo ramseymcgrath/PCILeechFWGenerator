@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from src.string_utils import log_debug_safe, safe_format
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,6 +125,7 @@ class PCIeRegisterDefinitions:
     }
 
     # Generate Status register mask from bit definitions
+
     @classmethod
     def get_status_mask(cls) -> int:
         """Generate status register mask from bit definitions."""
@@ -249,7 +252,7 @@ class OverlayMapper:
 
     def __init__(self):
         """Initialize the overlay mapper."""
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(__name__)
         self.definitions = PCIeRegisterDefinitions()
 
     def detect_overlay_registers(
@@ -290,8 +293,14 @@ class OverlayMapper:
                     ):  # Only add if partially writable
                         overlay_map.append((offset, mask))
                         processed_offsets.add(offset)
-                        self.logger.debug(
-                            f"Added overlay for {entry.description} at 0x{offset:03X} with mask 0x{mask:08X}"
+                        log_debug_safe(
+                            self.logger,
+                            safe_format(
+                                "Added overlay for {desc} at 0x{offset:03X} with mask 0x{mask:08X}",
+                                desc=entry.description,
+                                offset=offset,
+                                mask=mask,
+                            ),
                         )
 
         # Process capability-specific registers
@@ -305,8 +314,14 @@ class OverlayMapper:
                 ):
                     overlay_map.append((offset, mask))
                     processed_offsets.add(offset)
-                    self.logger.debug(
-                        f"Added overlay for {description} at 0x{offset:03X} with mask 0x{mask:08X}"
+                    log_debug_safe(
+                        self.logger,
+                        safe_format(
+                            "Added overlay for {desc} at 0x{offset:03X} with mask 0x{mask:08X}",
+                            desc=description,
+                            offset=offset,
+                            mask=mask,
+                        ),
                     )
 
         # Sort by offset for consistent ordering

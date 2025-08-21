@@ -16,6 +16,9 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe, safe_format)
+
 logger = logging.getLogger(__name__)
 
 # Write-protected bits for standard PCI configuration space
@@ -305,7 +308,7 @@ class WritemaskGenerator:
 
     def __init__(self):
         """Initialize the writemask generator."""
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(__name__)
 
     def get_msi_writemask(self, msi_config: Dict) -> Optional[Tuple[str, ...]]:
         """
@@ -394,7 +397,10 @@ class WritemaskGenerator:
                                 index += 1
 
         except Exception as e:
-            self.logger.error(f"Failed to read configuration space: {e}")
+            log_error_safe(
+                self.logger,
+                safe_format("Failed to read configuration space: {error}", error=e),
+            )
             raise
 
         return dword_map
@@ -423,7 +429,14 @@ class WritemaskGenerator:
             next_cap = (cap_dword >> ((cap_ptr % 4) * 8 + 8)) & 0xFF
 
             cap_name = CAPABILITY_NAMES.get(cap_id, f"Unknown (0x{cap_id:02X})")
-            self.logger.debug(f"Found capability at 0x{cap_ptr:02X}: {cap_name}")
+            log_debug_safe(
+                self.logger,
+                safe_format(
+                    "Found capability at 0x{ptr:02X}: {name}",
+                    ptr=cap_ptr,
+                    name=cap_name,
+                ),
+            )
 
             capabilities[f"0x{cap_id:02X}"] = cap_ptr
             cap_ptr = next_cap
@@ -442,8 +455,13 @@ class WritemaskGenerator:
                 cap_name = EXTENDED_CAPABILITY_NAMES.get(
                     ext_cap_id, f"Unknown (0x{ext_cap_id:04X})"
                 )
-                self.logger.debug(
-                    f"Found extended capability at 0x{ext_cap_offset:03X}: {cap_name}"
+                log_debug_safe(
+                    self.logger,
+                    safe_format(
+                        "Found extended capability at 0x{offset:03X}: {name}",
+                        offset=ext_cap_offset,
+                        name=cap_name,
+                    ),
                 )
 
                 capabilities[f"0x{ext_cap_id:04X}"] = ext_cap_offset
@@ -508,7 +526,10 @@ class WritemaskGenerator:
             output_path: Path for output writemask COE file
             device_config: Optional device configuration for MSI/MSI-X
         """
-        self.logger.info(f"Generating writemask from {cfg_space_path}")
+        log_info_safe(
+            self.logger,
+            safe_format("Generating writemask from {path}", path=cfg_space_path),
+        )
 
         # Read configuration space
         cfg_space = self.read_cfg_space(cfg_space_path)
@@ -559,7 +580,10 @@ class WritemaskGenerator:
         # Write output COE file
         self._write_writemask_coe(wr_mask, output_path)
 
-        self.logger.info(f"Writemask generated successfully: {output_path}")
+        log_info_safe(
+            self.logger,
+            safe_format("Writemask generated successfully: {path}", path=output_path),
+        )
 
     def _write_writemask_coe(self, wr_mask: List[str], output_path: Path) -> None:
         """

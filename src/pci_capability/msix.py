@@ -13,29 +13,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
                             log_warning_safe, safe_format)
-from .constants import PCI_CAP_ID_OFFSET, PCI_CAP_NEXT_PTR_OFFSET
-
-# MSI-X specific constants
-MSIX_CAPABILITY_SIZE = 12  # MSI-X capability structure is 12 bytes
-MSIX_MESSAGE_CONTROL_OFFSET = 2
-MSIX_TABLE_OFFSET_BIR_OFFSET = 4
-MSIX_PBA_OFFSET_BIR_OFFSET = 8
-
-# MSI-X Message Control register bit definitions
-MSIX_TABLE_SIZE_MASK = 0x07FF  # Bits 0-10
-MSIX_FUNCTION_MASK_BIT = 0x4000  # Bit 14
-MSIX_ENABLE_BIT = 0x8000  # Bit 15
-
-# MSI-X Table/PBA offset register bit definitions
-MSIX_BIR_MASK = 0x7  # Bits 0-2
-MSIX_OFFSET_MASK = 0xFFFFFFF8  # Bits 3-31
-
-# MSI-X constraints
-MSIX_MIN_TABLE_SIZE = 1
-MSIX_MAX_TABLE_SIZE = 2048
-MSIX_MAX_BIR = 5
-MSIX_OFFSET_ALIGNMENT = 8
-
+from .constants import (MSIX_BIR_MASK, MSIX_CAPABILITY_SIZE, MSIX_ENABLE_BIT,
+                        MSIX_FUNCTION_MASK_BIT, MSIX_LARGE_TABLE_THRESHOLD,
+                        MSIX_MAX_BIR, MSIX_MAX_TABLE_SIZE,
+                        MSIX_MESSAGE_CONTROL_OFFSET, MSIX_MIN_TABLE_SIZE,
+                        MSIX_OFFSET_ALIGNMENT, MSIX_OFFSET_MASK,
+                        MSIX_PBA_OFFSET_BIR_OFFSET,
+                        MSIX_TABLE_OFFSET_BIR_OFFSET, MSIX_TABLE_SIZE_MASK,
+                        PCI_CAP_ID_OFFSET, PCI_CAP_NEXT_PTR_OFFSET)
 from .core import CapabilityWalker, ConfigSpace
 from .patches import BinaryPatch, PatchEngine
 from .rules import RuleEngine
@@ -590,8 +575,8 @@ class MSIXCapabilityHandler:
                 table_size = msix_info["table_size"]
                 total_vectors += table_size
 
-                # Check for common issues
-                if table_size > 64:
+                # Then in the check_msix_requirements method:
+                if table_size > MSIX_LARGE_TABLE_THRESHOLD:
                     requirements["issues"].append(
                         f"Large MSI-X table size ({table_size}) at offset 0x{cap_info.offset:02x}"
                     )

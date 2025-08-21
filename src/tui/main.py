@@ -678,7 +678,9 @@ class PCILeechTUI(App):
                     try:
                         # Write traceback to file directly (internal helper)
                         try:
-                            self.error_handler._write_traceback_to_file("Uncaught exception", tb)
+                            self.error_handler._write_traceback_to_file(
+                                "Uncaught exception", tb
+                            )
                         except Exception:
                             # If that fails, silently ignore to avoid crashing
                             pass
@@ -707,6 +709,7 @@ class PCILeechTUI(App):
 
         # Thread exceptions (Python 3.8+ supports threading.excepthook)
         try:
+
             def _thread_hook(args):
                 _handle_uncaught(args.exc_type, args.exc_value, args.exc_traceback)
 
@@ -723,7 +726,9 @@ class PCILeechTUI(App):
                 # context may contain 'exception' or only a message
                 exc = context.get("exception")
                 if exc is not None:
-                    _handle_uncaught(type(exc), exc, getattr(exc, "__traceback__", None))
+                    _handle_uncaught(
+                        type(exc), exc, getattr(exc, "__traceback__", None)
+                    )
                 else:
                     # Create a synthetic exception to capture the message
                     msg = context.get("message", str(context))
@@ -746,21 +751,35 @@ class PCILeechTUI(App):
             # Import here to avoid circular import
             from src.tui.utils.ui_helpers import (format_status_messages,
                                                   safely_update_static)
-                
+
             try:
                 # Format all status messages at once
                 messages = format_status_messages(status)
-                
+
                 # Update all status widgets with formatted messages
-                safely_update_static(self, "#podman-status", messages.get("podman", "� Podman: Unknown"))
-                safely_update_static(self, "#vivado-status", messages.get("vivado", "⚡ Vivado: Unknown"))
-                safely_update_static(self, "#usb-status", messages.get("usb", "� USB Devices: Unknown"))
-                safely_update_static(self, "#disk-status", messages.get("disk", "� Disk Space: Unknown"))
-                safely_update_static(self, "#root-status", messages.get("root", "🔒 Root Access: Unknown"))
-                
+                safely_update_static(
+                    self, "#podman-status", messages.get("podman", "� Podman: Unknown")
+                )
+                safely_update_static(
+                    self, "#vivado-status", messages.get("vivado", "⚡ Vivado: Unknown")
+                )
+                safely_update_static(
+                    self, "#usb-status", messages.get("usb", "� USB Devices: Unknown")
+                )
+                safely_update_static(
+                    self, "#disk-status", messages.get("disk", "� Disk Space: Unknown")
+                )
+                safely_update_static(
+                    self,
+                    "#root-status",
+                    messages.get("root", "🔒 Root Access: Unknown"),
+                )
+
                 # Update donor module status if available
                 if "donor_module" in messages:
-                    safely_update_static(self, "#donor-module-status", messages["donor_module"])
+                    safely_update_static(
+                        self, "#donor-module-status", messages["donor_module"]
+                    )
             except Exception as e:
                 print(f"Error updating status widgets: {e}")
         except Exception as e:
@@ -769,7 +788,7 @@ class PCILeechTUI(App):
     def _safely_update_static(self, selector: str, text: str) -> None:
         """
         Safely update a Static widget, handling potential errors.
-        
+
         This is a legacy method. Use src.tui.utils.ui_helpers.safely_update_static instead.
 
         Args:
@@ -1111,8 +1130,9 @@ if __name__ == "__main__":
         print(f"❌ Error: {vfio_status.get('message', 'Unsupported operating system')}")
         print("PCILeech requires Linux for full functionality.")
         import sys
+
         sys.exit(1)
-    
+
     # Check for warnings about VFIO modules
     vfio_checks = vfio_status.get("checks", {})
     if not vfio_checks.get("modules_loaded", True):
@@ -1123,7 +1143,7 @@ if __name__ == "__main__":
     root_status = asyncio.run(check_root_access())
     if not root_status.get("available", False):
         print("⚠️  Warning: Continuing without root privileges - limited functionality.")
-    
+
     # Run the application
     app = PCILeechTUI()
     app.run()

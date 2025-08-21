@@ -47,6 +47,16 @@ class PowerState(Enum):
     D3_COLD = "D3_COLD"  # No power
 
 
+class LinkState(Enum):
+    """PCIe link power states."""
+
+    L0 = "L0"  # Active state
+    L0S = "L0s"  # Standby state
+    L1 = "L1"  # Low power standby
+    L2 = "L2"  # Auxiliary power
+    L3 = "L3"  # Off state
+
+
 class ErrorType(Enum):
     """Types of errors that can be detected and handled."""
 
@@ -581,6 +591,7 @@ endmodule
 # Export the main components
 __all__ = [
     "PowerState",
+    "LinkState",
     "ErrorType",
     "PerformanceMetric",
     "ErrorHandlingConfig",

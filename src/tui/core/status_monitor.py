@@ -45,5 +45,3 @@ class StatusMonitor:
     def get_status_summary(self) -> Dict[str, str]:
         """Get a summary of system status"""
         return get_status_summary(self._status_cache)
-
-        return summary

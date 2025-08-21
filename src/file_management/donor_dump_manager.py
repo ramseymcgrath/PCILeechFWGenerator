@@ -696,12 +696,20 @@ class DonorDumpManager:
         """
         logger.info(f"Generating synthetic donor information for {device_type} device")
 
+        # Import vendor ID constants
+        from src.device_clone.constants import (VENDOR_ID_INTEL,
+                                                get_fallback_vendor_id)
+
+        # Convert to hex string format
+        intel_vid_str = f"0x{VENDOR_ID_INTEL:04x}"
+        fallback_vid_str = f"0x{get_fallback_vendor_id():04x}"
+
         # Common device profiles
         device_profiles = {
             "generic": {
-                "vendor_id": "0x8086",  # Intel
+                "vendor_id": intel_vid_str,  # Intel
                 "device_id": "0x1533",  # I210 Gigabit Network Connection
-                "subvendor_id": "0x8086",
+                "subvendor_id": intel_vid_str,
                 "subsystem_id": "0x0000",
                 "revision_id": "0x03",
                 "bar_size": "0x20000",  # 128KB
@@ -709,9 +717,9 @@ class DonorDumpManager:
                 "mpr": "0x02",  # Max read request size (512 bytes)
             },
             "network": {
-                "vendor_id": "0x8086",  # Intel
+                "vendor_id": intel_vid_str,  # Intel
                 "device_id": "0x1533",  # I210 Gigabit Network Connection
-                "subvendor_id": "0x8086",
+                "subvendor_id": intel_vid_str,
                 "subsystem_id": "0x0000",
                 "revision_id": "0x03",
                 "bar_size": "0x20000",  # 128KB
@@ -719,9 +727,9 @@ class DonorDumpManager:
                 "mpr": "0x02",  # Max read request size (512 bytes)
             },
             "storage": {
-                "vendor_id": "0x8086",  # Intel
+                "vendor_id": intel_vid_str,  # Intel
                 "device_id": "0x2522",  # NVMe SSD Controller
-                "subvendor_id": "0x8086",
+                "subvendor_id": intel_vid_str,
                 "subsystem_id": "0x0000",
                 "revision_id": "0x01",
                 "bar_size": "0x40000",  # 256KB

@@ -251,8 +251,8 @@ module pcileech_advanced_{{ device_type }}_{{ device_class }} #(
     // Device ready and debug status
     assign device_ready = power_ready && !error_recovery_active;
     assign debug_status = {
-        8'h{{ '%02x' % ((get_vendor_id(device_config, device, config_space, vendor_id_int) | safe_int(0x8086)) // 256) }},  // Vendor ID high byte
-        8'h{{ '%02x' % ((get_device_id(device_config, device, config_space, device_id_int) | safe_int(0x1234)) // 256) }},  // Device ID high byte
+        8'h{{ '%02x' % ((get_vendor_id(device_config, device, config_space, vendor_id_int) | safe_int(FALLBACK_VENDOR_ID)) // 256) }},  // Vendor ID high byte
+        8'h{{ '%02x' % ((get_device_id(device_config, device, config_space, device_id_int) | safe_int(FALLBACK_DEVICE_ID)) // 256) }},  // Device ID high byte
         4'h0,
         current_power_state,
         error_state[1:0],

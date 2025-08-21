@@ -50,15 +50,18 @@ class USBFunctionAnalyzer(BaseFunctionAnalyzer):
         device_lower = self.device_id & 0xFF00
         device_upper = (self.device_id >> 8) & 0xFF
 
+        # Import vendor ID constants
+        from src.device_clone.constants import VENDOR_ID_AMD, VENDOR_ID_INTEL
+
         # Vendor-specific patterns
-        if self.vendor_id == 0x8086:  # Intel
+        if self.vendor_id == VENDOR_ID_INTEL:  # Intel
             if device_lower in [0x1E00, 0x1F00, 0x8C00, 0x9C00]:
                 return "xhci"
             elif device_lower in [0x2600, 0x2700]:
                 return "ehci"
             elif device_lower in [0x2400, 0x2500]:
                 return "uhci"
-        elif self.vendor_id == 0x1002:  # AMD
+        elif self.vendor_id == VENDOR_ID_AMD:  # AMD
             if device_lower in [0x7800, 0x7900]:
                 return "xhci"
             elif device_lower in [0x7600, 0x7700]:

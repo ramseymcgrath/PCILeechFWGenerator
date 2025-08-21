@@ -37,16 +37,21 @@ class TestGetPackageVersion:
 
             with patch("src.utils.unified_context.Path") as mock_path:
                 # Mock the path resolution
-                mock_parent_parent = MagicMock()
-                mock_parent_parent.__truediv__ = MagicMock(return_value=version_file)
-                mock_path.return_value.parent.parent = mock_parent_parent
+                mock_version_file = MagicMock()
+                mock_version_file.exists.return_value = True
+
+                # Set up the path traversal
+                mock_parent = MagicMock()
+                mock_parent.parent = MagicMock()
+                mock_parent.parent.__truediv__.return_value = mock_version_file
+                mock_path.return_value = MagicMock()
+                mock_path.return_value.parent = mock_parent
 
                 with patch(
                     "builtins.open", mock_open(read_data='__version__ = "2.5.0"')
                 ):
-                    with patch.object(version_file, "exists", return_value=True):
-                        version = get_package_version()
-                        assert version == "2.5.0"
+                    version = get_package_version()
+                    assert version == "2.5.0"
 
     def test_get_version_setuptools_scm_fallback(self):
         """Test fallback to setuptools_scm."""
@@ -95,8 +100,11 @@ class TestGetPackageVersion:
         with patch(
             "src.utils.unified_context.Path", side_effect=Exception("Test error")
         ):
-            version = get_package_version()
-            assert version == "0.5.0"
+            with patch("setuptools_scm.get_version", side_effect=ImportError):
+                with patch("importlib.metadata.version", side_effect=ImportError):
+                    with patch("src.utils.unified_context.DEFAULT_VERSION", "0.5.0"):
+                        version = get_package_version()
+                        assert version == "0.5.0"
 
 
 class TestTemplateObject:
@@ -133,7 +141,7 @@ class TestTemplateObject:
     def test_list_with_dicts_conversion(self):
         """Test that lists containing dictionaries are properly converted."""
         data = {
-            "items": [
+            "item_list": [
                 {"name": "item1", "value": 1},
                 {"name": "item2", "value": 2},
                 "simple_string",
@@ -141,7 +149,7 @@ class TestTemplateObject:
         }
         obj = TemplateObject(data)
 
-        items_list = getattr(obj, "items")
+        items_list = getattr(obj, "item_list")
         assert len(items_list) == 3
         assert isinstance(items_list[0], TemplateObject)
         assert isinstance(items_list[1], TemplateObject)
@@ -643,14 +651,14 @@ class TestEdgeCasesAndErrorHandling:
         """Test complete context with various overrides."""
         context = self.builder.create_complete_template_context(
             vendor_id="abcd",
-            device_id="efgh",
+            device_id="ef12",
             enable_transaction_counters=False,
             power_management=False,
             custom_field="override_value",
         )
 
         assert context.vendor_id == "abcd"
-        assert context.device_id == "efgh"
+        assert context.device_id == "ef12"
         assert context.custom_field == "override_value"
 
     def test_variance_model_validation_and_fallback(self):

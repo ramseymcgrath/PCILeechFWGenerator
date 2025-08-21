@@ -338,15 +338,26 @@ class FileManager:
                 if hex_files:
                     hex_file = hex_files[0]
                     hex_size = hex_file.stat().st_size
-                    validation_results["tcl_file_info"]["hex_file"] = {
-                        "filename": hex_file.name,
-                        "size_bytes": hex_size,
-                        "size_kb": round(hex_size / 1024, 2),
-                    }
+                    # Create a new dictionary with the updated hex_file info
+                    tcl_info = validation_results.get("tcl_file_info", {})
+                    if isinstance(tcl_info, dict):
+                        # Create a new dict with all existing values plus the hex_file
+                        tcl_info_updated = dict(tcl_info)
+                        tcl_info_updated["hex_file"] = {
+                            "filename": hex_file.name,
+                            "size_bytes": hex_size,
+                            "size_kb": round(hex_size / 1024, 2),
+                        }
+                        # Replace the entire tcl_file_info dict
+                        validation_results["tcl_file_info"] = tcl_info_updated
                     validation_results["file_sizes"][hex_file.name] = hex_size
                 else:
                     # For TCL-only builds, check if hex generation commands are present
-                    validation_results["tcl_file_info"]["hex_file"] = has_hex_generation
+                    tcl_info = validation_results.get("tcl_file_info", {})
+                    if isinstance(tcl_info, dict):
+                        tcl_info_updated = dict(tcl_info)
+                        tcl_info_updated["hex_file"] = has_hex_generation
+                        validation_results["tcl_file_info"] = tcl_info_updated
 
             # Check for bitstream file (only if Vivado was run)
             bitstream_files = list(self.output_dir.glob("*.bit"))
@@ -418,9 +429,11 @@ class FileManager:
             if validation_results["tcl_file_info"]:
                 if validation_results["build_mode"] == "full_vivado":
                     # Full Vivado build - check bitstream
-                    if validation_results["bitstream_info"]:
+                    bitstream_info = validation_results.get("bitstream_info", {})
+                    if bitstream_info:
                         if (
-                            validation_results["bitstream_info"]["size_bytes"] > 1000000
+                            isinstance(bitstream_info, dict)
+                            and bitstream_info.get("size_bytes", 0) > 1000000
                         ):  # > 1MB
                             validation_results["validation_status"] = (
                                 "success_full_build"
@@ -433,16 +446,27 @@ class FileManager:
                         validation_results["validation_status"] = "failed_no_bitstream"
                 else:
                     # TCL-only build - check TCL file quality (this is the main output)
-                    tcl_info = validation_results["tcl_file_info"]
-                    if tcl_info["has_device_config"] and tcl_info["size_bytes"] > 1000:
-                        validation_results["validation_status"] = "success_tcl_ready"
+                    tcl_info = validation_results.get("tcl_file_info", {})
+                    if isinstance(tcl_info, dict):
+                        has_device_config = tcl_info.get("has_device_config", False)
+                        size_bytes = tcl_info.get("size_bytes", 0)
+                        if has_device_config and size_bytes > 1000:
+                            validation_results["validation_status"] = (
+                                "success_tcl_ready"
+                            )
+                        else:
+                            validation_results["validation_status"] = (
+                                "warning_incomplete_tcl"
+                            )
+                        # Check if hex generation commands are present in TCL script
+                        if not tcl_info.get("has_hex_generation", False):
+                            validation_results["validation_status"] = (
+                                "warning_missing_hex"
+                            )
                     else:
                         validation_results["validation_status"] = (
                             "warning_incomplete_tcl"
                         )
-                    # Check if hex generation commands are present in TCL script
-                    if not tcl_info.get("has_hex_generation", False):
-                        validation_results["validation_status"] = "warning_missing_hex"
             else:
                 validation_results["validation_status"] = "failed_no_tcl"
 

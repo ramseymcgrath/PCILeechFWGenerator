@@ -17,8 +17,6 @@ ensuring consistent behavior and proper error reporting throughout the system.
 """
 
 import logging
-import mmap
-import os
 import sys
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -30,14 +28,12 @@ from typing import (Any, Dict, List, Optional, Set, Tuple, TypedDict, Union,
 from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.error_utils import (ErrorCategory, extract_root_cause,
-                             format_concise_error, format_user_friendly_error,
+from src.error_utils import (format_concise_error, format_user_friendly_error,
                              is_user_fixable_error)
 from src.string_utils import (generate_sv_header_comment, log_debug_safe,
-                              log_error_safe, log_info_safe, log_warning_safe,
-                              safe_format)
+                              log_error_safe, log_info_safe, log_warning_safe)
 from src.utils.attribute_access import (get_attr_or_raise, has_attr,
-                                        require_attrs, safe_get_attr)
+                                        safe_get_attr)
 
 from ..utils.unified_context import (DEFAULT_TIMING_CONFIG, MSIX_DEFAULT,
                                      PCILEECH_DEFAULT, TemplateObject,
@@ -538,8 +534,12 @@ class ContextBuilder:
         # Create device object for template compatibility
         device_info = ContextBuilder.create_device_info(device_config_dict)
 
-        # Set up common enable flags from the provided DeviceSpecificLogic object
-        enable_scatter_gather = getattr(device_config_obj, "enable_dma", False)
+        # Check for explicit scatter_gather setting, with fallback to DMA operations
+        enable_scatter_gather = getattr(
+            device_config_obj,
+            "enable_scatter_gather",
+            getattr(device_config_obj, "enable_dma", True),
+        )
 
         # Canonicalize specific configs using unified context helper which handles
         # dict/object/TemplateObject inputs and centralizes defaults.
@@ -766,7 +766,12 @@ class ContextBuilder:
                 ),
             },
             "enable_custom_config": True,
-            "enable_scatter_gather": getattr(device_config_obj, "enable_dma", True),
+            # Check for explicit scatter_gather setting, with fallback to DMA operations
+            "enable_scatter_gather": getattr(
+                device_config_obj,
+                "enable_scatter_gather",
+                getattr(device_config_obj, "enable_dma", True),
+            ),
             "enable_interrupt": template_context.get("interrupt_config", {}).get(
                 "vectors", 0
             )
@@ -1496,6 +1501,18 @@ class AdvancedSVGenerator:
             if not device_signature:
                 raise TemplateRenderError(ERROR_MESSAGES["empty_device_signature"])
 
+            # Import the validation function
+            try:
+                # Dynamically import to avoid circular dependencies
+                from .device_signature_validator import \
+                    ensure_valid_device_signature
+
+                ensure_valid_device_signature(template_context)
+            except ImportError:
+                # If import fails, fall back to basic validation
+                if not device_signature:
+                    raise TemplateRenderError(ERROR_MESSAGES["empty_device_signature"])
+
             # Ensure other required fields are present (tests expect these to be required)
             if "bar_config" not in template_context:
                 raise TemplateRenderError(
@@ -1521,6 +1538,22 @@ class AdvancedSVGenerator:
             modules["pcileech_tlps128_bar_controller"] = self.renderer.render_template(
                 TEMPLATE_PATHS["pcileech_tlps_bar_controller"], enhanced_context
             )
+
+            # Post-process: Check for error markers in the rendered content
+            rendered_content = modules["pcileech_tlps128_bar_controller"]
+            if "ERROR_MISSING_DEVICE_SIGNATURE" in rendered_content:
+                raise TemplateRenderError(ERROR_MESSAGES["missing_device_signature"])
+
+            # Check for syntax error risk with colon character in unexpected places
+            suspicious_colon_pattern = r"(?<!\'h)[:](?![\s]*\d+)"
+            import re
+
+            if re.search(suspicious_colon_pattern, rendered_content):
+                log_warning_safe(
+                    self.logger,
+                    "Potential syntax error: Found suspicious colon in rendered SystemVerilog. Please check the template.",
+                    prefix="TEMPLATE_ERROR",
+                )
 
             # Generate PCILeech FIFO controller
             modules["pcileech_fifo"] = self.renderer.render_template(

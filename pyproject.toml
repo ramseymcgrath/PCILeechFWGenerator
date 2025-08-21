@@ -62,3 +62,16 @@ version_scheme = "no-guess-dev"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pylint.messages_control]
+# Disable the line-too-long check
+# Disable the unused-import check
+disable = [
+    "line-too-long",
+    "unused-import",
+    "missing-module-docstring",
+    "missing-function-docstring",
+]
+
+[tool.pylint.format]
+max-line-length = 120

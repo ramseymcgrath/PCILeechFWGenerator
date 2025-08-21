@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
+                              log_warning_safe, safe_format)
+
 try:
     from typing_extensions import TypedDict
 except ImportError:
@@ -50,36 +53,8 @@ def setup_logging(level: int = logging.INFO) -> None:
     Args:
         level: Logging level (e.g., logging.INFO, logging.DEBUG)
     """
-
-    class ColoredFormatter(logging.Formatter):
-        """A logging formatter that adds ANSI color codes to log messages."""
-
-        # ANSI color codes
-        COLORS = {"RED": "\033[91m", "YELLOW": "\033[93m", "RESET": "\033[0m"}
-
-        def __init__(self, fmt=None, datefmt=None):
-            super().__init__(fmt, datefmt)
-            # Only use colors for TTY outputs
-            import sys
-
-            self.use_colors = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
-
-        def format(self, record):
-            formatted = super().format(record)
-            if self.use_colors:
-                if record.levelno >= logging.ERROR:
-                    return f"{self.COLORS['RED']}{formatted}{self.COLORS['RESET']}"
-                elif record.levelno >= logging.WARNING:
-                    return f"{self.COLORS['YELLOW']}{formatted}{self.COLORS['RESET']}"
-            return formatted
-
-    colored_formatter = ColoredFormatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(colored_formatter)
-
-    logging.basicConfig(level=level, handlers=[console_handler], force=True)
+    # Set the root logger level
+    logging.basicConfig(level=level, force=True)
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -418,7 +393,10 @@ class ManufacturingVarianceSimulator:
         """
         seed = self.deterministic_seed(dsn, revision)
         self.rng = random.Random(seed)
-        logger.info(f"Initialized deterministic RNG with seed: {seed}")
+        log_info_safe(
+            logger,
+            safe_format("Initialized deterministic RNG with seed: {seed}", seed=seed),
+        )
         return seed
 
     def generate_variance_model(

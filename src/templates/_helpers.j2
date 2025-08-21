@@ -60,7 +60,7 @@ across all templates with proper fallback chains. These macros handle:
 #}
 
 {# Get vendor ID as hex string with fallback chain #}
-{% macro get_vendor_id(device_config=none, device=none, config_space=none, vendor_id_int=none, default=0x8086) -%}
+{% macro get_vendor_id(device_config=none, device=none, config_space=none, vendor_id_int=none, default=FALLBACK_VENDOR_ID) -%}
   {%- if device_config and device_config.vendor_id_int is defined -%}
     {{ '%04x' % (device_config.vendor_id_int | safe_int(default)) }}
   {%- elif vendor_id_int is defined and vendor_id_int is not none -%}
@@ -77,7 +77,7 @@ across all templates with proper fallback chains. These macros handle:
 {%- endmacro %}
 
 {# Get device ID as hex string with fallback chain #}
-{% macro get_device_id(device_config=none, device=none, config_space=none, device_id_int=none, default=0x1234) -%}
+{% macro get_device_id(device_config=none, device=none, config_space=none, device_id_int=none, default=FALLBACK_DEVICE_ID) -%}
   {%- if device_config and device_config.device_id_int is defined -%}
     {{ '%04x' % (device_config.device_id_int | safe_int(default)) }}
   {%- elif device_id_int is defined and device_id_int is not none -%}
@@ -95,7 +95,7 @@ across all templates with proper fallback chains. These macros handle:
 
 {# Get subsystem vendor ID as hex string with fallback to main vendor ID #}
 {% macro get_subsystem_vendor_id(device_config=none, device=none, vendor_id_int=none, default=none) -%}
-  {%- set main_vendor = get_vendor_id(device_config, device, none, vendor_id_int, 0x8086) | safe_int(0x8086) -%}
+  {%- set main_vendor = get_vendor_id(device_config, device, none, vendor_id_int, FALLBACK_VENDOR_ID) | safe_int(FALLBACK_VENDOR_ID) -%}
   {%- if device_config and device_config.subsystem_vendor_id_int is defined -%}
     {{ '%04x' % (device_config.subsystem_vendor_id_int | safe_int(main_vendor)) }}
   {%- elif device and device.subsys_vendor_id is defined and device.subsys_vendor_id != "0000" -%}
@@ -111,7 +111,7 @@ across all templates with proper fallback chains. These macros handle:
 
 {# Get subsystem device ID as hex string with fallback to main device ID #}
 {% macro get_subsystem_device_id(device_config=none, device=none, device_id_int=none, default=none) -%}
-  {%- set main_device = get_device_id(device_config, device, none, device_id_int, 0x1234) | safe_int(0x1234) -%}
+  {%- set main_device = get_device_id(device_config, device, none, device_id_int, FALLBACK_DEVICE_ID) | safe_int(FALLBACK_DEVICE_ID) -%}
   {%- if device_config and device_config.subsystem_device_id_int is defined -%}
     {{ '%04x' % (device_config.subsystem_device_id_int | safe_int(main_device)) }}
   {%- elif device and device.subsys_device_id is defined and device.subsys_device_id != "0000" -%}

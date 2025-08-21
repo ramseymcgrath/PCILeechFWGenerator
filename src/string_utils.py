@@ -387,6 +387,13 @@ def generate_sv_header_comment(
         >>> generate_sv_header_comment("PCIe Controller Module")
         '//==============================================================================\\n// PCIe Controller Module\\n//=============================================================================='
     """
+    from src.utils.validation_constants import SV_FILE_HEADER
+
+    # Use the first line of the standardized header as a base
+    header_base = (
+        SV_FILE_HEADER.split("\n")[0] if "\n" in SV_FILE_HEADER else SV_FILE_HEADER
+    )
+
     lines = [
         "//=============================================================================="
     ]
@@ -451,6 +458,13 @@ def generate_tcl_header_comment(
         ... )
         '#==============================================================================\\n# PCILeech Firmware Build Script\\n# Generated for device 1234:5678 (Class: 0200)\\n# Board: AC701\\n#=============================================================================='
     """
+    from src.utils.validation_constants import TCL_FILE_HEADER
+
+    # Use the standardized header as a base
+    header_base = (
+        TCL_FILE_HEADER.split("\n")[0] if "\n" in TCL_FILE_HEADER else TCL_FILE_HEADER
+    )
+
     lines = [
         "#=============================================================================="
     ]

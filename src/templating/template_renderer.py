@@ -14,14 +14,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from __version__ import __version__
-from src.exceptions import TemplateRenderError
 from src.utils.unified_context import ensure_template_compatibility
 from string_utils import (generate_tcl_header_comment, log_debug_safe,
                           log_error_safe, log_info_safe, log_warning_safe,
                           safe_format)
 from templates.template_mapping import update_template_path
 
-# Expose a module-level __import__ reference so tests can patch import behavior
 __import__ = builtins.__import__
 
 try:
@@ -509,6 +507,19 @@ class TemplateRenderer:
 
             try:
                 compatible = ensure_template_compatibility(context)
+
+                # Add template constants to the context
+                try:
+                    from src.templates.constants import get_template_constants
+
+                    template_constants = get_template_constants()
+                    for key, value in template_constants.items():
+                        # Don't override existing context values
+                        if key not in compatible:
+                            compatible[key] = value
+                except ImportError:
+                    logger.debug("Template constants not available")
+
                 # Diagnostic: log the types after conversion to ensure dicts were wrapped
                 try:
                     post_type_info = {
@@ -877,7 +888,16 @@ class TemplateRenderError(_get_template_render_error_base()):
         try:
             base_msg = super().__str__()
         except Exception:
-            base_msg = str(self.args[0]) if self.args else "Template render error"
+            base_msg = "Template render error"
+            # Try to extract message from args if available
+            try:
+                if hasattr(self, "args"):
+                    args_obj = self.args
+                    if args_obj and isinstance(args_obj, (list, tuple)):
+                        if len(args_obj) > 0:
+                            base_msg = str(args_obj[0])
+            except (IndexError, TypeError, AttributeError):
+                pass
 
         parts = [base_msg]
         if getattr(self, "template_name", None):
@@ -887,10 +907,21 @@ class TemplateRenderError(_get_template_render_error_base()):
         if getattr(self, "original_error", None):
             try:
                 orig = self.original_error
-                orig_msg = orig.args[0] if getattr(orig, "args", None) else repr(orig)
+                orig_msg = repr(orig)
+                # Try to extract message from args if available
+                try:
+                    if hasattr(orig, "args"):
+                        args_obj = orig.args
+                        if args_obj and isinstance(args_obj, (list, tuple)):
+                            if len(args_obj) > 0:
+                                orig_msg = str(args_obj[0])
+                except (IndexError, TypeError, AttributeError):
+                    pass
             except Exception:
                 orig_msg = repr(self.original_error)
-            parts.append(f"Caused by: {type(self.original_error).__name__}: {orig_msg}")
+
+            error_type = type(self.original_error).__name__
+            parts.append(f"Caused by: {error_type}: {orig_msg}")
 
         return " | ".join(parts)
 

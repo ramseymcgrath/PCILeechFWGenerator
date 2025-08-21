@@ -65,22 +65,22 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         device_lower = self.device_id & 0xFF00
         device_upper = (self.device_id >> 8) & 0xFF
 
+        # Import vendor ID constants
+        from src.device_clone.constants import (VENDOR_ID_INTEL,
+                                                VENDOR_ID_REALTEK)
+
         # Vendor-specific patterns
-        if self.vendor_id == 0x8086:  # Intel
-            # Intel network device ID patterns
-            if device_lower in [0x1500, 0x1600, 0x1700]:  # Ethernet ranges
-                return "ethernet"
-            elif device_lower in [0x2400, 0x2500, 0x2700, 0x5100]:  # WiFi ranges
-                return "wifi"
-        elif self.vendor_id == 0x10EC:  # Realtek
-            if device_lower in [0x8100, 0x8200]:  # Ethernet ranges
-                return "ethernet"
-        elif self.vendor_id == 0x14E4:  # Broadcom
-            if device_lower in [0x1600, 0x1700]:  # Ethernet ranges
-                return "ethernet"
-        elif self.vendor_id == 0x17CB:  # Qualcomm Atheros
-            if device_lower in [0x1100]:  # WiFi ranges
-                return "wifi"
+        if self.vendor_id == VENDOR_ID_INTEL:  # Intel
+            if device_lower in [0x1500, 0x1600]:  # Common Intel LAN series
+                return "ethernet_controller"
+            elif device_lower in [0x2500, 0x2600]:  # Wireless series
+                return "wireless_controller"
+            # Add more Intel device ranges as needed
+        elif self.vendor_id == VENDOR_ID_REALTEK:  # Realtek
+            if device_lower in [0x8100, 0x8200]:
+                return "ethernet_controller"
+            elif device_lower in [0x8700, 0x8800]:
+                return "wireless_controller"
 
         # Generic patterns based on device ID structure
         if device_upper >= 0x80:  # Higher device IDs often indicate advanced features
@@ -121,10 +121,16 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
 
     def _supports_sriov(self) -> bool:
         """Check if device likely supports SR-IOV based on patterns."""
+        # Import vendor ID constants
+        from src.device_clone.constants import VENDOR_ID_INTEL
+
         # High-end devices (higher device IDs) more likely to support SR-IOV
         if self.device_id > 0x1500 and self._device_category == "ethernet":
             # Check for enterprise/datacenter patterns
-            if self.vendor_id == 0x8086 and (self.device_id & 0x0F00) >= 0x0500:
+            if (
+                self.vendor_id == VENDOR_ID_INTEL
+                and (self.device_id & 0x0F00) >= 0x0500
+            ):
                 return True
             elif self.vendor_id == 0x14E4 and (self.device_id & 0x00F0) >= 0x0080:
                 return True

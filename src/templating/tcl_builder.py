@@ -23,7 +23,7 @@ from src.device_clone.fallback_manager import get_global_fallback_manager
 from src.exceptions import (DeviceConfigError, TCLBuilderError,
                             TemplateNotFoundError, XDCConstraintError)
 from src.import_utils import safe_import, safe_import_class
-from src.string_utils import generate_tcl_header_comment, safe_format
+from src.string_utils import generate_tcl_header_comment
 
 
 def format_hex_id(val: Union[int, str, None], width: int = 4) -> str:
