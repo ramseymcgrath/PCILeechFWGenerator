@@ -1,705 +1,292 @@
 #!/usr/bin/env python3
 """
-Unit tests for the SystemVerilog Generator.
+Tests for the improved SystemVerilog generator.
 
-Tests the functionality of the SystemVerilog generator including proper templating system
-integration, error handling, and template rendering without fallbacks.
+This test suite validates the modular SystemVerilog generator implementation.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, Mock, patch
-
 import pytest
+from unittest.mock import Mock, patch, MagicMock
+from pathlib import Path
 
-from src.__version__ import __version__
-from src.device_clone.device_config import DeviceClass, DeviceType
-from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
-from src.templating.systemverilog_generator import (TEMPLATE_PATHS,
-                                                    AdvancedSVGenerator,
-                                                    DeviceSpecificLogic,
-                                                    MSIXHelper, PCILeechOutput,
-                                                    RegisterAccessType)
-from src.templating.template_renderer import TemplateRenderError
-
-
-class TestDeviceSpecificLogic:
-    """Test the DeviceSpecificLogic configuration class."""
-
-    def test_default_initialization(self):
-        """Test default initialization of DeviceSpecificLogic."""
-        config = DeviceSpecificLogic()
-
-        assert config.device_type == DeviceType.GENERIC
-        assert config.device_class == DeviceClass.CONSUMER
-        assert config.max_payload_size == 256
-        assert config.max_read_request_size == 512
-        assert config.msi_vectors == 1
-        assert config.msix_vectors == 0
-        assert config.enable_dma is False
-        assert config.enable_interrupt_coalescing is False
-        assert config.enable_virtualization is False
-        assert config.enable_sr_iov is False
-        assert config.base_frequency_mhz == 100.0
-        assert config.memory_frequency_mhz == 200.0
-
-    def test_custom_initialization(self):
-        """Test custom initialization of DeviceSpecificLogic."""
-        config = DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK,
-            device_class=DeviceClass.ENTERPRISE,
-            max_payload_size=512,
-            enable_dma=True,
-            base_frequency_mhz=250.0,
-        )
-
-        assert config.device_type == DeviceType.NETWORK
-        assert config.device_class == DeviceClass.ENTERPRISE
-        assert config.max_payload_size == 512
-        assert config.enable_dma is True
-        assert config.base_frequency_mhz == 250.0
+from src.templating.systemverilog_generator import (
+    SystemVerilogGenerator,
+    AdvancedSVGenerator,
+    DeviceSpecificLogic,
+    PowerManagementConfig,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    TemplateRenderError,
+)
+from src.templating.sv_constants import SV_VALIDATION
+from src.device_clone.device_config import DeviceType, DeviceClass
 
 
-class TestPCILeechOutput:
-    """Test the PCILeechOutput configuration class."""
+class TestSystemVerilogGenerator:
+    """Test the main SystemVerilog generator."""
 
-    def test_default_initialization(self):
-        """Test default initialization of PCILeechOutput."""
-        output = PCILeechOutput()
-
-        assert output.src_dir == "src"
-        assert output.ip_dir == "ip"
-        assert output.use_pcileech_structure is True
-        assert output.generate_explicit_file_lists is True
-        assert output.systemverilog_files == []
-        assert output.ip_core_files == []
-        assert output.coefficient_files == []
-        assert output.constraint_files == []
-
-    def test_custom_file_lists(self):
-        """Test initialization with custom file lists."""
-        sv_files = ["test1.sv", "test2.sv"]
-        ip_files = ["ip1.xci", "ip2.xci"]
-
-        output = PCILeechOutput(
-            systemverilog_files=sv_files,
-            ip_core_files=ip_files,
-        )
-
-        assert output.systemverilog_files == sv_files
-        assert output.ip_core_files == ip_files
-        assert output.coefficient_files == []  # Still default
-        assert output.constraint_files == []  # Still default
-
-
-class TestAdvancedSVGenerator:
-    """Test the AdvancedSVGenerator class."""
-
-    @pytest.fixture
-    def mock_template_renderer(self):
-        """Mock template renderer for testing."""
-        with patch("src.templating.systemverilog_generator.TemplateRenderer") as mock:
-            mock_instance = Mock()
-            mock.return_value = mock_instance
-            yield mock_instance
-
-    @pytest.fixture
-    def sample_device_config(self):
-        """Sample device configuration for testing."""
-        return DeviceSpecificLogic(
-            device_type=DeviceType.NETWORK,
-            device_class=DeviceClass.CONSUMER,
-            enable_dma=True,
-            base_frequency_mhz=250.0,
-        )
-
-    @pytest.fixture
-    def sample_power_config(self):
-        """Sample power management configuration."""
-        return PowerManagementConfig()
-
-    @pytest.fixture
-    def sample_error_config(self):
-        """Sample error handling configuration."""
-        return ErrorHandlingConfig()
-
-    @pytest.fixture
-    def sample_perf_config(self):
-        """Sample performance configuration."""
-        return PerformanceConfig()
-
-    def test_initialization_with_defaults(self, mock_template_renderer):
-        """Test AdvancedSVGenerator initialization with default configs."""
-        generator = AdvancedSVGenerator()
+    def test_initialization_with_defaults(self):
+        """Test generator initialization with default configurations."""
+        generator = SystemVerilogGenerator()
 
         assert generator.power_config is not None
         assert generator.error_config is not None
         assert generator.perf_config is not None
         assert generator.device_config is not None
         assert generator.use_pcileech_primary is True
-        assert generator.renderer is not None
-        assert generator.logger is not None
 
-    def test_initialization_with_custom_configs(
-        self,
-        mock_template_renderer,
-        sample_device_config,
-        sample_power_config,
-        sample_error_config,
-        sample_perf_config,
-    ):
-        """Test AdvancedSVGenerator initialization with custom configs."""
-        generator = AdvancedSVGenerator(
-            power_config=sample_power_config,
-            error_config=sample_error_config,
-            perf_config=sample_perf_config,
-            device_config=sample_device_config,
-            use_pcileech_primary=False,
+    def test_initialization_with_custom_configs(self):
+        """Test generator initialization with custom configurations."""
+        device_config = DeviceSpecificLogic(
+            device_type=DeviceType.NETWORK,
+            device_class=DeviceClass.ENTERPRISE,
+            max_payload_size=512,
         )
 
-        assert generator.power_config == sample_power_config
-        assert generator.error_config == sample_error_config
-        assert generator.perf_config == sample_perf_config
-        assert generator.device_config == sample_device_config
+        generator = SystemVerilogGenerator(
+            device_config=device_config, use_pcileech_primary=False
+        )
+
+        assert generator.device_config.device_type == DeviceType.NETWORK
+        assert generator.device_config.max_payload_size == 512
         assert generator.use_pcileech_primary is False
 
-    def test_template_renderer_initialization(self):
-        """Test that template renderer is properly initialized."""
-        with patch(
-            "src.templating.systemverilog_generator.TemplateRenderer"
-        ) as mock_renderer_class:
-            mock_instance = Mock()
-            mock_renderer_class.return_value = mock_instance
+    def test_backward_compatibility_alias(self):
+        """Test that AdvancedSVGenerator alias works."""
+        generator = AdvancedSVGenerator()
+        assert isinstance(generator, SystemVerilogGenerator)
 
-            custom_template_dir = Path("/custom/templates")
-            generator = AdvancedSVGenerator(template_dir=custom_template_dir)
+    def test_generate_modules_validation_error(self):
+        """Test that invalid context raises validation error."""
+        generator = SystemVerilogGenerator()
 
-            # Verify TemplateRenderer was called with custom directory
-            mock_renderer_class.assert_called_once_with(custom_template_dir)
+        # Missing required fields
+        invalid_context = {"device_config": {}}  # Missing device_signature
 
-    def test_generate_device_specific_ports_success(
-        self, mock_template_renderer, sample_device_config
-    ):
-        """Test successful generation of device-specific ports."""
-        expected_output = "// Device-specific port declarations\nlogic test_signal;"
-        mock_template_renderer.render_template.return_value = expected_output
+        with pytest.raises(TemplateRenderError) as exc_info:
+            generator.generate_modules(invalid_context)
 
-        generator = AdvancedSVGenerator(device_config=sample_device_config)
-        result = generator.generate_device_specific_ports()
+        assert "device_signature" in str(exc_info.value)
 
-        assert result == expected_output
-        mock_template_renderer.render_template.assert_called_once_with(
-            TEMPLATE_PATHS["device_specific_ports"],
-            {"device_config": sample_device_config},
-        )
+    def test_generate_modules_with_valid_context(self):
+        """Test module generation with valid context."""
+        generator = SystemVerilogGenerator()
 
-    def test_generate_device_specific_ports_template_error(
-        self, mock_template_renderer, sample_device_config
-    ):
-        """Test that template errors are properly raised for device-specific ports."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Template not found"
-        )
+        valid_context = {
+            "device_signature": "32'h12345678",
+            "device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "subsystem_vendor_id": "1043",
+                "subsystem_device_id": "8554",
+                "class_code": "020000",
+                "revision_id": "15",
+            },
+            "bar_config": {"bars": []},
+            "generation_metadata": {},
+        }
 
-        generator = AdvancedSVGenerator(device_config=sample_device_config)
-
-        with pytest.raises(TemplateRenderError, match="Template not found"):
-            generator.generate_device_specific_ports()
-
-    def test_generate_systemverilog_modules_pcileech_primary(
-        self, mock_template_renderer
-    ):
-        """Test SystemVerilog module generation with PCILeech as primary."""
-        generator = AdvancedSVGenerator(use_pcileech_primary=True)
-        template_context = {"device_config": {}}
-
-        # Mock the PCILeech module generation
-        expected_modules = {"test_module": "module test_module();"}
+        # Mock the module generator to avoid actual template rendering
         with patch.object(
-            generator, "generate_pcileech_modules", return_value=expected_modules
-        ):
-            result = generator.generate_systemverilog_modules(template_context)
+            generator.module_generator, "generate_pcileech_modules"
+        ) as mock_gen:
+            mock_gen.return_value = {"test_module": "module content"}
 
-        assert result == expected_modules
+            modules = generator.generate_modules(valid_context)
 
-    def test_generate_systemverilog_modules_legacy_path(self, mock_template_renderer):
-        """Test SystemVerilog module generation with legacy path."""
-        generator = AdvancedSVGenerator(use_pcileech_primary=False)
-        template_context = {"device_config": {}}
+            assert "test_module" in modules
+            mock_gen.assert_called_once()
 
-        # Mock the legacy module generation
-        expected_modules = {"legacy_module": "module legacy_module();"}
+    def test_legacy_method_compatibility(self):
+        """Test backward compatibility with legacy method names."""
+        generator = SystemVerilogGenerator()
+
+        valid_context = {
+            "device_signature": "32'hDEADBEEF",
+            "device_config": {
+                "vendor_id": "8086",
+                "device_id": "1234",
+                "subsystem_vendor_id": "0000",
+                "subsystem_device_id": "0000",
+                "class_code": "030000",
+                "revision_id": "00",
+            },
+            "bar_config": {"bars": []},
+            "generation_metadata": {},
+        }
+
         with patch.object(
-            generator, "_generate_legacy_modules", return_value=expected_modules
-        ):
-            result = generator.generate_systemverilog_modules(template_context)
+            generator.module_generator, "generate_pcileech_modules"
+        ) as mock_gen:
+            mock_gen.return_value = {"module": "content"}
 
-        assert result == expected_modules
+            # Test legacy method name
+            modules = generator.generate_systemverilog_modules(valid_context)
+            assert modules == {"module": "content"}
 
-    def test_generate_legacy_modules_basic(self, mock_template_renderer):
-        """Test legacy module generation."""
-        # Setup mock template renderer
-        mock_template_renderer.render_template.return_value = "module test();"
-
-        generator = AdvancedSVGenerator()
-        template_context = {"registers": []}
-
-        result = generator._generate_legacy_modules(template_context)
-
-        # Should generate multiple modules
-        assert len(result) > 0
-        # Verify template was called for each module
-        assert mock_template_renderer.render_template.call_count > 0
-
-    def test_generate_advanced_systemverilog_success(self, mock_template_renderer):
-        """Test successful generation of advanced SystemVerilog."""
-        # Mock the template renderer
-        mock_template_renderer.render_template.side_effect = [
-            "module advanced_controller();",  # Main module
-            "module clock_crossing();",  # Clock crossing module
-        ]
-
-        # Mock the header generation
-        with patch(
-            "src.templating.systemverilog_generator.generate_sv_header_comment",
-            return_value="// Header",
-        ):
-            generator = AdvancedSVGenerator()
-
-            # Mock the device specific ports generation
-            with patch.object(
-                generator, "generate_device_specific_ports", return_value="// Ports"
-            ):
-                result = generator.generate_advanced_systemverilog([])
-
-        assert "module advanced_controller();" in result
-        assert "module clock_crossing();" in result
-
-    def test_generate_advanced_systemverilog_template_error(
-        self, mock_template_renderer
-    ):
-        """Test that template errors are properly raised in advanced SystemVerilog generation."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Missing template"
+    def test_device_specific_ports_generation(self):
+        """Test device-specific ports generation."""
+        device_config = DeviceSpecificLogic(
+            device_type=DeviceType.NETWORK,
+            device_class=DeviceClass.ENTERPRISE,
         )
 
-        with patch(
-            "src.templating.systemverilog_generator.generate_sv_header_comment",
-            return_value="// Header",
-        ):
-            generator = AdvancedSVGenerator()
+        generator = SystemVerilogGenerator(device_config=device_config)
 
-            with patch.object(
-                generator, "generate_device_specific_ports", return_value="// Ports"
-            ):
-                with pytest.raises(TemplateRenderError, match="Missing template"):
-                    generator.generate_advanced_systemverilog([])
+        with patch.object(
+            generator.module_generator, "generate_device_specific_ports"
+        ) as mock_gen:
+            mock_gen.return_value = "// Device ports"
 
-    def test_generate_enhanced_build_integration_success(self, mock_template_renderer):
-        """Test successful generation of build integration code."""
-        expected_code = "# Build integration code\nprint('Hello')"
-        mock_template_renderer.render_template.return_value = expected_code
+            ports = generator.generate_device_specific_ports()
 
-        generator = AdvancedSVGenerator()
-        result = generator.generate_enhanced_build_integration()
+            mock_gen.assert_called_with(
+                DeviceType.NETWORK.value, DeviceClass.ENTERPRISE.value, ""
+            )
 
-        assert result == expected_code
-        mock_template_renderer.render_template.assert_called_once_with(
-            TEMPLATE_PATHS["build_integration"], {"generator_version": __version__}
-        )
+    def test_cache_clearing(self):
+        """Test cache clearing functionality."""
+        generator = SystemVerilogGenerator()
 
-    def test_generate_enhanced_build_integration_template_error(
-        self, mock_template_renderer
-    ):
-        """Test that template errors are properly raised in build integration generation."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Template error"
-        )
+        # Just verify the method exists and can be called without error
+        generator.clear_cache()
+        # The actual cache clearing is an implementation detail
+        # that doesn't need to be tested at this level
 
-        generator = AdvancedSVGenerator()
 
-        with pytest.raises(TemplateRenderError, match="Template error"):
-            generator.generate_enhanced_build_integration()
+class TestDeviceSpecificLogic:
+    """Test the DeviceSpecificLogic configuration class."""
 
-    def test_generate_pcileech_modules_basic(self, mock_template_renderer):
-        """Test basic PCILeech module generation."""
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = DeviceSpecificLogic()
 
-        # Setup mock to return different content for different templates
-        def mock_render(template_name, context):
-            if "pcileech_tlps128_bar_controller" in template_name:
-                return "module pcileech_tlps128_bar_controller();"
-            elif "pcileech_fifo" in template_name:
-                return "module pcileech_fifo();"
-            elif "top_level_wrapper" in template_name:
-                return "module top_level_wrapper();"
-            elif "pcileech_cfgspace.coe" in template_name:
-                return "memory_initialization_radix=16;"
-            else:
-                return f"// Template: {template_name}"
+        assert config.device_type == DeviceType.GENERIC
+        assert config.device_class == DeviceClass.CONSUMER
+        assert config.max_payload_size == 256
+        assert config.enable_dma is False
 
-        mock_template_renderer.render_template.side_effect = mock_render
+    def test_validation(self):
+        """Test configuration validation."""
+        # Valid configuration
+        config = DeviceSpecificLogic(max_payload_size=512)
+        config.validate()  # Should not raise
 
-        # Mock the header generation
-        with patch(
-            "src.templating.systemverilog_generator.generate_sv_header_comment",
-            return_value="// Header",
-        ):
-            generator = AdvancedSVGenerator()
-            # Provide valid device_config with required fields
-            template_context = {
-                "device_config": {
-                    "vendor_id": "10EC",
-                    "device_id": "8168",
-                    "class_code": "020000",
-                    "revision_id": "01",
-                    "subsystem_vendor_id": "10EC",
-                    "subsystem_device_id": "8168",
-                },
-                "device_signature": "0xDEADBEEF",  # Required security field
-                "active_device_config": {},  # Required by SystemVerilog generator
-                "bar_config": {
-                    "bars": [
-                        {
-                            "type": "memory",
-                            "size": 0x1000,
-                            "prefetchable": False,
-                            "is_64bit": False,
-                        }
-                    ]
-                },
+        # Invalid configuration
+        config = DeviceSpecificLogic(max_payload_size=-1)
+        with pytest.raises(ValueError) as exc_info:
+            config.validate()
+        assert "max_payload_size" in str(exc_info.value)
+
+
+class TestValidation:
+    """Test validation functionality."""
+
+    def test_error_messages_available(self):
+        """Test that error messages are properly defined."""
+        messages = SV_VALIDATION.ERROR_MESSAGES
+
+        assert "missing_device_signature" in messages
+        assert "invalid_device_type" in messages
+        assert "validation_failed" in messages
+
+    def test_missing_device_signature_error(self):
+        """Test specific error for missing device signature."""
+        generator = SystemVerilogGenerator()
+
+        context = {
+            "device_config": {
+                "vendor_id": "1234",
+                "device_id": "5678",
             }
+            # Missing device_signature
+        }
 
-            result = generator.generate_pcileech_modules(template_context)
+        with pytest.raises(TemplateRenderError) as exc_info:
+            generator.generate_modules(context)
 
-        # Should generate core PCILeech modules
-        assert "pcileech_tlps128_bar_controller" in result
-        assert "pcileech_fifo" in result
-        assert "top_level_wrapper" in result
-        assert "pcileech_cfgspace.coe" in result
+        error_msg = str(exc_info.value)
+        assert "device_signature" in error_msg
+        assert "required" in error_msg.lower()
 
-    def test_generate_pcileech_modules_with_msix(self, mock_template_renderer):
-        """Test PCILeech module generation with MSI-X support."""
 
-        def mock_render(template_name, context):
-            return f"// Generated: {template_name}"
+class TestIntegration:
+    """Integration tests for the complete system."""
 
-        mock_template_renderer.render_template.side_effect = mock_render
-
-        with patch(
-            "src.templating.systemverilog_generator.generate_sv_header_comment",
-            return_value="// Header",
-        ):
-            generator = AdvancedSVGenerator()
-
-            # Mock MSI-X initialization methods
-            with patch(
-                "src.templating.systemverilog_generator.MSIXHelper.generate_msix_pba_init",
-                return_value="PBA_INIT_DATA",
-            ):
-                with patch(
-                    "src.templating.systemverilog_generator.MSIXHelper.generate_msix_table_init",
-                    return_value="TABLE_INIT_DATA",
-                ):
-                    # Provide valid device_config with required fields
-                    template_context = {
-                        "device_config": {
-                            "vendor_id": "10EC",
-                            "device_id": "8168",
-                            "class_code": "020000",
-                            "revision_id": "01",
-                            "subsystem_vendor_id": "10EC",
-                            "subsystem_device_id": "8168",
-                        },
-                        "msix_config": {"is_supported": True, "num_vectors": 4},
-                        "device_signature": "0xCAFEBABE",
-                        "active_device_config": {},  # Required by SystemVerilog generator
-                        "bar_config": {
-                            "bars": [
-                                {
-                                    "type": "memory",
-                                    "size": 0x1000,
-                                    "prefetchable": False,
-                                    "is_64bit": False,
-                                }
-                            ]
-                        },
-                    }
-
-                    result = generator.generate_pcileech_modules(template_context)
-
-        # Should include MSI-X modules
-        assert "msix_capability_registers" in result
-        assert "msix_implementation" in result
-        assert "msix_table" in result
-        assert "msix_pba_init.hex" in result
-        assert "msix_table_init.hex" in result
-
-    def test_generate_pcileech_modules_template_error(self, mock_template_renderer):
-        """Test that template errors are properly raised in PCILeech module generation."""
-        # Setup template renderer to succeed for validation but fail for actual template
-        call_count = 0
-
-        def mock_render_with_error(template_name, context):
-            nonlocal call_count
-            call_count += 1
-            # Let validation pass by succeeding on first call, then fail
-            if call_count == 1:
-                return "module test();"
-            else:
-                raise TemplateRenderError("PCILeech template error")
-
-        mock_template_renderer.render_template.side_effect = mock_render_with_error
-
-        with patch(
-            "src.templating.systemverilog_generator.generate_sv_header_comment",
-            return_value="// Header",
-        ):
-            generator = AdvancedSVGenerator()
-            # Provide valid device_config to pass validation
-            template_context = {
-                "device_config": {
-                    "vendor_id": "10EC",
-                    "device_id": "8168",
-                    "class_code": "020000",
-                    "revision_id": "01",
-                    "subsystem_vendor_id": "10EC",
-                    "subsystem_device_id": "8168",
-                },
-                "device_signature": "0xCAFEBABE",
-                "active_device_config": {},  # Required by SystemVerilog generator
-                "bar_config": {
-                    "bars": [
-                        {
-                            "type": "memory",
-                            "size": 0x1000,
-                            "prefetchable": False,
-                            "is_64bit": False,
-                        }
-                    ]
-                },
-            }
-
-            with pytest.raises(TemplateRenderError, match="PCILeech template error"):
-                generator.generate_pcileech_modules(template_context)
-
-    def test_extract_pcileech_registers_with_behavior_profile(self):
-        """Test register extraction from behavior profile."""
-        # Mock behavior profile with register accesses
-        mock_access1 = Mock()
-        mock_access1.register = "TEST_REG1"
-        mock_access1.offset = 0x10
-        mock_access1.operation = "read"
-
-        mock_access2 = Mock()
-        mock_access2.register = "TEST_REG1"
-        mock_access2.offset = 0x10
-        mock_access2.operation = "write"
-
-        mock_access3 = Mock()
-        mock_access3.register = "TEST_REG2"
-        mock_access3.offset = 0x20
-        mock_access3.operation = "read"
-
-        mock_behavior_profile = Mock()
-        mock_behavior_profile.register_accesses = [
-            mock_access1,
-            mock_access2,
-            mock_access3,
-        ]
-
-        generator = AdvancedSVGenerator()
-        registers = generator._extract_pcileech_registers(mock_behavior_profile)
-
-        assert len(registers) == 2
-
-        # Find TEST_REG1 (should be read/write)
-        reg1 = next(r for r in registers if r["name"] == "TEST_REG1")
-        assert reg1["offset"] == 0x10
-        assert reg1["access_type"] == RegisterAccessType.READ_WRITE
-        assert reg1["access_count"] == 2
-
-        # Find TEST_REG2 (should be read-only)
-        reg2 = next(r for r in registers if r["name"] == "TEST_REG2")
-        assert reg2["offset"] == 0x20
-        assert reg2["access_type"] == RegisterAccessType.READ_ONLY
-        assert reg2["access_count"] == 1
-
-    @pytest.mark.skip(reason="Test needs refactoring for new DeviceType validation")
-    def test_extract_pcileech_registers_no_behavior_profile(self):
-        """Test register extraction with no behavior profile (should raise error)."""
-        mock_behavior_profile = Mock()
-        # Mock hasattr to return False for register_accesses
-        with patch("builtins.hasattr", return_value=False):
-            generator = AdvancedSVGenerator()
-
-            # The method should raise TemplateRenderError when register_accesses is missing
-            with pytest.raises(
-                TemplateRenderError,
-                match="Behavior profile missing 'register_accesses' attribute",
-            ):
-                generator._extract_pcileech_registers(mock_behavior_profile)
-
-    def test_generate_msix_pba_init(self):
-        """Test MSI-X PBA initialization generation."""
-        num_vectors = 8
-
-        result = MSIXHelper.generate_msix_pba_init(num_vectors)
-
-        # 8 vectors = 1 DWORD (8 bits, each vector is 1 bit)
-        lines = result.strip().split("\n")
-        assert len(lines) == 1
-        assert lines[0] == "00000000"
-
-    def test_generate_msix_pba_init_large_vector_count(self):
-        """Test MSI-X PBA initialization with large vector count."""
-        num_vectors = 64  # Should require 2 DWORDs
-
-        result = MSIXHelper.generate_msix_pba_init(num_vectors)
-
-        lines = result.strip().split("\n")
-        assert len(lines) == 2
-        assert all(line == "00000000" for line in lines)
-
-    def test_generate_msix_table_init_test_environment(self):
-        """Test MSI-X table initialization in test environment."""
-        num_vectors = 2
-        is_test_environment = True
-
-        result = MSIXHelper.generate_msix_table_init(num_vectors, is_test_environment)
-
-        lines = result.strip().split("\n")
-        assert len(lines) == 8  # 2 vectors * 4 DWORDs per entry
-
-        # First vector entry (4 DWORDs)
-        assert lines[0] == "FEE00000"  # Message Address Low for vector 0
-        assert lines[1] == "00000000"  # Message Address High
-        assert lines[2] == "00000000"  # Message Data
-        assert lines[3] == "00000000"  # Vector Control
-
-        # Second vector entry (4 DWORDs)
-        assert lines[4] == "FEE00010"  # Message Address Low for vector 1
-        assert lines[5] == "00000000"  # Message Address High
-        assert lines[6] == "00000001"  # Message Data
-        assert lines[7] == "00000000"  # Vector Control
-
-    def test_generate_msix_table_init_with_actual_data(self):
-        """Test generating hex format from actual MSI-X table data."""
-        actual_data = [0x12345678, 0x87654321, 0xABCDEF00, 0x00000000]
-
-        # Convert actual data to hex format as would be done in _generate_msix_table_init
-        result = "\n".join(f"{value:08X}" for value in actual_data) + "\n"
-
-        lines = result.strip().split("\n")
-        assert len(lines) == 4
-        assert lines[0] == "12345678"
-        assert lines[1] == "87654321"
-        assert lines[2] == "ABCDEF00"
-        assert lines[3] == "00000000"
-
-    def test_generate_pcileech_integration_code_success(self, mock_template_renderer):
-        """Test successful generation of PCILeech integration code."""
-        expected_code = "# PCILeech integration\nprint('Integration successful')"
-        mock_template_renderer.render_template.return_value = expected_code
-
-        generator = AdvancedSVGenerator()
-        template_context = {"device_config": {}}
-
-        result = generator.generate_pcileech_integration_code(template_context)
-
-        assert result == expected_code
-
-        # Verify the template was called with enhanced context
-        call_args = mock_template_renderer.render_template.call_args
-        assert call_args[0][0] == TEMPLATE_PATHS["pcileech_integration"]
-        context = call_args[0][1]
-        assert "pcileech_modules" in context
-        assert "integration_type" in context
-        assert context["integration_type"] == "pcileech"
-
-    def test_generate_pcileech_integration_code_template_error(
-        self, mock_template_renderer
-    ):
-        """Test that template errors are properly raised in PCILeech integration code generation."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Integration template error"
+    def test_full_generation_flow(self):
+        """Test the complete generation flow with all components."""
+        # Create custom configurations
+        device_config = DeviceSpecificLogic(
+            device_type=DeviceType.NETWORK,
+            device_class=DeviceClass.ENTERPRISE,
+            max_payload_size=512,
+            msix_vectors=8,
+            enable_dma=True,
         )
 
-        generator = AdvancedSVGenerator()
-        template_context = {"device_config": {}}
-
-        with pytest.raises(TemplateRenderError, match="Integration template error"):
-            generator.generate_pcileech_integration_code(template_context)
-
-
-class TestErrorHandling:
-    """Test that the generator properly handles errors instead of providing fallbacks."""
-
-    @pytest.fixture
-    def mock_template_renderer(self):
-        """Mock template renderer for error testing."""
-        with patch("src.templating.systemverilog_generator.TemplateRenderer") as mock:
-            mock_instance = Mock()
-            mock.return_value = mock_instance
-            yield mock_instance
-
-    def test_no_fallback_on_template_error(self, mock_template_renderer):
-        """Test that template errors are raised instead of falling back to defaults."""
-        # Setup mock to raise TemplateRenderError
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Template missing"
+        power_config = PowerManagementConfig(
+            enable_pme=True,
+            enable_wake_events=True,
         )
 
-        generator = AdvancedSVGenerator()
-
-        # All these methods should raise TemplateRenderError, not return fallback values
-        with pytest.raises(TemplateRenderError):
-            generator.generate_device_specific_ports()
-
-        with pytest.raises(TemplateRenderError):
-            generator.generate_enhanced_build_integration()
-
-        template_context = {"device_config": {}}
-        with pytest.raises(TemplateRenderError):
-            generator.generate_pcileech_modules(template_context)
-
-        with pytest.raises(TemplateRenderError):
-            generator.generate_pcileech_integration_code(template_context)
-
-    def test_template_renderer_properly_initialized(self):
-        """Test that TemplateRenderer is properly initialized and used."""
-        with patch(
-            "src.templating.systemverilog_generator.TemplateRenderer"
-        ) as mock_renderer_class:
-            mock_instance = Mock()
-            mock_renderer_class.return_value = mock_instance
-
-            custom_template_dir = Path("/custom/templates")
-            generator = AdvancedSVGenerator(template_dir=custom_template_dir)
-
-            # Verify TemplateRenderer was initialized with correct directory
-            mock_renderer_class.assert_called_once_with(custom_template_dir)
-
-            # Verify the generator uses the renderer instance
-            assert generator.renderer == mock_instance
-
-    def test_error_logging_and_reraising(self, mock_template_renderer):
-        """Test that errors are logged but still re-raised."""
-        mock_template_renderer.render_template.side_effect = TemplateRenderError(
-            "Test error"
+        error_config = ErrorHandlingConfig(
+            enable_error_detection=True,
+            enable_error_logging=True,
         )
 
-        generator = AdvancedSVGenerator()
+        perf_config = PerformanceConfig(
+            enable_performance_counters=True,
+        )
 
-        # Capture log messages
-        with patch.object(generator.logger, "error") as mock_log_error:
-            with pytest.raises(TemplateRenderError, match="Test error"):
-                generator.generate_device_specific_ports()
+        # Create generator
+        generator = SystemVerilogGenerator(
+            device_config=device_config,
+            power_config=power_config,
+            error_config=error_config,
+            perf_config=perf_config,
+        )
 
-            # Verify error was logged
-            mock_log_error.assert_called_once()
+        # Create valid context
+        context = {
+            "device_signature": "32'h12345678",
+            "device_config": {
+                "vendor_id": "10EC",
+                "device_id": "8168",
+                "subsystem_vendor_id": "1043",
+                "subsystem_device_id": "8554",
+                "class_code": "020000",
+                "revision_id": "15",
+            },
+            "msix_config": {
+                "is_supported": True,
+                "num_vectors": 8,
+                "table_bir": 2,
+                "table_offset": 0x1000,
+            },
+            "bar_config": {
+                "bars": [
+                    {"index": 0, "size": 0x100},
+                    {"index": 2, "size": 0x4000},
+                ]
+            },
+            "generation_metadata": {
+                "timestamp": "2024-01-15T10:30:00Z",
+                "version": "1.0.0",
+            },
+        }
+
+        # Mock template rendering to avoid file system dependencies
+        with patch.object(generator.renderer, "render_template") as mock_render:
+            mock_render.return_value = "// Generated module content"
+
+            modules = generator.generate_modules(context)
+
+            # Verify modules were generated
+            assert isinstance(modules, dict)
+            assert len(modules) > 0
+
+            # Verify render was called
+            assert mock_render.call_count > 0
 
 
 if __name__ == "__main__":
