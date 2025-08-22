@@ -131,7 +131,7 @@ PCILeech from accessing PCI devices for firmware generation.
             with open(script_path, "w") as f:
                 f.write(script)
 
-            os.chmod(script_path, 0o755)
+            os.chmod(script_path, 0o700)
             log_info_safe(
                 logger,
                 "\n📝 Remediation script generated: {path}",
