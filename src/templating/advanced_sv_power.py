@@ -35,6 +35,9 @@ class PowerManagementConfig:
     # Enable wake event support
     enable_wake_events: bool = False
 
+    # Interface signal configuration
+    has_interface_signals: bool = True
+
     # Transition cycle counts
     transition_cycles: Optional[TransitionCycles] = None
 

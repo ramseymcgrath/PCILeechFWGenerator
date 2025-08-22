@@ -506,6 +506,10 @@ class ContextBuilderConfig:
             "max_retry_count": 3,
             "error_recovery_cycles": 100,
             "error_log_depth": 256,
+            "timeout_cycles": 32768,  # Default timeout in clock cycles
+            "enable_parity_check": False,
+            "enable_timeout_detection": True,
+            "enable_crc_check": False,
         }
 
 
@@ -939,6 +943,9 @@ class UnifiedContextBuilder:
                 "enable_dma_operations": True,
                 "device_type": device_type,
                 "device_class": device_class,
+                # Add attributes expected by templates
+                "enable_perf_counters": True,
+                "has_option_rom": False,
             }
         )
 
@@ -946,7 +953,25 @@ class UnifiedContextBuilder:
         # Add aliases
         context["device"] = device_config
         context["device_info"] = device_config
-        context["config"] = device_config
+        
+        # Create a comprehensive config object that includes error handling, performance, etc.
+        # This is needed for templates that expect config.timeout_cycles, config.enable_error_logging, etc.
+        comprehensive_config = TemplateObject({
+            # Device configuration
+            **device_config.to_dict(),
+            # Error handling configuration (will be added later from error_config)
+            "timeout_cycles": 32768,
+            "enable_error_logging": True,
+            "enable_timeout_detection": True,
+            "enable_parity_check": False,
+            "enable_crc_check": False,
+            # Performance configuration
+            "enable_perf_counters": True,
+            # Board configuration
+            "has_option_rom": False,
+        })
+        
+        context["config"] = comprehensive_config
 
     def _add_standard_configs(self, context: Dict[str, Any], **kwargs) -> None:
         """Add standard configuration objects."""
@@ -961,8 +986,10 @@ class UnifiedContextBuilder:
                         "base": 0,
                         "size": kwargs.get("BAR_APERTURE_SIZE", 0x1000),
                         "type": "io",
+                        "is_64bit": kwargs.get("is_64bit", False),
                     }
-                ]
+                ],
+                "is_64bit": kwargs.get("is_64bit", False),
             }
         )
         context["bars"] = context["bar_config"].get("bars", [])
@@ -1044,6 +1071,18 @@ class UnifiedContextBuilder:
 
     def _add_compatibility_aliases(self, context: Dict[str, Any], **kwargs) -> None:
         """Add compatibility aliases for legacy templates."""
+        # Update the main config object with error handling and performance attributes
+        if "config" in context and "error_handling" in context:
+            config_dict = context["config"].to_dict()
+            config_dict.update(context["error_handling"].to_dict())
+            context["config"] = TemplateObject(config_dict)
+        
+        # Update config with performance attributes
+        if "config" in context and "perf_config" in context:
+            config_dict = context["config"].to_dict()
+            config_dict.update(context["perf_config"].to_dict())
+            context["config"] = TemplateObject(config_dict)
+
         # Top-level aliases for nested values
         context["enable_performance_counters"] = context[
             "perf_config"

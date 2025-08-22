@@ -414,6 +414,12 @@ class SystemVerilogGenerator:
             },
             "device_type": "GENERIC",
             "device_class": "CONSUMER",
+            # Include the configuration objects from the constructor
+            "perf_config": self.perf_config,
+            "error_config": self.error_config,
+            "power_config": self.power_config,
+            "error_handling": self.error_config,
+            "power_management": self.power_config,
         }
 
         # Use the module generator's method directly

@@ -189,7 +189,10 @@ class SVValidator:
             raise TemplateRenderError(self.messages["missing_critical_field"])
 
         device_config = context["device_config"]
-        if not isinstance(device_config, dict):
+        # Accept both dict and TemplateObject types for device_config
+        from src.utils.unified_context import TemplateObject
+
+        if not isinstance(device_config, (dict, TemplateObject)):
             raise TemplateRenderError(
                 self.messages["device_config_not_dict"].format(
                     type_name=type(device_config).__name__

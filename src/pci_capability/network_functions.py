@@ -88,24 +88,24 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
                 DEVICE_PATTERN_INTEL_LAN_BASE,
                 DEVICE_PATTERN_INTEL_LAN_EXT,
             ]:
-                return "ethernet_controller"
+                return "ethernet"
             if device_lower in [
                 DEVICE_PATTERN_INTEL_WIRELESS_BASE,
                 DEVICE_PATTERN_INTEL_WIRELESS_EXT,
             ]:
-                return "wireless_controller"
+                return "wifi"
             # Add more Intel device ranges as needed
         if self.vendor_id == VENDOR_ID_REALTEK:  # Realtek
             if device_lower in [
                 DEVICE_PATTERN_REALTEK_ETH_BASE,
                 DEVICE_PATTERN_REALTEK_ETH_EXT,
             ]:
-                return "ethernet_controller"
+                return "ethernet"
             if device_lower in [
                 DEVICE_PATTERN_REALTEK_WIFI_BASE,
                 DEVICE_PATTERN_REALTEK_WIFI_EXT,
             ]:
-                return "wireless_controller"
+                return "wifi"
 
         # Generic patterns based on device ID structure
         # Higher device IDs often indicate advanced features
@@ -150,6 +150,9 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         # Import vendor ID constants
         from src.device_clone.constants import VENDOR_ID_INTEL
 
+        # Convert enum to int if needed
+        intel_vendor_id = int(VENDOR_ID_INTEL) if hasattr(VENDOR_ID_INTEL, 'value') else VENDOR_ID_INTEL
+
         # High-end devices (higher device IDs) more likely to support SR-IOV
         if (
             self.device_id > DEVICE_ID_THRESHOLD_ADVANCED
@@ -157,7 +160,7 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         ):
             # Check for enterprise/datacenter patterns
             if (
-                self.vendor_id == VENDOR_ID_INTEL
+                self.vendor_id == intel_vendor_id
                 and (self.device_id & INTEL_ENTERPRISE_MASK)
                 >= INTEL_ENTERPRISE_THRESHOLD
             ):
