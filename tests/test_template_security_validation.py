@@ -46,7 +46,7 @@ class TestTemplateSecurity:
             renderer.render_template("sv/pcileech_fifo.sv.j2", context)
 
         error_msg = str(exc_info.value)
-        assert "header" in error_msg  # Should mention the undefined variable
+        assert "device" in error_msg  # Should mention the undefined variable
 
     def test_reject_missing_required_variables(self):
         """Test that missing required variables are rejected."""

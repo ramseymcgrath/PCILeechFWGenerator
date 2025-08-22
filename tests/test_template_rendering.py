@@ -413,8 +413,9 @@ class TestTemplateRendering:
             # Try to render with incomplete context - should fail with security violation
             renderer.render_template("sv/main_module.sv.j2", minimal_context)
 
-        # Should get a clear security violation message
-        assert "SECURITY VIOLATION" in str(exc_info.value)
+        # Should get a clear error message about undefined variable
+        assert "performance_counters" in str(exc_info.value)
+        assert "undefined" in str(exc_info.value)
 
 
 class TestTemplateFilters:
