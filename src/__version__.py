@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Version information for PCILeech Firmware Generator."""
 
-__version__ = "0.13.5"
-__version_info__ = (0, 13, 5)
+__version__ = "0.13.6"
+__version_info__ = (0, 13, 6)
 
 # Release information
 __title__ = "PCILeech Firmware Generator"
@@ -13,5 +13,5 @@ __license__ = "MIT"
 __url__ = "https://github.com/voltcyclone/PCILeechFWGenerator"
 
 # Build metadata
-__build_date__ = "2025-08-22T05:09:11.179821"
-__commit_hash__ = "47240c0"
+__build_date__ = "2025-08-22T07:14:11.420952"
+__commit_hash__ = "0fb4079"

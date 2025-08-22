@@ -13,9 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v0.5.0
 
 ## 📑 Table of Contents
 
+- [Version 0.13.6 (2025-08-22)](#version-0136-2025-08-22)
 - [Version 0.13.5 (2025-08-22)](#version-0135-2025-08-22)
 - [Version 0.13.4 (2025-08-16)](#version-0134-2025-08-16)
 - [Version 0.5.8 (2025-06-09)](#020---2025-06-09)
+
+---
+## Version 0.13.6 (2025-08-22)
+
+### Bug Fixes
+
+- Fix a couple tests.
+- Fix missing context values.
+
+### Other
+
+- Potential fix for code scanning alert no. 149: Overly permissive file permissions (#312).
+- Potential fix for code scanning alert no. 150: Overly permissive file permissions (#311).
+- Potential fix for code scanning alert no. 252: Unhashable object hashed (#310).
+- Potential fix for code scanning alert no. 248: Wrong number of arguments in a class instantiation (#309).
+- Update project url (#308).
 
 ---
 ## Version 0.13.5 (2025-08-22)
