@@ -8,6 +8,7 @@ the codebase.
 """
 
 from typing import Any, Optional, TypeVar, Union, cast
+import collections.abc
 
 T = TypeVar("T")
 
@@ -189,6 +190,8 @@ def get_multiple_attrs(
     result = {}
 
     for attr_name in attr_names:
+        if not isinstance(attr_name, collections.abc.Hashable):
+            raise TypeError(f"Attribute name {attr_name!r} is unhashable and cannot be used as a dict key.")
         default_value = defaults.get(attr_name, None)
         result[attr_name] = safe_get_attr(obj, attr_name, default_value)
 
