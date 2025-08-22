@@ -7,7 +7,7 @@ This guide covers development setup, testing, and contributing to the PCILeech F
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/ramseymcgrath/PCILeechFWGenerator.git
+git clone https://github.com/voltcyclone/PCILeechFWGenerator.git
 cd PCILeechFWGenerator
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt

@@ -17,8 +17,19 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
-                             ProgressBar, RichLog, Select, Static, Switch)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    RichLog,
+    Select,
+    Static,
+    Switch,
+)
 
 from src.device_clone.board_config import list_supported_boards
 
@@ -608,7 +619,7 @@ class PCILeechTUI(App):
                 self.notify("Opening local documentation", severity="info")
             else:
                 # Fallback to online documentation
-                webbrowser.open("https://pcileechfwgenerator.ramseymcgrath.com")
+                webbrowser.open("https://pcileechfwgenerator.voltcyclone.info")
                 self.notify("Opening online documentation", severity="info")
         except Exception as e:
             self.notify(f"Failed to open documentation: {e}", severity="error")
@@ -749,8 +760,10 @@ class PCILeechTUI(App):
                 return
 
             # Import here to avoid circular import
-            from src.tui.utils.ui_helpers import (format_status_messages,
-                                                  safely_update_static)
+            from src.tui.utils.ui_helpers import (
+                format_status_messages,
+                safely_update_static,
+            )
 
             try:
                 # Format all status messages at once

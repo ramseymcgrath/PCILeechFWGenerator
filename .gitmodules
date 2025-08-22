@@ -1,6 +1,6 @@
 [submodule "wiki"]
 	path = wiki
-	url = https://github.com/ramseymcgrath/PCILeechFWGenerator.wiki.git
+	url = https://github.com/voltcyclone/PCILeechFWGenerator.wiki.git
 [submodule "site"]
 	path = site
-	url = https://github.com/ramseymcgrath/PCILeechFWGenerator-site.git
+	url = https://github.com/voltcyclone/PCILeechFWGenerator-site.git

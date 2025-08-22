@@ -38,9 +38,9 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Documentation = "https://pcileechfwgenerator.ramseymcgrath.com"
-Source = "https://github.com/ramseymcgrath/PCILeechFWGenerator"
-"Bug Tracker" = "https://github.com/ramseymcgrath/PCILeechFWGenerator/issues"
+Documentation = "https://pcileechfwgenerator.voltcyclone.info"
+Source = "https://github.com/voltcyclone/PCILeechFWGenerator"
+"Bug Tracker" = "https://github.com/voltcyclone/PCILeechFWGenerator/issues"
 
 [project.optional-dependencies]
 testing = [
