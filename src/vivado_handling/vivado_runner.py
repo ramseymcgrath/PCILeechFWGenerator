@@ -146,8 +146,8 @@ echo "Vivado synthesis completed on host"
             with open(host_script, "w") as f:
                 f.write(script_content)
 
-            # Make script executable
-            os.chmod(host_script, 0o755)
+            # Make script executable (owner only)
+            os.chmod(host_script, 0o700)
 
             self.logger.info(f"Created host execution script: {host_script}")
             self.logger.info("To complete Vivado synthesis, run this on the host:")
