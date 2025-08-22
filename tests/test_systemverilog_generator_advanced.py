@@ -26,9 +26,11 @@ from test_helpers import requires_hardware
 
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig,
-                                                 PowerManagementConfig)
+from src.templating.advanced_sv_features import (
+    ErrorHandlingConfig,
+    PerformanceConfig,
+    PowerManagementConfig,
+)
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 from src.templating.template_renderer import TemplateRenderError
 
@@ -437,7 +439,9 @@ class TestComplexTemplateScenarios:
             mock_render.side_effect = template_errors
 
             # Each method should propagate the template error without modification
-            with pytest.raises(TemplateRenderError, match="device_config is missing"):
+            with pytest.raises(
+                TemplateRenderError, match="Missing fields: vendor_id, device_id"
+            ):
                 base_generator.generate_pcileech_modules(template_context)
 
     def test_large_template_context_performance(self, base_generator):
@@ -508,7 +512,7 @@ class TestAdvancedSystemVerilogFeatures:
         variance_model.power_variance = 0.1
 
         with patch.object(
-            advanced_generator.renderer, "render_template"
+            advanced_generator.module_generator.renderer, "render_template"
         ) as mock_render:
             mock_render.return_value = "advanced systemverilog module"
 
@@ -516,11 +520,15 @@ class TestAdvancedSystemVerilogFeatures:
                 regs=registers, variance_model=variance_model
             )
 
-            # Verify template was called with comprehensive context
-            call_args = mock_render.call_args_list[0]
-            context = call_args[0][1]
+            # Verify template was called at least twice
+            # (device_specific_ports + main controller)
+            assert len(mock_render.call_args_list) >= 2
 
-            # Check that device_config object is included instead of variance_model at root
+            # Check the second call (main controller) has comprehensive context
+            main_controller_call = mock_render.call_args_list[1]
+            context = main_controller_call[0][1]
+
+            # Check that device_config object is included
             assert "device_config" in context
             assert context.get("variance_model") == variance_model
 

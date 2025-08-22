@@ -311,25 +311,35 @@ class SVModuleGenerator:
     def _extract_registers(self, behavior_profile: Any) -> List[Dict]:
         """Extract register definitions from behavior profile."""
         if not behavior_profile:
-            raise ValueError(self.messages["missing_behavior_profile"])
+            log_warning_safe(self.logger, "No register accesses found, using defaults")
+            return self._get_default_registers()
 
         try:
-            register_accesses = get_attr_or_raise(
-                behavior_profile,
-                "register_accesses",
-                "Behavior profile missing register_accesses",
-            )
-        except AttributeError as e:
-            raise TemplateRenderError(str(e))
+            # Check if behavior_profile has register_accesses attribute
+            if hasattr(behavior_profile, "register_accesses"):
+                register_accesses = behavior_profile.register_accesses
+            else:
+                log_warning_safe(
+                    self.logger, "No register accesses found, using defaults"
+                )
+                return self._get_default_registers()
+
+        except AttributeError:
+            log_warning_safe(self.logger, "No register accesses found, using defaults")
+            return self._get_default_registers()
 
         if not register_accesses:
             log_warning_safe(self.logger, "No register accesses found, using defaults")
             return self._get_default_registers()
 
-        # Process register accesses
+        # Process register accesses to build unique register map
         register_map = {}
         for access in register_accesses:
             self._process_register_access(access, register_map)
+
+        if not register_map:
+            log_warning_safe(self.logger, "No register accesses found, using defaults")
+            return self._get_default_registers()
 
         return list(register_map.values())
 
@@ -337,13 +347,29 @@ class SVModuleGenerator:
         self, access: Any, register_map: Dict[str, Dict]
     ) -> None:
         """Process a single register access."""
+        # Try different ways to get the register name
         reg_name = safe_get_attr(access, "register")
         if not reg_name or reg_name == "UNKNOWN":
-            return
+            # Try getting name from offset
+            offset = safe_get_attr(access, "offset")
+            if offset is not None:
+                reg_name = self._get_register_name_from_offset(offset)
+            else:
+                return
 
         offset = safe_get_attr(access, "offset")
-        if offset is None or not isinstance(offset, int) or offset < 0:
+        if offset is None:
+            # Try to derive offset from known register names
+            offset = self._get_offset_from_register_name(reg_name)
+        if offset is None or not isinstance(offset, (int, float)) or offset < 0:
             return
+
+        offset = int(offset)
+
+        # Get operation type
+        operation = safe_get_attr(access, "operation")
+        if not operation:
+            operation = "read"  # Default to read
 
         # Initialize or update register entry
         if reg_name not in register_map:
@@ -354,16 +380,57 @@ class SVModuleGenerator:
                 "access_count": 0,
                 "read_count": 0,
                 "write_count": 0,
-                "access_type": "rw",
+                "access_type": "ro",  # Start with read-only
             }
 
         register_map[reg_name]["access_count"] += 1
 
-        operation = safe_get_attr(access, "operation")
         if operation == "read":
             register_map[reg_name]["read_count"] += 1
         elif operation == "write":
             register_map[reg_name]["write_count"] += 1
+            # If we see any write operations, mark as read-write
+            register_map[reg_name]["access_type"] = "rw"
+
+    def _get_register_name_from_offset(self, offset: int) -> str:
+        """Map register offset to name."""
+        offset_map = {
+            0x00: "VENDOR_ID",
+            0x02: "DEVICE_ID",
+            0x04: "COMMAND",
+            0x06: "STATUS",
+            0x08: "REVISION_ID",
+            0x0C: "CLASS_CODE",
+            0x10: "BAR0",
+            0x14: "BAR1",
+            0x18: "BAR2",
+            0x1C: "BAR3",
+            0x20: "BAR4",
+            0x24: "BAR5",
+            0x50: "MSI_CTRL",
+            0x60: "MSIX_CTRL",
+        }
+        return offset_map.get(offset, f"REG_{offset:02X}")
+
+    def _get_offset_from_register_name(self, reg_name: str) -> Optional[int]:
+        """Map register name to offset."""
+        name_map = {
+            "VENDOR_ID": 0x00,
+            "DEVICE_ID": 0x02,
+            "COMMAND": 0x04,
+            "STATUS": 0x06,
+            "REVISION_ID": 0x08,
+            "CLASS_CODE": 0x0C,
+            "BAR0": 0x10,
+            "BAR1": 0x14,
+            "BAR2": 0x18,
+            "BAR3": 0x1C,
+            "BAR4": 0x20,
+            "BAR5": 0x24,
+            "MSI_CTRL": 0x50,
+            "MSIX_CTRL": 0x60,
+        }
+        return name_map.get(reg_name)
 
     def _get_default_registers(self) -> List[Dict]:
         """Get default PCILeech registers."""
@@ -389,6 +456,18 @@ class SVModuleGenerator:
             {
                 "name": "PCILEECH_ADDR_HI",
                 "offset": 0x0C,
+                "access_type": "rw",
+                "size": 32,
+            },
+            {
+                "name": "PCILEECH_DATA",
+                "offset": 0x10,
+                "access_type": "rw",
+                "size": 32,
+            },
+            {
+                "name": "PCILEECH_SIZE",
+                "offset": 0x14,
                 "access_type": "rw",
                 "size": 32,
             },

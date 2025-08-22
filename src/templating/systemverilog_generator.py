@@ -163,12 +163,33 @@ class SystemVerilogGenerator:
             TemplateRenderError: If generation fails
         """
         try:
-            # Validate input context
-            self.validator.validate_template_context(template_context)
+            # Phase 0 compatibility: Check if we need to provide non-critical defaults
+            # BEFORE validation. Critical fields (device_signature, device_config)
+            # are still validated strictly for security.
+            context_with_defaults = template_context.copy()
+
+            # Only provide defaults for non-critical template convenience fields
+            # if they're missing. Critical security fields are validated strictly.
+            if "bar_config" not in context_with_defaults:
+                context_with_defaults["bar_config"] = {}
+            if "generation_metadata" not in context_with_defaults:
+                context_with_defaults["generation_metadata"] = {
+                    "generator_version": __version__
+                }
+
+            # Critical security validation: device identification must be complete if present
+            # This validation happens BEFORE Phase 0 compatibility to preserve security
+            device_config = context_with_defaults.get("device_config")
+            if device_config is not None:
+                # If device_config exists, it must be complete and valid
+                self.validator.validate_device_identification(device_config)
+
+            # Validate input context (will still enforce critical fields like device_signature)
+            self.validator.validate_template_context(context_with_defaults)
 
             # Build enhanced context efficiently
             enhanced_context = self.context_builder.build_enhanced_context(
-                template_context,
+                context_with_defaults,
                 self.power_config,
                 self.error_config,
                 self.perf_config,
@@ -225,6 +246,7 @@ class SystemVerilogGenerator:
                 )
 
             # Ensure config_space has sensible defaults for commonly accessed fields
+            # but only when device_config is either absent or completely valid
             cs = enhanced_context.get("config_space")
             try:
                 if isinstance(cs, dict):
@@ -232,18 +254,25 @@ class SystemVerilogGenerator:
                     cs.setdefault("command", 0x0000)
                     cs.setdefault("class_code", 0x020000)
                     cs.setdefault("revision_id", 0x01)
-                    cs.setdefault(
-                        "vendor_id",
-                        enhanced_context.get("device_config", {}).get(
-                            "vendor_id", 0x8086
-                        ),
-                    )
-                    cs.setdefault(
-                        "device_id",
-                        enhanced_context.get("device_config", {}).get(
-                            "device_id", 0x1533
-                        ),
-                    )
+
+                    # Device ID handling: Only provide defaults if device_config is
+                    # completely absent OR completely valid (both vendor_id and device_id present)
+                    device_cfg = enhanced_context.get("device_config")
+
+                    if device_cfg is None:
+                        # No device_config at all - provide minimal defaults for template compatibility
+                        cs.setdefault("vendor_id", 0x8086)
+                        cs.setdefault("device_id", 0x1533)
+                    elif (
+                        isinstance(device_cfg, dict)
+                        and device_cfg.get("vendor_id")
+                        and device_cfg.get("device_id")
+                    ):
+                        # Complete device_config - use its values as config_space defaults
+                        cs.setdefault("vendor_id", device_cfg["vendor_id"])
+                        cs.setdefault("device_id", device_cfg["device_id"])
+                    # If device_config exists but is incomplete, DO NOT provide defaults
+                    # This will cause template rendering to fail, preserving security validation
             except Exception:
                 # If config_space is some TemplateObject-like thing, trust its accessors
                 pass
@@ -256,15 +285,17 @@ class SystemVerilogGenerator:
 
             # Additional missing keys commonly referenced by templates
             enhanced_context.setdefault("device_specific_config", {})
-            
+
             # Handle device_config - if it's a TemplateObject, convert to dict with required attributes
             device_config = enhanced_context.get("device_config", {})
-            if hasattr(device_config, '__class__') and 'TemplateObject' in str(device_config.__class__):
+            if hasattr(device_config, "__class__") and "TemplateObject" in str(
+                device_config.__class__
+            ):
                 # Convert TemplateObject to dict and add missing attributes
                 device_config_dict = {}
                 try:
                     # Copy existing attributes if possible
-                    if hasattr(device_config, '__dict__'):
+                    if hasattr(device_config, "__dict__"):
                         device_config_dict.update(device_config.__dict__)
                     # Add known required attributes
                     device_config_dict.setdefault("enable_advanced_features", False)
@@ -274,7 +305,7 @@ class SystemVerilogGenerator:
                     # Fallback to minimal dict with required attributes
                     enhanced_context["device_config"] = {
                         "enable_advanced_features": False,
-                        "enable_perf_counters": False
+                        "enable_perf_counters": False,
                     }
             elif isinstance(device_config, dict):
                 device_config.setdefault("enable_advanced_features", False)
@@ -282,9 +313,9 @@ class SystemVerilogGenerator:
             else:
                 enhanced_context["device_config"] = {
                     "enable_advanced_features": False,
-                    "enable_perf_counters": False
+                    "enable_perf_counters": False,
                 }
-            
+
             enhanced_context.setdefault("active_device_config", {})
 
             # Generate modules based on configuration
@@ -396,7 +427,9 @@ class SystemVerilogGenerator:
             context, regs, variance_model
         )
 
-    def _read_actual_msix_table(self, context: Dict[str, Any]) -> Optional[str]:
+    def _read_actual_msix_table(
+        self, context: Dict[str, Any]
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Legacy method for reading actual MSI-X table from hardware.
 
@@ -406,15 +439,72 @@ class SystemVerilogGenerator:
         Returns:
             MSI-X table data or None if unavailable
         """
-        # This is a stub for backward compatibility
-        # In the refactored version, this functionality should be handled differently
+        from string_utils import log_info_safe, log_error_safe, safe_format
+
+        import logging
+
+        logger = logging.getLogger(__name__)
         msix_config = context.get("msix_config", {})
         if not msix_config.get("is_supported", False):
             return None
 
-        # Return None to indicate hardware data not available
-        # Tests should mock this method if they need specific behavior
-        return None
+        num_vectors = msix_config.get("num_vectors", 0)
+        if num_vectors <= 0:
+            return None
+
+        try:
+            # Import VFIO helpers for hardware access
+            from src.cli.vfio_helpers import get_device_fd
+
+            import mmap
+            import os
+
+            log_info_safe(
+                logger, "Reading MSI-X table for {vectors} vectors", vectors=num_vectors
+            )
+
+            # Get device file descriptors - need a device BDF
+            device_bdf = context.get("device_bdf", "00:00.0")
+            device_fd, container_fd = get_device_fd(device_bdf)
+
+            try:
+                # Attempt to map MSI-X table region
+                table_offset = msix_config.get("table_offset", 0)
+                table_size = num_vectors * 16  # Each MSI-X entry is 16 bytes
+
+                # Map the MSI-X table region
+                with mmap.mmap(device_fd, table_size, offset=table_offset) as mm:
+                    # Read MSI-X table entries
+                    table_entries = []
+                    for i in range(num_vectors):
+                        entry_offset = i * 16
+                        entry_data = mm[entry_offset : entry_offset + 16]
+                        table_entries.append(
+                            {
+                                "vector": i,
+                                "data": entry_data.hex(),
+                                "enabled": len(entry_data) == 16,
+                            }
+                        )
+
+                    return table_entries
+
+            finally:
+                # Always close file descriptors
+                os.close(device_fd)
+                os.close(container_fd)
+
+        except ImportError as e:
+            log_error_safe(logger, "VFIO module not available: {error}", error=str(e))
+            return None
+        except OSError as e:
+            log_error_safe(logger, "Failed to read MSI-X table: {error}", error=str(e))
+            return None
+        except Exception as e:
+            log_error_safe(
+                logger, "Unexpected error reading MSI-X table: {error}", error=str(e)
+            )
+            return None
 
     def generate_pcileech_integration_code(self, vfio_context: Dict[str, Any]) -> str:
         """
@@ -447,6 +537,53 @@ class SystemVerilogGenerator:
         """
         # Delegate to the module generator's method
         return self.module_generator._extract_registers(behavior_profile)
+
+    def _generate_pcileech_advanced_modules(
+        self, template_context: Dict[str, Any], behavior_profile: Optional[Any] = None
+    ) -> Dict[str, str]:
+        """
+        Generate advanced PCILeech modules.
+
+        Args:
+            template_context: Template context data
+            behavior_profile: Optional behavior profile
+
+        Returns:
+            Dictionary mapping module names to generated code
+        """
+        log_info_safe(
+            self.logger, "Generating advanced PCILeech modules", prefix="ADVANCED"
+        )
+
+        # Extract registers from behavior profile
+        registers = (
+            self._extract_pcileech_registers(behavior_profile)
+            if behavior_profile
+            else []
+        )
+
+        # Generate the advanced controller module
+        context_with_defaults = template_context.copy()
+
+        # Ensure device_config has advanced features enabled
+        device_config = context_with_defaults.get("device_config", {})
+        if isinstance(device_config, dict):
+            device_config.setdefault("enable_advanced_features", True)
+            device_config.setdefault("enable_perf_counters", True)
+            device_config.setdefault("enable_error_handling", True)
+
+        # Apply Phase 0 compatibility defaults
+        context_with_defaults.setdefault("bar_config", {})
+        context_with_defaults.setdefault(
+            "generation_metadata", {"generator_version": __version__}
+        )
+
+        # Generate the advanced controller
+        advanced_controller = self.module_generator._generate_advanced_controller(
+            context_with_defaults, registers, None
+        )
+
+        return {"pcileech_advanced_controller": advanced_controller}
 
 
 # Backward compatibility alias

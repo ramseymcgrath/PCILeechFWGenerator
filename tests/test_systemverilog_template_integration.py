@@ -13,8 +13,7 @@ import pytest
 
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.exceptions import TemplateRenderError
-from src.templating.advanced_sv_features import (ErrorHandlingConfig,
-                                                 PerformanceConfig)
+from src.templating.advanced_sv_features import ErrorHandlingConfig, PerformanceConfig
 from src.templating.advanced_sv_power import PowerManagementConfig
 from src.templating.systemverilog_generator import AdvancedSVGenerator
 
@@ -452,17 +451,37 @@ class TestSystemVerilogTemplateIntegration:
         [
             "device_config",
             "device_signature",
-            "bar_config",
-            "generation_metadata",
+            # NOTE: bar_config and generation_metadata are now provided by
+            # Phase 0 compatibility defaults and should not raise errors
         ],
     )
     def test_missing_required_field_raises_error(self, missing_field: str):
-        """Test that missing required fields raise appropriate errors."""
+        """Test that missing critical fields raise appropriate errors.
+
+        Phase 0 compatibility provides defaults for template convenience fields
+        (bar_config, generation_metadata) but still enforces strict validation
+        for critical security fields (device_config, device_signature).
+        """
         template_context = self.context_builder.create_minimal_context()
         del template_context[missing_field]
 
         with pytest.raises((TemplateRenderError, KeyError)):
             self.generator.generate_pcileech_modules(template_context)
+
+    def test_phase_0_compatibility_provides_defaults(self):
+        """Test that Phase 0 compatibility provides defaults for convenience fields."""
+        template_context = self.context_builder.create_minimal_context()
+
+        # Remove fields that should be provided by Phase 0 compatibility
+        if "bar_config" in template_context:
+            del template_context["bar_config"]
+        if "generation_metadata" in template_context:
+            del template_context["generation_metadata"]
+
+        # This should succeed with Phase 0 compatibility defaults
+        result = self.generator.generate_pcileech_modules(template_context)
+        assert isinstance(result, dict)
+        assert len(result) > 0
 
     def test_invalid_bar_configuration_handled(self):
         """Test handling of invalid BAR configurations."""
@@ -493,8 +512,7 @@ class TestSystemVerilogTemplateIntegration:
 
     def test_template_validation_compatibility(self):
         """Test compatibility with TemplateContextValidator requirements."""
-        from src.templating.template_context_validator import \
-            TemplateContextValidator
+        from src.templating.template_context_validator import TemplateContextValidator
 
         validator = TemplateContextValidator()
         template_context = self.context_builder.create_minimal_context()

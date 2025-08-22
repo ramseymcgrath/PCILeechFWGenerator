@@ -15,12 +15,6 @@ class PCILeechError(Exception):
     pass
 
 
-class ConfigurationError(PCILeechError):
-    """Raised when configuration is invalid or missing."""
-
-    pass
-
-
 class TemplateError(PCILeechError):
     """Base exception for template-related errors."""
 
@@ -144,6 +138,40 @@ class BuildError(PCILeechError):
         return super().__str__()
 
 
+class PCILeechBuildError(PCILeechError):
+    """Base exception for PCILeech build errors.
+
+    This exception serves as the base for all build-related errors
+    and inherits from PCILeechError to maintain hierarchy consistency.
+    """
+
+    pass
+
+
+class ConfigurationError(PCILeechBuildError):
+    """Raised when configuration is invalid or missing."""
+
+    pass
+
+
+class MSIXPreloadError(PCILeechBuildError):
+    """Raised when MSI-X data preloading fails."""
+
+    pass
+
+
+class FileOperationError(PCILeechBuildError):
+    """Raised when file operations fail."""
+
+    pass
+
+
+class VivadoIntegrationError(PCILeechBuildError):
+    """Raised when Vivado integration fails."""
+
+    pass
+
+
 class ValidationError(PCILeechError):
     """Raised when validation fails."""
 
@@ -186,7 +214,7 @@ class PCILeechGenerationError(PCILeechError):
         return super().__str__()
 
 
-class ModuleImportError(PCILeechError):
+class ModuleImportError(PCILeechBuildError):
     """Raised when module imports fail."""
 
     def __init__(self, message: Optional[str] = None, root_cause: Optional[str] = None):
@@ -256,6 +284,10 @@ __all__ = [
     "XDCConstraintError",
     "RepositoryError",
     "BuildError",
+    "PCILeechBuildError",
+    "MSIXPreloadError",
+    "FileOperationError",
+    "VivadoIntegrationError",
     "ValidationError",
     "ContextError",
     "PCILeechGenerationError",

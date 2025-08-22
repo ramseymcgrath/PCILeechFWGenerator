@@ -60,8 +60,11 @@ class TestSystemVerilogGenerator:
         """Test that invalid context raises validation error."""
         generator = SystemVerilogGenerator()
 
-        # Missing required fields
-        invalid_context = {"device_config": {}}  # Missing device_signature
+        # Missing device_signature (but valid device_config to pass device identification validation)
+        invalid_context = {
+            "device_config": {"vendor_id": "8086", "device_id": "1533"}
+            # Missing device_signature
+        }
 
         with pytest.raises(TemplateRenderError) as exc_info:
             generator.generate_modules(invalid_context)
