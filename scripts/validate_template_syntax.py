@@ -36,7 +36,8 @@ except Exception:
 
 # Try to import Jinja2
 try:
-    from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateSyntaxError
+    from jinja2 import (Environment, FileSystemLoader, TemplateError,
+                        TemplateSyntaxError)
 
     HAS_JINJA2 = True
 except ImportError:

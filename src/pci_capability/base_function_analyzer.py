@@ -68,7 +68,6 @@ class BaseFunctionAnalyzer(ABC):
         Returns:
             Device category string specific to device type
         """
-        pass
 
     @abstractmethod
     def _analyze_capabilities(self) -> Set[int]:
@@ -78,17 +77,14 @@ class BaseFunctionAnalyzer(ABC):
         Returns:
             Set of capability IDs that should be present
         """
-        pass
 
     @abstractmethod
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""
-        pass
 
     @abstractmethod
     def generate_device_features(self) -> Dict[str, Any]:
         """Generate device-specific features."""
-        pass
 
     def _create_pm_capability(self, aux_current: int = 0) -> Dict[str, Any]:
         """
@@ -173,8 +169,7 @@ class BaseFunctionAnalyzer(ABC):
         # Add device-specific variation for security
         if (self.device_id & 0x0F) >= 8:
             return (0, 0)  # Some devices use BAR 0
-        else:
-            return (1, 1)  # Most use BAR 1
+        return (1, 1)  # Most use BAR 1
 
     def _create_msix_capability(
         self,
@@ -282,15 +277,14 @@ class BaseFunctionAnalyzer(ABC):
         """
         if cap_id == self.PM_CAP_ID:
             return self._create_pm_capability()
-        elif cap_id == self.MSI_CAP_ID:
+        if cap_id == self.MSI_CAP_ID:
             return self._create_msi_capability()
-        elif cap_id == self.PCIE_CAP_ID:
+        if cap_id == self.PCIE_CAP_ID:
             return self._create_pcie_capability()
-        elif cap_id == self.MSIX_CAP_ID:
+        if cap_id == self.MSIX_CAP_ID:
             return self._create_msix_capability()
-        else:
-            # Let subclasses handle device-specific capabilities
-            return None
+        # Let subclasses handle device-specific capabilities
+        return None
 
     def validate_msix_bar_configuration(
         self, bars: List[Dict[str, Any]], capabilities: List[Dict[str, Any]]
@@ -341,7 +335,7 @@ class BaseFunctionAnalyzer(ABC):
             errors.append(f"MSI-X PBA offset 0x{pba_offset:x} is not 8-byte aligned")
 
         # Validate table size
-        if not (1 <= table_size <= 2048):
+        if not 1 <= table_size <= 2048:
             errors.append(f"MSI-X table size {table_size} is invalid (must be 1-2048)")
 
         # Calculate MSI-X structure sizes
@@ -656,7 +650,9 @@ class BaseFunctionAnalyzer(ABC):
     @abstractmethod
     def generate_bar_configuration(self) -> List[Dict[str, Any]]:
         """Generate BAR configuration for this device type."""
-        pass
+        raise NotImplementedError(
+            "Subclasses must implement " "generate_bar_configuration"
+        )
 
 
 def auto_fix_msix_conflicts(

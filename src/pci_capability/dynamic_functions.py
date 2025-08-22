@@ -123,14 +123,14 @@ def _classify_by_class_code(class_code: int) -> Optional[DeviceType]:
 
     if class_major == PCIClassCode.NETWORK:
         return DeviceType.NETWORK
-    elif class_major == PCIClassCode.MULTIMEDIA:
+    if class_major == PCIClassCode.MULTIMEDIA:
         return DeviceType.MEDIA
-    elif class_major == PCIClassCode.MASS_STORAGE:
+    if class_major == PCIClassCode.MASS_STORAGE:
         return DeviceType.STORAGE
-    elif class_major == PCIClassCode.SERIAL_BUS:
+    if class_major == PCIClassCode.SERIAL_BUS:
         if class_minor == PCIClassCode.USB_CONTROLLER:
             return DeviceType.USB
-        elif class_minor == PCIClassCode.OTHER_SERIAL:
+        if class_minor == PCIClassCode.OTHER_SERIAL:
             return DeviceType.NETWORK
 
     return None
@@ -147,7 +147,7 @@ def _classify_intel_device(device_upper: int, device_lower: int) -> DeviceType:
     # Intel-specific heuristics for unknown devices
     if device_upper >= 0x50:
         return DeviceType.STORAGE
-    elif device_upper >= 0x20:
+    if device_upper >= 0x20:
         return DeviceType.NETWORK
 
     return DeviceType.UNKNOWN
@@ -157,9 +157,9 @@ def _classify_realtek_device(device_upper: int, device_lower: int) -> DeviceType
     """Classify Realtek devices based on device ID patterns."""
     if device_upper == 0x81:
         return DeviceType.NETWORK
-    elif device_upper == 0x52:
+    if device_upper == 0x52:
         return DeviceType.STORAGE
-    elif device_lower < 0x80:
+    if device_lower < 0x80:
         return DeviceType.MEDIA
 
     return DeviceType.UNKNOWN
@@ -244,11 +244,11 @@ def _classify_by_generic_patterns(device_upper: int, device_lower: int) -> Devic
     if device_upper >= 0x80:
         # Very high device IDs often indicate storage or USB
         return DeviceType.STORAGE if device_lower >= 0xA0 else DeviceType.USB
-    elif device_upper >= 0x50:
+    if device_upper >= 0x50:
         return DeviceType.STORAGE
-    elif device_upper >= 0x15:
+    if device_upper >= 0x15:
         return DeviceType.NETWORK
-    elif device_lower < 0x50:
+    if device_lower < 0x50:
         return DeviceType.MEDIA
 
     # Default to generic
@@ -278,11 +278,11 @@ def analyze_device_function_type(
         ValueError: If vendor_id or device_id are out of valid range
     """
     # Validate inputs
-    if not (0 <= vendor_id <= 0xFFFF):
+    if not 0 <= vendor_id <= 0xFFFF:
         raise ValueError(f"Invalid vendor_id: {vendor_id:#x} (must be 16-bit)")
-    if not (0 <= device_id <= 0xFFFF):
+    if not 0 <= device_id <= 0xFFFF:
         raise ValueError(f"Invalid device_id: {device_id:#x} (must be 16-bit)")
-    if class_code is not None and not (0 <= class_code <= 0xFFFFFF):
+    if class_code is not None and not 0 <= class_code <= 0xFFFFFF:
         raise ValueError(f"Invalid class_code: {class_code:#x} (must be 24-bit)")
 
     # Try classification by class code first (most reliable)

@@ -17,27 +17,21 @@ from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
 from src.error_utils import format_user_friendly_error
-from src.string_utils import generate_sv_header_comment, log_error_safe, log_info_safe
+from src.string_utils import (generate_sv_header_comment, log_error_safe,
+                              log_info_safe)
 
-from ..utils.unified_context import (
-    DEFAULT_TIMING_CONFIG,
-    MSIX_DEFAULT,
-    PCILEECH_DEFAULT,
-    TemplateObject,
-    normalize_config_to_dict,
-)
-from .advanced_sv_features import (
-    AdvancedSVFeatureGenerator,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-)
+from ..utils.unified_context import (DEFAULT_TIMING_CONFIG, MSIX_DEFAULT,
+                                     PCILEECH_DEFAULT, TemplateObject,
+                                     normalize_config_to_dict)
+from .advanced_sv_features import (AdvancedSVFeatureGenerator,
+                                   ErrorHandlingConfig, PerformanceConfig)
 from .advanced_sv_power import PowerManagementConfig
-from .template_renderer import TemplateRenderer, TemplateRenderError
 from .sv_constants import SVConstants, SVTemplates, SVValidation
 from .sv_context_builder import SVContextBuilder
 from .sv_device_config import DeviceSpecificLogic
 from .sv_module_generator import SVModuleGenerator
 from .sv_validator import SVValidator
+from .template_renderer import TemplateRenderer, TemplateRenderError
 
 
 class MSIXHelper:
@@ -439,9 +433,9 @@ class SystemVerilogGenerator:
         Returns:
             MSI-X table data or None if unavailable
         """
-        from string_utils import log_info_safe, log_error_safe, safe_format
-
         import logging
+
+        from string_utils import log_error_safe, log_info_safe, safe_format
 
         logger = logging.getLogger(__name__)
         msix_config = context.get("msix_config", {})
@@ -454,10 +448,10 @@ class SystemVerilogGenerator:
 
         try:
             # Import VFIO helpers for hardware access
-            from src.cli.vfio_helpers import get_device_fd
-
             import mmap
             import os
+
+            from src.cli.vfio_helpers import get_device_fd
 
             log_info_safe(
                 logger, "Reading MSI-X table for {vectors} vectors", vectors=num_vectors

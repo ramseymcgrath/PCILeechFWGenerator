@@ -13,14 +13,14 @@ Usage:
 """
 
 import argparse
+import ast
+import importlib
+import inspect
 import json
 import logging
 import os
 import re
 import sys
-import ast
-import importlib
-import inspect
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Set, Tuple

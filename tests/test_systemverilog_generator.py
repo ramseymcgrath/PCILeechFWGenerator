@@ -5,21 +5,20 @@ Tests for the improved SystemVerilog generator.
 This test suite validates the modular SystemVerilog generator implementation.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 
-from src.templating.systemverilog_generator import (
-    SystemVerilogGenerator,
-    AdvancedSVGenerator,
-    DeviceSpecificLogic,
-    PowerManagementConfig,
-    ErrorHandlingConfig,
-    PerformanceConfig,
-    TemplateRenderError,
-)
+import pytest
+
+from src.device_clone.device_config import DeviceClass, DeviceType
 from src.templating.sv_constants import SV_VALIDATION
-from src.device_clone.device_config import DeviceType, DeviceClass
+from src.templating.systemverilog_generator import (AdvancedSVGenerator,
+                                                    DeviceSpecificLogic,
+                                                    ErrorHandlingConfig,
+                                                    PerformanceConfig,
+                                                    PowerManagementConfig,
+                                                    SystemVerilogGenerator,
+                                                    TemplateRenderError)
 
 
 class TestSystemVerilogGenerator:

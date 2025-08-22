@@ -102,10 +102,10 @@ class CapabilityRule:
         if condition == "version":
             return cap_info.version == expected_value
 
-        elif condition == "min_version":
+        if condition == "min_version":
             return cap_info.version >= expected_value
 
-        elif condition == "max_version":
+        if condition == "max_version":
             return cap_info.version <= expected_value
 
         elif condition == "vendor_id" and device_context:

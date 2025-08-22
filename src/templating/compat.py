@@ -13,18 +13,14 @@ warnings and migration guidance for users of the old API.
 
 import logging
 import warnings
-
 from typing import Any, Dict, Optional
 
 from string_utils import log_warning_safe, safe_format
 
-# Import the new implementations
-from .systemverilog_generator import SystemVerilogGenerator, MSIXHelper
-
 from .advanced_sv_generator import AdvancedSVGenerator
-
 from .sv_context_builder import SVContextBuilder
-
+# Import the new implementations
+from .systemverilog_generator import MSIXHelper, SystemVerilogGenerator
 
 # Create logger for this module
 logger = logging.getLogger(__name__)

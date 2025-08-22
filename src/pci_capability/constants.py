@@ -176,3 +176,416 @@ MSIX_MAX_TABLE_SIZE = 2048
 MSIX_MAX_BIR = 5
 MSIX_OFFSET_ALIGNMENT = 8
 MSIX_LARGE_TABLE_THRESHOLD = 64
+
+# USB Function Analyzer Constants
+
+# Additional Vendor IDs (beyond those in device_clone.constants)
+VENDOR_ID_NEC = 0x1033
+VENDOR_ID_VIA = 0x1106
+
+# Device ID Pattern Masks and Thresholds
+USB_DEVICE_LOWER_MASK = 0xFF00
+USB_DEVICE_UPPER_SHIFT = 8
+USB_DEVICE_UPPER_MASK = 0xFF
+
+# USB Device Category Thresholds (based on device_upper)
+USB_CATEGORY_USB4_THRESHOLD = 0xA0
+USB_CATEGORY_XHCI_THRESHOLD_HIGH = 0x90
+USB_CATEGORY_XHCI_THRESHOLD_LOW = 0x80
+USB_CATEGORY_EHCI_THRESHOLD = 0x60
+USB_CATEGORY_UHCI_THRESHOLD = 0x30
+
+# Intel USB Device ID Patterns
+INTEL_XHCI_PATTERNS = [0x1E00, 0x1F00, 0x8C00, 0x9C00]
+INTEL_EHCI_PATTERNS = [0x2600, 0x2700]
+INTEL_UHCI_PATTERNS = [0x2400, 0x2500]
+
+# AMD USB Device ID Patterns
+AMD_XHCI_PATTERNS = [0x7800, 0x7900]
+AMD_EHCI_PATTERNS = [0x7600, 0x7700]
+
+# NEC USB Device ID Patterns
+NEC_XHCI_PATTERNS = [0x0100, 0x0200]
+
+# VIA USB Device ID Patterns
+VIA_UHCI_PATTERNS = [0x3000, 0x3100]
+
+# PCI Capability IDs used in USB analysis
+USB_CAP_ID_PM = 0x01  # Power Management
+USB_CAP_ID_MSI = 0x05  # MSI
+USB_CAP_ID_PCIE = 0x10  # PCI Express
+USB_CAP_ID_MSIX = 0x11  # MSI-X
+
+# USB Device Feature Thresholds
+USB_MSIX_SUPPORT_THRESHOLD = 0x1000
+USB_VERSION_31_THRESHOLD = 0x8000
+USB_PORT_COUNT_HIGH_THRESHOLD_XHCI = 0x1500
+USB_PORT_COUNT_HIGH_THRESHOLD_EHCI = 0x2600
+
+# USB Power Management Values
+USB_AUX_CURRENT_XHCI_USB4 = 200
+USB_AUX_CURRENT_OTHER = 100
+
+# USB MSI Configuration Values
+USB_MSI_MESSAGES_XHCI_USB4 = 4
+USB_MSI_MESSAGES_OTHER = 2
+
+# USB PCIe Configuration Values
+USB_PCIE_MAX_PAYLOAD_SIZE = 256
+
+# USB Queue Count Base Values
+USB_QUEUE_BASE_USB4 = 16
+USB_QUEUE_BASE_XHCI = 8
+USB_QUEUE_BASE_EHCI = 4
+USB_QUEUE_BASE_OTHER = 2
+
+# USB Queue Count Calculation Constants
+USB_ENTROPY_MASK = 0x7
+USB_ENTROPY_DIVISOR = 16.0
+USB_ENTROPY_VARIATION_FACTOR = 0.5
+
+# USB BAR Sizes
+USB_BAR_SIZE_XHCI_BASE = 0x10000
+USB_BAR_SIZE_MSIX_TABLE = 0x1000
+USB_BAR_SIZE_EHCI_BASE = 0x1000
+USB_BAR_SIZE_IO_PORTS = 0x20
+
+# USB Port Counts
+USB_PORT_COUNT_USB4 = 2
+USB_PORT_COUNT_XHCI_HIGH = 8
+USB_PORT_COUNT_XHCI_LOW = 4
+USB_PORT_COUNT_EHCI_HIGH = 8
+USB_PORT_COUNT_EHCI_LOW = 4
+USB_PORT_COUNT_UHCI = 2
+USB_PORT_COUNT_OHCI = 4
+
+# USB Version Strings
+USB_VERSION_40 = "4.0"
+USB_VERSION_31 = "3.1"
+USB_VERSION_30 = "3.0"
+USB_VERSION_20 = "2.0"
+USB_VERSION_11 = "1.1"
+
+# USB Speed Strings
+USB_SPEED_40GBPS = "40Gbps"
+USB_SPEED_10GBPS = "10Gbps"
+USB_SPEED_5GBPS = "5Gbps"
+USB_SPEED_480MBPS = "480Mbps"
+USB_SPEED_12MBPS = "12Mbps"
+
+# =============================================================================
+# COMMON PCI CAPABILITY IDs (Shared across all function analyzers)
+# =============================================================================
+
+# Standard PCI Capability IDs
+CAP_ID_PM = 0x01  # Power Management
+CAP_ID_MSI = 0x05  # Message Signaled Interrupts
+CAP_ID_PCIE = 0x10  # PCI Express
+CAP_ID_MSIX = 0x11  # MSI-X
+CAP_ID_VENDOR_SPECIFIC = 0x09  # Vendor-specific capability
+
+# Extended PCI Capability IDs
+EXT_CAP_ID_AER = 0x0001  # Advanced Error Reporting
+EXT_CAP_ID_SRIOV = 0x0010  # SR-IOV
+EXT_CAP_ID_ACS = 0x000D  # Access Control Services
+EXT_CAP_ID_LTR = 0x0018  # Latency Tolerance Reporting
+EXT_CAP_ID_PTM = 0x001F  # Precision Time Measurement
+EXT_CAP_ID_ARI = 0x000E  # Alternative Routing-ID Interpretation
+
+# =============================================================================
+# VENDOR IDs (Additional beyond device_clone.constants)
+# =============================================================================
+
+VENDOR_ID_CMEDIA = 0x13F6  # C-Media
+VENDOR_ID_CREATIVE = 0x1274  # Creative Labs
+VENDOR_ID_BROADCOM = 0x14E4  # Broadcom
+VENDOR_ID_SAMSUNG = 0x144D  # Samsung
+VENDOR_ID_MARVELL = 0x1B4B  # Marvell
+VENDOR_ID_LSI_BROADCOM = 0x1000  # LSI/Broadcom
+
+# =============================================================================
+# DEVICE ID PATTERN MASKS AND CALCULATIONS
+# =============================================================================
+
+# Common Device ID Masks
+DEVICE_ID_LOWER_MASK = 0xFF00
+DEVICE_ID_UPPER_SHIFT = 8
+DEVICE_ID_UPPER_MASK = 0xFF
+DEVICE_ID_ENTROPY_MASK = 0x7
+DEVICE_ID_PARITY_MASK = 0x1
+
+# Entropy calculation constants
+ENTROPY_MASK = 0xF
+ENTROPY_DIVISOR = 32.0
+ENTROPY_VARIATION_FACTOR = 0.5
+
+# =============================================================================
+# DEVICE CLASS CODES (Extended from existing CLASS_CODES)
+# =============================================================================
+
+# Add to existing CLASS_CODES dictionary
+MEDIA_CLASS_CODES = {
+    "audio": 0x040100,  # Multimedia controller, Audio device
+    "video": 0x040000,  # Multimedia controller, Video
+    "hdaudio": 0x040300,  # Multimedia controller, HD Audio
+    "other_media": 0x040800,  # Multimedia controller, Other
+}
+
+NETWORK_CLASS_CODES = {
+    "ethernet": 0x020000,
+    "wifi": 0x028000,
+    "bluetooth": 0x0D1100,
+    "cellular": 0x028000,
+}
+
+STORAGE_CLASS_CODES = {
+    "scsi": 0x010000,  # Mass storage controller, SCSI
+    "ide": 0x010100,  # Mass storage controller, IDE
+    "floppy": 0x010200,  # Mass storage controller, Floppy
+    "ipi": 0x010300,  # Mass storage controller, IPI bus
+    "raid": 0x010400,  # Mass storage controller, RAID
+    "ata": 0x010500,  # Mass storage controller, ATA
+    "sata": 0x010601,  # Mass storage controller, Serial ATA (AHCI)
+    "sas": 0x010700,  # Mass storage controller, Serial Attached SCSI
+    "nvme": 0x010802,  # Mass storage controller, NVMe
+    "other_storage": 0x018000,  # Mass storage controller, Other
+}
+
+# =============================================================================
+# MEDIA FUNCTION CONSTANTS
+# =============================================================================
+
+# Media device ID ranges
+INTEL_HDAUDIO_RANGES = [0x2600, 0x2700, 0x2800]
+INTEL_VIDEO_RANGES = [0x5900, 0x5A00]
+NVIDIA_HDMI_AUDIO_RANGES = [0x0E00, 0x0F00]
+NVIDIA_VIDEO_RANGES = [0x1000, 0x1100]
+AMD_AUDIO_RANGES = [0xAA00, 0xAB00]
+
+# Media device categorization thresholds
+DEVICE_UPPER_HDAUDIO_THRESHOLD = 0x80
+DEVICE_UPPER_VIDEO_THRESHOLD = 0x50
+
+# Media device feature thresholds
+HIGH_END_DEVICE_THRESHOLD = 0x2000
+VENDOR_CAP_DEVICE_THRESHOLD = 0x1000
+HDAUDIO_MULTICHANNEL_THRESHOLD = 0x2500
+VIDEO_HIGH_FRAMERATE_THRESHOLD = 0x1500
+VIDEO_HARDWARE_ENCODING_THRESHOLD = 0x2500
+
+# Media BAR sizes
+BAR_SIZE_HDAUDIO_REGISTERS = 0x4000
+BAR_SIZE_VIDEO_FRAMEBUFFER = 0x10000
+BAR_SIZE_VIDEO_REGISTERS = 0x2000
+BAR_SIZE_AUDIO_REGISTERS = 0x1000
+
+# Media power management constants
+HDAUDIO_AUX_CURRENT_MA = 50
+
+# Media queue count defaults
+QUEUE_COUNT_HDAUDIO_HIGH = 8
+QUEUE_COUNT_HDAUDIO_BASIC = 4
+QUEUE_COUNT_VIDEO = 4
+QUEUE_COUNT_AUDIO = 2
+QUEUE_COUNT_MIN = 1
+
+# Audio specifications
+SAMPLE_RATES_HDAUDIO = [44100, 48000, 96000, 192000]
+SAMPLE_RATES_BASIC_AUDIO = [44100, 48000]
+BIT_DEPTHS_HDAUDIO = [16, 20, 24, 32]
+BIT_DEPTHS_BASIC_AUDIO = [16]
+CHANNELS_MULTICHANNEL = 8
+CHANNELS_STEREO = 2
+
+# Video specifications
+FRAME_RATES_HIGH = [30, 60]
+FRAME_RATES_BASIC = [30]
+
+# Default PCIe parameters
+DEFAULT_PCIE_MAX_PAYLOAD_SIZE = 128
+
+# =============================================================================
+# NETWORK FUNCTION CONSTANTS
+# =============================================================================
+
+# Network device ID thresholds
+DEVICE_ID_THRESHOLD_BASIC = 0x1000
+DEVICE_ID_THRESHOLD_ENTERPRISE = 0x1200
+DEVICE_ID_THRESHOLD_ADVANCED = 0x1500
+DEVICE_ID_THRESHOLD_HIGH_END = 0x1700
+DEVICE_ID_THRESHOLD_ULTRA_HIGH = 0x2000
+DEVICE_ID_THRESHOLD_WIFI_ADVANCED = 0x2400
+DEVICE_ID_THRESHOLD_WIFI_PREMIUM = 0x2500
+DEVICE_ID_THRESHOLD_WIFI_ULTRA = 0x2700
+
+# Network device category patterns
+DEVICE_PATTERN_HIGH_FEATURE = 0x80
+DEVICE_PATTERN_WIRELESS = 0x20
+DEVICE_PATTERN_INTEL_LAN_BASE = 0x1500
+DEVICE_PATTERN_INTEL_LAN_EXT = 0x1600
+DEVICE_PATTERN_INTEL_WIRELESS_BASE = 0x2500
+DEVICE_PATTERN_INTEL_WIRELESS_EXT = 0x2600
+DEVICE_PATTERN_REALTEK_ETH_BASE = 0x8100
+DEVICE_PATTERN_REALTEK_ETH_EXT = 0x8200
+DEVICE_PATTERN_REALTEK_WIFI_BASE = 0x8700
+DEVICE_PATTERN_REALTEK_WIFI_EXT = 0x8800
+
+# Enterprise device patterns
+INTEL_ENTERPRISE_MASK = 0x0F00
+INTEL_ENTERPRISE_THRESHOLD = 0x0500
+BROADCOM_ENTERPRISE_MASK = 0x00F0
+BROADCOM_ENTERPRISE_THRESHOLD = 0x0080
+
+# Network BAR configuration constants
+BASE_REGISTER_SIZE_BASIC = 0x10000
+BASE_REGISTER_SIZE_ADVANCED = 0x20000
+REGISTER_SIZE_VARIATION_MASK = 0xF
+REGISTER_SIZE_VARIATION_MULTIPLIER = 0x1000
+MSIX_TABLE_MIN_SIZE = 0x1000
+MSIX_TABLE_ENTRY_SIZE = 16
+MSIX_TABLE_ALIGN_MASK = 0xFFF
+ETHERNET_FLASH_SIZE = 0x4000
+WIFI_REGISTER_SIZE = 0x100000
+
+# Network queue count constants
+BASE_QUEUE_COUNT = 4
+QUEUE_COUNT_ADVANCED = 16
+QUEUE_COUNT_HIGH = 32
+QUEUE_COUNT_ULTRA = 64
+WIFI_MAX_QUEUES = 16
+SRIOV_MIN_QUEUES = 32
+
+# Network VF constants
+BASE_VF_COUNT = 8
+VF_COUNT_HIGH = 32
+VF_COUNT_ULTRA = 64
+VF_COUNT_VARIATION_MASK = 0x7
+VF_COUNT_VARIATION_OFFSET = 4
+
+# Network latency constants
+LTR_LATENCY_ETHERNET = 0x1001
+LTR_LATENCY_WIFI = 0x1003
+PTM_CLOCK_GRANULARITY = 0xFF  # 255ns
+
+# SR-IOV constants
+SRIOV_SUPPORTED_PAGE_SIZES = 0x553
+SRIOV_SYSTEM_PAGE_SIZE = 0x1
+
+# MSI-X BAR allocation patterns
+MSIX_BAR_VARIATION_MASK = 0x0F
+MSIX_BAR_VARIATION_THRESHOLD = 8
+
+# Size padding constants
+SIZE_PADDING_MASK = 0x7
+
+# =============================================================================
+# STORAGE FUNCTION CONSTANTS
+# =============================================================================
+
+# Storage device ID range patterns
+STORAGE_DEVICE_ID_RANGES = {
+    "intel_sata": [0x2800, 0x2900, 0x3A00],
+    "intel_nvme": [0x0900, 0x0A00],
+    "samsung_nvme": [0xA800, 0xA900],
+    "marvell_sata": [0x9100, 0x9200],
+    "lsi_sas": [0x0050, 0x0060],
+    "lsi_raid": [0x0070],
+}
+
+# Storage device ID thresholds
+STORAGE_DEVICE_ID_THRESHOLDS = {
+    "high_end_nvme": 0xA000,
+    "enterprise_nvme": 0xA500,
+    "high_performance_nvme": 0xA800,
+    "high_end_storage": 0x2000,
+    "enterprise_storage": 0x1500,
+    "device_upper_nvme": 0xA0,
+    "device_upper_sata": 0x80,
+    "device_upper_sas": 0x50,
+}
+
+# Storage MSI message capabilities
+STORAGE_MSI_MESSAGES = {
+    "nvme": 5,  # Up to 32 messages
+    "sas": 4,  # Up to 16 messages
+    "raid": 4,  # Up to 16 messages
+    "default": 3,  # Up to 8 messages
+}
+
+# Storage maximum payload sizes (bytes)
+STORAGE_MAX_PAYLOAD_SIZES = {
+    "nvme": 512,
+    "sas": 256,
+    "raid": 256,
+    "default": 128,
+}
+
+# Storage base queue counts
+STORAGE_BASE_QUEUE_COUNTS = {
+    "nvme_high_end": 64,
+    "nvme_standard": 32,
+    "sas_enterprise": 16,
+    "sas_standard": 8,
+    "default": 4,
+    "minimum": 2,
+}
+
+# Storage BAR sizes
+STORAGE_BAR_SIZES = {
+    "nvme_registers": 0x4000,  # 16KB for NVMe controllers
+    "sas_raid_registers": 0x8000,  # 32KB for SAS/RAID controllers
+    "sata_registers": 0x2000,  # 8KB for SATA controllers
+    "legacy_io": 0x100,  # 256 bytes for legacy IO
+    "minimum_msix_table": 0x1000,  # 4KB minimum MSI-X table
+}
+
+# Storage power management constants
+STORAGE_POWER_CONSTANTS = {
+    "raid_aux_current": 100,  # mA for RAID controllers
+    "default_aux_current": 0,
+}
+
+# Storage feature detection thresholds
+STORAGE_FEATURE_THRESHOLDS = {
+    "namespace_management": 0xA000,
+    "max_namespaces_high": 0xA500,
+    "pci_gen4": 0xA800,
+    "port_multiplier": 0x1500,
+}
+
+# Storage device limits
+STORAGE_DEVICE_LIMITS = {
+    "max_namespaces_high": 256,
+    "max_namespaces_standard": 64,
+    "max_drives_enterprise": 64,
+    "max_drives_standard": 16,
+    "max_ports_high": 8,
+    "max_ports_standard": 4,
+}
+
+# Storage bit manipulation constants
+STORAGE_BIT_MANIPULATION = {
+    "device_id_lower_mask": 0xFF00,
+    "device_id_upper_shift": 8,
+    "device_id_upper_mask": 0xFF,
+    "entropy_mask": 0xF,
+    "entropy_divisor": 32.0,
+    "entropy_factor": 0.5,
+    "device_id_parity_mask": 0x1,
+    "alignment_mask": 0xFFF,
+}
+
+# Storage AER capability register values
+AER_CAPABILITY_VALUES = {
+    "uncorrectable_error_mask": 0x00000000,
+    "uncorrectable_error_severity": 0x00462030,
+    "correctable_error_mask": 0x00002000,
+    "advanced_error_capabilities": 0x00000020,
+}
+
+# =============================================================================
+# COMMON BAR SIZES (Shared across all function types)
+# =============================================================================
+
+# Common MSI-X table size
+BAR_SIZE_MSIX_TABLE = 0x1000

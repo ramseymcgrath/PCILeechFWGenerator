@@ -17,6 +17,14 @@ from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
                             log_warning_safe, safe_format)
 from .base_function_analyzer import (BaseFunctionAnalyzer,
                                      create_function_capabilities)
+from .constants import (  # Common PCI Capability IDs; Storage class codes; Storage vendor IDs; Storage device ID ranges; Storage device ID thresholds; Storage MSI messages; Storage max payload sizes; Storage base queue counts; Storage BAR sizes; Storage power constants; Storage feature thresholds; Storage device limits; Storage bit manipulation; AER capability values
+    AER_CAPABILITY_VALUES, CAP_ID_MSI, CAP_ID_MSIX, CAP_ID_PCIE, CAP_ID_PM,
+    EXT_CAP_ID_AER, STORAGE_BAR_SIZES, STORAGE_BASE_QUEUE_COUNTS,
+    STORAGE_BIT_MANIPULATION, STORAGE_CLASS_CODES, STORAGE_DEVICE_ID_RANGES,
+    STORAGE_DEVICE_ID_THRESHOLDS, STORAGE_DEVICE_LIMITS,
+    STORAGE_FEATURE_THRESHOLDS, STORAGE_MAX_PAYLOAD_SIZES,
+    STORAGE_MSI_MESSAGES, STORAGE_POWER_CONSTANTS, VENDOR_ID_LSI_BROADCOM,
+    VENDOR_ID_MARVELL, VENDOR_ID_SAMSUNG)
 
 logger = logging.getLogger(__name__)
 
@@ -28,23 +36,6 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
     Analyzes vendor/device IDs provided at build time to generate realistic
     storage function capabilities without hardcoding device-specific behavior.
     """
-
-    # Storage-specific capability IDs
-    AER_CAP_ID = 0x0001  # Advanced Error Reporting
-
-    # PCI class codes for storage devices
-    CLASS_CODES = {
-        "scsi": 0x010000,  # Mass storage controller, SCSI
-        "ide": 0x010100,  # Mass storage controller, IDE
-        "floppy": 0x010200,  # Mass storage controller, Floppy
-        "ipi": 0x010300,  # Mass storage controller, IPI bus
-        "raid": 0x010400,  # Mass storage controller, RAID
-        "ata": 0x010500,  # Mass storage controller, ATA
-        "sata": 0x010601,  # Mass storage controller, Serial ATA (AHCI)
-        "sas": 0x010700,  # Mass storage controller, Serial Attached SCSI
-        "nvme": 0x010802,  # Mass storage controller, NVMe
-        "other_storage": 0x018000,  # Mass storage controller, Other
-    }
 
     def __init__(self, vendor_id: int, device_id: int):
         """
@@ -64,36 +55,41 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
             Device category string (scsi, nvme, sata, etc.)
         """
         # Pattern-based analysis without hardcoding specific device IDs
-        device_lower = self.device_id & 0xFF00
-        device_upper = (self.device_id >> 8) & 0xFF
+        device_lower = self.device_id & STORAGE_BIT_MANIPULATION["device_id_lower_mask"]
+        device_upper = (
+            self.device_id >> STORAGE_BIT_MANIPULATION["device_id_upper_shift"]
+        ) & STORAGE_BIT_MANIPULATION["device_id_upper_mask"]
 
         # Import vendor ID constants
         from src.device_clone.constants import VENDOR_ID_INTEL
 
         # Vendor-specific patterns
         if self.vendor_id == VENDOR_ID_INTEL:  # Intel
-            if device_lower in [0x2800, 0x2900, 0x3A00]:  # SATA ranges
+            if device_lower in STORAGE_DEVICE_ID_RANGES["intel_sata"]:  # SATA ranges
                 return "sata"
-            elif device_lower in [0x0900, 0x0A00]:  # NVMe ranges
+            if device_lower in STORAGE_DEVICE_ID_RANGES["intel_nvme"]:  # NVMe ranges
                 return "nvme"
-        elif self.vendor_id == 0x144D:  # Samsung
-            if device_lower in [0xA800, 0xA900]:  # NVMe ranges
+        if self.vendor_id == VENDOR_ID_SAMSUNG:  # Samsung
+            if device_lower in STORAGE_DEVICE_ID_RANGES["samsung_nvme"]:
                 return "nvme"
-        elif self.vendor_id == 0x1B4B:  # Marvell
-            if device_lower in [0x9100, 0x9200]:  # SATA ranges
+        if self.vendor_id == VENDOR_ID_MARVELL:  # Marvell
+            if device_lower in STORAGE_DEVICE_ID_RANGES["marvell_sata"]:
                 return "sata"
-        elif self.vendor_id == 0x1000:  # LSI/Broadcom
-            if device_lower in [0x0050, 0x0060]:  # SAS ranges
+        if self.vendor_id == VENDOR_ID_LSI_BROADCOM:  # LSI/Broadcom
+            if device_lower in STORAGE_DEVICE_ID_RANGES["lsi_sas"]:  # SAS ranges
                 return "sas"
-            elif device_lower in [0x0070]:  # RAID ranges
+            if device_lower in STORAGE_DEVICE_ID_RANGES["lsi_raid"]:  # RAID ranges
                 return "raid"
 
         # Generic patterns based on device ID structure
-        if device_upper >= 0xA0:  # High device IDs often NVMe
+        # High device IDs often NVMe
+        if device_upper >= STORAGE_DEVICE_ID_THRESHOLDS["device_upper_nvme"]:
             return "nvme"
-        elif device_upper >= 0x80:  # Mid-high often SATA
+        # Mid-high often SATA
+        if device_upper >= STORAGE_DEVICE_ID_THRESHOLDS["device_upper_sata"]:
             return "sata"
-        elif device_upper >= 0x50:  # Mid often SAS
+        # Mid often SAS
+        if device_upper >= STORAGE_DEVICE_ID_THRESHOLDS["device_upper_sas"]:
             return "sas"
 
         return "sata"  # Default fallback
@@ -108,11 +104,18 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         caps = set()
 
         # Always include basic storage capabilities
-        caps.update([0x01, 0x05, 0x10, 0x11])  # PM, MSI, PCIe, MSI-X
+        caps.update(
+            [
+                CAP_ID_PM,
+                CAP_ID_MSI,
+                CAP_ID_PCIE,
+                CAP_ID_MSIX,
+            ]
+        )
 
         # Advanced capabilities based on device analysis
         if self._supports_aer():
-            caps.add(self.AER_CAP_ID)
+            caps.add(EXT_CAP_ID_AER)
 
         return caps
 
@@ -121,13 +124,18 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         # High-end storage devices (NVMe, enterprise SATA/SAS) support AER
         if self._device_category in ["nvme", "sas"]:
             return True
-        elif self._device_category in ["sata", "raid"] and self.device_id > 0x2000:
+        if (
+            self._device_category in ["sata", "raid"]
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        ):
             return True
         return False
 
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""
-        return self.CLASS_CODES.get(self._device_category, self.CLASS_CODES["sata"])
+        return STORAGE_CLASS_CODES.get(
+            self._device_category, STORAGE_CLASS_CODES["sata"]
+        )
 
     def _create_capability_by_id(self, cap_id: int) -> Optional[Dict[str, Any]]:
         """Create capability by ID, handling storage-specific capabilities."""
@@ -137,15 +145,18 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
             return capability
 
         # Handle storage-specific capabilities
-        if cap_id == self.AER_CAP_ID:
+        if cap_id == EXT_CAP_ID_AER:
             return self._create_aer_capability()
-        else:
-            return None
+        return None
 
     def _create_pm_capability(self, aux_current: int = 0) -> Dict[str, Any]:
         """Create Power Management capability for storage devices."""
         # RAID controllers may need aux power
-        aux_current = 100 if self._device_category == "raid" else 0
+        aux_current = (
+            STORAGE_POWER_CONSTANTS["raid_aux_current"]
+            if self._device_category == "raid"
+            else STORAGE_POWER_CONSTANTS["default_aux_current"]
+        )
         return super()._create_pm_capability(aux_current)
 
     def _create_msi_capability(
@@ -157,11 +168,11 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         if multi_message_capable is None:
             # Storage devices typically need more interrupts
             if self._device_category == "nvme":
-                multi_message_capable = 5  # Up to 32 messages
+                multi_message_capable = STORAGE_MSI_MESSAGES["nvme"]
             elif self._device_category in ["sas", "raid"]:
-                multi_message_capable = 4  # Up to 16 messages
+                multi_message_capable = STORAGE_MSI_MESSAGES["sas"]
             else:
-                multi_message_capable = 3  # Up to 8 messages
+                multi_message_capable = STORAGE_MSI_MESSAGES["default"]
 
         return super()._create_msi_capability(
             multi_message_capable, supports_per_vector_masking
@@ -176,30 +187,42 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         if max_payload_size is None:
             # Storage devices benefit from larger payloads
             if self._device_category == "nvme":
-                max_payload_size = 512
+                max_payload_size = STORAGE_MAX_PAYLOAD_SIZES["nvme"]
             elif self._device_category in ["sas", "raid"]:
-                max_payload_size = 256
+                max_payload_size = STORAGE_MAX_PAYLOAD_SIZES["sas"]
             else:
-                max_payload_size = 128
+                max_payload_size = STORAGE_MAX_PAYLOAD_SIZES["default"]
 
         return super()._create_pcie_capability(max_payload_size, supports_flr)
 
     def _calculate_default_queue_count(self) -> int:
         """Calculate appropriate queue count for storage devices."""
-        base_queues = 2
+        base_queues = STORAGE_BASE_QUEUE_COUNTS["minimum"]
 
         # Scale based on storage type
         if self._device_category == "nvme":
-            base_queues = 64 if self.device_id > 0xA000 else 32
+            base_queues = (
+                STORAGE_BASE_QUEUE_COUNTS["nvme_high_end"]
+                if self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_nvme"]
+                else STORAGE_BASE_QUEUE_COUNTS["nvme_standard"]
+            )
         elif self._device_category in ["sas", "raid"]:
-            base_queues = 16 if self.device_id > 0x1500 else 8
+            enterprise_threshold = STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+            base_queues = (
+                STORAGE_BASE_QUEUE_COUNTS["sas_enterprise"]
+                if self.device_id > enterprise_threshold
+                else STORAGE_BASE_QUEUE_COUNTS["sas_standard"]
+            )
         else:
-            base_queues = 4
+            base_queues = STORAGE_BASE_QUEUE_COUNTS["default"]
 
         # Add entropy-based variation for security
-        entropy_factor = ((self.vendor_id ^ self.device_id) & 0xF) / 32.0
-        variation = int(base_queues * entropy_factor * 0.5)
-        if (self.device_id & 0x1) == 0:
+        entropy_factor = (
+            (self.vendor_id ^ self.device_id) & STORAGE_BIT_MANIPULATION["entropy_mask"]
+        ) / STORAGE_BIT_MANIPULATION["entropy_divisor"]
+        entropy_multiplier = STORAGE_BIT_MANIPULATION["entropy_factor"]
+        variation = int(base_queues * entropy_factor * entropy_multiplier)
+        if (self.device_id & STORAGE_BIT_MANIPULATION["device_id_parity_mask"]) == 0:
             variation = -variation
 
         final_queues = max(1, base_queues + variation)
@@ -207,12 +230,15 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
 
     def _create_aer_capability(self) -> Dict[str, Any]:
         """Create Advanced Error Reporting capability."""
+        aer_values = AER_CAPABILITY_VALUES
         return {
-            "cap_id": self.AER_CAP_ID,
-            "uncorrectable_error_mask": 0x00000000,
-            "uncorrectable_error_severity": 0x00462030,
-            "correctable_error_mask": 0x00002000,
-            "advanced_error_capabilities": 0x00000020,
+            "cap_id": EXT_CAP_ID_AER,
+            "uncorrectable_error_mask": aer_values["uncorrectable_error_mask"],
+            "uncorrectable_error_severity": (
+                aer_values["uncorrectable_error_severity"]
+            ),
+            "correctable_error_mask": aer_values["correctable_error_mask"],
+            "advanced_error_capabilities": aer_values["advanced_error_capabilities"],
         }
 
     def generate_bar_configuration(self) -> List[Dict[str, Any]]:
@@ -222,7 +248,7 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         # Base register space - size based on device type
         if self._device_category == "nvme":
             # NVMe controllers need larger register space
-            base_size = 0x4000
+            base_size = STORAGE_BAR_SIZES["nvme_registers"]
             bars.append(
                 {
                     "bar": 0,
@@ -234,7 +260,7 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
             )
         elif self._device_category in ["sas", "raid"]:
             # SAS/RAID controllers
-            base_size = 0x8000
+            base_size = STORAGE_BAR_SIZES["sas_raid_registers"]
             bars.append(
                 {
                     "bar": 0,
@@ -249,14 +275,14 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
                 {
                     "bar": 1,
                     "type": "io",
-                    "size": 0x100,
+                    "size": STORAGE_BAR_SIZES["legacy_io"],
                     "prefetchable": False,
                     "description": "Legacy IO",
                 }
             )
         else:
             # SATA/IDE controllers
-            base_size = 0x2000
+            base_size = STORAGE_BAR_SIZES["sata_registers"]
             bars.append(
                 {
                     "bar": 0,
@@ -268,9 +294,13 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
             )
 
         # MSI-X table space for devices that support it
-        if 0x11 in self._capabilities:
+        if CAP_ID_MSIX in self._capabilities:
             vector_count = self._calculate_default_queue_count()
-            table_size = max(0x1000, (vector_count * 16 + 0xFFF) & ~0xFFF)
+            table_size = max(
+                STORAGE_BAR_SIZES["minimum_msix_table"],
+                (vector_count * 16 + STORAGE_BIT_MANIPULATION["alignment_mask"])
+                & ~STORAGE_BIT_MANIPULATION["alignment_mask"],
+            )
 
             bars.append(
                 {
@@ -295,27 +325,50 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
 
         # Category-specific features
         if self._device_category == "nvme":
+            namespace_threshold = STORAGE_FEATURE_THRESHOLDS["namespace_management"]
+            namespaces_threshold = STORAGE_FEATURE_THRESHOLDS["max_namespaces_high"]
+            pci_gen4_threshold = STORAGE_FEATURE_THRESHOLDS["pci_gen4"]
+
             features.update(
                 {
-                    "supports_namespace_management": self.device_id > 0xA000,
-                    "max_namespaces": 256 if self.device_id > 0xA500 else 64,
+                    "supports_namespace_management": (
+                        self.device_id > namespace_threshold
+                    ),
+                    "max_namespaces": (
+                        STORAGE_DEVICE_LIMITS["max_namespaces_high"]
+                        if self.device_id > namespaces_threshold
+                        else STORAGE_DEVICE_LIMITS["max_namespaces_standard"]
+                    ),
                     "supports_nvme_mi": True,
-                    "pci_gen": 4 if self.device_id > 0xA800 else 3,
+                    "pci_gen": 4 if self.device_id > pci_gen4_threshold else 3,
                 }
             )
         elif self._device_category in ["sas", "raid"]:
+            enterprise_threshold = STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
             features.update(
                 {
                     "supports_raid_levels": [0, 1, 5, 6, 10],
-                    "max_drives": 64 if self.device_id > 0x1500 else 16,
+                    "max_drives": (
+                        STORAGE_DEVICE_LIMITS["max_drives_enterprise"]
+                        if self.device_id > enterprise_threshold
+                        else STORAGE_DEVICE_LIMITS["max_drives_standard"]
+                    ),
                     "supports_hot_swap": True,
                 }
             )
         elif self._device_category == "sata":
+            high_end_threshold = STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+            port_multiplier_threshold = STORAGE_FEATURE_THRESHOLDS["port_multiplier"]
             features.update(
                 {
-                    "max_ports": 8 if self.device_id > 0x2000 else 4,
-                    "supports_port_multiplier": self.device_id > 0x1500,
+                    "max_ports": (
+                        STORAGE_DEVICE_LIMITS["max_ports_high"]
+                        if self.device_id > high_end_threshold
+                        else STORAGE_DEVICE_LIMITS["max_ports_standard"]
+                    ),
+                    "supports_port_multiplier": (
+                        self.device_id > port_multiplier_threshold
+                    ),
                     "supports_fis_switching": True,
                 }
             )

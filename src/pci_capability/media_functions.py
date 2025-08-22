@@ -17,6 +17,22 @@ from ..string_utils import (log_debug_safe, log_error_safe, log_info_safe,
                             log_warning_safe, safe_format)
 from .base_function_analyzer import (BaseFunctionAnalyzer,
                                      create_function_capabilities)
+from .constants import (  # Common PCI Capability IDs; Media class codes; Common device ID masks; Media-specific device ranges; Media device thresholds; Media BAR sizes; Media power management; Media queue counts; Audio specifications; Video specifications; PCIe defaults; Additional vendor IDs
+    AMD_AUDIO_RANGES, BAR_SIZE_AUDIO_REGISTERS, BAR_SIZE_HDAUDIO_REGISTERS,
+    BAR_SIZE_MSIX_TABLE, BAR_SIZE_VIDEO_FRAMEBUFFER, BAR_SIZE_VIDEO_REGISTERS,
+    BIT_DEPTHS_BASIC_AUDIO, BIT_DEPTHS_HDAUDIO, CAP_ID_MSI, CAP_ID_MSIX,
+    CAP_ID_PCIE, CAP_ID_PM, CAP_ID_VENDOR_SPECIFIC, CHANNELS_MULTICHANNEL,
+    CHANNELS_STEREO, DEFAULT_PCIE_MAX_PAYLOAD_SIZE, DEVICE_ID_ENTROPY_MASK,
+    DEVICE_ID_LOWER_MASK, DEVICE_UPPER_HDAUDIO_THRESHOLD,
+    DEVICE_UPPER_VIDEO_THRESHOLD, FRAME_RATES_BASIC, FRAME_RATES_HIGH,
+    HDAUDIO_AUX_CURRENT_MA, HDAUDIO_MULTICHANNEL_THRESHOLD,
+    HIGH_END_DEVICE_THRESHOLD, INTEL_HDAUDIO_RANGES, INTEL_VIDEO_RANGES,
+    MEDIA_CLASS_CODES, NVIDIA_HDMI_AUDIO_RANGES, NVIDIA_VIDEO_RANGES,
+    QUEUE_COUNT_AUDIO, QUEUE_COUNT_HDAUDIO_BASIC, QUEUE_COUNT_HDAUDIO_HIGH,
+    QUEUE_COUNT_MIN, QUEUE_COUNT_VIDEO, SAMPLE_RATES_BASIC_AUDIO,
+    SAMPLE_RATES_HDAUDIO, VENDOR_CAP_DEVICE_THRESHOLD, VENDOR_ID_CMEDIA,
+    VENDOR_ID_CREATIVE, VIDEO_HARDWARE_ENCODING_THRESHOLD,
+    VIDEO_HIGH_FRAMERATE_THRESHOLD)
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +46,10 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
     """
 
     # Media-specific capability IDs
-    VENDOR_CAP_ID = 0x09  # Vendor-specific capability
+    VENDOR_CAP_ID = CAP_ID_VENDOR_SPECIFIC  # Vendor-specific capability
 
     # PCI class codes for media devices
-    CLASS_CODES = {
-        "audio": 0x040100,  # Multimedia controller, Audio device
-        "video": 0x040000,  # Multimedia controller, Video
-        "hdaudio": 0x040300,  # Multimedia controller, HD Audio
-        "other_media": 0x040800,  # Multimedia controller, Other
-    }
+    CLASS_CODES = MEDIA_CLASS_CODES
 
     def __init__(self, vendor_id: int, device_id: int):
         """
@@ -58,7 +69,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
             Device category string (audio, video, hdaudio, other_media)
         """
         # Pattern-based analysis without hardcoding specific device IDs
-        device_lower = self.device_id & 0xFF00
+        device_lower = self.device_id & DEVICE_ID_LOWER_MASK
         device_upper = (self.device_id >> 8) & 0xFF
 
         # Import vendor ID constants
@@ -67,30 +78,29 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
 
         # Vendor-specific patterns
         if self.vendor_id == VENDOR_ID_INTEL:  # Intel
-            if device_lower in [0x2600, 0x2700, 0x2800]:  # HD Audio ranges
+            if device_lower in INTEL_HDAUDIO_RANGES:  # HD Audio ranges
                 return "hdaudio"
-            elif device_lower in [0x5900, 0x5A00]:  # Video ranges
+            if device_lower in INTEL_VIDEO_RANGES:  # Video ranges
                 return "video"
-        elif self.vendor_id == VENDOR_ID_NVIDIA:  # NVIDIA
-            if device_lower in [0x0E00, 0x0F00]:  # Audio over HDMI
+        if self.vendor_id == VENDOR_ID_NVIDIA:  # NVIDIA
+            if device_lower in NVIDIA_HDMI_AUDIO_RANGES:  # Audio over HDMI
                 return "hdaudio"
-            elif device_lower in [0x1000, 0x1100]:  # Video capture
+            if device_lower in NVIDIA_VIDEO_RANGES:  # Video capture
                 return "video"
-        elif self.vendor_id == VENDOR_ID_AMD:  # AMD/ATI
-            if device_lower in [0xAA00, 0xAB00]:  # Audio
+        if self.vendor_id == VENDOR_ID_AMD:  # AMD/ATI
+            if device_lower in AMD_AUDIO_RANGES:  # Audio
                 return "hdaudio"
-        elif self.vendor_id == 0x13F6:  # C-Media
+        if self.vendor_id == VENDOR_ID_CMEDIA:  # C-Media
             return "audio"
-        elif self.vendor_id == 0x1274:  # Creative Labs
+        if self.vendor_id == VENDOR_ID_CREATIVE:  # Creative Labs
             return "audio"
 
         # Generic patterns based on device ID structure
-        if device_upper >= 0x80:  # Higher device IDs often HD Audio
-            return "hdaudio"
-        elif device_upper >= 0x50:  # Mid-range often video
-            return "video"
-        else:
-            return "audio"  # Default to basic audio
+        if device_upper >= DEVICE_UPPER_HDAUDIO_THRESHOLD:
+            return "hdaudio"  # Higher device IDs often HD Audio
+        if device_upper >= DEVICE_UPPER_VIDEO_THRESHOLD:
+            return "video"  # Mid-range often video
+        return "audio"  # Default to basic audio
 
     def _analyze_capabilities(self) -> Set[int]:
         """
@@ -102,11 +112,11 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         caps = set()
 
         # Always include basic media capabilities
-        caps.update([0x01, 0x05, 0x10])  # PM, MSI, PCIe
+        caps.update([CAP_ID_PM, CAP_ID_MSI, CAP_ID_PCIE])  # PM, MSI, PCIe
 
         # MSI-X for high-end devices
         if self._is_high_end_device():
-            caps.add(0x11)  # MSI-X
+            caps.add(CAP_ID_MSIX)  # MSI-X
 
         # Vendor-specific capabilities for certain devices
         if self._supports_vendor_capability():
@@ -116,12 +126,18 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
 
     def _is_high_end_device(self) -> bool:
         """Check if this is a high-end media device."""
-        return self._device_category in ["hdaudio", "video"] and self.device_id > 0x2000
+        return (
+            self._device_category in ["hdaudio", "video"]
+            and self.device_id > HIGH_END_DEVICE_THRESHOLD
+        )
 
     def _supports_vendor_capability(self) -> bool:
         """Check if device supports vendor-specific capabilities."""
         # Vendor caps common in audio devices for DSP features
-        return self._device_category in ["audio", "hdaudio"] and self.device_id > 0x1000
+        return (
+            self._device_category in ["audio", "hdaudio"]
+            and self.device_id > VENDOR_CAP_DEVICE_THRESHOLD
+        )
 
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""
@@ -137,13 +153,14 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         # Handle media-specific capabilities
         if cap_id == self.VENDOR_CAP_ID:
             return self._create_vendor_capability()
-        else:
-            return None
+        return None
 
     def _create_pm_capability(self, aux_current: int = 0) -> Dict[str, Any]:
         """Create Power Management capability for media devices."""
         # HD Audio may need aux power for always-on features
-        aux_current = 50 if self._device_category == "hdaudio" else 0
+        aux_current = (
+            HDAUDIO_AUX_CURRENT_MA if self._device_category == "hdaudio" else 0
+        )
         return super()._create_pm_capability(aux_current)
 
     def _create_msi_capability(
@@ -168,7 +185,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         """Create PCIe Express capability for media devices."""
         if max_payload_size is None:
             # Conservative payload size for media devices
-            max_payload_size = 128
+            max_payload_size = DEFAULT_PCIE_MAX_PAYLOAD_SIZE
 
         # HD Audio benefits from FLR
         supports_flr = self._device_category == "hdaudio"
@@ -178,26 +195,31 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         """Get appropriate BAR allocation for MSI-X tables."""
         if self._device_category == "hdaudio":
             return (1, 1)  # HD Audio: Use BAR 1 for MSI-X
-        else:
-            return (0, 0)  # Other media: Use BAR 0
+        return (0, 0)  # Other media: Use BAR 0
 
     def _calculate_default_queue_count(self) -> int:
         """Calculate appropriate queue count for media devices."""
         # Media devices typically need fewer queues
         if self._device_category == "hdaudio":
-            base_queues = 8 if self.device_id > 0x2500 else 4
+            base_queues = (
+                QUEUE_COUNT_HDAUDIO_HIGH
+                if self.device_id > HDAUDIO_MULTICHANNEL_THRESHOLD
+                else QUEUE_COUNT_HDAUDIO_BASIC
+            )
         elif self._device_category == "video":
-            base_queues = 4
+            base_queues = QUEUE_COUNT_VIDEO
         else:
-            base_queues = 2
+            base_queues = QUEUE_COUNT_AUDIO
 
         # Add entropy-based variation for security
-        entropy_factor = ((self.vendor_id ^ self.device_id) & 0x7) / 16.0
+        entropy_factor = (
+            (self.vendor_id ^ self.device_id) & DEVICE_ID_ENTROPY_MASK
+        ) / 16.0
         variation = int(base_queues * entropy_factor * 0.5)
         if (self.device_id & 0x1) == 0:
             variation = -variation
 
-        final_queues = max(1, base_queues + variation)
+        final_queues = max(QUEUE_COUNT_MIN, base_queues + variation)
         return 1 << (final_queues - 1).bit_length()
 
     def _create_vendor_capability(self) -> Dict[str, Any]:
@@ -216,7 +238,7 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
         # Base register space - size based on device type
         if self._device_category == "hdaudio":
             # HD Audio needs larger register space
-            base_size = 0x4000
+            base_size = BAR_SIZE_HDAUDIO_REGISTERS
             bars.append(
                 {
                     "bar": 0,
@@ -228,19 +250,19 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
             )
 
             # MSI-X table space if supported
-            if 0x11 in self._capabilities:
+            if CAP_ID_MSIX in self._capabilities:
                 bars.append(
                     {
                         "bar": 1,
                         "type": "memory",
-                        "size": 0x1000,
+                        "size": BAR_SIZE_MSIX_TABLE,
                         "prefetchable": False,
                         "description": "MSI-X table",
                     }
                 )
         elif self._device_category == "video":
             # Video devices need frame buffer space
-            base_size = 0x10000
+            base_size = BAR_SIZE_VIDEO_FRAMEBUFFER
             bars.append(
                 {
                     "bar": 0,
@@ -254,14 +276,14 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
                 {
                     "bar": 1,
                     "type": "memory",
-                    "size": 0x2000,
+                    "size": BAR_SIZE_VIDEO_REGISTERS,
                     "prefetchable": False,
                     "description": "Video registers",
                 }
             )
         else:
             # Basic audio device
-            base_size = 0x1000
+            base_size = BAR_SIZE_AUDIO_REGISTERS
             bars.append(
                 {
                     "bar": 0,
@@ -286,28 +308,40 @@ class MediaFunctionAnalyzer(BaseFunctionAnalyzer):
             features.update(
                 {
                     "codec_support": ["AC97", "HDA"],
-                    "sample_rates": [44100, 48000, 96000, 192000],
-                    "bit_depths": [16, 20, 24, 32],
-                    "channels": 8 if self.device_id > 0x2500 else 2,
+                    "sample_rates": SAMPLE_RATES_HDAUDIO,
+                    "bit_depths": BIT_DEPTHS_HDAUDIO,
+                    "channels": (
+                        CHANNELS_MULTICHANNEL
+                        if self.device_id > HDAUDIO_MULTICHANNEL_THRESHOLD
+                        else CHANNELS_STEREO
+                    ),
                     "supports_dsp": self._supports_vendor_capability(),
                 }
             )
         elif self._device_category == "video":
             features.update(
                 {
-                    "max_resolution": "4K" if self.device_id > 0x2000 else "1080p",
+                    "max_resolution": (
+                        "4K" if self.device_id > HIGH_END_DEVICE_THRESHOLD else "1080p"
+                    ),
                     "color_formats": ["RGB", "YUV420", "YUV422"],
-                    "frame_rates": [30, 60] if self.device_id > 0x1500 else [30],
-                    "supports_hardware_encoding": self.device_id > 0x2500,
+                    "frame_rates": (
+                        FRAME_RATES_HIGH
+                        if self.device_id > VIDEO_HIGH_FRAMERATE_THRESHOLD
+                        else FRAME_RATES_BASIC
+                    ),
+                    "supports_hardware_encoding": (
+                        self.device_id > VIDEO_HARDWARE_ENCODING_THRESHOLD
+                    ),
                 }
             )
         elif self._device_category == "audio":
             features.update(
                 {
                     "codec_support": ["AC97"],
-                    "sample_rates": [44100, 48000],
-                    "bit_depths": [16],
-                    "channels": 2,
+                    "sample_rates": SAMPLE_RATES_BASIC_AUDIO,
+                    "bit_depths": BIT_DEPTHS_BASIC_AUDIO,
+                    "channels": CHANNELS_STEREO,
                     "supports_midi": True,
                 }
             )
