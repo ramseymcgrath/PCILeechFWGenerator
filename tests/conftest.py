@@ -48,7 +48,7 @@ def config_dialog():
     except ImportError:
         pytest.skip("TUI main module not available")
 
-    dialog = ConfigurationDialog()
+    dialog = ConfigurationDialog(Mock(), Mock())
     dialog.app = Mock()
     dialog.app.config_manager = Mock()
     dialog.query_one = Mock()
