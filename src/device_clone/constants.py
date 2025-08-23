@@ -10,8 +10,7 @@ from typing import Dict, Final, List, Optional, Union
 
 # Import the VendorID enum for use in fallback functions
 try:
-    from src.pci_capability.dynamic_functions import \
-        VendorID as ExternalVendorID
+    from src.pci_capability.dynamic_functions import VendorID as ExternalVendorID
 
     # Use the external VendorID enum values
     VENDOR_ID_INTEL = ExternalVendorID.INTEL
@@ -30,6 +29,27 @@ DEVICE_ID_GENERIC = 0x1234  # Generic device ID for fallback
 DEVICE_ID_INTEL_ETH = 0x1533  # Intel I210 Gigabit Network Connection
 DEVICE_ID_INTEL_NVME = 0x2522  # Intel NVMe SSD Controller
 DEVICE_ID_NVIDIA_GPU = 0x2204  # NVIDIA RTX GPU
+DEVICE_ID_FALLBACK = 0x0000  # Fallback when device ID is missing
+
+# PCIe BAR type constants
+BAR_TYPE_MEMORY_32BIT = 0
+BAR_TYPE_MEMORY_64BIT = 1
+
+# PCI configuration space constants
+MAX_32BIT_VALUE = 0xFFFFFFFF  # Maximum 32-bit unsigned value
+DEFAULT_EXT_CFG_CAP_PTR = 0x100  # Default extended capability pointer
+DEFAULT_CLASS_CODE = "000000"  # Default class code for unknown devices
+DEFAULT_REVISION_ID = "00"  # Default revision ID
+
+# PCI device class codes
+PCI_CLASS_NETWORK = "02"
+PCI_CLASS_STORAGE = "01"
+PCI_CLASS_DISPLAY = "03"
+PCI_CLASS_AUDIO = "040"
+
+# Power management states
+POWER_STATE_D0 = "D0"  # Fully operational power state
+POWER_STATE_D3 = "D3"  # Lowest power state
 
 # Fallback vendor ID list for generating random vendor IDs when needed
 FALLBACK_VENDOR_IDS: Final[List[int]] = [

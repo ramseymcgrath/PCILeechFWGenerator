@@ -11,8 +11,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import project logging and string utilities
 from src.log_config import get_logger
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
 
 # Import PCI capability infrastructure for extended capabilities support
 try:
@@ -33,15 +37,15 @@ except ImportError:
 
 # Import template renderer
 try:
-    from src.templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+    from src.templating.template_renderer import TemplateRenderer, TemplateRenderError
 except ImportError:
     try:
-        from templating.template_renderer import (TemplateRenderer,
-                                                  TemplateRenderError)
+        from templating.template_renderer import TemplateRenderer, TemplateRenderError
     except ImportError:
-        from src.templating.template_renderer import (TemplateRenderer,
-                                                      TemplateRenderError)
+        from src.templating.template_renderer import (
+            TemplateRenderer,
+            TemplateRenderError,
+        )
 
 # Import BAR size constants
 try:
@@ -543,8 +547,7 @@ def parse_bar_info_from_config_space(cfg: str) -> List[Dict[str, Any]]:
                 # Note: This requires the BAR value to be the result of writing all 1s
                 # and reading back, which we don't have from config space dumps
                 try:
-                    from src.device_clone.bar_size_converter import \
-                        BarSizeConverter
+                    from src.device_clone.bar_size_converter import BarSizeConverter
 
                     # For config space values, we can't use the PCIe probe method
                     # as we don't have the actual size mask. Use the simplified method instead.
@@ -724,8 +727,8 @@ def validate_msix_configuration_enhanced(
                 bar_size=bar_size,
             )
 
-    is_valid = len(errors) == 0
-    return is_valid, errors
+    _is_valid = len(errors) == 0
+    return _is_valid, errors
 
 
 def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
@@ -755,8 +758,7 @@ def generate_msix_table_sv(msix_info: Dict[str, Any]) -> str:
             "CRITICAL: Missing required MSI-X fields: {fields}",
             fields=missing_fields,
         )
-        # CRITICAL: Cannot generate MSI-X module without proper BAR/offset information
-        # These values are hardware-specific and cannot be guessed
+
         raise ValueError(
             f"Cannot generate MSI-X module - missing critical fields: {missing_fields}. "
             f"MSI-X BAR indices and offsets must come from actual hardware configuration."
@@ -870,8 +872,8 @@ def validate_msix_configuration(
                     "MSI-X table and PBA overlap in the same BAR (basic validation)"
                 )
 
-        is_valid = len(errors) == 0
-        return is_valid, errors
+        _is_valid = len(errors) == 0
+        return _is_valid, errors
 
 
 def generate_msix_capability_registers(msix_info: Dict[str, Any]) -> str:
@@ -936,11 +938,11 @@ if __name__ == "__main__":
     if bars:
         print(f"\nParsed BARs ({len(bars)} active):")
         for bar in bars:
-            bitness = "64-bit" if bar["is_64bit"] else "32-bit"
-            prefetch = "prefetchable" if bar["prefetchable"] else "non-prefetchable"
+            BITNESS = "64-bit" if bar["is_64bit"] else "32-bit"
+            PREFETCH = "prefetchable" if bar["prefetchable"] else "non-prefetchable"
             print(
                 f"  BAR {bar['index']}: {bar['bar_type']} @ 0x{bar['address']:016x}, "
-                f"size=0x{bar['size']:x} ({bitness}, {prefetch})"
+                f"size=0x{bar['size']:x} ({BITNESS}, {PREFETCH})"
             )
 
     sv_code = generate_msix_table_sv(msix_info)

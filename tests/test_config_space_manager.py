@@ -6,11 +6,14 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from src.device_clone.config_space_manager import (BarInfo,
-                                                   ConfigSpaceConstants,
-                                                   ConfigSpaceError,
-                                                   ConfigSpaceManager,
-                                                   SysfsError, VFIOError)
+from src.device_clone.config_space_manager import (
+    BarInfo,
+    ConfigSpaceConstants,
+    ConfigSpaceError,
+    ConfigSpaceManager,
+    SysfsError,
+    VFIOError,
+)
 
 
 class TestBarInfo:
@@ -256,7 +259,6 @@ class TestConfigSpaceManager:
 
             synthetic_config = manager.generate_synthetic_config_space()
 
-            # Fixed: synthetic config space should be 4096 bytes (extended), not 256 bytes (standard)
             assert len(synthetic_config) == 4096
             # Check vendor ID
             assert synthetic_config[0:2] == b"\x86\x80"
@@ -272,7 +274,6 @@ class TestConfigSpaceManager:
 
         parsed_data = manager._parse_hexdump_output(hexdump)
 
-        # Fixed: Should return full 256-byte config space, not just 32 bytes
         assert len(parsed_data) == 256
         assert parsed_data[0:4] == b"\x86\x80\x00\x10"
         assert parsed_data[0x10:0x14] == b"\x00\x00\x00\xf0"
@@ -283,9 +284,7 @@ class TestConfigSpaceManager:
 
         parsed_data = manager._parse_hexdump_output(invalid_hexdump)
 
-        # Fixed: Should still return 256-byte buffer, but with all zeros (no valid data parsed)
         assert len(parsed_data) == 256
-        # Since no valid data was parsed, the buffer should have default revision_id set
         assert (
             parsed_data[ConfigSpaceConstants.REVISION_ID_OFFSET]
             == ConfigSpaceConstants.DEFAULT_REVISION_ID

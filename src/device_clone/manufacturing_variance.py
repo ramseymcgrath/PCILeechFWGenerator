@@ -19,8 +19,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe, safe_format)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
 
 try:
     from typing_extensions import TypedDict
@@ -659,7 +664,6 @@ class ManufacturingVarianceSimulator:
             adjustments["register_access_jitter_ns"] / 10.0
         )  # Assuming 100MHz clock
 
-        # FIXED: Store the computed values instead of discarding them
         adjusted_base_cycles = max(1, int(base_delay_cycles * timing_factor))
         max_jitter_cycles = max(1, jitter_cycles)
 

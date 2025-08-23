@@ -8,22 +8,35 @@ using the template system, integrating with constants and build helpers.
 
 import logging
 import shutil
+
 # Use absolute imports for better compatibility
 import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Dict, List, Optional, Protocol, Union,
-                    runtime_checkable)
+from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# String utilities (always use these)
+from src.string_utils import (
+    safe_format,
+    log_info_safe,
+    log_warning_safe,
+    log_error_safe,
+    log_debug_safe,
+    generate_tcl_header_comment,
+)
+
 from src.device_clone.fallback_manager import get_global_fallback_manager
-from src.exceptions import (DeviceConfigError, TCLBuilderError,
-                            TemplateNotFoundError, XDCConstraintError)
+from src.exceptions import (
+    DeviceConfigError,
+    TCLBuilderError,
+    TemplateNotFoundError,
+    XDCConstraintError,
+)
 from src.import_utils import safe_import, safe_import_class
-from src.string_utils import generate_tcl_header_comment
 
 
 def format_hex_id(val: Union[int, str, None], width: int = 4) -> str:
@@ -127,7 +140,12 @@ class BuildContext:
         class_code = self.class_code or 0x020000  # Default to Ethernet controller
 
         # Generate device signature for security compliance
-        device_signature = f"{format_hex_id(vendor_id, 4)}:{format_hex_id(device_id, 4)}:{format_hex_id(revision_id, 2)}"
+        device_signature = safe_format(
+            "{vid}:{did}:{rid}",
+            vid=format_hex_id(vendor_id, 4),
+            did=format_hex_id(device_id, 4),
+            rid=format_hex_id(revision_id, 2),
+        )
 
         # Create comprehensive config objects required by templates
         device_config = {
@@ -330,15 +348,21 @@ class ConstraintManager:
         """
         try:
             # Import repo_manager functions directly
-            from file_management.repo_manager import (get_xdc_files,
-                                                      is_repository_accessible)
+            from file_management.repo_manager import (
+                get_xdc_files,
+                is_repository_accessible,
+            )
 
             if not is_repository_accessible(board_name):
                 raise XDCConstraintError("Repository is not accessible")
 
             xdc_files = get_xdc_files(board_name)
             if not xdc_files:
-                raise XDCConstraintError(f"No XDC files found for board '{board_name}'")
+                raise XDCConstraintError(
+                    safe_format(
+                        "No XDC files found for board '{board}'", board=board_name
+                    )
+                )
 
             copied_files = []
             for xdc_file in xdc_files:
@@ -346,20 +370,38 @@ class ConstraintManager:
                 try:
                     shutil.copy2(xdc_file, dest_path)
                     copied_files.append(dest_path.name)
-                    self.logger.info(f"Copied XDC file: {xdc_file.name}")
+                    log_info_safe(
+                        self.logger,
+                        safe_format(
+                            "Copied XDC file: {filename}", filename=xdc_file.name
+                        ),
+                    )
                 except Exception as e:
                     raise XDCConstraintError(
-                        f"Failed to copy XDC file {xdc_file.name}: {e}"
+                        safe_format(
+                            "Failed to copy XDC file {filename}: {error}",
+                            filename=xdc_file.name,
+                            error=e,
+                        )
                     ) from e
 
-            self.logger.info(f"Successfully copied {len(copied_files)} XDC files")
+            log_info_safe(
+                self.logger,
+                safe_format(
+                    "Successfully copied {count} XDC files", count=len(copied_files)
+                ),
+            )
             return copied_files
 
         except Exception as e:
             if isinstance(e, XDCConstraintError):
                 raise
             raise XDCConstraintError(
-                f"Failed to copy XDC files for board '{board_name}': {e}"
+                safe_format(
+                    "Failed to copy XDC files for board '{board}': {error}",
+                    board=board_name,
+                    error=e,
+                )
             ) from e
 
 
@@ -410,15 +452,22 @@ class TCLScriptBuilder:
         template_path = self._template_map.get(script_type)
         if not template_path:
             raise TemplateNotFoundError(
-                f"No template mapping for script type: {script_type}"
+                safe_format(
+                    "No template mapping for script type: {script_type}",
+                    script_type=script_type,
+                )
             )
 
         try:
             return self.template_renderer.render_template(template_path, context)
         except Exception as e:
             raise TemplateNotFoundError(
-                f"Template not found for {script_type.value}. "
-                f"Ensure '{template_path}' exists in the template directory."
+                safe_format(
+                    "Template not found for {script_type_value}. "
+                    "Ensure '{template_path}' exists in the template directory.",
+                    script_type_value=script_type.value,
+                    template_path=template_path,
+                )
             ) from e
 
 
@@ -479,7 +528,13 @@ class TCLBuilder:
         # Track generated files
         self.generated_files: List[str] = []
 
-        self.logger.debug(f"TCL builder initialized with output dir: {self.output_dir}")
+        log_debug_safe(
+            self.logger,
+            safe_format(
+                "TCL builder initialized with output dir: {output_dir}",
+                output_dir=self.output_dir,
+            ),
+        )
 
     def _init_template_renderer(self, template_dir: Optional[Union[str, Path]]):
         """Initialize template renderer with error handling."""
@@ -488,12 +543,16 @@ class TCLBuilder:
 
             self.template_renderer = TemplateRenderer(template_dir)
         except ImportError as e:
-            raise TCLBuilderError(f"Failed to initialize template renderer: {e}") from e
+            raise TCLBuilderError(
+                safe_format("Failed to initialize template renderer: {error}", error=e)
+            ) from e
 
     def _init_device_config(self, device_profile: Optional[str]):
         """Initialize device configuration with robust error handling."""
         if device_profile is None:
-            self.logger.info("No device profile specified, using live device detection")
+            log_info_safe(
+                self.logger, "No device profile specified, using live device detection"
+            )
             self.device_config = None
             return
 
@@ -502,15 +561,20 @@ class TCLBuilder:
 
             self.device_config = get_device_config(device_profile)
         except ImportError as e:
-            self.logger.warning(f"Device config module unavailable: {e}")
+            log_warning_safe(
+                self.logger,
+                safe_format("Device config module unavailable: {error}", error=e),
+            )
             self.device_config = None
 
     def _init_build_helpers(self):
         """Initialize build helpers with fallback handling."""
         try:
-            from build_helpers import (batch_write_tcl_files,
-                                       create_fpga_strategy_selector,
-                                       validate_fpga_part)
+            from build_helpers import (
+                batch_write_tcl_files,
+                create_fpga_strategy_selector,
+                validate_fpga_part,
+            )
 
             self.batch_write_tcl_files = batch_write_tcl_files
             self.fpga_strategy_selector = create_fpga_strategy_selector()
@@ -531,7 +595,9 @@ class TCLBuilder:
             self.IMPLEMENTATION_STRATEGY = constants.IMPLEMENTATION_STRATEGY
             self.FPGA_FAMILIES = constants.FPGA_FAMILIES
         except ImportError as e:
-            self.logger.warning(f"Using fallback constants: {e}")
+            log_warning_safe(
+                self.logger, safe_format("Using fallback constants: {error}", error=e)
+            )
             fallback = self._create_fallback_constants()
             for attr_name in dir(fallback):
                 if not attr_name.startswith("_"):
@@ -570,7 +636,10 @@ class TCLBuilder:
         try:
             self.constraint_manager = ConstraintManager(self.output_dir, self.logger)
         except ImportError as e:
-            self.logger.warning(f"Constraint manager unavailable: {e}")
+            log_warning_safe(
+                self.logger,
+                safe_format("Constraint manager unavailable: {error}", error=e),
+            )
             self.constraint_manager = None
 
     @staticmethod
@@ -642,7 +711,11 @@ class TCLBuilder:
 
             if board not in self.BOARD_PARTS:
                 raise ValueError(
-                    f"Invalid board '{board}'. Available: {list(self.BOARD_PARTS.keys())}"
+                    safe_format(
+                        "Invalid board '{board}'. Available: {boards}",
+                        board=board,
+                        boards=list(self.BOARD_PARTS.keys()),
+                    )
                 )
 
             fpga_part = self.BOARD_PARTS[board]
@@ -746,7 +819,9 @@ class TCLBuilder:
                     copied_files[0] if copied_files else None
                 )
             except XDCConstraintError as e:
-                self.logger.error(f"XDC constraint error: {e}")
+                log_error_safe(
+                    self.logger, safe_format("XDC constraint error: {error}", error=e)
+                )
                 raise
 
         # Add required variables for constraints template
@@ -798,10 +873,14 @@ class TCLBuilder:
             )
 
         # Log device info being used
-        self.logger.info(
-            f"Using device information: {template_context['device'].get('vendor_id', 'N/A')}:"
-            f"{template_context['device'].get('device_id', 'N/A')} "
-            f"(Class: {template_context['device'].get('class_code', 'N/A')})"
+        log_info_safe(
+            self.logger,
+            safe_format(
+                "Using device information: {vid}:{did} (Class: {cls})",
+                vid=template_context["device"].get("vendor_id", "N/A"),
+                did=template_context["device"].get("device_id", "N/A"),
+                cls=template_context["device"].get("class_code", "N/A"),
+            ),
         )
 
         # 2. Handle board information - extract from BuildContext if available
@@ -1038,7 +1117,9 @@ class TCLBuilder:
             # Return success status for all files if batch write succeeds
             return {filename: True for filename in tcl_contents.keys()}
         except Exception as e:
-            self.logger.error(f"Failed to write TCL files: {e}")
+            log_error_safe(
+                self.logger, safe_format("Failed to write TCL files: {error}", error=e)
+            )
             # Return failure status for all files if batch write fails
             return {filename: False for filename in tcl_contents.keys()}
 
@@ -1115,19 +1196,37 @@ class TCLBuilder:
                         template_path, template_context
                     )
                     scripts[script_name] = script_content
-                    self.logger.info(f"Generated PCILeech {script_name} script")
+                    log_info_safe(
+                        self.logger,
+                        safe_format(
+                            "Generated PCILeech {name} script", name=script_name
+                        ),
+                    )
 
                 except Exception as e:
-                    self.logger.error(
-                        f"Failed to generate PCILeech {script_name} script: {e}"
+                    log_error_safe(
+                        self.logger,
+                        safe_format(
+                            "Failed to generate PCILeech {name} script: {error}",
+                            name=script_name,
+                            error=e,
+                        ),
                     )
                     # Continue with other scripts even if one fails
 
-            self.logger.info(f"Generated {len(scripts)} PCILeech-enhanced TCL scripts")
+            log_info_safe(
+                self.logger,
+                safe_format(
+                    "Generated {count} PCILeech-enhanced TCL scripts",
+                    count=len(scripts),
+                ),
+            )
 
         except Exception as e:
             raise TCLBuilderError(
-                f"Failed to build PCILeech enhanced scripts: {e}"
+                safe_format(
+                    "Failed to build PCILeech enhanced scripts: {error}", error=e
+                )
             ) from e
 
         return scripts
@@ -1168,14 +1267,24 @@ class TCLBuilder:
                     f.write(script_content)
 
                 saved_files.append(str(script_path))
-                self.logger.info(f"Saved PCILeech script: {filename}")
+                log_info_safe(
+                    self.logger,
+                    safe_format("Saved PCILeech script: {filename}", filename=filename),
+                )
 
-            self.logger.info(
-                f"Saved {len(saved_files)} PCILeech scripts to {output_dir}"
+            log_info_safe(
+                self.logger,
+                safe_format(
+                    "Saved {count} PCILeech scripts to {output_dir}",
+                    count=len(saved_files),
+                    output_dir=output_dir,
+                ),
             )
 
         except Exception as e:
-            raise TCLBuilderError(f"Failed to save PCILeech scripts: {e}") from e
+            raise TCLBuilderError(
+                safe_format("Failed to save PCILeech scripts: {error}", error=e)
+            ) from e
 
         return saved_files
 

@@ -22,29 +22,40 @@ import struct
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 
 import pytest
 
-from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
-                                    VFIO_GROUP_GET_DEVICE_FD,
-                                    VFIO_REGION_INFO_FLAG_MMAP,
-                                    VFIO_REGION_INFO_FLAG_READ,
-                                    VFIO_REGION_INFO_FLAG_WRITE,
-                                    VfioRegionInfo)
-from src.device_clone.behavior_profiler import (BehaviorProfile,
-                                                RegisterAccess, TimingPattern)
+from src.cli.vfio_constants import (
+    VFIO_DEVICE_GET_REGION_INFO,
+    VFIO_GROUP_GET_DEVICE_FD,
+    VFIO_REGION_INFO_FLAG_MMAP,
+    VFIO_REGION_INFO_FLAG_READ,
+    VFIO_REGION_INFO_FLAG_WRITE,
+    VfioRegionInfo,
+)
+from src.device_clone.behavior_profiler import (
+    BehaviorProfile,
+    RegisterAccess,
+    TimingPattern,
+)
 from src.device_clone.config_space_manager import BarInfo
-from src.device_clone.fallback_manager import (FallbackManager,
-                                               get_global_fallback_manager)
+from src.device_clone.fallback_manager import (
+    FallbackManager,
+    get_global_fallback_manager,
+)
 from src.device_clone.overlay_mapper import OverlayMapper
-from src.device_clone.pcileech_context import (BarConfiguration, ContextError,
-                                               DeviceIdentifiers,
-                                               PCILeechContextBuilder,
-                                               TemplateContext,
-                                               TimingParameters,
-                                               ValidationLevel)
+from src.device_clone.pcileech_context import (
+    BarConfiguration,
+    ContextError,
+    DeviceIdentifiers,
+    PCILeechContextBuilder,
+    TemplateContext,
+    TimingParameters,
+    ValidationLevel,
+)
 
 # ============================================================================
 # Test Data Factories
@@ -1051,6 +1062,7 @@ class TestIntegrationScenarios:
                 # Verify complete context
                 self._verify_complete_context(context)
 
+    @pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
     def test_error_recovery_workflow(self, mock_config):
         """Test error recovery and fallback mechanisms."""
         builder = PCILeechContextBuilder(
@@ -1066,6 +1078,7 @@ class TestIntegrationScenarios:
             with pytest.raises(ContextError, match="VFIO access failed"):
                 builder._get_vfio_bar_info(0, {"type": "memory"})
 
+    @pytest.mark.skipif(sys.platform == "darwin", reason="VFIO tests require Linux")
     def test_performance_optimization_scenario(
         self, mock_config, config_space_data, behavior_profile
     ):

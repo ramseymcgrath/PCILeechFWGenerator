@@ -8,11 +8,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.device_clone.msix_capability import (
-    BAR_IO_DEFAULT_SIZE, BAR_MEM_DEFAULT_SIZE, BAR_MEM_MIN_SIZE, find_cap,
-    generate_msix_capability_registers, generate_msix_table_sv, hex_to_bytes,
-    is_valid_offset, msix_size, parse_bar_info_from_config_space,
-    parse_msix_capability, read_u8, read_u16_le, read_u32_le,
-    validate_msix_configuration, validate_msix_configuration_enhanced)
+    BAR_IO_DEFAULT_SIZE,
+    BAR_MEM_DEFAULT_SIZE,
+    BAR_MEM_MIN_SIZE,
+    find_cap,
+    generate_msix_capability_registers,
+    generate_msix_table_sv,
+    hex_to_bytes,
+    is_valid_offset,
+    msix_size,
+    parse_bar_info_from_config_space,
+    parse_msix_capability,
+    read_u8,
+    read_u16_le,
+    read_u32_le,
+    validate_msix_configuration,
+    validate_msix_configuration_enhanced,
+)
 
 
 class TestUtilityFunctions:
@@ -1218,7 +1230,6 @@ class TestMSIXAlignmentRegression:
         - Device has MSI-X table at BIR=4, offset=0
         - Raw register value table_offset_bir = 4 (BIR=4, offset=0)
         - Previous code incorrectly checked alignment on 4 (raw value)
-        - Fixed code correctly checks alignment on 0 (extracted offset)
         """
         # Create a configuration space with MSI-X capability
         # that has BIR=4 and offset=0 (8-byte aligned)

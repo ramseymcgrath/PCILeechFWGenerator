@@ -16,8 +16,13 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from src.string_utils import (log_debug_safe, log_error_safe, log_info_safe,
-                              log_warning_safe, safe_format)
+from src.string_utils import (
+    log_debug_safe,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+    safe_format,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +271,6 @@ EXTENDED_CAPABILITY_NAMES = {
     0x002C: "system firmware intermediary",
 }
 
-# Fixed section for standard configuration space header
 FIXED_SECTION = (
     "00000000",  # 0x00: Vendor/Device ID (read-only)
     "470500f9",  # 0x04: Command/Status (partially writable)

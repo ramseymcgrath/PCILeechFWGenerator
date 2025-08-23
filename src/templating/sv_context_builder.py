@@ -5,9 +5,13 @@ from typing import Any, Dict, List, Optional, Union
 
 from src.string_utils import log_error_safe, log_warning_safe
 
-from ..utils.unified_context import (DEFAULT_TIMING_CONFIG, MSIX_DEFAULT,
-                                     PCILEECH_DEFAULT, TemplateObject,
-                                     normalize_config_to_dict)
+from ..utils.unified_context import (
+    DEFAULT_TIMING_CONFIG,
+    MSIX_DEFAULT,
+    PCILEECH_DEFAULT,
+    TemplateObject,
+    normalize_config_to_dict,
+)
 from .sv_constants import SV_CONSTANTS
 from .template_renderer import TemplateRenderError
 
@@ -181,9 +185,24 @@ class SVContextBuilder:
         self, context: Dict[str, Any], device_config: Dict[str, Any]
     ) -> None:
         """Add device identification fields to context."""
-        # Extract vendor and device IDs
-        vendor_id = device_config.get("vendor_id", "0000")
-        device_id = device_config.get("device_id", "0000")
+        # Extract vendor and device IDs - no fallbacks allowed
+        vendor_id = device_config.get("vendor_id")
+        device_id = device_config.get("device_id")
+
+        if not vendor_id or not device_id:
+            from src.string_utils import log_error_safe, safe_format
+            import logging
+
+            logger = logging.getLogger(__name__)
+            log_error_safe(
+                logger,
+                safe_format(
+                    "Missing required device identifiers: vendor_id={vid}, device_id={did}",
+                    vid=vendor_id,
+                    did=device_id,
+                ),
+            )
+            raise SystemExit(2)
 
         # Add string versions
         context["vendor_id"] = vendor_id
@@ -310,7 +329,8 @@ class SVContextBuilder:
             {
                 "msi_vectors": int(context.get("msi_vectors", 0)),
                 "num_sources": int(context.get("num_sources", 1)),
-                "FALLBACK_DEVICE_ID": device_config_dict.get("device_id", "0x0000"),
+                # No fallback device ID - should use actual device_id from context
+                "FALLBACK_DEVICE_ID": device_config_dict["device_id"],
             }
         )
 

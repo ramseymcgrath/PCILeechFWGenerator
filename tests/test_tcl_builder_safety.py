@@ -106,29 +106,6 @@ class TestTCLBuilderSafety(unittest.TestCase):
             self.assertNotIsInstance(e, KeyError)
 
 
-class TestSystemVerilogGeneratorSecurity(unittest.TestCase):
-    """Test SystemVerilog generator for security validation."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        # self.sv_generator = EnhancedSystemVerilogGenerator()  # Class not available
-        pass
-
-    def test_empty_template_context_security_rejection(self):
-        """Test that empty template context is rejected for security reasons."""
-        # This test class now documents the security-first approach
-        # Empty contexts are now rejected, not handled gracefully
-        self.skipTest("SystemVerilog generator security tests run elsewhere")
-
-    def test_strict_template_validation(self):
-        """Test strict validation of template context for security."""
-        # In security-first approach, partial contexts are rejected
-        # All variables must be explicitly initialized
-        self.skipTest(
-            "Security validation tests moved to test_template_context_validator.py"
-        )
-
-
 class TestImportResilience(unittest.TestCase):
     """Test that imports are resilient to missing modules."""
 
