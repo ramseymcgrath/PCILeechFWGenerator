@@ -259,32 +259,6 @@ class TemplateObject:
             return DEFAULT_TEMPERATURE_COEFFICIENT
         if name == "voltage_variation":
             return DEFAULT_VOLTAGE_VARIATION
-        if name == "enabled":
-            return True  # Default to enabled for active device configs
-        if name == "timer_enable":
-            return True  # Default to timer enabled
-        if name == "timer_period":
-            return 1000  # Default timer period
-        if name == "msi_64bit_addr":
-            return True  # Default to 64-bit MSI addresses
-        if name == "num_sources":
-            return 1  # Default number of interrupt sources
-        if name == "default_priority":
-            return 4  # Default interrupt priority
-        if name == "num_msix":
-            return 4  # Default number of MSI-X vectors
-        if name == "msi_vector_width":
-            return 5  # Default MSI vector width
-        if name == "msix_table_bir":
-            return 0  # Default MSI-X table BIR
-        if name == "msix_table_offset":
-            return 0x1000  # Default MSI-X table offset
-        if name == "msix_pba_bir":
-            return 0  # Default MSI-X PBA BIR
-        if name == "msix_pba_offset":
-            return 0x2000  # Default MSI-X PBA offset
-        if name == "completer_id":
-            return 0x0000  # Default completer ID
 
         # Otherwise raise AttributeError
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")

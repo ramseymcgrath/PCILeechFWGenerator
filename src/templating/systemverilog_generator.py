@@ -17,14 +17,21 @@ from src.__version__ import __version__
 from src.device_clone.device_config import DeviceClass, DeviceType
 from src.device_clone.manufacturing_variance import VarianceModel
 from src.error_utils import format_user_friendly_error
-from src.string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe)
+from src.string_utils import generate_sv_header_comment, log_error_safe, log_info_safe
 
-from ..utils.unified_context import (DEFAULT_TIMING_CONFIG, MSIX_DEFAULT,
-                                     PCILEECH_DEFAULT, TemplateObject,
-                                     normalize_config_to_dict)
-from .advanced_sv_features import (AdvancedSVFeatureGenerator,
-                                   ErrorHandlingConfig, PerformanceConfig)
+from ..utils.unified_context import (
+    DEFAULT_TIMING_CONFIG,
+    MSIX_DEFAULT,
+    PCILEECH_DEFAULT,
+    TemplateObject,
+    UnifiedContextBuilder,
+    normalize_config_to_dict,
+)
+from .advanced_sv_features import (
+    AdvancedSVFeatureGenerator,
+    ErrorHandlingConfig,
+    PerformanceConfig,
+)
 from .advanced_sv_power import PowerManagementConfig
 from .sv_constants import SVConstants, SVTemplates, SVValidation
 from .sv_context_builder import SVContextBuilder
@@ -138,6 +145,45 @@ class SystemVerilogGenerator:
             self.logger,
             "SystemVerilogGenerator initialized successfully",
             use_pcileech=self.use_pcileech_primary,
+        )
+
+    def _create_default_active_device_config(
+        self, enhanced_context: Dict[str, Any]
+    ) -> TemplateObject:
+        """
+        Create a proper default active_device_config with all required attributes.
+
+        This uses the existing UnifiedContextBuilder to create a properly structured
+        active_device_config instead of relying on empty dict fallbacks.
+        """
+        # Extract device identifiers from context if available
+        device_config = enhanced_context.get("device_config", {})
+        config_space = enhanced_context.get("config_space", {})
+
+        # Try to get vendor_id and device_id from various context sources
+        vendor_id = (
+            enhanced_context.get("vendor_id")
+            or device_config.get("vendor_id")
+            or config_space.get("vendor_id")
+            or "0000"  # Fallback
+        )
+
+        device_id = (
+            enhanced_context.get("device_id")
+            or device_config.get("device_id")
+            or config_space.get("device_id")
+            or "0000"  # Fallback
+        )
+
+        # Create unified context builder and generate proper active_device_config
+        builder = UnifiedContextBuilder(self.logger)
+        return builder.create_active_device_config(
+            vendor_id=str(vendor_id),
+            device_id=str(device_id),
+            class_code="000000",  # Default class code
+            revision_id="00",  # Default revision
+            interrupt_strategy="intx",  # Default interrupt strategy
+            interrupt_vectors=1,  # Default interrupt vectors
         )
 
     def generate_modules(
@@ -310,7 +356,11 @@ class SystemVerilogGenerator:
                     "enable_perf_counters": False,
                 }
 
-            enhanced_context.setdefault("active_device_config", {})
+            # Create proper active_device_config instead of empty dict fallback
+            if "active_device_config" not in enhanced_context:
+                enhanced_context["active_device_config"] = (
+                    self._create_default_active_device_config(enhanced_context)
+                )
 
             # Generate modules based on configuration
             if self.use_pcileech_primary:
