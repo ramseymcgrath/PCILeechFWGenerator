@@ -4,10 +4,13 @@ import logging
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.string_utils import (generate_sv_header_comment, log_error_safe,
-                              log_info_safe, log_warning_safe)
-from src.utils.attribute_access import (get_attr_or_raise, has_attr,
-                                        safe_get_attr)
+from src.string_utils import (
+    generate_sv_header_comment,
+    log_error_safe,
+    log_info_safe,
+    log_warning_safe,
+)
+from src.utils.attribute_access import get_attr_or_raise, has_attr, safe_get_attr
 
 from .sv_constants import SV_TEMPLATES, SV_VALIDATION
 from .template_renderer import TemplateRenderer, TemplateRenderError
@@ -516,7 +519,77 @@ class SVModuleGenerator:
                 )
             return "\n".join(f"{value:08X}" for value in table_data) + "\n"
 
-        # In production, require actual hardware data
+        # Check for explicitly provided MSI-X table entries in the context.
+        # This allows callers (or earlier preload steps) to inject real table
+        # contents read from hardware so the generator can emit the correct
+        # initialization hex without fabricating values.
+        msix_data = context.get("msix_data") or context.get("template_context", {}).get(
+            "msix_data"
+        )
+        if msix_data:
+            # Support multiple possible representations:
+            # - 'table_init_hex': a prebuilt hex string (returned as-is)
+            # - 'table_entries': a list of dicts with 'data' (hex bytes) per vector
+            table_init_hex = msix_data.get("table_init_hex")
+            if table_init_hex:
+                return table_init_hex
+
+            entries = msix_data.get("table_entries")
+            if entries and isinstance(entries, list):
+                # Build hex lines from entries. Each entry should represent 16 bytes
+                # (4 x 32-bit little-endian words). If an entry is missing or
+                # shorter than 16 bytes, pad with zeros and log a warning.
+                table_lines = []
+                for i in range(num_vectors):
+                    if i < len(entries):
+                        ent = entries[i]
+                        data_hex = None
+                        if isinstance(ent, dict):
+                            data_hex = ent.get("data")
+                        elif isinstance(ent, (bytes, bytearray)):
+                            data_hex = bytes(ent).hex()
+                        elif isinstance(ent, str):
+                            data_hex = ent
+
+                        if data_hex:
+                            try:
+                                data_bytes = bytes.fromhex(data_hex)
+                            except Exception:
+                                # If parsing fails, treat as missing
+                                self.logger.warning(
+                                    "MSI-X table entry %d has invalid hex data; "
+                                    "filling with zeros",
+                                    i,
+                                )
+                                data_bytes = b""
+                        else:
+                            data_bytes = b""
+
+                    else:
+                        data_bytes = b""
+
+                    # Ensure 16 bytes per entry
+                    if len(data_bytes) < 16:
+                        if len(data_bytes) != 0:
+                            self.logger.warning(
+                                "MSI-X table entry %d is %d bytes; "
+                                "padding to 16 bytes",
+                                i,
+                                len(data_bytes),
+                            )
+                        data_bytes = data_bytes.ljust(16, b"\x00")
+
+                    # Split into four 32-bit little-endian words
+                    for w in range(4):
+                        word_bytes = data_bytes[w * 4 : (w + 1) * 4]
+                        word_val = int.from_bytes(word_bytes, "little")
+                        table_lines.append(f"{word_val:08X}")
+
+                return "\n".join(table_lines) + "\n"
+
+        # In production, if no explicit table entries are available, refuse to
+        # fabricate MSI-X table contents. This is a safety measure; callers
+        # should either provide real table contents or run without MSI-X.
         raise TemplateRenderError(
             "MSI-X table data must be read from actual hardware. "
             "Cannot generate safe firmware without real MSI-X values."
