@@ -1637,6 +1637,9 @@ puts "Synthesis complete!"
     def _preload_msix_data_early(self) -> Optional[Dict[str, Any]]:
         """
         Preload MSI-X data from sysfs before VFIO binding to ensure availability.
+        
+        This includes both MSI-X capability information and actual table entries
+        read from hardware when available.
 
         Returns:
             MSI-X data dictionary if available, None otherwise
@@ -1682,6 +1685,9 @@ puts "Synthesis complete!"
                 # Validate MSI-X configuration
                 is_valid, validation_errors = validate_msix_configuration(msix_info)
 
+                # Try to read actual MSI-X table entries from hardware
+                table_entries = self._read_msix_table_from_hardware(msix_info)
+
                 # Build comprehensive MSI-X data
                 msix_data = {
                     "capability_info": msix_info,
@@ -1697,6 +1703,22 @@ puts "Synthesis complete!"
                     "preloaded": True,
                 }
 
+                # Add table entries if successfully read from hardware
+                if table_entries:
+                    msix_data["table_entries"] = table_entries
+                    log_info_safe(
+                        self.logger,
+                        "Successfully read {count} MSI-X table entries from hardware",
+                        count=len(table_entries),
+                        prefix="MSIX",
+                    )
+                else:
+                    log_warning_safe(
+                        self.logger,
+                        "Could not read MSI-X table entries from hardware - firmware generation may require fallback",
+                        prefix="MSIX",
+                    )
+
                 return msix_data
             else:
                 log_info_safe(
@@ -1710,6 +1732,191 @@ puts "Synthesis complete!"
             log_warning_safe(
                 self.logger,
                 "MSI-X preload failed: {error}",
+                error=str(e),
+                prefix="MSIX",
+            )
+            return None
+
+    def _read_msix_table_from_hardware(self, msix_info: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """
+        Read MSI-X table entries from actual hardware via sysfs resource files.
+        
+        This method attempts to read the MSI-X table data from the actual hardware
+        by mapping the appropriate BAR resource and reading the table entries.
+        
+        Args:
+            msix_info: MSI-X capability information including table BIR and offset
+            
+        Returns:
+            List of MSI-X table entries if successful, None otherwise
+        """
+        try:
+            import os
+            import struct
+            
+            table_bir = msix_info["table_bir"]
+            table_offset = msix_info["table_offset"]
+            table_size = msix_info["table_size"]
+            
+            if table_size <= 0 or table_bir > 5:
+                log_warning_safe(
+                    self.logger,
+                    "Invalid MSI-X table parameters: BIR={bir}, size={size}",
+                    bir=table_bir,
+                    size=table_size,
+                    prefix="MSIX",
+                )
+                return None
+            
+            # Try to read from sysfs resource file
+            resource_path = f"/sys/bus/pci/devices/{self.config.device_bdf}/resource{table_bir}"
+            
+            if not os.path.exists(resource_path):
+                log_info_safe(
+                    self.logger,
+                    "MSI-X BAR resource file not accessible: {path}",
+                    path=resource_path,
+                    prefix="MSIX",
+                )
+                return None
+                
+            # Check if we have read permissions
+            if not os.access(resource_path, os.R_OK):
+                log_warning_safe(
+                    self.logger,
+                    "No read permission for MSI-X BAR resource: {path}",
+                    path=resource_path,
+                    prefix="MSIX",
+                )
+                return None
+            
+            log_info_safe(
+                self.logger,
+                "Reading MSI-X table from BAR{bir} at offset 0x{offset:x}",
+                bir=table_bir,
+                offset=table_offset,
+                prefix="MSIX",
+            )
+            
+            table_entries = []
+            
+            # Each MSI-X table entry is 16 bytes (4 x 32-bit words)
+            entry_size = 16
+            total_table_bytes = table_size * entry_size
+            
+            try:
+                with open(resource_path, "rb") as f:
+                    # Seek to the table offset
+                    f.seek(table_offset)
+                    
+                    # Read all table entries
+                    for vector_idx in range(table_size):
+                        try:
+                            # Read 16 bytes for this entry
+                            entry_data = f.read(entry_size)
+                            
+                            if len(entry_data) != entry_size:
+                                log_warning_safe(
+                                    self.logger,
+                                    "Incomplete MSI-X table entry {idx}: got {got} bytes, expected {exp}",
+                                    idx=vector_idx,
+                                    got=len(entry_data),
+                                    exp=entry_size,
+                                    prefix="MSIX",
+                                )
+                                # Pad with zeros if incomplete
+                                entry_data = entry_data.ljust(entry_size, b'\x00')
+                            
+                            # Parse the entry components (little-endian format)
+                            if len(entry_data) >= 16:
+                                addr_low = struct.unpack('<I', entry_data[0:4])[0]
+                                addr_high = struct.unpack('<I', entry_data[4:8])[0]
+                                msg_data = struct.unpack('<I', entry_data[8:12])[0]
+                                vector_ctrl = struct.unpack('<I', entry_data[12:16])[0]
+                                
+                                table_entries.append({
+                                    "vector": vector_idx,
+                                    "data": entry_data.hex(),
+                                    "addr_low": addr_low,
+                                    "addr_high": addr_high,
+                                    "msg_data": msg_data,
+                                    "vector_ctrl": vector_ctrl,
+                                    "enabled": (vector_ctrl & 0x1) == 0,  # Bit 0 = 0 means enabled
+                                })
+                            else:
+                                log_warning_safe(
+                                    self.logger,
+                                    "Invalid MSI-X table entry {idx}: insufficient data",
+                                    idx=vector_idx,
+                                    prefix="MSIX",
+                                )
+                                # Add a zero entry
+                                table_entries.append({
+                                    "vector": vector_idx,
+                                    "data": "00000000000000000000000000000000",
+                                    "addr_low": 0,
+                                    "addr_high": 0,
+                                    "msg_data": 0,
+                                    "vector_ctrl": 1,  # Masked
+                                    "enabled": False,
+                                })
+                                
+                        except Exception as e:
+                            log_warning_safe(
+                                self.logger,
+                                "Error reading MSI-X table entry {idx}: {error}",
+                                idx=vector_idx,
+                                error=str(e),
+                                prefix="MSIX",
+                            )
+                            # Add a zero entry for this vector
+                            table_entries.append({
+                                "vector": vector_idx,
+                                "data": "00000000000000000000000000000000",
+                                "addr_low": 0,
+                                "addr_high": 0,
+                                "msg_data": 0,
+                                "vector_ctrl": 1,  # Masked
+                                "enabled": False,
+                            })
+                            
+                log_info_safe(
+                    self.logger,
+                    "Successfully read {count} MSI-X table entries from hardware",
+                    count=len(table_entries),
+                    prefix="MSIX",
+                )
+                
+                return table_entries if table_entries else None
+                
+            except PermissionError:
+                log_warning_safe(
+                    self.logger,
+                    "Permission denied reading MSI-X table from {path}",
+                    path=resource_path,
+                    prefix="MSIX",
+                )
+                return None
+            except OSError as e:
+                if e.errno == 2:  # No such file or directory
+                    log_info_safe(
+                        self.logger,
+                        "MSI-X BAR resource not mapped or accessible",
+                        prefix="MSIX",
+                    )
+                else:
+                    log_warning_safe(
+                        self.logger,
+                        "OS error reading MSI-X table: {error}",
+                        error=str(e),
+                        prefix="MSIX",
+                    )
+                return None
+                
+        except Exception as e:
+            log_warning_safe(
+                self.logger,
+                "Failed to read MSI-X table from hardware: {error}",
                 error=str(e),
                 prefix="MSIX",
             )

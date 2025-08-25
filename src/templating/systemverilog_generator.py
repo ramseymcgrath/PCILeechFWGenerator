@@ -99,9 +99,11 @@ class MSIXHelper:
             return "\n".join(f"{value:08X}" for value in table_data) + "\n"
 
         # In production, require actual hardware data
+        # This method is legacy - the main implementation is in sv_module_generator.py
         raise TemplateRenderError(
             "MSI-X table data must be read from actual hardware. "
-            "Cannot generate safe firmware without real MSI-X values."
+            "Cannot generate safe firmware without real MSI-X values. "
+            "Use the context-aware method in SVModuleGenerator instead."
         )
 
 

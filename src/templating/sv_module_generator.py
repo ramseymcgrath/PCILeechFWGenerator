@@ -587,10 +587,36 @@ class SVModuleGenerator:
 
                 return "\n".join(table_lines) + "\n"
 
-        # In production, if no explicit table entries are available, refuse to
-        # fabricate MSI-X table contents. This is a safety measure; callers
-        # should either provide real table contents or run without MSI-X.
+        # Check if this is a development/testing context where safe fallbacks are allowed
+        # Look for explicit permission to use fallback values
+        allow_fallback = (
+            context.get("allow_msix_fallback", False) or
+            context.get("development_mode", False) or
+            context.get("testing_mode", False)
+        )
+        
+        if allow_fallback:
+            self.logger.warning(
+                "Using MSI-X table fallback values - not suitable for production use"
+            )
+            # Generate safe fallback data (all masked/disabled)
+            table_data = []
+            for i in range(num_vectors):
+                table_data.extend(
+                    [
+                        0x00000000,  # Address Low (all zeros = safe)
+                        0x00000000,  # Address High
+                        0x00000000,  # Message Data (all zeros = safe)
+                        0x00000001,  # Vector Control (bit 0 = 1 means masked/disabled)
+                    ]
+                )
+            return "\n".join(f"{value:08X}" for value in table_data) + "\n"
+
+        # In production, if no explicit table entries are available and no fallback is allowed,
+        # refuse to fabricate MSI-X table contents. This is a safety measure; callers
+        # should either provide real table contents or enable fallback mode.
         raise TemplateRenderError(
             "MSI-X table data must be read from actual hardware. "
-            "Cannot generate safe firmware without real MSI-X values."
+            "Cannot generate safe firmware without real MSI-X values. "
+            "To override this safety check, set 'allow_msix_fallback=True' in the context."
         )
